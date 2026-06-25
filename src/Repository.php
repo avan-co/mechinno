@@ -54,8 +54,8 @@ final class Repository
             'lockers' => $this->rows('SELECT * FROM lockers ORDER BY locker_number'),
             'plans' => $this->rows('SELECT * FROM plans ORDER BY plan_number'),
             'charges' => $this->rows(
-                'SELECT fiscal_year, team_name, leader, desk_count, month_name,
-                        amount, note, charge_rate, rent_rate
+                'SELECT id, fiscal_year, team_name, leader, desk_count, month_index, month_name,
+                        amount, note, charge_rate, rent_rate, source_file, source_sheet
                  FROM charges
                  ORDER BY fiscal_year, team_name, month_index'
             ),
