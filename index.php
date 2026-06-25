@@ -15,81 +15,84 @@ $today = JalaliDate::todayParts();
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>پنل مدیریتی مرکز نوآوری</title>
+    <title>پنل مرکز نوآوری</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="assets/styles.css" />
   </head>
   <body>
     <?php if (!$isConfigured): ?>
       <main class="setup-screen">
         <section class="setup-card">
-          <span class="brand-mark">M</span>
-          <h1>راه‌اندازی لازم است</h1>
-          <p>فایل <code>config.sample.php</code> را به <code>config.php</code> کپی کنید و اطلاعات دیتابیس را وارد کنید.</p>
-          <a class="button" href="install.php">رفتن به نصب</a>
+          <span class="brand-mark">✦</span>
+          <h1>راه‌اندازی پنل</h1>
+          <p>فایل <code>config.sample.php</code> را به <code>config.php</code> کپی کنید.</p>
+          <a class="button" href="install.php">شروع نصب</a>
         </section>
       </main>
     <?php else: ?>
       <div class="sidebar-backdrop" id="sidebarBackdrop" hidden></div>
-      <nav class="bottom-nav" aria-label="ناوبری سریع">
-        <button class="bottom-nav-item active" data-section="overview" type="button" aria-label="داشبورد">
-          <span class="bottom-nav-icon">⌂</span><span>داشبورد</span>
-        </button>
-        <button class="bottom-nav-item" data-section="teams" type="button" aria-label="نهادها">
-          <span class="bottom-nav-icon">◉</span><span>نهادها</span>
-        </button>
-        <button class="bottom-nav-item" data-section="charges" type="button" aria-label="شارژ">
-          <span class="bottom-nav-icon">₪</span><span>شارژ</span>
-        </button>
-        <button class="bottom-nav-item" data-section="transactions" type="button" aria-label="مالی">
-          <span class="bottom-nav-icon">◈</span><span>مالی</span>
-        </button>
+      <nav class="bottom-nav" aria-label="ناوبری">
+        <button class="bottom-nav-item active" data-section="overview" type="button"><span class="bottom-nav-icon">⌂</span><span>خانه</span></button>
+        <button class="bottom-nav-item" data-section="teams" type="button"><span class="bottom-nav-icon">◉</span><span>نهادها</span></button>
+        <button class="bottom-nav-item" data-section="charges" type="button"><span class="bottom-nav-icon">₪</span><span>شارژ</span></button>
+        <button class="bottom-nav-item" data-section="transactions" type="button"><span class="bottom-nav-icon">◈</span><span>مالی</span></button>
       </nav>
+
       <div class="shell">
         <aside class="sidebar" id="sidebar">
           <div class="brand">
-            <span class="brand-mark">M</span>
+            <span class="brand-mark">✦</span>
             <div>
               <strong>Mechinno</strong>
               <small>مرکز نوآوری مکانیک</small>
             </div>
           </div>
           <nav class="nav">
-            <button class="nav-item active" data-section="overview" type="button">داشبورد</button>
-            <button class="nav-item" data-section="teams" type="button">نهادها</button>
-            <button class="nav-item" data-section="members" type="button">اعضا</button>
-            <button class="nav-item" data-section="desks" type="button">میزها</button>
-            <button class="nav-item" data-section="lockers" type="button">کمدها</button>
-            <button class="nav-item" data-section="charges" type="button">شارژ</button>
-            <button class="nav-item" data-section="transactions" type="button">مالی</button>
-            <button class="nav-item" data-section="plans" type="button">برنامه‌ها</button>
-            <button class="nav-item" data-section="rate_settings" type="button">نرخ‌ها</button>
-            <button class="nav-item" data-section="backups" type="button">پشتیبان‌ها</button>
+            <button class="nav-item active" data-section="overview" type="button">🏠 داشبورد</button>
+            <button class="nav-item" data-section="teams" type="button">◉ نهادها</button>
+            <button class="nav-item" data-section="members" type="button">👤 اعضا</button>
+            <button class="nav-item" data-section="desks" type="button">▦ میزها</button>
+            <button class="nav-item" data-section="lockers" type="button">▣ کمدها</button>
+            <button class="nav-item" data-section="charges" type="button">₪ شارژ</button>
+            <button class="nav-item" data-section="transactions" type="button">◈ مالی</button>
           </nav>
-          <a class="export-all" href="export.php?report=all">خروجی Excel</a>
-          <a class="export-all secondary" href="report.php">گزارش PDF</a>
-          <a class="logout-link" href="logout.php">خروج</a>
+          <div class="sidebar-foot">
+            <a class="export-all" href="export.php?report=all">خروجی Excel</a>
+            <a class="export-all secondary" href="report.php">گزارش PDF</a>
+            <a class="export-all ghost" href="install.php">بازنشانی پنل</a>
+            <a class="logout-link" href="logout.php">خروج</a>
+          </div>
         </aside>
 
         <main class="content">
           <header class="mobile-topbar">
-            <button class="menu-toggle" id="menuToggle" type="button" aria-label="باز کردن منو">☰</button>
+            <button class="menu-toggle" id="menuToggle" type="button" aria-label="منو">☰</button>
             <strong>Mechinno</strong>
-            <span class="kbd-hint" title="میانبر: / برای جست‌وجو">/</span>
+            <span class="kbd-hint" title="/ جست‌وجو">/</span>
           </header>
 
-          <header class="hero compact">
-            <div>
-              <p class="eyebrow">Management Panel</p>
-              <h1>پنل مدیریت مرکز نوآوری</h1>
-              <p>مدیریت مستقل نهادها، میزها، شارژ و مالی — پس از راه‌اندازی اولیه نیازی به Excel نیست.</p>
+          <header class="hero">
+            <div class="hero-glow"></div>
+            <div class="hero-text">
+              <p class="eyebrow">Innovation Center Panel</p>
+              <h1>مدیریت مرکز نوآوری</h1>
+              <p>پنل خالی و آماده — نهادها، میزها، شارژ و مالی را خودتان تکمیل کنید.</p>
             </div>
           </header>
 
           <section id="overview" class="section active">
-            <article class="panel highlight-panel" id="currentMonthPanel">
+            <article class="panel welcome-panel" id="welcomePanel">
+              <h2>شروع سریع</h2>
+              <ol class="start-steps" id="startSteps">
+                <li data-go="teams">ثبت نهادها (تیم / شرکت / دانشجو)</li>
+                <li data-go="members">افزودن اعضا و انتساب میز</li>
+                <li data-go="lockers">تعریف شماره کمدها</li>
+                <li data-go="charges">تنظیم نرخ و ثبت شارژ</li>
+              </ol>
+            </article>
+            <article class="panel">
               <div class="panel-head"><h2>خلاصه ماه جاری</h2><span id="currentMonthLabel" class="hint"></span></div>
               <div id="currentMonthSummary" class="current-month-grid"></div>
             </article>
@@ -99,89 +102,44 @@ $today = JalaliDate::todayParts();
             </article>
             <div id="cards" class="cards"></div>
             <div class="grid two">
-              <article class="panel">
-                <div class="panel-head"><h2>شارژ ماهانه</h2></div>
-                <div id="chargeChart" class="bar-chart"></div>
-              </article>
-              <article class="panel">
-                <div class="panel-head"><h2>وضعیت کمدها</h2></div>
-                <div id="lockerStatus" class="status-list"></div>
-              </article>
+              <article class="panel"><div class="panel-head"><h2>شارژ ماهانه</h2></div><div id="chargeChart" class="bar-chart"></div></article>
+              <article class="panel"><div class="panel-head"><h2>بدهی نهادها</h2></div><div id="debtChart" class="bar-chart"></div></article>
             </div>
-            <div class="grid two">
-              <article class="panel">
-                <div class="panel-head"><h2>بدهی نهادها</h2></div>
-                <div id="debtChart" class="bar-chart"></div>
-              </article>
-              <article class="panel">
-                <div class="panel-head"><h2>درآمد و هزینه</h2></div>
-                <div id="financeChart" class="bar-chart"></div>
-              </article>
-            </div>
-            <article class="panel">
-              <div class="panel-head"><h2>اشغال میز و کمد</h2></div>
-              <div id="occupancyChart" class="metric-grid"></div>
-            </article>
           </section>
 
           <section id="teams" class="section">
-            <data-table title="تیم‌ها، شرکت‌ها و دانشجویان" endpoint="api.php?resource=teams"></data-table>
+            <data-table title="نهادها" endpoint="api.php?resource=teams"></data-table>
           </section>
           <section id="members" class="section">
             <data-table title="اعضا" endpoint="api.php?resource=members"></data-table>
           </section>
           <section id="desks" class="section">
             <article class="panel">
-              <div class="panel-head">
-                <h2>نقشه ۲۴ میز (۳ ردیف × ۸)</h2>
-                <span class="hint">کلیک روی میز — جزئیات | کلیک روی نام نهاد — پروفایل</span>
-              </div>
+              <div class="panel-head"><h2>نقشه ۲۴ میز</h2><span class="hint">۳ ردیف × ۸ — هر میز ۲ صندلی</span></div>
               <div id="deskGrid" class="desk-grid"></div>
             </article>
             <data-table title="جزئیات میزها" endpoint="api.php?resource=desks"></data-table>
           </section>
           <section id="lockers" class="section">
-            <data-table title="کمدها" endpoint="api.php?resource=lockers"></data-table>
+            <data-table title="کمدها — شماره را خودتان اضافه کنید" endpoint="api.php?resource=lockers"></data-table>
           </section>
           <section id="charges" class="section">
+            <data-table title="نرخ‌های سالانه" endpoint="api.php?resource=rate_settings"></data-table>
             <article class="panel">
               <div class="panel-head">
                 <h2>کلاژ شارژ و پرداخت</h2>
                 <div class="panel-head-actions">
                   <select id="chargesYear" class="year-select"></select>
-                  <button id="recalcChargesButton" class="button ghost" type="button">محاسبه خودکار شارژ از نرخ</button>
+                  <button id="recalcChargesButton" class="button ghost" type="button">محاسبه خودکار از نرخ</button>
                 </div>
               </div>
-              <p class="hint collage-hint">روی سلول‌های بدهکار یا ناقص کلیک کنید تا واریز ثبت شود.</p>
+              <p class="hint collage-hint">روی سلول بدهکار کلیک کنید تا واریز ثبت شود.</p>
               <div id="chargesCollage" class="charges-collage"></div>
             </article>
-            <data-table title="ویرایش دستی مبالغ شارژ" endpoint="api.php?resource=charges"></data-table>
+            <data-table title="ثبت و ویرایش شارژ" endpoint="api.php?resource=charges"></data-table>
           </section>
           <section id="transactions" class="section">
-            <data-table title="مالی (تنخواه + واریز تیم‌ها)" endpoint="api.php?resource=transactions"></data-table>
-          </section>
-          <section id="plans" class="section">
-            <data-table title="برنامه‌های اجرایی" endpoint="api.php?resource=plans"></data-table>
-          </section>
-          <section id="rate_settings" class="section">
-            <data-table title="نرخ پیش‌فرض" endpoint="api.php?resource=rate_settings"></data-table>
-            <data-table title="نرخ اختصاصی نهادها" endpoint="api.php?resource=team_rates"></data-table>
-          </section>
-          <section id="backups" class="section">
-            <data-table title="پشتیبان‌ها" endpoint="api.php?resource=backups"></data-table>
-            <article class="panel danger-zone">
-              <div class="panel-head"><h2>بازنشانی کامل داده</h2></div>
-              <p class="danger-text">همه داده‌های دیتابیس پاک و دوباره از <code>install-bundle.json</code> بارگذاری می‌شود. رکوردهای دستی از بین می‌رود.</p>
-              <label class="check-row">
-                <input type="checkbox" id="reimportAck" />
-                <span>می‌دانم این عملیات برگشت‌پذیر نیست.</span>
-              </label>
-              <label class="wide-label">
-                <span>برای تأیید، کلمه <strong>بازنشانی</strong> را تایپ کنید:</span>
-                <input type="text" id="reimportConfirm" class="search" placeholder="بازنشانی" autocomplete="off" />
-              </label>
-              <button id="reimportButton" class="button danger" type="button" disabled>بازنشانی داده از bundle</button>
-            </article>
+            <data-table title="مالی و واریز تیم‌ها" endpoint="api.php?resource=transactions"></data-table>
           </section>
         </main>
       </div>

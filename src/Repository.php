@@ -28,7 +28,6 @@ final class Repository
                 'paid_total' => $this->scalar("SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE category = 'واریز تیم' AND confirmed = 1"),
             ],
             'locker_status' => $this->rows('SELECT status, COUNT(*) AS count FROM lockers GROUP BY status ORDER BY count DESC'),
-            'plan_status' => $this->rows('SELECT status, COUNT(*) AS count FROM plans GROUP BY status ORDER BY count DESC'),
             'monthly_charges' => $this->rows(
                 'SELECT fiscal_year, month_index, month_name, SUM(amount) AS amount
                  FROM charges GROUP BY fiscal_year, month_index, month_name
@@ -38,7 +37,6 @@ final class Repository
                 'SELECT category, COUNT(*) AS count, COALESCE(SUM(amount), 0) AS amount
                  FROM transactions GROUP BY category ORDER BY amount DESC'
             ),
-            'latest_import' => $this->row('SELECT imported_at, source_files FROM import_runs ORDER BY id DESC LIMIT 1'),
             'debt_by_team' => $this->rows(
                 "SELECT t.id AS team_id, t.name AS team_name, COALESCE(SUM(c.amount), 0) - COALESCE(p.paid, 0) AS debt
                  FROM teams t
@@ -132,6 +130,15 @@ final class Repository
         $year = (string) $today['year'];
         $month = (int) $today['month'];
 
+        if ($this->scalar('SELECT COUNT(*) FROM teams') === 0) {
+            $items[] = [
+                'type' => 'start',
+                'label' => 'اولین نهاد را ثبت کنید',
+                'detail' => 'تیم، شرکت یا دانشجوی مستقل',
+                'section' => 'teams',
+            ];
+        }
+
         $debtors = $this->preparedRows(
             "SELECT t.id AS team_id, t.name AS team_name,
                     COALESCE(SUM(c.amount), 0) - COALESCE(p.paid, 0) AS debt
@@ -189,18 +196,17 @@ final class Repository
             $items[] = [
                 'type' => 'rate',
                 'label' => 'نرخ سال ' . $year . ' تنظیم نشده',
-                'detail' => 'برای محاسبه خودکار شارژ لازم است',
-                'section' => 'rate_settings',
+                'detail' => 'ابتدا نرخ شارژ را در بخش شارژ تعریف کنید',
+                'section' => 'charges',
             ];
         }
 
-        $activePlans = $this->scalar("SELECT COUNT(*) FROM plans WHERE status = 'در حال اجرا'");
-        if ($activePlans > 0) {
+        if ($this->scalar('SELECT COUNT(*) FROM lockers') === 0) {
             $items[] = [
-                'type' => 'plan',
-                'label' => number_format($activePlans) . ' برنامه در حال اجرا',
-                'detail' => 'پیگیری وضعیت',
-                'section' => 'plans',
+                'type' => 'locker',
+                'label' => 'هنوز کمدی ثبت نشده',
+                'detail' => 'شماره کمدها را خودتان اضافه کنید',
+                'section' => 'lockers',
             ];
         }
 
@@ -266,10 +272,6 @@ final class Repository
                  LEFT JOIN teams t ON t.id = l.team_id
                  LEFT JOIN members m ON m.id = l.member_id
                  ORDER BY l.locker_number",
-            'plans' => "SELECT p.*, t.name AS owner_team
-                 FROM plans p
-                 LEFT JOIN teams t ON t.id = p.owner_team_id
-                 ORDER BY CASE p.priority WHEN 'بالا' THEN 1 WHEN 'متوسط' THEN 2 ELSE 3 END, p.start_date",
             'charges' => 'SELECT c.*, t.name AS team_name, t.entity_type
                  FROM charges c
                  LEFT JOIN teams t ON t.id = c.team_id
@@ -281,12 +283,6 @@ final class Repository
                  LEFT JOIN teams tm ON tm.id = t.team_id
                  ORDER BY t.tx_date DESC, t.id DESC",
             'rate_settings' => 'SELECT * FROM rate_settings ORDER BY fiscal_year, effective_from, id',
-            'team_rates' => 'SELECT r.*, t.name AS team_name
-                 FROM team_rates r
-                 LEFT JOIN teams t ON t.id = r.team_id
-                 ORDER BY r.fiscal_year, t.name',
-            'backups' => 'SELECT * FROM import_backups ORDER BY id DESC',
-            'warnings' => 'SELECT * FROM import_warnings ORDER BY id',
             default => throw new InvalidArgumentException('Unknown resource.'),
         };
     }

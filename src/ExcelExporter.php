@@ -50,26 +50,10 @@ final class ExcelExporter
                             FROM transactions t LEFT JOIN teams tm ON tm.id = t.team_id ORDER BY t.tx_date DESC, t.id DESC",
                 'headers' => ['تاریخ', 'شرح', 'مبلغ', 'دسته', 'نهاد', 'سال', 'ماه', 'توضیحات'],
             ],
-            'plans' => [
-                'title' => 'برنامه‌ها',
-                'query' => 'SELECT p.plan_code, p.priority, p.status, p.title, t.name AS owner_team, p.proposed_budget, p.start_date, p.end_date, p.progress
-                            FROM plans p LEFT JOIN teams t ON t.id = p.owner_team_id ORDER BY p.priority, p.start_date',
-                'headers' => ['کد', 'اولویت', 'وضعیت', 'عنوان', 'تیم مجری', 'بودجه', 'شروع', 'پایان', 'پیشرفت'],
-            ],
             'rate_settings' => [
-                'title' => 'نرخ‌های پیش‌فرض',
+                'title' => 'نرخ‌ها',
                 'query' => 'SELECT fiscal_year, title, charge_rate, informal_rent_rate, effective_from, notes FROM rate_settings ORDER BY fiscal_year, id',
                 'headers' => ['سال', 'عنوان', 'نرخ شارژ', 'نرخ اجاره غیررسمی', 'تاریخ اثر', 'توضیحات'],
-            ],
-            'team_rates' => [
-                'title' => 'نرخ‌های اختصاصی',
-                'query' => 'SELECT t.name, r.fiscal_year, r.charge_rate, r.informal_rent_rate, r.notes FROM team_rates r LEFT JOIN teams t ON t.id = r.team_id ORDER BY r.fiscal_year, t.name',
-                'headers' => ['نهاد', 'سال', 'نرخ شارژ', 'نرخ اجاره', 'توضیحات'],
-            ],
-            'backups' => [
-                'title' => 'پشتیبان‌ها',
-                'query' => 'SELECT id, created_at, reason, summary FROM import_backups ORDER BY id DESC',
-                'headers' => ['شناسه', 'تاریخ', 'دلیل', 'خلاصه'],
             ],
         ];
     }

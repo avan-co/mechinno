@@ -13,12 +13,6 @@ try {
     $resource = (string) ($_GET['resource'] ?? 'summary');
     $action = (string) ($_GET['action'] ?? '');
 
-    if ($_SERVER['REQUEST_METHOD'] === 'POST' && $resource === 'reimport') {
-        require_csrf_json();
-        $summary = (new Seeder($pdo, app_base_path()))->seedFromFile();
-        json_response(['ok' => true, 'summary' => $summary]);
-    }
-
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && $resource === 'recalculate-charges') {
         require_csrf_json();
         $payload = json_decode((string) file_get_contents('php://input'), true);
@@ -26,16 +20,12 @@ try {
             $payload = $_POST;
         }
         $fiscalYear = (string) ($payload['fiscal_year'] ?? $_GET['fiscal_year'] ?? '1404');
-        (new Seeder($pdo, app_base_path()))->recalculateCharges($fiscalYear);
+        (new Seeder($pdo))->recalculateCharges($fiscalYear);
         json_response(['ok' => true, 'fiscal_year' => $fiscalYear]);
     }
 
     if ($resource === 'crud-meta') {
         json_response($crud->meta());
-    }
-
-    if ((int) $pdo->query('SELECT COUNT(*) FROM import_runs')->fetchColumn() === 0) {
-        (new Importer($pdo, app_base_path()))->importAll();
     }
 
     if ($resource === 'summary') {
@@ -72,10 +62,7 @@ try {
         json_response(['ok' => true, 'record' => $result]);
     }
 
-    $paginatedResources = [
-        'teams', 'members', 'desks', 'lockers', 'plans', 'charges',
-        'transactions', 'rate_settings', 'team_rates', 'backups', 'warnings',
-    ];
+    $paginatedResources = ['teams', 'members', 'desks', 'lockers', 'charges', 'transactions', 'rate_settings'];
     if (in_array($resource, $paginatedResources, true)) {
         $page = (int) ($_GET['page'] ?? 1);
         $perPage = (int) ($_GET['per_page'] ?? 25);
