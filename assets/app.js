@@ -107,6 +107,23 @@ const fetchJson = async (url, options = {}) => {
   return data;
 };
 
+const fetchResource = async (endpoint, { page = 1, perPage = 25 } = {}) => {
+  const url = new URL(endpoint, window.location.href);
+  url.searchParams.set("page", String(page));
+  url.searchParams.set("per_page", String(perPage));
+  const data = await fetchJson(url.toString());
+  if (Array.isArray(data)) {
+    return { rows: data, total: data.length, page: 1, per_page: data.length, pages: 1 };
+  }
+  return {
+    rows: data.rows || [],
+    total: Number(data.total || 0),
+    page: Number(data.page || page),
+    per_page: Number(data.per_page || perPage),
+    pages: Number(data.pages || 1),
+  };
+};
+
 const postJson = (url, payload = {}) =>
   fetchJson(url, {
     method: "POST",
@@ -214,7 +231,7 @@ const loadDashboard = async () => {
 };
 
 const loadDeskGrid = async () => {
-  const desks = await fetchJson("api.php?resource=desks");
+  const { rows: desks } = await fetchResource("api.php?resource=desks", { page: 1, perPage: 100 });
   const container = document.getElementById("deskGrid");
   const rows = { 1: [], 2: [], 3: [] };
   desks.forEach((desk) => rows[desk.row_index]?.push(desk));
@@ -260,6 +277,45 @@ const loadChargesCollage = async () => {
       }).join("")}
     </tr>`).join("");
   container.innerHTML = `<table class="collage-table"><thead>${head}</thead><tbody>${body}</tbody></table>`;
+};
+
+const profileSection = (title, rows, cols) => `
+  <div class="profile-table">
+    <h3>${escapeHtml(title)}</h3>
+    <table>
+      <thead><tr>${cols.map((c) => `<th>${escapeHtml(labels[c] || c)}</th>`).join("")}</tr></thead>
+      <tbody>${rows.length
+        ? rows.map((row) => `<tr>${cols.map((c) => {
+          const value = row[c];
+          if (["amount", "charge_amount", "rent_amount"].includes(c)) return `<td>${escapeHtml(formatMoney(value))}</td>`;
+          return `<td>${escapeHtml(formatNumber(value ?? "—"))}</td>`;
+        }).join("")}</tr>`).join("")
+        : `<tr><td colspan="${cols.length}">داده‌ای موجود نیست.</td></tr>`}
+      </tbody>
+    </table>
+  </div>`;
+
+const openTeamProfile = async (teamId) => {
+  const data = await fetchJson(`api.php?resource=team-profile&id=${encodeURIComponent(teamId)}`);
+  const modal = ensureModal();
+  const form = modal.querySelector("#crudForm");
+  modal.querySelector("#crudModalTitle").textContent = `پروفایل نهاد: ${data.team.name || "—"}`;
+  form.innerHTML = `
+    <div class="profile-summary">
+      <div><span>نوع</span><strong>${escapeHtml(entityTypeLabels[data.team.entity_type] || data.team.entity_type || "—")}</strong></div>
+      <div><span>مسئول</span><strong>${escapeHtml(data.team.leader || "—")}</strong></div>
+      <div><span>جمع شارژ</span><strong>${escapeHtml(formatMoney(data.summary.charge_total || 0))}</strong></div>
+      <div><span>واریز</span><strong>${escapeHtml(formatMoney(data.summary.paid_total || 0))}</strong></div>
+      <div><span>بدهی</span><strong>${escapeHtml(formatMoney(data.summary.debt_total || 0))}</strong></div>
+    </div>
+    ${profileSection("میزها", data.desks, ["number", "usage_type", "formal_seats", "informal_seats"])}
+    ${profileSection("اعضا", data.members, ["full_name", "access_code", "desk_numbers", "phone"])}
+    ${profileSection("کمدها", data.lockers, ["locker_number", "status", "delivered_at", "key_number"])}
+    ${profileSection("شارژها", data.charges, ["fiscal_year", "month_name", "charge_amount", "rent_amount", "amount"])}
+    ${profileSection("واریز تیم", data.payments, ["tx_date", "fiscal_year", "month_index", "amount"])}
+    <div class="modal-actions"><button class="button ghost" type="button" data-close-modal>بستن</button></div>`;
+  form.querySelector("[data-close-modal]").addEventListener("click", closeModal);
+  modal.hidden = false;
 };
 
 const ensureModal = () => {
@@ -381,20 +437,68 @@ class DataTable extends HTMLElement {
     this.resource = new URL(this.endpoint, window.location.href).searchParams.get("resource");
     this.definition = null;
     this.rows = [];
+    this.page = 1;
+    this.perPage = 25;
+    this.total = 0;
+    this.pages = 1;
+    this.filter = "";
     this.innerHTML = `
       <article class="panel" style="margin-top:14px">
         <div class="table-toolbar">
           <h2>${this.title}</h2>
           <div class="table-actions">
+            ${this.resource === "teams" ? `<button class="button ghost profile-toolbar-button" type="button" hidden>پروفایل نهاد</button>` : ""}
             <button class="button add-button" type="button" hidden>افزودن</button>
             <input class="search" placeholder="جست‌وجو..." />
           </div>
         </div>
         <div class="table-wrap"><div class="empty">در حال بارگذاری...</div></div>
+        <div class="table-pagination" hidden>
+          <span class="pager-info"></span>
+          <div class="pager-buttons">
+            <label>تعداد در صفحه
+              <select class="per-page-select">
+                <option value="10">10</option>
+                <option value="25" selected>25</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+              </select>
+            </label>
+            <button class="mini-button pager-prev" type="button">قبلی</button>
+            <button class="mini-button pager-next" type="button">بعدی</button>
+          </div>
+        </div>
       </article>`;
-    this.querySelector(".search").addEventListener("input", (e) => this.render(e.target.value));
+    this.querySelector(".search").addEventListener("input", (e) => {
+      this.filter = e.target.value;
+      this.render();
+    });
     this.querySelector(".add-button").addEventListener("click", () => {
       openRecordModal({ resource: this.resource, definition: this.definition, onSaved: () => this.load() });
+    });
+    const profileButton = this.querySelector(".profile-toolbar-button");
+    if (profileButton) {
+      profileButton.addEventListener("click", () => {
+        const first = this.rows[0];
+        if (first?.id) openTeamProfile(first.id).catch((error) => alert(error.message));
+      });
+    }
+    this.querySelector(".per-page-select")?.addEventListener("change", (e) => {
+      this.perPage = Number(e.target.value) || 25;
+      this.page = 1;
+      this.load();
+    });
+    this.querySelector(".pager-prev")?.addEventListener("click", () => {
+      if (this.page > 1) {
+        this.page -= 1;
+        this.load();
+      }
+    });
+    this.querySelector(".pager-next")?.addEventListener("click", () => {
+      if (this.page < this.pages) {
+        this.page += 1;
+        this.load();
+      }
     });
     this.addEventListener("click", (e) => this.handleClick(e));
     this.addEventListener("change", (e) => this.handleChange(e));
@@ -406,16 +510,37 @@ class DataTable extends HTMLElement {
       const meta = await loadCrudMeta();
       this.definition = meta.resources[this.resource] || null;
       this.querySelector(".add-button").hidden = !this.definition || !editableResources.has(this.resource);
-      this.rows = await fetchJson(this.endpoint);
-      this.render("");
+      const result = await fetchResource(this.endpoint, { page: this.page, perPage: this.perPage });
+      this.rows = result.rows;
+      this.total = result.total;
+      this.page = result.page;
+      this.perPage = result.per_page;
+      this.pages = result.pages;
+      const profileButton = this.querySelector(".profile-toolbar-button");
+      if (profileButton) profileButton.hidden = this.rows.length === 0;
+      this.render();
+      this.renderPager();
     } catch (error) {
       this.querySelector(".table-wrap").innerHTML = `<div class="empty">خطا: ${escapeHtml(error.message)}</div>`;
+      this.querySelector(".table-pagination").hidden = true;
     }
   }
 
-  render(filter) {
+  renderPager() {
+    const pager = this.querySelector(".table-pagination");
+    if (!pager) return;
+    pager.hidden = this.total <= this.perPage && this.pages <= 1;
+    pager.querySelector(".pager-info").textContent =
+      `صفحه ${this.page.toLocaleString("fa-IR")} از ${this.pages.toLocaleString("fa-IR")} — ${this.total.toLocaleString("fa-IR")} رکورد`;
+    const perPageSelect = pager.querySelector(".per-page-select");
+    if (perPageSelect) perPageSelect.value = String(this.perPage);
+    pager.querySelector(".pager-prev").disabled = this.page <= 1;
+    pager.querySelector(".pager-next").disabled = this.page >= this.pages;
+  }
+
+  render() {
     const wrap = this.querySelector(".table-wrap");
-    const normalized = filter.trim().toLowerCase();
+    const normalized = this.filter.trim().toLowerCase();
     const rows = normalized
       ? this.rows.filter((row) => JSON.stringify(row).toLowerCase().includes(normalized))
       : this.rows;
@@ -438,21 +563,32 @@ class DataTable extends HTMLElement {
         const className = column === "amount" && Number(value) < 0 ? "money-negative" : column === "amount" && Number(value) > 0 ? "money-positive" : "";
         return `<td class="${className}">${formatCell(column, value, row)}</td>`;
       }).join("");
-      const actions = editable ? `<td class="row-actions">
-        <button class="mini-button" type="button" data-action="edit" data-id="${escapeHtml(row.id)}">ویرایش</button>
-        <button class="mini-button danger" type="button" data-action="delete" data-id="${escapeHtml(row.id)}">حذف</button>
-      </td>` : "";
+      const profileAction = this.resource === "teams"
+        ? `<button class="mini-button" type="button" data-action="profile" data-id="${escapeHtml(row.id)}">پروفایل</button>`
+        : "";
+      const actions = editable || profileAction
+        ? `<td class="row-actions">
+        ${profileAction}
+        ${editable ? `<button class="mini-button" type="button" data-action="edit" data-id="${escapeHtml(row.id)}">ویرایش</button>
+        <button class="mini-button danger" type="button" data-action="delete" data-id="${escapeHtml(row.id)}">حذف</button>` : ""}
+      </td>`
+        : "";
       return `<tr>${cells}${actions}</tr>`;
     }).join("");
-    wrap.innerHTML = `<table><thead><tr>${head}${editable ? "<th>عملیات</th>" : ""}</tr></thead><tbody>${body}</tbody></table>`;
+    wrap.innerHTML = `<table><thead><tr>${head}${editable || this.resource === "teams" ? "<th>عملیات</th>" : ""}</tr></thead><tbody>${body}</tbody></table>`;
   }
 
   async handleClick(event) {
     const button = event.target.closest("button[data-action]");
-    if (!button || !this.contains(button) || !this.definition) return;
+    if (!button || !this.contains(button)) return;
     const id = Number(button.dataset.id);
     const record = this.rows.find((row) => Number(row.id) === id);
     if (!record) return;
+    if (button.dataset.action === "profile") {
+      openTeamProfile(id).catch((error) => alert(error.message));
+      return;
+    }
+    if (!this.definition) return;
     if (button.dataset.action === "edit") {
       const full = this.rows.find((r) => Number(r.id) === id);
       if (full?.desk_ids && typeof full.desk_ids === "string") {
@@ -490,7 +626,7 @@ customElements.define("data-table", DataTable);
 const reimportButton = document.getElementById("reimportButton");
 if (reimportButton) {
   reimportButton.addEventListener("click", async () => {
-    if (!window.confirm("داده‌های نمونه جایگزین داده فعلی شود؟ رکوردهای دستی ممکن است از بین برود.")) return;
+    if (!window.confirm("داده نصب از install-bundle.json جایگزین داده فعلی شود؟ رکوردهای دستی ممکن است از بین برود.")) return;
     reimportButton.disabled = true;
     try {
       await fetchJson("api.php?resource=reimport", { method: "POST", headers: { "X-CSRF-Token": csrfToken } });
@@ -498,6 +634,26 @@ if (reimportButton) {
     } catch (error) {
       alert(error.message);
       reimportButton.disabled = false;
+    }
+  });
+}
+
+const recalcChargesButton = document.getElementById("recalcChargesButton");
+if (recalcChargesButton) {
+  recalcChargesButton.addEventListener("click", async () => {
+    const year = document.getElementById("chargesYear")?.value || "1404";
+    if (!window.confirm(`شارژهای محاسبه‌شده خودکار سال ${year} از نرخ‌ها بازمحاسبه شود؟ مبالغ دستی و داده bundle حفظ می‌شوند.`)) return;
+    recalcChargesButton.disabled = true;
+    try {
+      await postJson("api.php?resource=recalculate-charges", { fiscal_year: year });
+      await loadChargesCollage();
+      document.querySelector('#charges data-table')?.load?.();
+      await loadDashboard();
+      alert("محاسبه خودکار انجام شد.");
+    } catch (error) {
+      alert(error.message);
+    } finally {
+      recalcChargesButton.disabled = false;
     }
   });
 }

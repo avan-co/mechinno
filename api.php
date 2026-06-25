@@ -19,6 +19,17 @@ try {
         json_response(['ok' => true, 'summary' => $summary]);
     }
 
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && $resource === 'recalculate-charges') {
+        require_csrf_json();
+        $payload = json_decode((string) file_get_contents('php://input'), true);
+        if (!is_array($payload)) {
+            $payload = $_POST;
+        }
+        $fiscalYear = (string) ($payload['fiscal_year'] ?? $_GET['fiscal_year'] ?? '1404');
+        (new Seeder($pdo, app_base_path()))->recalculateCharges($fiscalYear);
+        json_response(['ok' => true, 'fiscal_year' => $fiscalYear]);
+    }
+
     if ($resource === 'crud-meta') {
         json_response($crud->meta());
     }
@@ -59,6 +70,16 @@ try {
         };
 
         json_response(['ok' => true, 'record' => $result]);
+    }
+
+    $paginatedResources = [
+        'teams', 'members', 'desks', 'lockers', 'plans', 'charges',
+        'transactions', 'rate_settings', 'team_rates', 'backups', 'warnings',
+    ];
+    if (in_array($resource, $paginatedResources, true)) {
+        $page = (int) ($_GET['page'] ?? 1);
+        $perPage = (int) ($_GET['per_page'] ?? 25);
+        json_response($repository->paginatedResource($resource, $page, $perPage));
     }
 
     json_response($repository->resource($resource));

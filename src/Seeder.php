@@ -18,34 +18,56 @@ final class Seeder
      */
     public function seedFromFile(?string $path = null): array
     {
-        $path ??= $this->basePath . '/data/initial-seed.json';
+        $path ??= $this->basePath . '/data/install-bundle.json';
         if (!is_file($path)) {
-            throw new RuntimeException('فایل داده اولیه پیدا نشد: data/initial-seed.json');
+            $path = $this->basePath . '/data/initial-seed.json';
+        }
+        if (!is_file($path)) {
+            throw new RuntimeException('فایل داده نصب پیدا نشد: data/install-bundle.json');
         }
 
         $payload = json_decode((string) file_get_contents($path), true, 512, JSON_THROW_ON_ERROR);
+        $bundleName = basename($path);
         Schema::migrate($this->pdo);
         Schema::reset($this->pdo);
         Schema::seedDesks($this->pdo);
 
         $meta = $payload['meta'] ?? [];
-        $fiscalYear = (string) ($meta['fiscal_year'] ?? '1404');
-        $excelLockers = LockerCatalog::bootstrap($this->pdo, $this->basePath);
-        $seedLockerNumbers = array_map(static fn (array $row): int => (int) ($row['number'] ?? 0), $payload['lockers'] ?? []);
-        $seedLockerNumbers = array_values(array_filter($seedLockerNumbers, static fn (int $n): bool => $n > 0));
-        if ($excelLockers === [] && $seedLockerNumbers !== []) {
-            Schema::ensureLockerNumbers($this->pdo, $seedLockerNumbers);
+        $fiscalYears = $meta['fiscal_years'] ?? [];
+        $fiscalYear = (string) ($fiscalYears[0] ?? $meta['fiscal_year'] ?? '1404');
+
+        $lockerNumbers = $meta['locker_numbers'] ?? array_map(
+            static fn (array $row): int => (int) ($row['number'] ?? 0),
+            $payload['lockers'] ?? []
+        );
+        $lockerNumbers = array_values(array_filter($lockerNumbers, static fn (int $n): bool => $n > 0));
+        if ($lockerNumbers !== []) {
+            Schema::ensureLockerNumbers($this->pdo, $lockerNumbers);
         }
 
+        foreach ($payload['rate_settings'] ?? [] as $rate) {
+            $this->insert('rate_settings', [
+                'fiscal_year' => $rate['fiscal_year'] ?? $fiscalYear,
+                'title' => $rate['title'] ?? 'نرخ نصب',
+                'charge_rate' => $rate['charge_rate'] ?? null,
+                'informal_rent_rate' => $rate['informal_rent_rate'] ?? null,
+                'effective_from' => $rate['effective_from'] ?? '',
+                'notes' => 'bundle',
+            ]);
+        }
         $this->insertRateSetting($fiscalYear, $meta);
+
         $teamMap = $this->seedEntities($payload['entities'] ?? [], $fiscalYear);
         $memberMap = $this->seedMembers($payload['members'] ?? [], $teamMap);
+        $this->assignDesksFromMembers($payload['members'] ?? [], $teamMap);
         $this->seedLockers($payload['lockers'] ?? [], $teamMap, $memberMap);
         $this->seedPlans($payload['plans'] ?? [], $teamMap);
+        $this->seedCharges($payload['charges'] ?? [], $teamMap);
         $this->seedFinance($payload['finance'] ?? [], $teamMap, $fiscalYear);
+        $this->resolveLockerTeams($teamMap);
 
         $this->insert('import_runs', [
-            'source_files' => json_encode(['initial-seed.json'], JSON_UNESCAPED_UNICODE),
+            'source_files' => json_encode([$bundleName], JSON_UNESCAPED_UNICODE),
         ]);
 
         return [
@@ -240,7 +262,7 @@ final class Seeder
             if ($number < 1) {
                 continue;
             }
-            $teamName = (string) ($locker['team'] ?? '');
+            $teamName = (string) ($locker['team'] ?? $locker['assigned_to'] ?? '');
             $memberName = (string) ($locker['member'] ?? '');
             $existing = $this->pdo->prepare('SELECT id FROM lockers WHERE locker_number = :number LIMIT 1');
             $existing->execute(['number' => $number]);
@@ -252,7 +274,7 @@ final class Seeder
                 'delivered_at' => $locker['delivered_at'] ?? null,
                 'key_number' => $locker['key_number'] ?? null,
                 'spare_key' => $locker['spare_key'] ?? 'ندارد',
-                'notes' => $locker['notes'] ?? null,
+                'notes' => $locker['notes'] ?? $locker['assigned_to'] ?? null,
                 'source_file' => 'seed',
                 'source_sheet' => 'lockers',
             ];
@@ -268,6 +290,82 @@ final class Seeder
                     ->execute($payload);
             }
         }
+    }
+
+    /**
+     * @param list<array<string, mixed>> $charges
+     * @param array<string, int> $teamMap
+     */
+    private function seedCharges(array $charges, array $teamMap): void
+    {
+        foreach ($charges as $row) {
+            $teamName = (string) ($row['team'] ?? $row['team_name'] ?? '');
+            $this->insert('charges', [
+                'team_id' => $teamMap[$teamName] ?? null,
+                'team_name' => $teamName,
+                'fiscal_year' => $row['fiscal_year'] ?? null,
+                'month_index' => $row['month_index'] ?? null,
+                'month_name' => $row['month_name'] ?? $this->monthName((int) ($row['month_index'] ?? 0)),
+                'charge_amount' => $row['charge_amount'] ?? null,
+                'rent_amount' => $row['rent_amount'] ?? null,
+                'amount' => $row['amount'] ?? null,
+                'note' => $row['note'] ?? null,
+                'source_file' => 'bundle',
+                'source_sheet' => 'charges',
+            ]);
+        }
+    }
+
+    /**
+     * @param list<array<string, mixed>> $members
+     * @param array<string, int> $teamMap
+     */
+    private function assignDesksFromMembers(array $members, array $teamMap): void
+    {
+        foreach ($members as $member) {
+            $teamId = $teamMap[(string) ($member['team'] ?? '')] ?? null;
+            if ($teamId === null) {
+                continue;
+            }
+            foreach ($member['desks'] ?? [] as $deskNumber) {
+                $number = (int) $deskNumber;
+                if ($number < 1 || $number > 24) {
+                    continue;
+                }
+                $this->pdo->prepare(
+                    'UPDATE desks SET team_id = :team_id, informal_seats = CASE WHEN informal_seats = 0 THEN 1 ELSE informal_seats END
+                     WHERE number = :number AND (team_id IS NULL OR team_id = :team_id2)'
+                )->execute(['team_id' => $teamId, 'team_id2' => $teamId, 'number' => $number]);
+            }
+        }
+    }
+
+    /**
+     * @param array<string, int> $teamMap
+     */
+    private function resolveLockerTeams(array $teamMap): void
+    {
+        $rows = $this->pdo->query('SELECT id, notes FROM lockers WHERE team_id IS NULL AND notes IS NOT NULL AND notes <> \'\'')->fetchAll();
+        $update = $this->pdo->prepare('UPDATE lockers SET team_id = :team_id WHERE id = :id');
+        foreach ($rows as $row) {
+            $key = $this->normalizeName($row['notes'] ?? '');
+            if ($key !== '' && isset($teamMap[$key])) {
+                $update->execute(['team_id' => $teamMap[$key], 'id' => $row['id']]);
+                continue;
+            }
+            foreach ($teamMap as $name => $teamId) {
+                if ($key !== '' && (str_contains($key, $name) || str_contains($name, $key))) {
+                    $update->execute(['team_id' => $teamId, 'id' => $row['id']]);
+                    break;
+                }
+            }
+        }
+    }
+
+    private function normalizeName(string $value): string
+    {
+        $text = trim(str_replace(['ي', 'ك', '‌'], ['ی', 'ک', ' '], $value));
+        return trim(preg_replace('/\s+/', ' ', $text) ?? $text);
     }
 
     /**

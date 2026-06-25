@@ -28,8 +28,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $configured) {
         }
         $pdo = Database::connect();
         Schema::migrate($pdo);
-        $useExcel = ($_POST['import_source'] ?? 'seed') === 'excel';
-        $result = (new Importer($pdo, app_base_path()))->importAll($useExcel);
+        $result = (new Importer($pdo, app_base_path()))->importAll();
     } catch (Throwable $exception) {
         $error = $exception instanceof RuntimeException ? $exception->getMessage() : safe_error_message($exception);
     }
@@ -51,7 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $configured) {
       <section class="setup-card wide">
         <span class="brand-mark">M</span>
         <h1>نصب پنل مدیریتی</h1>
-        <p>ابتدا <code>config.sample.php</code> را به <code>config.php</code> کپی کنید. سپس داده اولیه را وارد کنید. پس از نصب، پنل مستقل از Excel کار می‌کند.</p>
+        <p>ابتدا <code>config.sample.php</code> را به <code>config.php</code> کپی کنید. داده اولیه از <code>data/install-bundle.json</code> بارگذاری می‌شود — نیازی به آپلود Excel روی سرور نیست.</p>
 
         <div class="requirements">
           <?php foreach ($requirements as $name => $ok): ?>
@@ -78,14 +77,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $configured) {
         <form method="post">
           <?php if ($configured): ?>
             <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>" />
-            <label class="check-row">
-              <input type="radio" name="import_source" value="seed" checked />
-              <span>ورود داده اولیه از <code>data/initial-seed.json</code> (پیشنهادی)</span>
-            </label>
-            <label class="check-row">
-              <input type="radio" name="import_source" value="excel" />
-              <span>ورود یک‌باره از Excel — شماره کمدها از شیت lockers فایل Innovation Center.xlsx خوانده می‌شود</span>
-            </label>
             <label class="check-row">
               <input type="checkbox" name="confirm_import" value="1" />
               <span>تأیید می‌کنم داده‌های فعلی بازنشانی شوند.</span>

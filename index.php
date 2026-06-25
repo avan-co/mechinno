@@ -120,7 +120,10 @@ if ($isConfigured) {
             <article class="panel">
               <div class="panel-head">
                 <h2>کلاژ شارژ و پرداخت</h2>
-                <select id="chargesYear" class="year-select"></select>
+                <div class="panel-head-actions">
+                  <select id="chargesYear" class="year-select"></select>
+                  <button id="recalcChargesButton" class="button ghost" type="button">محاسبه خودکار شارژ از نرخ</button>
+                </div>
               </div>
               <div id="chargesCollage" class="charges-collage"></div>
             </article>

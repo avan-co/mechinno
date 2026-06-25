@@ -299,7 +299,39 @@ th {
   font-size: 12px;
 }
 
-.empty { padding: 20px; color: var(--muted); text-align: center; }
+.panel-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.table-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  flex-wrap: wrap;
+}
+.table-pagination .pager-buttons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.table-pagination select {
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  font-size: 12px;
+}
+.profile-table { margin-bottom: 14px; overflow-x: auto; }
+.profile-table h3 { margin: 0 0 8px; font-size: 14px; color: var(--blue); }
+.profile-table table { width: 100%; font-size: 12px; }
+
 .money-positive { color: var(--success); font-weight: 500; }
 .money-negative { color: var(--danger); font-weight: 500; }
 

@@ -11,13 +11,9 @@ final class Importer
     /**
      * @return array<string, int>
      */
-    public function importAll(bool $preferExcel = false): array
+    public function importAll(): array
     {
         Schema::migrate($this->pdo);
-
-        if ($preferExcel && $this->excelFilesExist()) {
-            return $this->importFromExcel();
-        }
 
         return (new Seeder($this->pdo, $this->basePath))->seedFromFile();
     }

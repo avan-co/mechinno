@@ -1,0 +1,3383 @@
+{
+    "meta": {
+        "built_at": "2026-06-25T15:16:45+00:00",
+        "fiscal_years": [
+            "1404",
+            "1405"
+        ],
+        "locker_numbers": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31,
+            32,
+            33,
+            34,
+            35,
+            36
+        ]
+    },
+    "lockers": [
+        {
+            "number": 1,
+            "status": "تخصیص یافته",
+            "assigned_to": "آوان صعنت دانش گستر",
+            "delivered_at": "1404\/09\/01",
+            "key_number": "1",
+            "spare_key": "دارد"
+        },
+        {
+            "number": 2,
+            "status": "تخصیص یافته",
+            "assigned_to": "سوشیانت",
+            "delivered_at": "1404\/09\/02",
+            "key_number": "2",
+            "spare_key": "دارد"
+        },
+        {
+            "number": 3,
+            "status": "تخصیص یافته",
+            "assigned_to": "آوان صعنت دانش گستر",
+            "delivered_at": "1404\/09\/03",
+            "key_number": "3",
+            "spare_key": "دارد"
+        },
+        {
+            "number": 4,
+            "status": "تخصیص یافته",
+            "assigned_to": "ناصری (دکتر عظیمی)",
+            "delivered_at": "1404\/09\/04",
+            "key_number": "4",
+            "spare_key": "ندارد"
+        },
+        {
+            "number": 5,
+            "status": "تخصیص یافته",
+            "assigned_to": "بادی تک",
+            "delivered_at": "1404\/09\/05",
+            "key_number": "5",
+            "spare_key": "دارد"
+        },
+        {
+            "number": 6,
+            "status": "تخصیص یافته",
+            "assigned_to": "بادی تک",
+            "delivered_at": "1404\/09\/06",
+            "key_number": "6",
+            "spare_key": "دارد"
+        },
+        {
+            "number": 7,
+            "status": "تخصیص یافته",
+            "assigned_to": "فیدار",
+            "delivered_at": "1404\/09\/07",
+            "key_number": "7",
+            "spare_key": "دارد"
+        },
+        {
+            "number": 8,
+            "status": "تخصیص یافته",
+            "assigned_to": "بادی تک",
+            "delivered_at": "1404\/09\/08",
+            "key_number": "8",
+            "spare_key": "دارد"
+        },
+        {
+            "number": 9,
+            "status": "تخصیص یافته",
+            "assigned_to": "تخمه چی",
+            "delivered_at": "1404\/09\/09",
+            "key_number": "9",
+            "spare_key": "دارد"
+        },
+        {
+            "number": 10,
+            "status": "تخصیص یافته",
+            "assigned_to": "شبیه سازان امیرکبیر",
+            "delivered_at": "1404\/09\/10",
+            "key_number": "10",
+            "spare_key": "دارد"
+        },
+        {
+            "number": 11,
+            "status": "تخصیص یافته",
+            "assigned_to": "حامد ایزدی",
+            "delivered_at": "1404\/09\/11",
+            "key_number": "11",
+            "spare_key": "دارد"
+        },
+        {
+            "number": 12,
+            "status": "تخصیص یافته",
+            "assigned_to": "فاطمه حسینی",
+            "delivered_at": "1404\/09\/12",
+            "key_number": "12",
+            "spare_key": "دارد"
+        },
+        {
+            "number": 13,
+            "status": "تخصیص یافته",
+            "assigned_to": "رایان رباتیک ایرانیان",
+            "delivered_at": "1404\/09\/13",
+            "key_number": "13",
+            "spare_key": "ندارد"
+        },
+        {
+            "number": 14,
+            "status": "تخصیص یافته",
+            "assigned_to": "فیدار",
+            "delivered_at": "1404\/09\/14",
+            "key_number": "14",
+            "spare_key": "دارد"
+        },
+        {
+            "number": 15,
+            "status": "تخصیص یافته",
+            "assigned_to": "تخمه چی",
+            "delivered_at": "1404\/09\/15",
+            "key_number": "15",
+            "spare_key": "ندارد"
+        },
+        {
+            "number": 16,
+            "status": "تخصیص یافته",
+            "assigned_to": "رایان رباتیک ایرانیان",
+            "delivered_at": "1404\/09\/16",
+            "key_number": "16",
+            "spare_key": "ندارد"
+        },
+        {
+            "number": 17,
+            "status": "تخصیص یافته",
+            "assigned_to": "آوان صعنت دانش گستر",
+            "delivered_at": "1404\/09\/17",
+            "key_number": "17",
+            "spare_key": "دارد"
+        },
+        {
+            "number": 18,
+            "status": "تخصیص یافته",
+            "assigned_to": "فیدار",
+            "delivered_at": "1404\/09\/18",
+            "key_number": "18",
+            "spare_key": "دارد"
+        },
+        {
+            "number": 19,
+            "status": "خراب",
+            "assigned_to": "",
+            "delivered_at": "1404\/09\/19",
+            "key_number": "19",
+            "spare_key": "ندارد"
+        },
+        {
+            "number": 20,
+            "status": "رزرو",
+            "assigned_to": "گرجی(دکتر عظیمی)",
+            "delivered_at": "1404\/09\/20",
+            "key_number": "20",
+            "spare_key": "دارد"
+        },
+        {
+            "number": 21,
+            "status": "تخصیص یافته",
+            "assigned_to": "شعبانی",
+            "delivered_at": "1404\/09\/21",
+            "key_number": "21",
+            "spare_key": "ندارد"
+        },
+        {
+            "number": 22,
+            "status": "رزرو",
+            "assigned_to": "صادقی(دکتر عظیمی)",
+            "delivered_at": "1404\/09\/22",
+            "key_number": "22",
+            "spare_key": "دارد"
+        },
+        {
+            "number": 23,
+            "status": "تخصیص یافته",
+            "assigned_to": "روبوتوپیا",
+            "delivered_at": "1404\/09\/23",
+            "key_number": "23",
+            "spare_key": "ندارد"
+        },
+        {
+            "number": 24,
+            "status": "رزرو",
+            "assigned_to": "محمدپور(دکتر عظیمی)",
+            "delivered_at": "1404\/09\/24",
+            "key_number": "24",
+            "spare_key": "دارد"
+        },
+        {
+            "number": 25,
+            "status": "رزرو",
+            "assigned_to": "نوری(دکتر عظیمی)",
+            "delivered_at": "1404\/09\/25",
+            "key_number": "25",
+            "spare_key": "ندارد"
+        },
+        {
+            "number": 26,
+            "status": "خالی",
+            "assigned_to": "-",
+            "delivered_at": "1404\/09\/26",
+            "key_number": "26",
+            "spare_key": "دارد"
+        },
+        {
+            "number": 27,
+            "status": "خراب",
+            "assigned_to": "مجردی(دکتر عظیمی)",
+            "delivered_at": "1404\/09\/27",
+            "key_number": "27",
+            "spare_key": "ندارد"
+        },
+        {
+            "number": 28,
+            "status": "تخصیص یافته",
+            "assigned_to": "تخمه چی",
+            "delivered_at": "1404\/09\/28",
+            "key_number": "28",
+            "spare_key": "ندارد"
+        },
+        {
+            "number": 29,
+            "status": "تخصیص یافته",
+            "assigned_to": "طاهری(دکتر عظیمی)",
+            "delivered_at": "1404\/09\/29",
+            "key_number": "29",
+            "spare_key": "ندارد"
+        },
+        {
+            "number": 30,
+            "status": "تخصیص یافته",
+            "assigned_to": "شرکت رهام",
+            "delivered_at": "1404\/09\/30",
+            "key_number": "30",
+            "spare_key": "دارد"
+        },
+        {
+            "number": 31,
+            "status": "تخصیص یافته",
+            "assigned_to": "رایان رباتیک ایرانیان",
+            "delivered_at": "1404\/09\/31",
+            "key_number": "31",
+            "spare_key": "ندارد"
+        },
+        {
+            "number": 32,
+            "status": "تخصیص یافته",
+            "assigned_to": "کارانو",
+            "delivered_at": "1404\/09\/32",
+            "key_number": "32",
+            "spare_key": "دارد"
+        },
+        {
+            "number": 33,
+            "status": "رزرو",
+            "assigned_to": "آرانی(دکتر عظیمی)",
+            "delivered_at": "1404\/09\/33",
+            "key_number": "33",
+            "spare_key": "ندارد"
+        },
+        {
+            "number": 34,
+            "status": "رزرو",
+            "assigned_to": "جهانی(دکتر عظیمی)",
+            "delivered_at": "1404\/09\/34",
+            "key_number": "34",
+            "spare_key": "دارد"
+        },
+        {
+            "number": 35,
+            "status": "تخصیص یافته",
+            "assigned_to": "شرکت رهام",
+            "delivered_at": "1404\/09\/35",
+            "key_number": "35",
+            "spare_key": "ندارد"
+        },
+        {
+            "number": 36,
+            "status": "تخصیص یافته",
+            "assigned_to": "سپیده تخمه چی",
+            "delivered_at": "1404\/09\/36",
+            "key_number": "36",
+            "spare_key": "دارد"
+        }
+    ],
+    "entities": [
+        {
+            "entity_type": "team",
+            "name": "آوان صنعت دانش گستر",
+            "leader": "مهدی پورحسین",
+            "phone": "9398283658",
+            "desk_count": 2,
+            "joined_at": "",
+            "warning": "",
+            "notes": ""
+        },
+        {
+            "entity_type": "team",
+            "name": "دکتر عظیمی",
+            "leader": "مهدی گرجی",
+            "phone": "9352572223",
+            "desk_count": 5,
+            "joined_at": "",
+            "warning": "",
+            "notes": ""
+        },
+        {
+            "entity_type": "team",
+            "name": "فیدار",
+            "leader": "حسین وارث",
+            "phone": "9124770308",
+            "desk_count": 1,
+            "joined_at": "",
+            "warning": "",
+            "notes": ""
+        },
+        {
+            "entity_type": "team",
+            "name": "بادی تک",
+            "leader": "علی جعفری فشارکی",
+            "phone": "9137297432",
+            "desk_count": 3,
+            "joined_at": "",
+            "warning": "",
+            "notes": ""
+        },
+        {
+            "entity_type": "team",
+            "name": "سوشیانت",
+            "leader": "مهدی طهماسبی",
+            "phone": "9124874629",
+            "desk_count": 1,
+            "joined_at": "",
+            "warning": "",
+            "notes": ""
+        },
+        {
+            "entity_type": "team",
+            "name": "شبیه سازان",
+            "leader": "محمد فولادگر",
+            "phone": "9124113687",
+            "desk_count": 1,
+            "joined_at": "",
+            "warning": "",
+            "notes": ""
+        },
+        {
+            "entity_type": "team",
+            "name": "رایان رباتیک ایرانیان",
+            "leader": "رامیلا عابدی آذر",
+            "phone": "9149225257",
+            "desk_count": 1,
+            "joined_at": "",
+            "warning": "",
+            "notes": ""
+        },
+        {
+            "entity_type": "company",
+            "name": "شرکت رهام",
+            "leader": "ساره رضوی",
+            "phone": "9197257822",
+            "desk_count": 3,
+            "joined_at": "",
+            "warning": "",
+            "notes": ""
+        },
+        {
+            "entity_type": "team",
+            "name": "پایش تجهیز پیشتاز",
+            "leader": "امیر یزدان مهر",
+            "phone": "9124933980",
+            "desk_count": 1,
+            "joined_at": "",
+            "warning": "",
+            "notes": ""
+        },
+        {
+            "entity_type": "team",
+            "name": "روبوتوپیا",
+            "leader": "مهدی باغکی",
+            "phone": "9022823964",
+            "desk_count": 1,
+            "joined_at": "",
+            "warning": "",
+            "notes": ""
+        },
+        {
+            "entity_type": "team",
+            "name": "تیم ساز هم افزا",
+            "leader": "نیلوفر مود",
+            "phone": "9123787738",
+            "desk_count": 1,
+            "joined_at": "",
+            "warning": "",
+            "notes": ""
+        },
+        {
+            "entity_type": "team",
+            "name": "",
+            "leader": "تعداد میز های مورد استفاده",
+            "phone": "تعداد میز های مورد استفاده",
+            "desk_count": 20,
+            "joined_at": "",
+            "warning": "",
+            "notes": ""
+        },
+        {
+            "entity_type": "team",
+            "name": "",
+            "leader": "تعداد میز های مورد استفاده",
+            "phone": "تعداد میز های مورد استفاده",
+            "desk_count": 20,
+            "joined_at": "",
+            "warning": "",
+            "notes": ""
+        },
+        {
+            "entity_type": "team",
+            "name": "",
+            "leader": "تعداد کل میز ها",
+            "phone": "تعداد کل میز ها",
+            "desk_count": 24,
+            "joined_at": "",
+            "warning": "",
+            "notes": ""
+        },
+        {
+            "entity_type": "team",
+            "name": "",
+            "leader": "تعداد کل میز ها",
+            "phone": "تعداد کل میز ها",
+            "desk_count": 24,
+            "joined_at": "",
+            "warning": "",
+            "notes": ""
+        },
+        {
+            "entity_type": "team",
+            "name": "",
+            "leader": "تعداد کل میز های اجاره داده شده",
+            "phone": "تعداد کل میز های اجاره داده شده",
+            "desk_count": 15,
+            "joined_at": "",
+            "warning": "",
+            "notes": ""
+        },
+        {
+            "entity_type": "team",
+            "name": "",
+            "leader": "تعداد کل میز های اجاره داده شده",
+            "phone": "تعداد کل میز های اجاره داده شده",
+            "desk_count": 15,
+            "joined_at": "",
+            "warning": "",
+            "notes": ""
+        }
+    ],
+    "members": [
+        {
+            "team": "معاون پارک فناوری",
+            "full_name": "دکتر قریشی",
+            "access_code": "1",
+            "desks": [
+                1
+            ],
+            "phone": "",
+            "national_id": "",
+            "notes": ""
+        },
+        {
+            "team": "مدیر",
+            "full_name": "دکتر عظیمی",
+            "access_code": "24",
+            "desks": [
+                1
+            ],
+            "phone": "",
+            "national_id": "",
+            "notes": ""
+        },
+        {
+            "team": "کادر سابق",
+            "full_name": "محمد دهقان نیری",
+            "access_code": "76",
+            "desks": [
+                1
+            ],
+            "phone": "9137239267",
+            "national_id": "",
+            "notes": ""
+        },
+        {
+            "team": "رهام",
+            "full_name": "ساره رضوی",
+            "access_code": "42",
+            "desks": [
+                2,
+                3,
+                4
+            ],
+            "phone": "9197257822",
+            "national_id": "2572599902",
+            "notes": ""
+        },
+        {
+            "team": "رهام",
+            "full_name": "فهیمه اطیابی",
+            "access_code": "31",
+            "desks": [
+                2,
+                3,
+                4
+            ],
+            "phone": "",
+            "national_id": "23301821",
+            "notes": ""
+        },
+        {
+            "team": "رهام",
+            "full_name": "سیف الله قادری",
+            "access_code": "87",
+            "desks": [
+                2,
+                3,
+                4
+            ],
+            "phone": "",
+            "national_id": "2292888378",
+            "notes": ""
+        },
+        {
+            "team": "رهام",
+            "full_name": "سیدمحسن توسلی",
+            "access_code": "",
+            "desks": [
+                2,
+                3,
+                4
+            ],
+            "phone": "9125571611",
+            "national_id": "81004583",
+            "notes": ""
+        },
+        {
+            "team": "رهام",
+            "full_name": "سید جعفر احمدی",
+            "access_code": "126",
+            "desks": [
+                2,
+                3,
+                4
+            ],
+            "phone": "",
+            "national_id": "",
+            "notes": ""
+        },
+        {
+            "team": "رهام",
+            "full_name": "یونس میری نژاد",
+            "access_code": "90",
+            "desks": [
+                2,
+                3,
+                4
+            ],
+            "phone": "",
+            "national_id": "10049770",
+            "notes": ""
+        },
+        {
+            "team": "رهام",
+            "full_name": "رهام نرگسی",
+            "access_code": "85",
+            "desks": [
+                2,
+                3,
+                4
+            ],
+            "phone": "",
+            "national_id": "3329848111",
+            "notes": ""
+        },
+        {
+            "team": "دکتر عظیمی",
+            "full_name": "علی آرانی",
+            "access_code": "55",
+            "desks": [
+                5,
+                6,
+                7,
+                8
+            ],
+            "phone": "",
+            "national_id": "",
+            "notes": ""
+        },
+        {
+            "team": "دکتر عظیمی",
+            "full_name": "مهدی گرجی",
+            "access_code": "23",
+            "desks": [
+                5,
+                6,
+                7,
+                8
+            ],
+            "phone": "9352572223",
+            "national_id": "21518009",
+            "notes": ""
+        },
+        {
+            "team": "دکتر عظیمی",
+            "full_name": "علیرضا طاهری",
+            "access_code": "50",
+            "desks": [
+                5,
+                6,
+                7,
+                8
+            ],
+            "phone": "9198902285",
+            "national_id": "6660379282",
+            "notes": ""
+        },
+        {
+            "team": "دکتر عظیمی",
+            "full_name": "مهدیه نوری",
+            "access_code": "81",
+            "desks": [
+                5,
+                6,
+                7,
+                8
+            ],
+            "phone": "",
+            "national_id": "",
+            "notes": ""
+        },
+        {
+            "team": "دکتر عظیمی",
+            "full_name": "علیرضا ابراهیمی",
+            "access_code": "20",
+            "desks": [
+                5,
+                6,
+                7,
+                8
+            ],
+            "phone": "",
+            "national_id": "",
+            "notes": "مشخص شود"
+        },
+        {
+            "team": "دکتر عظیمی",
+            "full_name": "علی اقبالی",
+            "access_code": "11",
+            "desks": [
+                5,
+                6,
+                7,
+                8
+            ],
+            "phone": "",
+            "national_id": "",
+            "notes": ""
+        },
+        {
+            "team": "دکتر عظیمی",
+            "full_name": "پگاه گل افشان",
+            "access_code": "36",
+            "desks": [
+                5,
+                6,
+                7,
+                8
+            ],
+            "phone": "9384270209",
+            "national_id": "0481154817",
+            "notes": ""
+        },
+        {
+            "team": "دکتر عظیمی",
+            "full_name": "محمدحسین صدری",
+            "access_code": "38",
+            "desks": [
+                5,
+                6,
+                7,
+                8
+            ],
+            "phone": "",
+            "national_id": "",
+            "notes": ""
+        },
+        {
+            "team": "دکتر عظیمی",
+            "full_name": "سید جواد میرفرجود",
+            "access_code": "67",
+            "desks": [
+                5,
+                6,
+                7,
+                8
+            ],
+            "phone": "",
+            "national_id": "",
+            "notes": ""
+        },
+        {
+            "team": "دکتر عظیمی",
+            "full_name": "سارا رضایی",
+            "access_code": "73",
+            "desks": [
+                5,
+                6,
+                7,
+                8
+            ],
+            "phone": "",
+            "national_id": "",
+            "notes": ""
+        },
+        {
+            "team": "دکتر عظیمی",
+            "full_name": "آریا کارخیران",
+            "access_code": "75",
+            "desks": [
+                5,
+                6,
+                7,
+                8
+            ],
+            "phone": "",
+            "national_id": "",
+            "notes": ""
+        },
+        {
+            "team": "دکتر عظیمی",
+            "full_name": "مازیار عسکری",
+            "access_code": "28",
+            "desks": [
+                5,
+                6,
+                7,
+                8
+            ],
+            "phone": "",
+            "national_id": "",
+            "notes": ""
+        },
+        {
+            "team": "دکتر عظیمی",
+            "full_name": "محمد سجاد اعرابی",
+            "access_code": "",
+            "desks": [
+                5,
+                6,
+                7,
+                8
+            ],
+            "phone": "",
+            "national_id": "",
+            "notes": "دانشجو دکترا"
+        },
+        {
+            "team": "دکتر عظیمی",
+            "full_name": "محمدحسین نظری مقدم",
+            "access_code": "54",
+            "desks": [
+                5,
+                6,
+                7,
+                8
+            ],
+            "phone": "",
+            "national_id": "",
+            "notes": ""
+        },
+        {
+            "team": "دکتر عظیمی",
+            "full_name": "شهرزاد میلانی",
+            "access_code": "29",
+            "desks": [
+                5,
+                6,
+                7,
+                8
+            ],
+            "phone": "",
+            "national_id": "",
+            "notes": ""
+        },
+        {
+            "team": "دکتر عظیمی",
+            "full_name": "جواد زین‌الدینی",
+            "access_code": "110",
+            "desks": [
+                5,
+                6,
+                7,
+                8
+            ],
+            "phone": "",
+            "national_id": "",
+            "notes": ""
+        },
+        {
+            "team": "شبیه سازان",
+            "full_name": "محمد فولادگر",
+            "access_code": "39",
+            "desks": [
+                9
+            ],
+            "phone": "9124113687",
+            "national_id": "0079812856",
+            "notes": ""
+        },
+        {
+            "team": "شبیه سازان",
+            "full_name": "علی فولادگر",
+            "access_code": "3",
+            "desks": [
+                9
+            ],
+            "phone": "9126452592",
+            "national_id": "0014251991",
+            "notes": ""
+        },
+        {
+            "team": "شبیه سازان",
+            "full_name": "محمد ریاضی دوست",
+            "access_code": "19",
+            "desks": [
+                9
+            ],
+            "phone": "",
+            "national_id": "0480307164",
+            "notes": ""
+        },
+        {
+            "team": "شبیه سازان",
+            "full_name": "محمدعلی سکادفکر",
+            "access_code": "35",
+            "desks": [
+                9
+            ],
+            "phone": "",
+            "national_id": "0019938004",
+            "notes": ""
+        },
+        {
+            "team": "شبیه سازان",
+            "full_name": "محمدعلی مهدی",
+            "access_code": "111",
+            "desks": [
+                9
+            ],
+            "phone": "9355374339",
+            "national_id": "",
+            "notes": ""
+        },
+        {
+            "team": "شبیه سازان",
+            "full_name": "امید صداقت",
+            "access_code": "84",
+            "desks": [
+                9
+            ],
+            "phone": "",
+            "national_id": "",
+            "notes": ""
+        },
+        {
+            "team": "شبیه سازان",
+            "full_name": "حسن شریفی",
+            "access_code": "22",
+            "desks": [
+                9
+            ],
+            "phone": "",
+            "national_id": "",
+            "notes": ""
+        },
+        {
+            "team": "",
+            "full_name": "زهرا نعمتی",
+            "access_code": "26",
+            "desks": [
+                9
+            ],
+            "phone": "",
+            "national_id": "013337246",
+            "notes": ""
+        },
+        {
+            "team": "",
+            "full_name": "سپیده تخمه چی",
+            "access_code": "94",
+            "desks": [
+                9
+            ],
+            "phone": "",
+            "national_id": "0081241224",
+            "notes": ""
+        },
+        {
+            "team": "",
+            "full_name": "سعید ظفر واحدیان",
+            "access_code": "57",
+            "desks": [
+                9
+            ],
+            "phone": "9124402271",
+            "national_id": "0073115789",
+            "notes": ""
+        },
+        {
+            "team": "",
+            "full_name": "زهره اکبری",
+            "access_code": "97",
+            "desks": [
+                9
+            ],
+            "phone": "",
+            "national_id": "0083085858",
+            "notes": ""
+        },
+        {
+            "team": "",
+            "full_name": "سارا افتخاری",
+            "access_code": "49",
+            "desks": [
+                9
+            ],
+            "phone": "",
+            "national_id": "",
+            "notes": ""
+        },
+        {
+            "team": "",
+            "full_name": "نسرین سادات هاشمی",
+            "access_code": "98",
+            "desks": [
+                9
+            ],
+            "phone": "",
+            "national_id": "5739917492",
+            "notes": ""
+        },
+        {
+            "team": "",
+            "full_name": "نیلوفر شیروین",
+            "access_code": "99",
+            "desks": [
+                9
+            ],
+            "phone": "",
+            "national_id": "0016396642",
+            "notes": ""
+        },
+        {
+            "team": "روبوتوپیا",
+            "full_name": "مهدی باغکی",
+            "access_code": "60",
+            "desks": [
+                10
+            ],
+            "phone": "9022823964",
+            "national_id": "1273114991",
+            "notes": ""
+        },
+        {
+            "team": "روبوتوپیا",
+            "full_name": "محمد مهدی قربانی",
+            "access_code": "107",
+            "desks": [
+                10
+            ],
+            "phone": "9939130515",
+            "national_id": "1250746418",
+            "notes": "کارآموز"
+        },
+        {
+            "team": "روبوتوپیا",
+            "full_name": "علیرضا اصلانی منش",
+            "access_code": "127",
+            "desks": [
+                10
+            ],
+            "phone": "9195698795",
+            "national_id": "150776667",
+            "notes": "کارآموز"
+        },
+        {
+            "team": "روبوتوپیا",
+            "full_name": "ابوالفضل کوانگری",
+            "access_code": "123",
+            "desks": [
+                10
+            ],
+            "phone": "",
+            "national_id": "200373791",
+            "notes": "کارآموز"
+        },
+        {
+            "team": "روبوتوپیا",
+            "full_name": "محمدصالح رحیمی",
+            "access_code": "128",
+            "desks": [
+                10
+            ],
+            "phone": "2100669145",
+            "national_id": "151110697",
+            "notes": "کارآموز"
+        },
+        {
+            "team": "روبوتوپیا",
+            "full_name": "علی باغی بیرق",
+            "access_code": "130",
+            "desks": [
+                10
+            ],
+            "phone": "9104521416",
+            "national_id": "25438441",
+            "notes": "کارآموز"
+        },
+        {
+            "team": "روبوتوپیا",
+            "full_name": "عرفان نجف آبادی",
+            "access_code": "133",
+            "desks": [
+                10
+            ],
+            "phone": "9944775447",
+            "national_id": "0180637893",
+            "notes": ""
+        },
+        {
+            "team": "روبوتوپیا",
+            "full_name": "محمدرضا خبازیان",
+            "access_code": "15",
+            "desks": [
+                10
+            ],
+            "phone": "9133658053",
+            "national_id": "1273067061",
+            "notes": ""
+        },
+        {
+            "team": "تیم ساز هم افزا",
+            "full_name": "نیلوفر مود",
+            "access_code": "65",
+            "desks": [
+                11
+            ],
+            "phone": "9123787738",
+            "national_id": "",
+            "notes": ""
+        },
+        {
+            "team": "پایش تجهیز پیشتاز",
+            "full_name": "دکتر یزدان مهر",
+            "access_code": "92",
+            "desks": [
+                12
+            ],
+            "phone": "",
+            "national_id": "",
+            "notes": ""
+        },
+        {
+            "team": "آوان صنعت دانش گستر",
+            "full_name": "مهدی پورحسین",
+            "access_code": "51",
+            "desks": [
+                15,
+                16
+            ],
+            "phone": "9398283658",
+            "national_id": "1990881165",
+            "notes": ""
+        },
+        {
+            "team": "آوان صنعت دانش گستر",
+            "full_name": "علی پورحسین",
+            "access_code": "21",
+            "desks": [
+                15,
+                16
+            ],
+            "phone": "9158322014",
+            "national_id": "1990620051",
+            "notes": ""
+        },
+        {
+            "team": "آوان صنعت دانش گستر",
+            "full_name": "امیرحسین ساعی",
+            "access_code": "9",
+            "desks": [
+                15,
+                16
+            ],
+            "phone": "9924665780",
+            "national_id": "4271371858",
+            "notes": ""
+        },
+        {
+            "team": "آوان صنعت دانش گستر",
+            "full_name": "آلاله صباغ پور",
+            "access_code": "106",
+            "desks": [
+                15,
+                16
+            ],
+            "phone": "9181079769",
+            "national_id": "2110538740",
+            "notes": ""
+        },
+        {
+            "team": "آوان صنعت دانش گستر",
+            "full_name": "پرهام بیضاوی",
+            "access_code": "132",
+            "desks": [
+                15,
+                16
+            ],
+            "phone": "9101717368",
+            "national_id": "0200283405",
+            "notes": ""
+        },
+        {
+            "team": "آوان صنعت دانش گستر",
+            "full_name": "علی بابایی",
+            "access_code": "13",
+            "desks": [
+                15,
+                16
+            ],
+            "phone": "9101672132",
+            "national_id": "0023897961",
+            "notes": ""
+        },
+        {
+            "team": "آوان صنعت دانش گستر",
+            "full_name": "احسان صالحی",
+            "access_code": "17",
+            "desks": [
+                15,
+                16
+            ],
+            "phone": "",
+            "national_id": "",
+            "notes": ""
+        },
+        {
+            "team": "آوان صنعت دانش گستر",
+            "full_name": "دانیال سلیمی",
+            "access_code": "5",
+            "desks": [
+                15,
+                16
+            ],
+            "phone": "9964081736",
+            "national_id": "",
+            "notes": ""
+        },
+        {
+            "team": "آوان صنعت دانش گستر",
+            "full_name": "کوین باباخانلو",
+            "access_code": "52",
+            "desks": [
+                15,
+                16
+            ],
+            "phone": "9912798973",
+            "national_id": "0023065826",
+            "notes": ""
+        },
+        {
+            "team": "بادی تک",
+            "full_name": "محمدحسين طيب زاده",
+            "access_code": "88",
+            "desks": [
+                17,
+                18
+            ],
+            "phone": "9213962354",
+            "national_id": "0021306745",
+            "notes": ""
+        },
+        {
+            "team": "بادی تک",
+            "full_name": "علی جعفری فشارکی",
+            "access_code": "12",
+            "desks": [
+                17,
+                18
+            ],
+            "phone": "9137297432",
+            "national_id": "1272179478",
+            "notes": ""
+        },
+        {
+            "team": "بادی تک",
+            "full_name": "محمدعرفان حافظی",
+            "access_code": "101",
+            "desks": [
+                17,
+                18
+            ],
+            "phone": "",
+            "national_id": "",
+            "notes": ""
+        },
+        {
+            "team": "بادی تک",
+            "full_name": "عرفان عطوفی",
+            "access_code": "63",
+            "desks": [
+                17,
+                18
+            ],
+            "phone": "",
+            "national_id": "",
+            "notes": ""
+        },
+        {
+            "team": "بادی تک",
+            "full_name": "سلمان عامی مطلق",
+            "access_code": "14",
+            "desks": [
+                17,
+                18
+            ],
+            "phone": "9307541474",
+            "national_id": "",
+            "notes": ""
+        },
+        {
+            "team": "بادی تک",
+            "full_name": "یاسین بیات",
+            "access_code": "58",
+            "desks": [
+                17,
+                18
+            ],
+            "phone": "9104015905",
+            "national_id": "0021306745",
+            "notes": ""
+        },
+        {
+            "team": "بادی تک",
+            "full_name": "آرش اخلاقی",
+            "access_code": "104",
+            "desks": [
+                17,
+                18
+            ],
+            "phone": "9012899041",
+            "national_id": "00200266772",
+            "notes": "کارآموز"
+        },
+        {
+            "team": "بادی تک",
+            "full_name": "باران میرفخار",
+            "access_code": "125",
+            "desks": [
+                17,
+                18
+            ],
+            "phone": "9393004296",
+            "national_id": "0250225689",
+            "notes": "کارآموز"
+        },
+        {
+            "team": "رایان رباتیک ایرانیان",
+            "full_name": "رامیلا عابدی آذر",
+            "access_code": "66",
+            "desks": [
+                20
+            ],
+            "phone": "",
+            "national_id": "1540349578",
+            "notes": ""
+        },
+        {
+            "team": "رایان رباتیک ایرانیان",
+            "full_name": "محمدجواد حقی",
+            "access_code": "14",
+            "desks": [
+                20
+            ],
+            "phone": "9196363751",
+            "national_id": "0015064603",
+            "notes": ""
+        },
+        {
+            "team": "رایان رباتیک ایرانیان",
+            "full_name": "علی آهنگر ارجمندی",
+            "access_code": "20",
+            "desks": [
+                20
+            ],
+            "phone": "9127765362",
+            "national_id": "0023241543",
+            "notes": ""
+        },
+        {
+            "team": "رایان رباتیک ایرانیان",
+            "full_name": "امید والی نژاد",
+            "access_code": "69",
+            "desks": [
+                20
+            ],
+            "phone": "9124332683",
+            "national_id": "0016660692",
+            "notes": ""
+        },
+        {
+            "team": "سوشیانت",
+            "full_name": "محمدمهدی طهماسبی",
+            "access_code": "68",
+            "desks": [
+                21,
+                22
+            ],
+            "phone": "9124874629",
+            "national_id": "",
+            "notes": ""
+        },
+        {
+            "team": "سوشیانت",
+            "full_name": "محمد باقری",
+            "access_code": "53",
+            "desks": [
+                21,
+                22
+            ],
+            "phone": "9905656972",
+            "national_id": "",
+            "notes": ""
+        },
+        {
+            "team": "سوشیانت",
+            "full_name": "محمدطاها یاری میاب",
+            "access_code": "91",
+            "desks": [
+                21,
+                22
+            ],
+            "phone": "9359774601",
+            "national_id": "",
+            "notes": ""
+        },
+        {
+            "team": "سوشیانت",
+            "full_name": "امیرحسین احمدی نیا",
+            "access_code": "18",
+            "desks": [
+                21,
+                22
+            ],
+            "phone": "9389980458",
+            "national_id": "",
+            "notes": ""
+        },
+        {
+            "team": "سوشیانت",
+            "full_name": "محمدعلی کشاورز",
+            "access_code": "82",
+            "desks": [
+                21,
+                22
+            ],
+            "phone": "9367844926",
+            "national_id": "0023191171",
+            "notes": ""
+        },
+        {
+            "team": "سوشیانت",
+            "full_name": "امین رضا نجاریان",
+            "access_code": "59",
+            "desks": [
+                21,
+                22
+            ],
+            "phone": "9100173608",
+            "national_id": "",
+            "notes": ""
+        },
+        {
+            "team": "سوشیانت",
+            "full_name": "سامان محجوب",
+            "access_code": "120",
+            "desks": [
+                21,
+                22
+            ],
+            "phone": "9058756377",
+            "national_id": "",
+            "notes": ""
+        },
+        {
+            "team": "فیدار",
+            "full_name": "محمدحسین  وارث وزیریان",
+            "access_code": "25",
+            "desks": [
+                24
+            ],
+            "phone": "9124770308",
+            "national_id": "0020536208",
+            "notes": ""
+        },
+        {
+            "team": "فیدار",
+            "full_name": "سجاد شریفیان",
+            "access_code": "72",
+            "desks": [
+                24
+            ],
+            "phone": "9335617039",
+            "national_id": "0022941983",
+            "notes": ""
+        },
+        {
+            "team": "فیدار",
+            "full_name": "سید سینا میرخانی",
+            "access_code": "7",
+            "desks": [
+                24
+            ],
+            "phone": "9125607035",
+            "national_id": "0020111101",
+            "notes": ""
+        },
+        {
+            "team": "فیدار",
+            "full_name": "صهیب جوهری",
+            "access_code": "70",
+            "desks": [
+                24
+            ],
+            "phone": "9150298672",
+            "national_id": "0760439451",
+            "notes": ""
+        },
+        {
+            "team": "فیدار",
+            "full_name": "آیدا احمدی",
+            "access_code": "135",
+            "desks": [
+                24
+            ],
+            "phone": "9351386830",
+            "national_id": "0024279048",
+            "notes": ""
+        },
+        {
+            "team": "",
+            "full_name": "حانیه عطریان سرشت",
+            "access_code": "8",
+            "desks": [],
+            "phone": "9033610511",
+            "national_id": "150083068",
+            "notes": ""
+        },
+        {
+            "team": "",
+            "full_name": "امیرحسین محرابیان",
+            "access_code": "10",
+            "desks": [],
+            "phone": "",
+            "national_id": "",
+            "notes": ""
+        },
+        {
+            "team": "",
+            "full_name": "الهه دهسنگی",
+            "access_code": "56",
+            "desks": [],
+            "phone": "",
+            "national_id": "",
+            "notes": ""
+        },
+        {
+            "team": "",
+            "full_name": "نیروی خدمات",
+            "access_code": "117",
+            "desks": [],
+            "phone": "",
+            "national_id": "",
+            "notes": ""
+        },
+        {
+            "team": "",
+            "full_name": "محمدرضا شعبانی",
+            "access_code": "27",
+            "desks": [],
+            "phone": "9102107081",
+            "national_id": "0022086315",
+            "notes": ""
+        }
+    ],
+    "plans": [
+        {
+            "title": "سرویس چایی مشترک در فضای استراحت",
+            "status": "پیشنهادی",
+            "priority": "متوسط",
+            "proposed_budget": 11000000,
+            "schedule": "ماهانه",
+            "end_date": "زمستان 1404"
+        },
+        {
+            "title": "چراغ خطی لاین آبی رنگ مرکز",
+            "status": "پیشنهادی",
+            "priority": "متوسط",
+            "proposed_budget": 20000000,
+            "schedule": "ماهانه",
+            "end_date": "-"
+        },
+        {
+            "title": "تعمیر پریز های برق مرکز",
+            "status": "پیشنهادی",
+            "priority": "متوسط",
+            "proposed_budget": 20000000,
+            "schedule": "ماهانه",
+            "end_date": "-"
+        },
+        {
+            "title": "خرید کولر آبی",
+            "status": "پیشنهادی",
+            "priority": "متوسط",
+            "proposed_budget": 20000000,
+            "schedule": "ماهانه",
+            "end_date": "-"
+        },
+        {
+            "title": "خرید گلدان و گل آرایی مرکز",
+            "status": "پیشنهادی",
+            "priority": "متوسط",
+            "proposed_budget": 10000000,
+            "schedule": "ماهانه",
+            "end_date": "-"
+        },
+        {
+            "title": "نور پردازی روی کمد ها",
+            "status": "پیشنهادی",
+            "priority": "متوسط",
+            "proposed_budget": 20000000,
+            "schedule": "ماهانه",
+            "end_date": "-"
+        },
+        {
+            "title": "افزایش کمد های مرکز",
+            "status": "پیشنهادی",
+            "priority": "متوسط",
+            "proposed_budget": 20000000,
+            "schedule": "ماهانه",
+            "end_date": "-"
+        },
+        {
+            "title": "تغییر محل بعضی دوربین های مرکز",
+            "status": "پیشنهادی",
+            "priority": "متوسط",
+            "proposed_budget": 20000000,
+            "schedule": "ماهانه",
+            "end_date": "-"
+        },
+        {
+            "title": "خرید دوربین، nvr و تلفن شبکه ای",
+            "status": "پیشنهادی",
+            "priority": "متوسط",
+            "proposed_budget": 20000000,
+            "schedule": "ماهانه",
+            "end_date": "-"
+        },
+        {
+            "title": "خرید دستگیره برای کمد ها",
+            "status": "پیشنهادی",
+            "priority": "متوسط",
+            "proposed_budget": 20000000,
+            "schedule": "ماهانه",
+            "end_date": "-"
+        },
+        {
+            "title": "تعویض قفل های کمد ها",
+            "status": "پیشنهادی",
+            "priority": "متوسط",
+            "proposed_budget": 20000000,
+            "schedule": "ماهانه",
+            "end_date": "-"
+        },
+        {
+            "title": "راه اندازی سرویس انلاین رزرو اتاق جلسه",
+            "status": "پیشنهادی",
+            "priority": "متوسط",
+            "proposed_budget": 20000000,
+            "schedule": "ماهانه",
+            "end_date": "-"
+        },
+        {
+            "title": "رنگ امیزی سردر و سقف مرکز",
+            "status": "پیشنهادی",
+            "priority": "متوسط",
+            "proposed_budget": 20000000,
+            "schedule": "ماهانه",
+            "end_date": "-"
+        },
+        {
+            "title": "افزودن تعداد سطل آشغال ها",
+            "status": "پیشنهادی",
+            "priority": "متوسط",
+            "proposed_budget": 20000000,
+            "schedule": "ماهانه",
+            "end_date": "-"
+        },
+        {
+            "title": "نظافت اساسی کف و دیوار های مرکز توسط نیروی خصوصی",
+            "status": "پیشنهادی",
+            "priority": "متوسط",
+            "proposed_budget": 20000000,
+            "schedule": "ماهانه",
+            "end_date": "-"
+        },
+        {
+            "title": "نظافت اساسی کف و دیوار های مرکز توسط نیروی خصوصی",
+            "status": "پیشنهادی",
+            "priority": "متوسط",
+            "proposed_budget": 20000000,
+            "schedule": "ماهانه",
+            "end_date": "-"
+        }
+    ],
+    "charges": [
+        {
+            "fiscal_year": "1404",
+            "team": "آوان صنعت دانش گستر",
+            "month_index": 8,
+            "month_name": "آبان",
+            "charge_amount": 840000,
+            "rent_amount": 360000,
+            "amount": 1200000
+        },
+        {
+            "fiscal_year": "1404",
+            "team": "آوان صنعت دانش گستر",
+            "month_index": 9,
+            "month_name": "آذر",
+            "charge_amount": 840000,
+            "rent_amount": 360000,
+            "amount": 1200000
+        },
+        {
+            "fiscal_year": "1404",
+            "team": "آوان صنعت دانش گستر",
+            "month_index": 10,
+            "month_name": "دی",
+            "charge_amount": 840000,
+            "rent_amount": 360000,
+            "amount": 1200000
+        },
+        {
+            "fiscal_year": "1404",
+            "team": "آوان صنعت دانش گستر",
+            "month_index": 11,
+            "month_name": "بهمن",
+            "charge_amount": 840000,
+            "rent_amount": 360000,
+            "amount": 1200000
+        },
+        {
+            "fiscal_year": "1404",
+            "team": "آوان صنعت دانش گستر",
+            "month_index": 12,
+            "month_name": "اسفند",
+            "charge_amount": 840000,
+            "rent_amount": 360000,
+            "amount": 1200000
+        },
+        {
+            "fiscal_year": "1404",
+            "team": "فیدار",
+            "month_index": 8,
+            "month_name": "آبان",
+            "charge_amount": 490000,
+            "rent_amount": 210000,
+            "amount": 700000
+        },
+        {
+            "fiscal_year": "1404",
+            "team": "فیدار",
+            "month_index": 9,
+            "month_name": "آذر",
+            "charge_amount": 490000,
+            "rent_amount": 210000,
+            "amount": 700000
+        },
+        {
+            "fiscal_year": "1404",
+            "team": "فیدار",
+            "month_index": 10,
+            "month_name": "دی",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1404",
+            "team": "فیدار",
+            "month_index": 11,
+            "month_name": "بهمن",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1404",
+            "team": "فیدار",
+            "month_index": 12,
+            "month_name": "اسفند",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1404",
+            "team": "بادی تک",
+            "month_index": 8,
+            "month_name": "آبان",
+            "charge_amount": 980000,
+            "rent_amount": 420000,
+            "amount": 1400000
+        },
+        {
+            "fiscal_year": "1404",
+            "team": "بادی تک",
+            "month_index": 9,
+            "month_name": "آذر",
+            "charge_amount": 1470000,
+            "rent_amount": 630000,
+            "amount": 2100000
+        },
+        {
+            "fiscal_year": "1404",
+            "team": "بادی تک",
+            "month_index": 10,
+            "month_name": "دی",
+            "charge_amount": 1260000,
+            "rent_amount": 540000,
+            "amount": 1800000
+        },
+        {
+            "fiscal_year": "1404",
+            "team": "بادی تک",
+            "month_index": 11,
+            "month_name": "بهمن",
+            "charge_amount": 1260000,
+            "rent_amount": 540000,
+            "amount": 1800000
+        },
+        {
+            "fiscal_year": "1404",
+            "team": "بادی تک",
+            "month_index": 12,
+            "month_name": "اسفند",
+            "charge_amount": 1260000,
+            "rent_amount": 540000,
+            "amount": 1800000
+        },
+        {
+            "fiscal_year": "1404",
+            "team": "سوشیانت",
+            "month_index": 8,
+            "month_name": "آبان",
+            "charge_amount": 490000,
+            "rent_amount": 210000,
+            "amount": 700000
+        },
+        {
+            "fiscal_year": "1404",
+            "team": "سوشیانت",
+            "month_index": 9,
+            "month_name": "آذر",
+            "charge_amount": 490000,
+            "rent_amount": 210000,
+            "amount": 700000
+        },
+        {
+            "fiscal_year": "1404",
+            "team": "سوشیانت",
+            "month_index": 10,
+            "month_name": "دی",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1404",
+            "team": "سوشیانت",
+            "month_index": 11,
+            "month_name": "بهمن",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1404",
+            "team": "سوشیانت",
+            "month_index": 12,
+            "month_name": "اسفند",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1404",
+            "team": "شبیه سازان",
+            "month_index": 8,
+            "month_name": "آبان",
+            "charge_amount": 490000,
+            "rent_amount": 210000,
+            "amount": 700000
+        },
+        {
+            "fiscal_year": "1404",
+            "team": "شبیه سازان",
+            "month_index": 9,
+            "month_name": "آذر",
+            "charge_amount": 490000,
+            "rent_amount": 210000,
+            "amount": 700000
+        },
+        {
+            "fiscal_year": "1404",
+            "team": "شبیه سازان",
+            "month_index": 10,
+            "month_name": "دی",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1404",
+            "team": "شبیه سازان",
+            "month_index": 11,
+            "month_name": "بهمن",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1404",
+            "team": "شبیه سازان",
+            "month_index": 12,
+            "month_name": "اسفند",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1404",
+            "team": "رایان رباتیک ایرانیان",
+            "month_index": 8,
+            "month_name": "آبان",
+            "charge_amount": 490000,
+            "rent_amount": 210000,
+            "amount": 700000
+        },
+        {
+            "fiscal_year": "1404",
+            "team": "رایان رباتیک ایرانیان",
+            "month_index": 9,
+            "month_name": "آذر",
+            "charge_amount": 490000,
+            "rent_amount": 210000,
+            "amount": 700000
+        },
+        {
+            "fiscal_year": "1404",
+            "team": "رایان رباتیک ایرانیان",
+            "month_index": 10,
+            "month_name": "دی",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1404",
+            "team": "رایان رباتیک ایرانیان",
+            "month_index": 11,
+            "month_name": "بهمن",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1404",
+            "team": "رایان رباتیک ایرانیان",
+            "month_index": 12,
+            "month_name": "اسفند",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1404",
+            "team": "شرکت رهام",
+            "month_index": 8,
+            "month_name": "آبان",
+            "charge_amount": 1260000,
+            "rent_amount": 540000,
+            "amount": 1800000
+        },
+        {
+            "fiscal_year": "1404",
+            "team": "شرکت رهام",
+            "month_index": 9,
+            "month_name": "آذر",
+            "charge_amount": 1260000,
+            "rent_amount": 540000,
+            "amount": 1800000
+        },
+        {
+            "fiscal_year": "1404",
+            "team": "شرکت رهام",
+            "month_index": 10,
+            "month_name": "دی",
+            "charge_amount": 1260000,
+            "rent_amount": 540000,
+            "amount": 1800000
+        },
+        {
+            "fiscal_year": "1404",
+            "team": "شرکت رهام",
+            "month_index": 11,
+            "month_name": "بهمن",
+            "charge_amount": 1260000,
+            "rent_amount": 540000,
+            "amount": 1800000
+        },
+        {
+            "fiscal_year": "1404",
+            "team": "شرکت رهام",
+            "month_index": 12,
+            "month_name": "اسفند",
+            "charge_amount": 1260000,
+            "rent_amount": 540000,
+            "amount": 1800000
+        },
+        {
+            "fiscal_year": "1404",
+            "team": "پایش تجهیز پیشتاز",
+            "month_index": 8,
+            "month_name": "آبان",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1404",
+            "team": "پایش تجهیز پیشتاز",
+            "month_index": 9,
+            "month_name": "آذر",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1404",
+            "team": "پایش تجهیز پیشتاز",
+            "month_index": 10,
+            "month_name": "دی",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1404",
+            "team": "پایش تجهیز پیشتاز",
+            "month_index": 11,
+            "month_name": "بهمن",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1404",
+            "team": "پایش تجهیز پیشتاز",
+            "month_index": 12,
+            "month_name": "اسفند",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1404",
+            "team": "روبوتوپیا",
+            "month_index": 8,
+            "month_name": "آبان",
+            "charge_amount": 490000,
+            "rent_amount": 210000,
+            "amount": 700000
+        },
+        {
+            "fiscal_year": "1404",
+            "team": "روبوتوپیا",
+            "month_index": 9,
+            "month_name": "آذر",
+            "charge_amount": 490000,
+            "rent_amount": 210000,
+            "amount": 700000
+        },
+        {
+            "fiscal_year": "1404",
+            "team": "روبوتوپیا",
+            "month_index": 10,
+            "month_name": "دی",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1404",
+            "team": "روبوتوپیا",
+            "month_index": 11,
+            "month_name": "بهمن",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1404",
+            "team": "روبوتوپیا",
+            "month_index": 12,
+            "month_name": "اسفند",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1404",
+            "team": "تیم ساز هم افزا",
+            "month_index": 8,
+            "month_name": "آبان",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1404",
+            "team": "تیم ساز هم افزا",
+            "month_index": 9,
+            "month_name": "آذر",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1404",
+            "team": "تیم ساز هم افزا",
+            "month_index": 10,
+            "month_name": "دی",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1404",
+            "team": "تیم ساز هم افزا",
+            "month_index": 11,
+            "month_name": "بهمن",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1404",
+            "team": "تیم ساز هم افزا",
+            "month_index": 12,
+            "month_name": "اسفند",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1404",
+            "team": "-",
+            "month_index": 8,
+            "month_name": "آبان",
+            "charge_amount": 980000,
+            "rent_amount": 420000,
+            "amount": 1400000
+        },
+        {
+            "fiscal_year": "1404",
+            "team": "-",
+            "month_index": 9,
+            "month_name": "آذر",
+            "charge_amount": 980000,
+            "rent_amount": 420000,
+            "amount": 1400000
+        },
+        {
+            "fiscal_year": "1404",
+            "team": "-",
+            "month_index": 10,
+            "month_name": "دی",
+            "charge_amount": 1050000,
+            "rent_amount": 450000,
+            "amount": 1500000
+        },
+        {
+            "fiscal_year": "1404",
+            "team": "-",
+            "month_index": 11,
+            "month_name": "بهمن",
+            "charge_amount": 1050000,
+            "rent_amount": 450000,
+            "amount": 1500000
+        },
+        {
+            "fiscal_year": "1404",
+            "team": "-",
+            "month_index": 12,
+            "month_name": "اسفند",
+            "charge_amount": 1050000,
+            "rent_amount": 450000,
+            "amount": 1500000
+        },
+        {
+            "fiscal_year": "1404",
+            "team": "-",
+            "month_index": 11,
+            "month_name": "بهمن",
+            "charge_amount": 1050000,
+            "rent_amount": 450000,
+            "amount": 1500000
+        },
+        {
+            "fiscal_year": "1404",
+            "team": "-",
+            "month_index": 12,
+            "month_name": "اسفند",
+            "charge_amount": 2100000,
+            "rent_amount": 900000,
+            "amount": 3000000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "آوان صنعت دانش گستر",
+            "month_index": 8,
+            "month_name": "آبان",
+            "charge_amount": 840000,
+            "rent_amount": 360000,
+            "amount": 1200000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "آوان صنعت دانش گستر",
+            "month_index": 9,
+            "month_name": "آذر",
+            "charge_amount": 840000,
+            "rent_amount": 360000,
+            "amount": 1200000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "آوان صنعت دانش گستر",
+            "month_index": 10,
+            "month_name": "دی",
+            "charge_amount": 840000,
+            "rent_amount": 360000,
+            "amount": 1200000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "آوان صنعت دانش گستر",
+            "month_index": 11,
+            "month_name": "بهمن",
+            "charge_amount": 840000,
+            "rent_amount": 360000,
+            "amount": 1200000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "آوان صنعت دانش گستر",
+            "month_index": 12,
+            "month_name": "اسفند",
+            "charge_amount": 840000,
+            "rent_amount": 360000,
+            "amount": 1200000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "فیدار",
+            "month_index": 1,
+            "month_name": "فروردین",
+            "charge_amount": 210000,
+            "rent_amount": 90000,
+            "amount": 300000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "فیدار",
+            "month_index": 2,
+            "month_name": "اردیبهشت",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "فیدار",
+            "month_index": 3,
+            "month_name": "خرداد",
+            "charge_amount": 840000,
+            "rent_amount": 360000,
+            "amount": 1200000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "فیدار",
+            "month_index": 4,
+            "month_name": "تیر",
+            "charge_amount": 840000,
+            "rent_amount": 360000,
+            "amount": 1200000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "فیدار",
+            "month_index": 5,
+            "month_name": "مرداد",
+            "charge_amount": 840000,
+            "rent_amount": 360000,
+            "amount": 1200000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "فیدار",
+            "month_index": 6,
+            "month_name": "شهریور",
+            "charge_amount": 840000,
+            "rent_amount": 360000,
+            "amount": 1200000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "فیدار",
+            "month_index": 7,
+            "month_name": "مهر",
+            "charge_amount": 840000,
+            "rent_amount": 360000,
+            "amount": 1200000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "فیدار",
+            "month_index": 8,
+            "month_name": "آبان",
+            "charge_amount": 840000,
+            "rent_amount": 360000,
+            "amount": 1200000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "فیدار",
+            "month_index": 9,
+            "month_name": "آذر",
+            "charge_amount": 840000,
+            "rent_amount": 360000,
+            "amount": 1200000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "فیدار",
+            "month_index": 10,
+            "month_name": "دی",
+            "charge_amount": 840000,
+            "rent_amount": 360000,
+            "amount": 1200000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "فیدار",
+            "month_index": 11,
+            "month_name": "بهمن",
+            "charge_amount": 840000,
+            "rent_amount": 360000,
+            "amount": 1200000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "فیدار",
+            "month_index": 12,
+            "month_name": "اسفند",
+            "charge_amount": 840000,
+            "rent_amount": 360000,
+            "amount": 1200000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "بادی تک",
+            "month_index": 1,
+            "month_name": "فروردین",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "بادی تک",
+            "month_index": 2,
+            "month_name": "اردیبهشت",
+            "charge_amount": 1470000,
+            "rent_amount": 630000,
+            "amount": 2100000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "بادی تک",
+            "month_index": 3,
+            "month_name": "خرداد",
+            "charge_amount": 1470000,
+            "rent_amount": 630000,
+            "amount": 2100000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "بادی تک",
+            "month_index": 4,
+            "month_name": "تیر",
+            "charge_amount": 1470000,
+            "rent_amount": 630000,
+            "amount": 2100000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "بادی تک",
+            "month_index": 5,
+            "month_name": "مرداد",
+            "charge_amount": 1470000,
+            "rent_amount": 630000,
+            "amount": 2100000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "بادی تک",
+            "month_index": 6,
+            "month_name": "شهریور",
+            "charge_amount": 1470000,
+            "rent_amount": 630000,
+            "amount": 2100000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "بادی تک",
+            "month_index": 7,
+            "month_name": "مهر",
+            "charge_amount": 1470000,
+            "rent_amount": 630000,
+            "amount": 2100000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "بادی تک",
+            "month_index": 8,
+            "month_name": "آبان",
+            "charge_amount": 1470000,
+            "rent_amount": 630000,
+            "amount": 2100000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "بادی تک",
+            "month_index": 9,
+            "month_name": "آذر",
+            "charge_amount": 1470000,
+            "rent_amount": 630000,
+            "amount": 2100000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "بادی تک",
+            "month_index": 10,
+            "month_name": "دی",
+            "charge_amount": 1470000,
+            "rent_amount": 630000,
+            "amount": 2100000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "بادی تک",
+            "month_index": 11,
+            "month_name": "بهمن",
+            "charge_amount": 1470000,
+            "rent_amount": 630000,
+            "amount": 2100000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "بادی تک",
+            "month_index": 12,
+            "month_name": "اسفند",
+            "charge_amount": 1470000,
+            "rent_amount": 630000,
+            "amount": 2100000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "سوشیانت",
+            "month_index": 1,
+            "month_name": "فروردین",
+            "charge_amount": 0,
+            "rent_amount": 0,
+            "amount": 0
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "سوشیانت",
+            "month_index": 2,
+            "month_name": "اردیبهشت",
+            "charge_amount": 0,
+            "rent_amount": 0,
+            "amount": 0
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "سوشیانت",
+            "month_index": 3,
+            "month_name": "خرداد",
+            "charge_amount": 0,
+            "rent_amount": 0,
+            "amount": 0
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "شبیه سازان",
+            "month_index": 1,
+            "month_name": "فروردین",
+            "charge_amount": 0,
+            "rent_amount": 0,
+            "amount": 0
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "شبیه سازان",
+            "month_index": 2,
+            "month_name": "اردیبهشت",
+            "charge_amount": 0,
+            "rent_amount": 0,
+            "amount": 0
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "شبیه سازان",
+            "month_index": 3,
+            "month_name": "خرداد",
+            "charge_amount": 0,
+            "rent_amount": 0,
+            "amount": 0
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "رایان رباتیک ایرانیان",
+            "month_index": 1,
+            "month_name": "فروردین",
+            "charge_amount": 210000,
+            "rent_amount": 90000,
+            "amount": 300000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "رایان رباتیک ایرانیان",
+            "month_index": 2,
+            "month_name": "اردیبهشت",
+            "charge_amount": 840000,
+            "rent_amount": 360000,
+            "amount": 1200000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "رایان رباتیک ایرانیان",
+            "month_index": 3,
+            "month_name": "خرداد",
+            "charge_amount": 840000,
+            "rent_amount": 360000,
+            "amount": 1200000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "رایان رباتیک ایرانیان",
+            "month_index": 4,
+            "month_name": "تیر",
+            "charge_amount": 840000,
+            "rent_amount": 360000,
+            "amount": 1200000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "رایان رباتیک ایرانیان",
+            "month_index": 5,
+            "month_name": "مرداد",
+            "charge_amount": 840000,
+            "rent_amount": 360000,
+            "amount": 1200000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "رایان رباتیک ایرانیان",
+            "month_index": 6,
+            "month_name": "شهریور",
+            "charge_amount": 840000,
+            "rent_amount": 360000,
+            "amount": 1200000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "رایان رباتیک ایرانیان",
+            "month_index": 7,
+            "month_name": "مهر",
+            "charge_amount": 840000,
+            "rent_amount": 360000,
+            "amount": 1200000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "رایان رباتیک ایرانیان",
+            "month_index": 8,
+            "month_name": "آبان",
+            "charge_amount": 840000,
+            "rent_amount": 360000,
+            "amount": 1200000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "رایان رباتیک ایرانیان",
+            "month_index": 9,
+            "month_name": "آذر",
+            "charge_amount": 840000,
+            "rent_amount": 360000,
+            "amount": 1200000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "رایان رباتیک ایرانیان",
+            "month_index": 10,
+            "month_name": "دی",
+            "charge_amount": 840000,
+            "rent_amount": 360000,
+            "amount": 1200000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "رایان رباتیک ایرانیان",
+            "month_index": 11,
+            "month_name": "بهمن",
+            "charge_amount": 840000,
+            "rent_amount": 360000,
+            "amount": 1200000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "رایان رباتیک ایرانیان",
+            "month_index": 12,
+            "month_name": "اسفند",
+            "charge_amount": 840000,
+            "rent_amount": 360000,
+            "amount": 1200000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "شرکت رهام",
+            "month_index": 1,
+            "month_name": "فروردین",
+            "charge_amount": 630000,
+            "rent_amount": 270000,
+            "amount": 900000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "شرکت رهام",
+            "month_index": 2,
+            "month_name": "اردیبهشت",
+            "charge_amount": 1260000,
+            "rent_amount": 540000,
+            "amount": 1800000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "شرکت رهام",
+            "month_index": 3,
+            "month_name": "خرداد",
+            "charge_amount": 1260000,
+            "rent_amount": 540000,
+            "amount": 1800000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "شرکت رهام",
+            "month_index": 4,
+            "month_name": "تیر",
+            "charge_amount": 1260000,
+            "rent_amount": 540000,
+            "amount": 1800000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "شرکت رهام",
+            "month_index": 5,
+            "month_name": "مرداد",
+            "charge_amount": 1260000,
+            "rent_amount": 540000,
+            "amount": 1800000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "شرکت رهام",
+            "month_index": 6,
+            "month_name": "شهریور",
+            "charge_amount": 1260000,
+            "rent_amount": 540000,
+            "amount": 1800000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "شرکت رهام",
+            "month_index": 7,
+            "month_name": "مهر",
+            "charge_amount": 1260000,
+            "rent_amount": 540000,
+            "amount": 1800000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "شرکت رهام",
+            "month_index": 8,
+            "month_name": "آبان",
+            "charge_amount": 1260000,
+            "rent_amount": 540000,
+            "amount": 1800000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "شرکت رهام",
+            "month_index": 9,
+            "month_name": "آذر",
+            "charge_amount": 1260000,
+            "rent_amount": 540000,
+            "amount": 1800000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "شرکت رهام",
+            "month_index": 10,
+            "month_name": "دی",
+            "charge_amount": 1260000,
+            "rent_amount": 540000,
+            "amount": 1800000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "شرکت رهام",
+            "month_index": 11,
+            "month_name": "بهمن",
+            "charge_amount": 1260000,
+            "rent_amount": 540000,
+            "amount": 1800000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "شرکت رهام",
+            "month_index": 12,
+            "month_name": "اسفند",
+            "charge_amount": 1260000,
+            "rent_amount": 540000,
+            "amount": 1800000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "پایش تجهیز پیشتاز",
+            "month_index": 1,
+            "month_name": "فروردین",
+            "charge_amount": 210000,
+            "rent_amount": 90000,
+            "amount": 300000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "پایش تجهیز پیشتاز",
+            "month_index": 2,
+            "month_name": "اردیبهشت",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "پایش تجهیز پیشتاز",
+            "month_index": 3,
+            "month_name": "خرداد",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "پایش تجهیز پیشتاز",
+            "month_index": 4,
+            "month_name": "تیر",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "پایش تجهیز پیشتاز",
+            "month_index": 5,
+            "month_name": "مرداد",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "پایش تجهیز پیشتاز",
+            "month_index": 6,
+            "month_name": "شهریور",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "پایش تجهیز پیشتاز",
+            "month_index": 7,
+            "month_name": "مهر",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "پایش تجهیز پیشتاز",
+            "month_index": 8,
+            "month_name": "آبان",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "پایش تجهیز پیشتاز",
+            "month_index": 9,
+            "month_name": "آذر",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "پایش تجهیز پیشتاز",
+            "month_index": 10,
+            "month_name": "دی",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "پایش تجهیز پیشتاز",
+            "month_index": 11,
+            "month_name": "بهمن",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "پایش تجهیز پیشتاز",
+            "month_index": 12,
+            "month_name": "اسفند",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "روبوتوپیا",
+            "month_index": 1,
+            "month_name": "فروردین",
+            "charge_amount": 0,
+            "rent_amount": 0,
+            "amount": 0
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "روبوتوپیا",
+            "month_index": 2,
+            "month_name": "اردیبهشت",
+            "charge_amount": 0,
+            "rent_amount": 0,
+            "amount": 0
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "روبوتوپیا",
+            "month_index": 3,
+            "month_name": "خرداد",
+            "charge_amount": 0,
+            "rent_amount": 0,
+            "amount": 0
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "تیم ساز هم افزا",
+            "month_index": 1,
+            "month_name": "فروردین",
+            "charge_amount": 210000,
+            "rent_amount": 90000,
+            "amount": 300000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "تیم ساز هم افزا",
+            "month_index": 2,
+            "month_name": "اردیبهشت",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "تیم ساز هم افزا",
+            "month_index": 3,
+            "month_name": "خرداد",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "تیم ساز هم افزا",
+            "month_index": 4,
+            "month_name": "تیر",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "تیم ساز هم افزا",
+            "month_index": 5,
+            "month_name": "مرداد",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "تیم ساز هم افزا",
+            "month_index": 6,
+            "month_name": "شهریور",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "تیم ساز هم افزا",
+            "month_index": 7,
+            "month_name": "مهر",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "تیم ساز هم افزا",
+            "month_index": 8,
+            "month_name": "آبان",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "تیم ساز هم افزا",
+            "month_index": 9,
+            "month_name": "آذر",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "تیم ساز هم افزا",
+            "month_index": 10,
+            "month_name": "دی",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "تیم ساز هم افزا",
+            "month_index": 11,
+            "month_name": "بهمن",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "تیم ساز هم افزا",
+            "month_index": 12,
+            "month_name": "اسفند",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "-",
+            "month_index": 1,
+            "month_name": "فروردین",
+            "charge_amount": 525000,
+            "rent_amount": 225000,
+            "amount": 750000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "-",
+            "month_index": 2,
+            "month_name": "اردیبهشت",
+            "charge_amount": 1050000,
+            "rent_amount": 450000,
+            "amount": 1500000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "-",
+            "month_index": 3,
+            "month_name": "خرداد",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "-",
+            "month_index": 4,
+            "month_name": "تیر",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "-",
+            "month_index": 5,
+            "month_name": "مرداد",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "-",
+            "month_index": 6,
+            "month_name": "شهریور",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "-",
+            "month_index": 7,
+            "month_name": "مهر",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "-",
+            "month_index": 8,
+            "month_name": "آبان",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "-",
+            "month_index": 9,
+            "month_name": "آذر",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "-",
+            "month_index": 10,
+            "month_name": "دی",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "-",
+            "month_index": 11,
+            "month_name": "بهمن",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "-",
+            "month_index": 12,
+            "month_name": "اسفند",
+            "charge_amount": 420000,
+            "rent_amount": 180000,
+            "amount": 600000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "-",
+            "month_index": 1,
+            "month_name": "فروردین",
+            "charge_amount": 1050000,
+            "rent_amount": 450000,
+            "amount": 1500000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "-",
+            "month_index": 2,
+            "month_name": "اردیبهشت",
+            "charge_amount": 2100000,
+            "rent_amount": 900000,
+            "amount": 3000000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "-",
+            "month_index": 3,
+            "month_name": "خرداد",
+            "charge_amount": 2100000,
+            "rent_amount": 900000,
+            "amount": 3000000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "-",
+            "month_index": 4,
+            "month_name": "تیر",
+            "charge_amount": 2100000,
+            "rent_amount": 900000,
+            "amount": 3000000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "-",
+            "month_index": 5,
+            "month_name": "مرداد",
+            "charge_amount": 2100000,
+            "rent_amount": 900000,
+            "amount": 3000000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "-",
+            "month_index": 6,
+            "month_name": "شهریور",
+            "charge_amount": 2100000,
+            "rent_amount": 900000,
+            "amount": 3000000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "-",
+            "month_index": 7,
+            "month_name": "مهر",
+            "charge_amount": 2100000,
+            "rent_amount": 900000,
+            "amount": 3000000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "-",
+            "month_index": 8,
+            "month_name": "آبان",
+            "charge_amount": 2100000,
+            "rent_amount": 900000,
+            "amount": 3000000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "-",
+            "month_index": 9,
+            "month_name": "آذر",
+            "charge_amount": 2100000,
+            "rent_amount": 900000,
+            "amount": 3000000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "-",
+            "month_index": 10,
+            "month_name": "دی",
+            "charge_amount": 2100000,
+            "rent_amount": 900000,
+            "amount": 3000000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "-",
+            "month_index": 11,
+            "month_name": "بهمن",
+            "charge_amount": 2100000,
+            "rent_amount": 900000,
+            "amount": 3000000
+        },
+        {
+            "fiscal_year": "1405",
+            "team": "-",
+            "month_index": 12,
+            "month_name": "اسفند",
+            "charge_amount": 2100000,
+            "rent_amount": 900000,
+            "amount": 3000000
+        }
+    ],
+    "finance": [
+        {
+            "tx_date": "1404\/09\/29",
+            "description": "آبونمان اقای فولادگر 1 ماه",
+            "amount": 7000000,
+            "category": "درآمد",
+            "notes": "آبان ماه"
+        },
+        {
+            "tx_date": "1404\/09\/29",
+            "description": "آبونمان خانم تخمه چی 0.5 ماه",
+            "amount": 7000000,
+            "category": "درآمد",
+            "notes": "آبان ماه"
+        },
+        {
+            "tx_date": "1404\/10\/02",
+            "description": "آبونمان اقای فشارکی 2 ماه",
+            "amount": 35000000,
+            "category": "درآمد",
+            "notes": "آبان و آذر"
+        },
+        {
+            "tx_date": "1404\/10\/02",
+            "description": "آبونمان اقای طهماسبی 1 ماه",
+            "amount": 7000000,
+            "category": "درآمد",
+            "notes": "آبان ماه"
+        },
+        {
+            "tx_date": "1404\/10\/05",
+            "description": "آبونمان اقای طهماسبی 1 ماه",
+            "amount": 7000000,
+            "category": "درآمد",
+            "notes": "آذر ماه"
+        },
+        {
+            "tx_date": "1404\/10\/06",
+            "description": "آبونمان خانم تخمه چی 1.5 ماه",
+            "amount": 21000000,
+            "category": "درآمد",
+            "notes": "آبان و آذر"
+        },
+        {
+            "tx_date": "1404\/10\/08",
+            "description": "آبونمان خانم عابدی آذر 2 ماه",
+            "amount": 14000000,
+            "category": "درآمد",
+            "notes": "آبان و آذر"
+        },
+        {
+            "tx_date": "1404\/10\/11",
+            "description": "آبونمان اقای باغکی 2 ماه",
+            "amount": 14000000,
+            "category": "درآمد",
+            "notes": "آبان و آذر"
+        },
+        {
+            "tx_date": "1404\/10\/12",
+            "description": "سهم مرکز از دوره ی پرینتر سه بعدی (خانم عابدی آذر)",
+            "amount": 10000000,
+            "category": "درآمد",
+            "notes": "دوره ی آموزشی"
+        },
+        {
+            "tx_date": "1404\/10\/15",
+            "description": "هزینه ی تعمیر مایکرویو",
+            "amount": -30000000,
+            "category": "هزینه",
+            "notes": "تعمیرات"
+        },
+        {
+            "tx_date": "1404\/10\/21",
+            "description": "خرید پیج ها جهت تعمیر صندلی اتاق جلسه",
+            "amount": -2500000,
+            "category": "هزینه",
+            "notes": "تعداد 5 عدد پیچ"
+        },
+        {
+            "tx_date": "1404\/10\/28",
+            "description": "خرید کابل HDMI برای اتاق جلسه",
+            "amount": -3400000,
+            "category": "هزینه",
+            "notes": "-"
+        },
+        {
+            "tx_date": "1404\/10\/28",
+            "description": "خرید پلکسی های دور سینک فضای استراحت",
+            "amount": -7500000,
+            "category": "هزینه",
+            "notes": "هزینه های مشترک فضای استراحت"
+        },
+        {
+            "tx_date": "1404\/10\/28",
+            "description": "پر ینت رنگی A3 و لمینت اطلاعیه ها",
+            "amount": -1850000,
+            "category": "هزینه",
+            "notes": "پرینت اطلاعیه"
+        },
+        {
+            "tx_date": "1404\/10\/28",
+            "description": "پرینت قرارداد های 6 ماهه دوم سال 1404 تیم ها",
+            "amount": -4030000,
+            "category": "هزینه",
+            "notes": "در 2 عدد فاکتور"
+        },
+        {
+            "tx_date": "1404\/11\/02",
+            "description": "آبونمان آقای طهماسبی 1 ماه",
+            "amount": 7000000,
+            "category": "درآمد",
+            "notes": "دی"
+        },
+        {
+            "tx_date": "1404\/11\/08",
+            "description": "آبونمان آقای وارث ویزیریان 3 ماه",
+            "amount": 21000000,
+            "category": "درآمد",
+            "notes": "آبان، آذر و دی"
+        },
+        {
+            "tx_date": "1404\/11\/15",
+            "description": "آبونمان خانم تخمه چی",
+            "amount": 16000000,
+            "category": "درآمد",
+            "notes": "دی ماه"
+        },
+        {
+            "tx_date": "1404\/11\/18",
+            "description": "واریز سود بانکی",
+            "amount": 239001,
+            "category": "واریز تیم",
+            "notes": "سود بانکی حساب مرکز"
+        },
+        {
+            "tx_date": "1404\/11\/18",
+            "description": "آبونمان آقای فشارکی",
+            "amount": 18000000,
+            "category": "درآمد",
+            "notes": "دی ماه"
+        },
+        {
+            "tx_date": "1404\/11\/19",
+            "description": "آبونمان اقای فولادگر 1 ماه",
+            "amount": 6000000,
+            "category": "درآمد",
+            "notes": "دی ماه"
+        },
+        {
+            "tx_date": "1404\/11\/20",
+            "description": "آبونمان خانم عابدی آذر",
+            "amount": 7000000,
+            "category": "درآمد",
+            "notes": "دی ماه"
+        },
+        {
+            "tx_date": "1404\/09\/29",
+            "description": "خرید تعدادی لوازم سرویس چای و نخ نامرئی و ..",
+            "amount": 0,
+            "category": "درآمد",
+            "notes": "16620000"
+        },
+        {
+            "tx_date": "1404\/09\/29",
+            "description": "خرید چای 1 کیلو",
+            "amount": 0,
+            "category": "درآمد",
+            "notes": "5100000"
+        },
+        {
+            "tx_date": "1404\/10\/02",
+            "description": "چایی ساز میگل",
+            "amount": 0,
+            "category": "درآمد",
+            "notes": "80000000"
+        }
+    ],
+    "rate_settings": [
+        {
+            "fiscal_year": "1404",
+            "title": "نرخ استخراج‌شده از Excel",
+            "charge_rate": 600000,
+            "informal_rent_rate": 900000,
+            "effective_from": "1404\/01\/01"
+        },
+        {
+            "fiscal_year": "1405",
+            "title": "نرخ استخراج‌شده از Excel",
+            "charge_rate": 600000,
+            "informal_rent_rate": 900000,
+            "effective_from": "1405\/01\/01"
+        }
+    ]
+}

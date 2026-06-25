@@ -11,7 +11,7 @@ if ((int) $pdo->query('SELECT COUNT(*) FROM import_runs')->fetchColumn() === 0) 
 }
 $repo = new Repository($pdo);
 $summary = $repo->summary();
-$payments = $repo->resource('team_payments');
+$debts = $repo->chargeDebtRows();
 $transactions = $repo->resource('transactions');
 ?>
 <!doctype html>
@@ -42,9 +42,9 @@ $transactions = $repo->resource('transactions');
       <table class="report-table">
         <thead><tr><th>تیم</th><th>سال</th><th>ماه</th><th>بدهی</th><th>پرداخت</th><th>وضعیت</th></tr></thead>
         <tbody>
-          <?php foreach ($payments as $row): ?>
+          <?php foreach ($debts as $row): ?>
             <tr>
-              <td><?= e($row['related_team'] ?? '-') ?></td>
+              <td><?= e($row['team_name'] ?? '-') ?></td>
               <td><?= e($row['fiscal_year'] ?? '-') ?></td>
               <td><?= e($row['month_name'] ?? '-') ?></td>
               <td><?= number_format((int) ($row['amount_due'] ?? 0)) ?></td>

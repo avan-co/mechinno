@@ -73,20 +73,44 @@ final class Repository
     }
 
     /**
+     * @return array{rows:list<array<string,mixed>>,total:int,page:int,per_page:int,pages:int}
+     */
+    public function paginatedResource(string $name, int $page = 1, int $perPage = 25): array
+    {
+        $page = max(1, $page);
+        $perPage = min(100, max(10, $perPage));
+        $sql = $this->resourceSql($name);
+        $countSql = 'SELECT COUNT(*) FROM (' . $sql . ') AS counted_rows';
+        $total = (int) $this->pdo->query($countSql)->fetchColumn();
+        $offset = ($page - 1) * $perPage;
+        $rows = $this->rows($sql . ' LIMIT ' . $perPage . ' OFFSET ' . $offset);
+
+        return [
+            'rows' => $rows,
+            'total' => $total,
+            'page' => $page,
+            'per_page' => $perPage,
+            'pages' => max(1, (int) ceil($total / $perPage)),
+        ];
+    }
+
+    /**
      * @return list<array<string, mixed>>
      */
     public function resource(string $name): array
     {
+        return $this->rows($this->resourceSql($name));
+    }
+
+    private function resourceSql(string $name): string
+    {
         return match ($name) {
-            'teams' => $this->rows(
-                "SELECT t.*,
+            'teams' => "SELECT t.*,
                         (SELECT COUNT(*) FROM desks d WHERE d.team_id = t.id) AS desk_count,
                         (SELECT COALESCE(SUM(d.informal_seats), 0) FROM desks d WHERE d.team_id = t.id) AS informal_seats
                  FROM teams t
-                 ORDER BY t.entity_type, t.name"
-            ),
-            'members' => $this->rows(
-                "SELECT m.id, m.member_code, m.team_id, m.access_code, m.full_name, m.phone, m.national_id,
+                 ORDER BY t.entity_type, t.name",
+            'members' => "SELECT m.id, m.member_code, m.team_id, m.access_code, m.full_name, m.phone, m.national_id,
                         m.locker_id, m.notes, t.name AS team_label, t.entity_type,
                         l.locker_number,
                         GROUP_CONCAT(md.desk_id) AS desk_ids,
@@ -97,50 +121,37 @@ final class Repository
                  LEFT JOIN member_desks md ON md.member_id = m.id
                  LEFT JOIN desks d ON d.id = md.desk_id
                  GROUP BY m.id
-                 ORDER BY m.id"
-            ),
-            'desks' => $this->rows(
-                "SELECT d.*, t.name AS team_name, t.entity_type
+                 ORDER BY m.id",
+            'desks' => "SELECT d.*, t.name AS team_name, t.entity_type
                  FROM desks d
                  LEFT JOIN teams t ON t.id = d.team_id
-                 ORDER BY d.number"
-            ),
-            'lockers' => $this->rows(
-                "SELECT l.*, t.name AS team_label, m.full_name AS member_name
+                 ORDER BY d.number",
+            'lockers' => "SELECT l.*, t.name AS team_label, m.full_name AS member_name
                  FROM lockers l
                  LEFT JOIN teams t ON t.id = l.team_id
                  LEFT JOIN members m ON m.id = l.member_id
-                 ORDER BY l.locker_number"
-            ),
-            'plans' => $this->rows(
-                "SELECT p.*, t.name AS owner_team
+                 ORDER BY l.locker_number",
+            'plans' => "SELECT p.*, t.name AS owner_team
                  FROM plans p
                  LEFT JOIN teams t ON t.id = p.owner_team_id
-                 ORDER BY CASE p.priority WHEN 'بالا' THEN 1 WHEN 'متوسط' THEN 2 ELSE 3 END, p.start_date"
-            ),
-            'charges' => $this->rows(
-                'SELECT c.*, t.name AS team_name, t.entity_type
+                 ORDER BY CASE p.priority WHEN 'بالا' THEN 1 WHEN 'متوسط' THEN 2 ELSE 3 END, p.start_date",
+            'charges' => 'SELECT c.*, t.name AS team_name, t.entity_type
                  FROM charges c
                  LEFT JOIN teams t ON t.id = c.team_id
-                 ORDER BY c.fiscal_year, t.name, c.month_index'
-            ),
-            'transactions' => $this->rows(
-                "SELECT t.id, t.tx_date, t.description, t.amount, t.category, t.team_id,
+                 ORDER BY c.fiscal_year, t.name, c.month_index',
+            'transactions' => "SELECT t.id, t.tx_date, t.description, t.amount, t.category, t.team_id,
                         t.fiscal_year, t.month_index, t.confirmed, t.notes,
                         tm.name AS team_name
                  FROM transactions t
                  LEFT JOIN teams tm ON tm.id = t.team_id
-                 ORDER BY t.tx_date DESC, t.id DESC"
-            ),
-            'rate_settings' => $this->rows('SELECT * FROM rate_settings ORDER BY fiscal_year, effective_from, id'),
-            'team_rates' => $this->rows(
-                'SELECT r.*, t.name AS team_name
+                 ORDER BY t.tx_date DESC, t.id DESC",
+            'rate_settings' => 'SELECT * FROM rate_settings ORDER BY fiscal_year, effective_from, id',
+            'team_rates' => 'SELECT r.*, t.name AS team_name
                  FROM team_rates r
                  LEFT JOIN teams t ON t.id = r.team_id
-                 ORDER BY r.fiscal_year, t.name'
-            ),
-            'backups' => $this->rows('SELECT * FROM import_backups ORDER BY id DESC'),
-            'warnings' => $this->rows('SELECT * FROM import_warnings ORDER BY id'),
+                 ORDER BY r.fiscal_year, t.name',
+            'backups' => 'SELECT * FROM import_backups ORDER BY id DESC',
+            'warnings' => 'SELECT * FROM import_warnings ORDER BY id',
             default => throw new InvalidArgumentException('Unknown resource.'),
         };
     }
@@ -201,6 +212,28 @@ final class Repository
         }
 
         return ['fiscal_year' => $fiscalYear, 'months' => $months, 'rows' => $rows];
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    public function chargeDebtRows(): array
+    {
+        return $this->rows(
+            "SELECT t.name AS team_name, c.fiscal_year, c.month_name,
+                    c.charge_amount, c.rent_amount, c.amount AS amount_due,
+                    COALESCE(p.paid, 0) AS amount_paid,
+                    CASE WHEN COALESCE(p.paid, 0) >= c.amount THEN 'پرداخت‌شده'
+                         WHEN COALESCE(p.paid, 0) > 0 THEN 'ناقص' ELSE 'بدهکار' END AS status
+             FROM charges c
+             JOIN teams t ON t.id = c.team_id
+             LEFT JOIN (
+                SELECT team_id, fiscal_year, month_index, SUM(amount) AS paid
+                FROM transactions WHERE category = 'واریز تیم' AND confirmed = 1
+                GROUP BY team_id, fiscal_year, month_index
+             ) p ON p.team_id = c.team_id AND p.fiscal_year = c.fiscal_year AND p.month_index = c.month_index
+             ORDER BY c.fiscal_year, t.name, c.month_index"
+        );
     }
 
     /**
