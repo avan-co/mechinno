@@ -13,28 +13,23 @@ const labels = {
   phone: "تماس",
   desk_count: "تعداد میز",
   informal_seats: "صندلی غیررسمی",
-  desk_numbers: "میزها",
+  desk_numbers: "میزهای نهاد",
   number: "شماره میز",
-  row_index: "ردیف",
-  col_index: "ستون",
   usage_type: "نوع استفاده",
   formal_seats: "صندلی رسمی",
   locker_number: "شماره کمد",
-  locker_id: "کمد",
-  member_id: "عضو",
   member_name: "عضو",
   status: "وضعیت",
   delivered_at: "تاریخ تحویل",
   key_number: "شماره کلید",
   spare_key: "کلید یدک",
-  fiscal_year: "سال",
+  title: "عنوان",
+  fiscal_year: "سال مالی",
   month_index: "ماه",
   month_name: "ماه",
   charge_amount: "شارژ",
   rent_amount: "اجاره غیررسمی",
   amount: "مبلغ",
-  amount_due: "بدهی",
-  amount_paid: "پرداخت",
   note: "یادداشت",
   notes: "توضیحات",
   national_id: "کدملی",
@@ -44,16 +39,24 @@ const labels = {
   confirmed: "تأیید",
   charge_rate: "نرخ شارژ",
   informal_rent_rate: "نرخ اجاره غیررسمی",
+  effective_from: "تاریخ اثر",
   joined_at: "عضویت",
   warning: "اخطار",
-  created_at: "تاریخ",
-  reason: "دلیل",
-  summary: "خلاصه",
-  source_file: "منبع",
 };
 
 const entityTypeLabels = { team: "تیم", company: "شرکت", student: "دانشجو" };
 const usageLabels = { formal: "رسمی", informal: "غیررسمی", mixed: "ترکیبی" };
+
+const sectionMeta = {
+  overview: { eyebrow: "داشبورد", title: "مدیریت مرکز نوآوری", subtitle: "خلاصه وضعیت مرکز و اقدامات پیشنهادی" },
+  teams: { eyebrow: "نهادها", title: "تیم‌ها، شرکت‌ها و دانشجویان", subtitle: "ثبت و مدیریت نهادهای مستقر در مرکز" },
+  members: { eyebrow: "اعضا", title: "اعضای نهادها", subtitle: "هر عضو به یک نهاد تعلق دارد — میزها در سطح نهاد تخصیص می‌یابند" },
+  desks: { eyebrow: "میزها", title: "نقشه و تخصیص ۲۴ میز", subtitle: "میزها را به نهادها اختصاص دهید" },
+  lockers: { eyebrow: "کمدها", title: "مدیریت کمدها", subtitle: "شماره کمدها را خودتان تعریف و تخصیص دهید" },
+  charges: { eyebrow: "شارژ", title: "نرخ و شارژ ماهانه", subtitle: "تعریف نرخ سالانه، محاسبه خودکار و پیگیری پرداخت" },
+  transactions: { eyebrow: "مالی", title: "دریافت، درآمد و هزینه", subtitle: "نهادها به مرکز بدهکارند — دریافت شارژ، طلب مطالبات" },
+};
+
 const cardNavMap = {
   members: "members",
   teams: "teams",
@@ -66,24 +69,51 @@ const cardNavMap = {
   available_lockers: "lockers",
 };
 
+const cardConfig = [
+  ["members", "اعضا", "👤", "members"],
+  ["teams", "نهادها", "◉", "teams"],
+  ["desks_occupied", "میز اشغال", "▦", "desks"],
+  ["charge_total", "جمع شارژ", "₪", "charge"],
+  ["income_total", "دریافتی", "↓", "income"],
+  ["expense_total", "هزینه", "↑", "expense"],
+  ["debt_total", "طلب از نهادها", "!", "debt"],
+  ["paid_total", "دریافت از نهادها", "✓", "paid"],
+  ["available_lockers", "کمد آزاد", "▣", "lockers"],
+];
+
+const moneyCards = new Set(["charge_total", "income_total", "expense_total", "debt_total", "paid_total"]);
+
+const resourceColumns = {
+  teams: ["entity_code", "entity_type", "name", "leader", "phone", "desk_count", "informal_seats", "joined_at", "warning"],
+  members: ["member_code", "full_name", "team_label", "entity_type", "desk_numbers", "access_code", "locker_number", "phone"],
+  desks: ["number", "team_name", "usage_type", "formal_seats", "informal_seats"],
+  lockers: ["locker_number", "status", "team_label", "member_name", "delivered_at", "key_number", "spare_key"],
+  rate_settings: ["fiscal_year", "title", "charge_rate", "informal_rent_rate", "effective_from", "notes"],
+  charges: ["fiscal_year", "team_name", "month_name", "charge_amount", "rent_amount", "amount", "note"],
+  transactions: ["tx_date", "description", "amount", "category", "team_name", "fiscal_year", "month_index", "confirmed"],
+};
+
+const editableResources = new Set(["members", "teams", "desks", "lockers", "charges", "transactions", "rate_settings"]);
+const hiddenColumns = new Set([
+  "source_sheet", "source_file", "team_id", "locker_id", "member_id",
+  "row_index", "col_index", "created_at", "entity_type",
+]);
+
+const linkColumns = {
+  team_label: "team_id",
+  team_name: "team_id",
+  name: "id",
+};
+
 const csrfToken = window.MECHINNO?.csrfToken || "";
 let crudMetaPromise = null;
 let highlightDesk = null;
 let highlightLocker = null;
-let lastProfileTeamId = null;
+let txCategoryFilter = "";
 
-const editableResources = new Set(["members", "teams", "desks", "lockers", "charges", "transactions", "rate_settings"]);
-const hiddenColumns = new Set([
-  "source_sheet", "source_file", "team_id", "owner_team_id", "locker_id", "member_id", "row_index", "col_index",
-]);
-const linkColumns = {
-  team_label: "team_id",
-  team_name: "team_id",
-  owner_team: "owner_team_id",
-  name: "id",
+const invalidateCrudMeta = () => {
+  crudMetaPromise = null;
 };
-
-const isMobile = () => window.matchMedia("(max-width: 720px)").matches;
 
 const escapeHtml = (value) =>
   String(value ?? "")
@@ -108,7 +138,9 @@ const showToast = (message, type = "info") => {
 };
 
 const loadCrudMeta = () => {
-  if (!crudMetaPromise) crudMetaPromise = fetchJson("api.php?resource=crud-meta");
+  if (!crudMetaPromise) {
+    crudMetaPromise = fetchJson("api.php?resource=crud-meta");
+  }
   return crudMetaPromise;
 };
 
@@ -156,6 +188,39 @@ const postJson = (url, payload = {}) =>
     body: JSON.stringify(payload),
   });
 
+const isMobile = () => window.matchMedia("(max-width: 768px)").matches;
+
+const syncMobileClass = () => {
+  document.body.classList.toggle("is-mobile", isMobile());
+};
+
+const updatePageHeader = (sectionId) => {
+  const meta = sectionMeta[sectionId] || sectionMeta.overview;
+  const eyebrow = document.getElementById("pageEyebrow");
+  const title = document.getElementById("pageTitle");
+  const subtitle = document.getElementById("pageSubtitle");
+  if (eyebrow) eyebrow.textContent = meta.eyebrow;
+  if (title) title.textContent = meta.title;
+  if (subtitle) subtitle.textContent = meta.subtitle;
+};
+
+const reloadSectionTables = (sectionId, resetPage = false) => {
+  document.querySelectorAll(`#${sectionId} data-table`).forEach((table) => {
+    if (resetPage) table.page = 1;
+    table.load?.();
+  });
+};
+
+const refreshAfterMutation = async (sectionId = null) => {
+  invalidateCrudMeta();
+  if (sectionId) reloadSectionTables(sectionId, true);
+  await loadDashboard();
+  document.querySelectorAll("data-table").forEach((table) => {
+    if (!sectionId || table.closest(`#${sectionId}`)) return;
+    table.load?.();
+  });
+};
+
 const closeDrawer = () => {
   document.getElementById("sidebar")?.classList.remove("open");
   document.getElementById("sidebarBackdrop")?.setAttribute("hidden", "");
@@ -167,7 +232,6 @@ const openDrawer = () => {
 };
 
 const activateSection = (id, options = {}) => {
-  if (options.teamId) lastProfileTeamId = options.teamId;
   if (options.highlightDesk !== undefined) highlightDesk = options.highlightDesk;
   if (options.highlightLocker !== undefined) highlightLocker = options.highlightLocker;
 
@@ -176,7 +240,9 @@ const activateSection = (id, options = {}) => {
     i.classList.toggle("active", i.dataset.section === id);
   });
 
+  updatePageHeader(id);
   closeDrawer();
+  reloadSectionTables(id);
 
   if (id === "desks") loadDeskGrid().catch((error) => showToast(error.message, "error"));
   if (id === "charges") loadChargesCollage().catch((error) => showToast(error.message, "error"));
@@ -192,8 +258,22 @@ document.querySelectorAll(".nav-item, .bottom-nav-item").forEach((item) => {
 document.getElementById("menuToggle")?.addEventListener("click", openDrawer);
 document.getElementById("sidebarBackdrop")?.addEventListener("click", closeDrawer);
 
-document.querySelectorAll(".start-steps [data-go]").forEach((item) => {
+document.querySelectorAll(".start-step[data-go]").forEach((item) => {
   item.addEventListener("click", () => activateSection(item.dataset.go));
+});
+
+document.getElementById("themeToggle")?.addEventListener("click", () => {
+  const html = document.documentElement;
+  const next = html.getAttribute("data-theme") === "dark" ? "light" : "dark";
+  html.setAttribute("data-theme", next);
+  try {
+    localStorage.setItem("mechinno-theme", next);
+  } catch (e) {}
+});
+
+document.getElementById("txCategoryFilter")?.addEventListener("change", (event) => {
+  txCategoryFilter = event.target.value;
+  document.querySelector("#transactions data-table")?.render?.();
 });
 
 const teamLink = (teamId, label) => {
@@ -207,8 +287,24 @@ const deskLink = (number) =>
 const lockerLink = (number) =>
   `<button type="button" class="text-link" data-nav-section="lockers" data-highlight-locker="${escapeHtml(number)}">کمد ${escapeHtml(number)}</button>`;
 
+const entityBadge = (type) => {
+  const label = entityTypeLabels[type] || type || "—";
+  const cls = type === "company" ? "badge-company" : type === "student" ? "badge-student" : "badge-team";
+  return `<span class="badge ${cls}">${escapeHtml(label)}</span>`;
+};
+
+const lockerStatusBadge = (status) => {
+  const map = {
+    "خالی": "badge-locker-empty",
+    "تخصیص یافته": "badge-locker-assigned",
+    "رزرو": "badge-locker-reserved",
+    "خراب": "badge-locker-broken",
+  };
+  return `<span class="badge ${map[status] || "badge-locker-empty"}">${escapeHtml(status || "—")}</span>`;
+};
+
 document.addEventListener("click", (event) => {
-  const link = event.target.closest(".text-link[data-nav-section], .text-link[data-team-id], .action-item, .card-clickable, .debt-link, .desk-tile, .metric.card-clickable");
+  const link = event.target.closest(".text-link[data-nav-section], .text-link[data-team-id], .action-item, .card-clickable, .debt-link, .desk-tile");
   if (!link) return;
 
   if (link.dataset.teamId) {
@@ -218,40 +314,28 @@ document.addEventListener("click", (event) => {
     return;
   }
 
-  if (!link.dataset.navSection && !link.dataset.section) return;
+  if (!link.dataset.navSection) return;
   event.preventDefault();
-
-  activateSection(link.dataset.navSection || link.dataset.section, {
+  activateSection(link.dataset.navSection, {
     highlightDesk: link.dataset.highlightDesk ? Number(link.dataset.highlightDesk) : undefined,
     highlightLocker: link.dataset.highlightLocker ? Number(link.dataset.highlightLocker) : undefined,
     teamId: link.dataset.openTeam ? Number(link.dataset.openTeam) : undefined,
   });
 });
 
-const cardDefinitions = [
-  ["members", "اعضا"],
-  ["teams", "نهادها"],
-  ["desks_occupied", "میز اشغال"],
-  ["charge_total", "جمع شارژ"],
-  ["income_total", "دریافتی"],
-  ["expense_total", "هزینه"],
-  ["debt_total", "بدهی"],
-  ["paid_total", "واریز تیم"],
-  ["available_lockers", "کمد آزاد"],
-];
-
-const moneyCards = new Set(["charge_total", "income_total", "expense_total", "debt_total", "paid_total"]);
-
 const renderCards = (cards) => {
-  document.getElementById("cards").innerHTML = cardDefinitions
-    .map(([key, title]) => {
-      let value = cards[key];
-      if (key === "desks_occupied") value = `${cards.desks_occupied || 0} / ${cards.desks_total || 24}`;
+  const container = document.getElementById("cards");
+  if (!container) return;
+  container.innerHTML = cardConfig
+    .map(([key, title, icon, tone]) => {
+      let value = cards?.[key];
+      if (key === "desks_occupied") value = `${cards?.desks_occupied || 0} / ${cards?.desks_total || 24}`;
       else if (moneyCards.has(key)) value = formatMoney(value);
       else value = formatNumber(value);
       const section = cardNavMap[key];
-      return `<article class="card card-clickable" data-nav-section="${section}" tabindex="0" role="button">
-        <span>${escapeHtml(title)}</span><strong>${escapeHtml(value)}</strong>
+      return `<article class="stat-card stat-card--${tone} card-clickable" data-nav-section="${section}" tabindex="0" role="button">
+        <span class="stat-icon" aria-hidden="true">${icon}</span>
+        <div><span class="stat-label">${escapeHtml(title)}</span><strong>${escapeHtml(value)}</strong></div>
       </article>`;
     })
     .join("");
@@ -265,8 +349,8 @@ const renderCurrentMonth = (month) => {
   container.innerHTML = `
     <div class="month-stat"><span>شارژ ماه</span><strong>${escapeHtml(formatMoney(month.charge_total))}</strong></div>
     <div class="month-stat"><span>واریز ماه</span><strong>${escapeHtml(formatMoney(month.paid_total))}</strong></div>
-    <div class="month-stat"><span>بدهی باقی‌مانده</span><strong class="debt-value">${escapeHtml(formatMoney(month.debt_total))}</strong></div>
-    <div class="month-stat"><span>نهاد بدهکار</span><strong>${escapeHtml(formatNumber(month.debtor_count))}</strong></div>`;
+    <div class="month-stat"><span>مانده طلب ماه</span><strong class="debt-value">${escapeHtml(formatMoney(month.debt_total))}</strong></div>
+    <div class="month-stat"><span>نهاد بدهکار به مرکز</span><strong>${escapeHtml(formatNumber(month.debtor_count))}</strong></div>`;
 };
 
 const renderActionItems = (items) => {
@@ -287,6 +371,7 @@ const renderActionItems = (items) => {
 
 const renderChargeChart = (rows) => {
   const container = document.getElementById("chargeChart");
+  if (!container) return;
   const max = Math.max(...rows.map((r) => Number(r.amount || 0)), 1);
   container.innerHTML = rows.slice(-10).map((row) => `
     <div class="bar-row">
@@ -298,22 +383,23 @@ const renderChargeChart = (rows) => {
 
 const renderDebtChart = (rows) => {
   const container = document.getElementById("debtChart");
+  if (!container) return;
   const max = Math.max(...rows.map((r) => Number(r.debt || 0)), 1);
   container.innerHTML = rows.length
     ? rows.map((row) => `
       <div class="bar-row">
         <button type="button" class="text-link debt-link" data-team-id="${escapeHtml(row.team_id)}">${escapeHtml(row.team_name || "—")}</button>
-        <div class="bar-track danger-track"><div class="bar-fill danger-fill" style="width:${(Number(row.debt || 0) / max) * 100}%"></div></div>
+        <div class="bar-track"><div class="bar-fill danger-fill" style="width:${(Number(row.debt || 0) / max) * 100}%"></div></div>
         <strong>${escapeHtml(formatMoney(row.debt))}</strong>
       </div>`).join("")
-    : `<div class="empty">بدهی ثبت‌شده‌ای نیست.</div>`;
+    : `<div class="empty">مطالبه ثبت‌شده‌ای از نهادها نیست.</div>`;
 };
 
 const loadDashboard = async () => {
   const data = await fetchJson("api.php?resource=summary");
   renderCurrentMonth(data.current_month || {});
   renderActionItems(data.action_items || []);
-  renderCards(data.cards);
+  renderCards(data.cards || {});
   renderChargeChart(data.monthly_charges || []);
   renderDebtChart(data.debt_by_team || []);
   const welcome = document.getElementById("welcomePanel");
@@ -323,10 +409,11 @@ const loadDashboard = async () => {
 const loadDeskGrid = async () => {
   const { rows: desks } = await fetchResource("api.php?resource=desks", { page: 1, perPage: 100 });
   const container = document.getElementById("deskGrid");
+  if (!container) return;
   const rows = { 1: [], 2: [], 3: [] };
   desks.forEach((desk) => rows[desk.row_index]?.push(desk));
   container.innerHTML = [1, 2, 3].map((rowIndex) => `
-    <div>
+    <div class="desk-row-block">
       <div class="desk-row-label">ردیف ${rowIndex}</div>
       <div class="desk-row">
         ${(rows[rowIndex] || []).sort((a, b) => a.col_index - b.col_index).map((desk) => {
@@ -334,12 +421,13 @@ const loadDeskGrid = async () => {
           const highlighted = highlightDesk === Number(desk.number);
           return `<button type="button" class="desk-tile ${occupied ? "occupied" : "free"} ${highlighted ? "highlighted" : ""}"
             data-nav-section="desks" data-highlight-desk="${desk.number}">
-            <strong>${desk.number}</strong>
-            <span>${occupied
-              ? `<span role="button" tabindex="0" class="text-link-inline" data-team-id="${escapeHtml(desk.team_id)}">${escapeHtml(desk.team_name || "اشغال")}</span>`
-              : "آزاد"}</span>
-            <span class="badge">${escapeHtml(usageLabels[desk.usage_type] || desk.usage_type)}</span>
-            <span>ر:${desk.formal_seats || 0} غ:${desk.informal_seats || 0}</span>
+            <span class="desk-num">${desk.number}</span>
+            <span class="desk-status">${occupied ? "اشغال" : "آزاد"}</span>
+            ${occupied
+              ? `<span class="desk-meta"><span role="button" tabindex="0" class="text-link-inline" data-team-id="${escapeHtml(desk.team_id)}">${escapeHtml(desk.team_name || "نهاد")}</span></span>`
+              : `<span class="desk-meta">بدون نهاد</span>`}
+            <span class="desk-badge">${escapeHtml(usageLabels[desk.usage_type] || desk.usage_type || "—")}</span>
+            <span class="desk-meta">ر:${desk.formal_seats || 0} · غ:${desk.informal_seats || 0}</span>
           </button>`;
         }).join("")}
       </div>
@@ -358,25 +446,22 @@ const loadDeskGrid = async () => {
       }
     });
   });
-
-  if (highlightDesk) {
-    document.querySelector(`#desks data-table`)?.scrollIntoView?.({ behavior: "smooth", block: "nearest" });
-  }
 };
 
 const loadChargesCollage = async () => {
   const yearSelect = document.getElementById("chargesYear");
+  if (!yearSelect) return;
   if (!yearSelect.options.length) {
     [window.MECHINNO?.fiscalYear || "1404", "1405"].filter((v, i, a) => a.indexOf(v) === i).forEach((y) => {
       yearSelect.insertAdjacentHTML("beforeend", `<option value="${y}">${y}</option>`);
     });
-    yearSelect.addEventListener("change", () => loadChargesCollage().catch(console.error));
+    yearSelect.addEventListener("change", () => loadChargesCollage().catch((error) => showToast(error.message, "error")));
   }
   const year = yearSelect.value || window.MECHINNO?.fiscalYear || "1404";
   const data = await fetchJson(`api.php?resource=charges-matrix&fiscal_year=${encodeURIComponent(year)}`);
   const container = document.getElementById("chargesCollage");
   if (!data.rows?.length) {
-    container.innerHTML = `<div class="empty">داده شارژی برای این سال نیست.</div>`;
+    container.innerHTML = `<div class="empty">داده شارژی برای این سال نیست — ابتدا نهاد و نرخ تعریف کنید.</div>`;
     return;
   }
   const head = `<tr><th class="team-col">نهاد</th>${data.months.map((m) => `<th>${escapeHtml(m.name)}</th>`).join("")}</tr>`;
@@ -384,11 +469,11 @@ const loadChargesCollage = async () => {
     <tr>
       <td class="team-col">
         <button type="button" class="text-link" data-team-id="${escapeHtml(row.team.id)}">${escapeHtml(row.team.name)}</button>
-        <br><small>${escapeHtml(entityTypeLabels[row.team.entity_type] || "")}</small>
+        <br>${entityBadge(row.team.entity_type)}
       </td>
       ${row.cells.map((cell) => {
-        const cls = cell.status === "پرداخت‌شده" ? "cell-paid" : cell.status === "ناقص" ? "cell-partial" : cell.status === "بدهکار" ? "cell-debt" : "cell-empty";
-        const clickable = cell.status === "بدهکار" || cell.status === "ناقص";
+        const cls = cell.status === "پرداخت‌شده" ? "cell-paid" : cell.status === "ناقص" ? "cell-partial" : cell.status === "بدهکار به مرکز" ? "cell-debt" : "cell-empty";
+        const clickable = cell.status === "بدهکار به مرکز" || cell.status === "ناقص";
         const attrs = clickable
           ? `class="${cls} cell-clickable" role="button" tabindex="0"
              data-team-id="${row.team.id}" data-team-name="${escapeHtml(row.team.name)}"
@@ -436,7 +521,7 @@ const profileSection = (title, rows, cols, cellRenderer = null) => `
           }
           const value = row[c];
           if (["amount", "charge_amount", "rent_amount"].includes(c)) return `<td>${escapeHtml(formatMoney(value))}</td>`;
-          if (c === "usage_type") return `<td>${escapeHtml(usageLabels[value] || value || "—")}</td>`;
+          if (c === "usage_type") return `<td>${usageLabels[value] || value || "—"}</td>`;
           if (c === "number") return `<td>${deskLink(value)}</td>`;
           return `<td>${escapeHtml(formatNumber(value ?? "—"))}</td>`;
         }).join("")}</tr>`).join("")
@@ -447,37 +532,34 @@ const profileSection = (title, rows, cols, cellRenderer = null) => `
 
 const openTeamProfile = async (teamId) => {
   const data = await fetchJson(`api.php?resource=team-profile&id=${encodeURIComponent(teamId)}`);
-  lastProfileTeamId = teamId;
   const modal = ensureModal();
   const form = modal.querySelector("#crudForm");
   modal.querySelector("#crudModalTitle").textContent = `پروفایل نهاد: ${data.team.name || "—"}`;
+  const deskList = (data.desks || []).map((d) => d.number).join("، ") || "—";
   form.innerHTML = `
     <div class="profile-summary">
-      <div><span>نوع</span><strong>${escapeHtml(entityTypeLabels[data.team.entity_type] || data.team.entity_type || "—")}</strong></div>
+      <div><span>نوع</span><strong>${entityBadge(data.team.entity_type)}</strong></div>
       <div><span>مسئول</span><strong>${escapeHtml(data.team.leader || "—")}</strong></div>
+      <div><span>میزها</span><strong>${escapeHtml(deskList)}</strong></div>
       <div><span>جمع شارژ</span><strong>${escapeHtml(formatMoney(data.summary.charge_total || 0))}</strong></div>
-      <div><span>واریز</span><strong>${escapeHtml(formatMoney(data.summary.paid_total || 0))}</strong></div>
-      <div><span>بدهی</span><strong>${escapeHtml(formatMoney(data.summary.debt_total || 0))}</strong></div>
+      <div><span>دریافت از نهاد</span><strong>${escapeHtml(formatMoney(data.summary.paid_total || 0))}</strong></div>
+      <div><span>مانده طلب</span><strong class="debt-value">${escapeHtml(formatMoney(data.summary.debt_total || 0))}</strong></div>
     </div>
     <div class="profile-actions">
       <button type="button" class="button" data-profile-action="add-member">افزودن عضو</button>
-      <button type="button" class="button ghost" data-profile-action="deposit">ثبت واریز</button>
+      <button type="button" class="button ghost" data-profile-action="deposit">ثبت دریافت شارژ</button>
       <button type="button" class="button ghost" data-profile-action="charges">مشاهده شارژ</button>
       <button type="button" class="button ghost" data-profile-action="desks">مدیریت میزها</button>
     </div>
-    ${profileSection("میزها", data.desks, ["number", "usage_type", "formal_seats", "informal_seats"])}
-    ${profileSection("اعضا", data.members, ["full_name", "access_code", "desk_numbers", "phone"], (column, row) => {
-      if (column === "desk_numbers" && row.desk_numbers) {
-        return row.desk_numbers.split(",").map((n) => deskLink(n.trim())).join(" ");
-      }
-      return null;
-    })}
+    ${profileSection("میزهای نهاد", data.desks, ["number", "usage_type", "formal_seats", "informal_seats"])}
+    ${profileSection("اعضا", data.members, ["full_name", "access_code", "locker_number", "phone"])}
     ${profileSection("کمدها", data.lockers, ["locker_number", "status", "delivered_at", "key_number"], (column, row) => {
       if (column === "locker_number") return lockerLink(row.locker_number);
+      if (column === "status") return lockerStatusBadge(row.status);
       return null;
     })}
     ${profileSection("شارژها", data.charges, ["fiscal_year", "month_name", "charge_amount", "rent_amount", "amount"])}
-    ${profileSection("واریز تیم", data.payments, ["tx_date", "fiscal_year", "month_index", "amount"])}
+    ${profileSection("دریافت شارژ از نهاد", data.payments, ["tx_date", "fiscal_year", "month_index", "amount"])}
     <div class="modal-actions"><button class="button ghost" type="button" data-close-modal>بستن</button></div>`;
 
   form.querySelector("[data-close-modal]").addEventListener("click", closeModal);
@@ -494,8 +576,8 @@ const openTeamProfile = async (teamId) => {
           title: `افزودن عضو — ${data.team.name}`,
           record: { team_id: String(teamId) },
           onSaved: async () => {
-            document.querySelector('#members data-table')?.load?.();
-            showToast("عضو ثبت شد.");
+            await refreshAfterMutation("members");
+            showToast("عضو ثبت شد.", "success");
           },
         });
       } else if (action === "deposit") {
@@ -529,23 +611,21 @@ const openDepositModal = async ({ teamId, teamName, fiscalYear, monthIndex, mont
   openRecordModal({
     resource: "transactions",
     definition,
-    title: `ثبت واریز — ${teamName}`,
+    title: `ثبت دریافت شارژ — ${teamName}`,
     record: {
       category: "واریز تیم",
       team_id: String(teamId),
       fiscal_year: fiscalYear,
       month_index: String(monthIndex),
       amount: remaining || amountDue,
-      description: `واریز شارژ ${resolvedMonthName} ${fiscalYear}`,
+      description: `دریافت شارژ ${resolvedMonthName} ${fiscalYear}`,
       tx_date: window.MECHINNO?.today || "",
       confirmed: "1",
     },
     onSaved: async () => {
+      await refreshAfterMutation("transactions");
       await loadChargesCollage();
-      await loadDashboard();
-      document.querySelector("#charges data-table")?.load?.();
-      document.querySelector("#transactions data-table")?.load?.();
-      showToast("واریز ثبت شد.");
+      showToast("دریافت شارژ ثبت شد.", "success");
     },
   });
 };
@@ -583,16 +663,6 @@ const fieldInput = (name, meta, value) => {
   if (type === "textarea") {
     return `<textarea name="${escapeHtml(name)}" ${required} ${placeholder}>${escapeHtml(safeValue)}</textarea>`;
   }
-  if (type === "multi_select") {
-    const options = meta.options || {};
-    const selected = Array.isArray(safeValue) ? safeValue.map(String) : String(safeValue || "").split(",").filter(Boolean);
-    return `<select name="${escapeHtml(name)}" multiple ${required}>
-      ${Object.entries(options).map(([optionValue, optionLabel]) => {
-        const isSelected = selected.includes(String(optionValue)) ? "selected" : "";
-        return `<option value="${escapeHtml(optionValue)}" ${isSelected}>${escapeHtml(optionLabel)}</option>`;
-      }).join("")}
-    </select>`;
-  }
   if (type === "select") {
     const options = meta.options || {};
     const entries = Array.isArray(options) ? options.map((o) => [o, o]) : Object.entries(options);
@@ -615,7 +685,7 @@ const openRecordModal = ({ resource, definition, record = null, onSaved, title =
   form.innerHTML = `
     <div class="crud-grid">
       ${Object.entries(definition.fields).map(([name, meta]) => `
-        <label class="${meta.type === "textarea" || meta.type === "multi_select" ? "wide" : ""}">
+        <label class="${meta.type === "textarea" ? "wide" : ""}">
           <span>${escapeHtml(meta.label)}${meta.required ? " *" : ""}</span>
           ${fieldInput(name, meta, record ? record[name] : "")}
         </label>`).join("")}
@@ -630,15 +700,11 @@ const openRecordModal = ({ resource, definition, record = null, onSaved, title =
     const submitButton = form.querySelector('button[type="submit"]');
     submitButton.disabled = true;
     try {
-      const formData = new FormData(form);
-      const payload = Object.fromEntries(formData.entries());
-      const multi = form.querySelector('select[multiple][name="desk_ids"]');
-      if (multi) payload.desk_ids = Array.from(multi.selectedOptions).map((o) => o.value);
+      const payload = Object.fromEntries(new FormData(form).entries());
       if (isEdit) payload.id = record.id;
       await postJson(`api.php?resource=${encodeURIComponent(resource)}&action=${isEdit ? "update" : "create"}`, payload);
       closeModal();
       await onSaved();
-      await loadDashboard();
     } catch (error) {
       showToast(error.message, "error");
     } finally {
@@ -649,28 +715,41 @@ const openRecordModal = ({ resource, definition, record = null, onSaved, title =
 };
 
 const formatCell = (column, value, row, resource) => {
-  if (column === "entity_type") return entityTypeLabels[value] || value;
-  if (column === "usage_type") return usageLabels[value] || value;
+  if (column === "entity_type") return entityBadge(value);
+  if (column === "usage_type") return escapeHtml(usageLabels[value] || value || "—");
+  if (column === "category") {
+    if (value === "واریز تیم") return "دریافت از نهاد";
+    return escapeHtml(value || "—");
+  }
   if (column === "confirmed") return Number(value) === 1 ? "بله" : "خیر";
+  if (column === "status" && resource === "lockers") return lockerStatusBadge(value);
   if (linkColumns[column] && row[linkColumns[column]] && value) {
     if (column === "name" && resource === "teams") {
       return `<button type="button" class="text-link" data-team-id="${escapeHtml(row.id)}">${escapeHtml(value)}</button>`;
     }
     return teamLink(row[linkColumns[column]], value);
   }
+  if (column === "full_name" && resource === "members" && row.team_id) {
+    return `${escapeHtml(value || "—")} <small>${teamLink(row.team_id, "پروفایل نهاد")}</small>`;
+  }
   if (column === "desk_numbers" && value) {
     return String(value).split(",").filter(Boolean).map((n) => deskLink(n.trim())).join(" ");
   }
-  if (column === "locker_number" && value) {
-    return lockerLink(value);
-  }
-  if (column === "number" && resource === "desks") {
-    return deskLink(value);
-  }
+  if (column === "locker_number" && value) return lockerLink(value);
+  if (column === "number" && resource === "desks") return deskLink(value);
   if (["amount", "charge_amount", "rent_amount", "charge_rate", "informal_rent_rate"].includes(column)) {
     return formatMoney(value);
   }
   return formatNumber(value);
+};
+
+const resolveColumns = (rows, resource) => {
+  if (!rows.length) return [];
+  const preferred = resourceColumns[resource] || [];
+  const available = Object.keys(rows[0]).filter((c) => !hiddenColumns.has(c));
+  const ordered = preferred.filter((c) => available.includes(c));
+  const rest = available.filter((c) => !ordered.includes(c));
+  return [...ordered, ...rest];
 };
 
 class DataTable extends HTMLElement {
@@ -686,20 +765,20 @@ class DataTable extends HTMLElement {
     this.pages = 1;
     this.filter = "";
     this.innerHTML = `
-      <article class="panel" style="margin-top:14px">
+      <article class="panel data-panel">
         <div class="table-toolbar">
-          <h2>${this.title}</h2>
+          <h2>${escapeHtml(this.title)}</h2>
           <div class="table-actions">
-            <button class="button add-button" type="button" hidden>افزودن</button>
-            <input class="search" placeholder="جست‌وجو... ( / )" />
+            <button class="button add-button" type="button" hidden>+ افزودن</button>
+            <input class="search" type="search" placeholder="جست‌وجو... ( / )" />
           </div>
         </div>
         <div class="table-wrap"><div class="empty">در حال بارگذاری...</div></div>
-        <div class="mobile-cards" hidden></div>
+        <div class="mobile-cards"></div>
         <div class="table-pagination" hidden>
           <span class="pager-info"></span>
           <div class="pager-buttons">
-            <label>تعداد در صفحه
+            <label>تعداد
               <select class="per-page-select">
                 <option value="10">10</option>
                 <option value="25" selected>25</option>
@@ -717,7 +796,16 @@ class DataTable extends HTMLElement {
       this.render();
     });
     this.querySelector(".add-button").addEventListener("click", () => {
-      openRecordModal({ resource: this.resource, definition: this.definition, onSaved: () => this.load() });
+      openRecordModal({
+        resource: this.resource,
+        definition: this.definition,
+        onSaved: async () => {
+          this.page = 1;
+          await this.load();
+          await refreshAfterMutation(this.closest(".section")?.id || null);
+          showToast("ثبت شد.", "success");
+        },
+      });
     });
     this.querySelector(".per-page-select")?.addEventListener("change", (e) => {
       this.perPage = Number(e.target.value) || 25;
@@ -767,52 +855,63 @@ class DataTable extends HTMLElement {
   }
 
   filteredRows() {
+    let rows = this.rows;
+    if (this.resource === "transactions" && txCategoryFilter) {
+      rows = rows.filter((row) => row.category === txCategoryFilter);
+    }
     const normalized = this.filter.trim().toLowerCase();
-    return normalized
-      ? this.rows.filter((row) => JSON.stringify(row).toLowerCase().includes(normalized))
-      : this.rows;
+    if (normalized) {
+      rows = rows.filter((row) => JSON.stringify(row).toLowerCase().includes(normalized));
+    }
+    return rows;
   }
 
   renderMobileCards(rows) {
     const container = this.querySelector(".mobile-cards");
-    const wrap = this.querySelector(".table-wrap");
-    if (!isMobile()) {
-      container.hidden = true;
-      wrap.hidden = false;
-      return false;
-    }
-    wrap.hidden = true;
-    container.hidden = false;
-    const columns = rows.length ? Object.keys(rows[0]).filter((c) => !hiddenColumns.has(c)).slice(0, 6) : [];
+    if (!isMobile()) return false;
+    const columns = rows.length ? resolveColumns(rows, this.resource).slice(0, 6) : [];
     const editable = this.definition && editableResources.has(this.resource);
-    container.innerHTML = rows.map((row) => {
-      const highlighted = this.resource === "lockers" && highlightLocker === Number(row.locker_number);
-      const fields = columns.map((column) => `
-        <div class="mobile-card-field">
-          <span>${escapeHtml(labels[column] || column)}</span>
-          <strong>${formatCell(column, row[column], row, this.resource)}</strong>
-        </div>`).join("");
-      const profileBtn = this.resource === "teams"
-        ? `<button class="mini-button" type="button" data-action="profile" data-id="${escapeHtml(row.id)}">پروفایل</button>` : "";
-      const editBtns = editable
-        ? `<button class="mini-button" type="button" data-action="edit" data-id="${escapeHtml(row.id)}">ویرایش</button>
-           <button class="mini-button danger" type="button" data-action="delete" data-id="${escapeHtml(row.id)}">حذف</button>` : "";
-      return `<article class="mobile-card ${highlighted ? "highlighted" : ""}">${fields}
-        <div class="row-actions">${profileBtn}${editBtns}</div></article>`;
-    }).join("") || `<div class="empty">رکوردی یافت نشد.</div>`;
+    container.innerHTML = rows.length
+      ? rows.map((row) => {
+        const highlighted = this.resource === "lockers" && highlightLocker === Number(row.locker_number);
+        const fields = columns.map((column) => `
+          <div class="mobile-card-field">
+            <span>${escapeHtml(labels[column] || column)}</span>
+            <strong>${formatCell(column, row[column], row, this.resource)}</strong>
+          </div>`).join("");
+        const profileBtn = this.resource === "teams"
+          ? `<button class="mini-button primary" type="button" data-action="profile" data-id="${escapeHtml(row.id)}">پروفایل</button>` : "";
+        const editBtns = editable
+          ? `<button class="mini-button" type="button" data-action="edit" data-id="${escapeHtml(row.id)}">ویرایش</button>
+             <button class="mini-button danger" type="button" data-action="delete" data-id="${escapeHtml(row.id)}">حذف</button>` : "";
+        return `<article class="mobile-card ${highlighted ? "highlighted" : ""}">${fields}
+          <div class="row-actions">${profileBtn}${editBtns}</div></article>`;
+      }).join("")
+      : `<div class="empty">رکوردی یافت نشد.</div>`;
     return true;
   }
 
   render() {
+    syncMobileClass();
     const rows = this.filteredRows();
-    if (this.renderMobileCards(rows)) return;
-
     const wrap = this.querySelector(".table-wrap");
-    if (!rows.length) {
-      wrap.innerHTML = `<div class="empty">رکوردی یافت نشد.</div>`;
+    const mobile = this.querySelector(".mobile-cards");
+
+    if (this.renderMobileCards(rows)) {
+      wrap.innerHTML = "";
       return;
     }
-    const columns = Object.keys(rows[0]).filter((c) => !hiddenColumns.has(c));
+
+    if (!rows.length) {
+      const cta = this.definition && editableResources.has(this.resource)
+        ? `<div class="empty-state-cta"><button class="button add-inline" type="button">+ افزودن اولین رکورد</button></div>` : "";
+      wrap.innerHTML = `<div class="empty">رکوردی یافت نشد.${cta}</div>`;
+      wrap.querySelector(".add-inline")?.addEventListener("click", () => this.querySelector(".add-button")?.click());
+      if (mobile) mobile.innerHTML = "";
+      return;
+    }
+
+    const columns = resolveColumns(rows, this.resource);
     const editable = this.definition && editableResources.has(this.resource);
     const statusField = this.definition?.status_field;
     const statusOptions = this.definition?.status_options || [];
@@ -826,11 +925,14 @@ class DataTable extends HTMLElement {
           const options = statusOptions.map((o) => `<option value="${escapeHtml(o)}" ${String(o) === String(value) ? "selected" : ""}>${escapeHtml(o)}</option>`).join("");
           return `<td><select class="inline-status" data-id="${escapeHtml(row.id)}">${options}</select></td>`;
         }
-        const className = column === "amount" && Number(value) < 0 ? "money-negative" : column === "amount" && Number(value) > 0 ? "money-positive" : "";
+        let className = "";
+        if (column === "amount") {
+          className = Number(value) < 0 ? "money-negative" : Number(value) > 0 ? "money-positive" : "";
+        }
         return `<td class="${className}">${formatCell(column, value, row, this.resource)}</td>`;
       }).join("");
       const profileAction = this.resource === "teams"
-        ? `<button class="mini-button" type="button" data-action="profile" data-id="${escapeHtml(row.id)}">پروفایل</button>` : "";
+        ? `<button class="mini-button primary" type="button" data-action="profile" data-id="${escapeHtml(row.id)}">پروفایل</button>` : "";
       const actions = editable || profileAction
         ? `<td class="row-actions">${profileAction}${editable ? `
         <button class="mini-button" type="button" data-action="edit" data-id="${escapeHtml(row.id)}">ویرایش</button>
@@ -838,6 +940,7 @@ class DataTable extends HTMLElement {
       return `<tr class="${rowHighlight ? "highlighted" : ""}">${cells}${actions}</tr>`;
     }).join("");
     wrap.innerHTML = `<table><thead><tr>${head}${editable || this.resource === "teams" ? "<th>عملیات</th>" : ""}</tr></thead><tbody>${body}</tbody></table>`;
+    if (mobile) mobile.innerHTML = "";
   }
 
   async handleClick(event) {
@@ -852,19 +955,24 @@ class DataTable extends HTMLElement {
     }
     if (!this.definition) return;
     if (button.dataset.action === "edit") {
-      const full = this.rows.find((r) => Number(r.id) === id);
-      if (full?.desk_ids && typeof full.desk_ids === "string") {
-        full.desk_ids = full.desk_ids.split(",").filter(Boolean);
-      }
-      openRecordModal({ resource: this.resource, definition: this.definition, record: full || record, onSaved: () => this.load() });
+      openRecordModal({
+        resource: this.resource,
+        definition: this.definition,
+        record: { ...record },
+        onSaved: async () => {
+          await this.load();
+          await refreshAfterMutation(this.closest(".section")?.id || null);
+          showToast("ذخیره شد.", "success");
+        },
+      });
       return;
     }
     if (button.dataset.action === "delete") {
       if (!window.confirm("حذف شود؟")) return;
       await postJson(`api.php?resource=${encodeURIComponent(this.resource)}&action=delete`, { id });
       await this.load();
-      await loadDashboard();
-      showToast("حذف شد.");
+      await refreshAfterMutation(this.closest(".section")?.id || null);
+      showToast("حذف شد.", "success");
     }
   }
 
@@ -875,8 +983,8 @@ class DataTable extends HTMLElement {
     try {
       await postJson(`api.php?resource=${encodeURIComponent(this.resource)}&action=status`, { id: select.dataset.id, status: select.value });
       await this.load();
-      await loadDashboard();
-      showToast("وضعیت به‌روز شد.");
+      await refreshAfterMutation(this.closest(".section")?.id || null);
+      showToast("وضعیت به‌روز شد.", "success");
     } catch (error) {
       showToast(error.message, "error");
     } finally {
@@ -893,16 +1001,19 @@ if (recalcChargesButton) {
     const year = document.getElementById("chargesYear")?.value || "1404";
     if (!window.confirm(`شارژهای محاسبه‌شده خودکار سال ${year} از نرخ‌ها بازمحاسبه شود؟`)) return;
     recalcChargesButton.disabled = true;
+    recalcChargesButton.classList.add("is-loading");
+    recalcChargesButton.textContent = "در حال محاسبه…";
     try {
       await postJson("api.php?resource=recalculate-charges", { fiscal_year: year });
       await loadChargesCollage();
-      document.querySelector("#charges data-table")?.load?.();
-      await loadDashboard();
-      showToast("محاسبه خودکار انجام شد.");
+      await refreshAfterMutation("charges");
+      showToast("محاسبه خودکار انجام شد.", "success");
     } catch (error) {
       showToast(error.message, "error");
     } finally {
       recalcChargesButton.disabled = false;
+      recalcChargesButton.classList.remove("is-loading");
+      recalcChargesButton.textContent = "محاسبه خودکار از نرخ";
     }
   });
 }
@@ -922,15 +1033,18 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "/" && !["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName)) {
     event.preventDefault();
     const activeSection = document.querySelector(".section.active");
-    const search = activeSection?.querySelector("data-table .search, .table-actions .search");
-    search?.focus();
+    activeSection?.querySelector("data-table .search")?.focus();
   }
 });
 
 window.addEventListener("resize", () => {
+  syncMobileClass();
   document.querySelectorAll("data-table").forEach((table) => table.render?.());
 });
 
+syncMobileClass();
+updatePageHeader("overview");
 loadDashboard().catch((error) => {
-  document.getElementById("cards").innerHTML = `<article class="card"><span>خطا</span><strong>${escapeHtml(error.message)}</strong></article>`;
+  const cards = document.getElementById("cards");
+  if (cards) cards.innerHTML = `<article class="stat-card"><span class="stat-label">خطا</span><strong>${escapeHtml(error.message)}</strong></article>`;
 });

@@ -48,7 +48,6 @@ final class Crud
                     'team_id' => ['label' => 'نهاد (تیم / شرکت / دانشجو)', 'type' => 'select', 'options' => [], 'required' => true],
                     'full_name' => ['label' => 'نام', 'type' => 'text', 'required' => true],
                     'access_code' => ['label' => 'کد دستگاه تردد', 'type' => 'text'],
-                    'desk_ids' => ['label' => 'میزها', 'type' => 'multi_select', 'options' => []],
                     'locker_id' => ['label' => 'کمد', 'type' => 'select', 'options' => []],
                     'phone' => ['label' => 'تماس', 'type' => 'text'],
                     'national_id' => ['label' => 'کدملی', 'type' => 'text'],
@@ -103,8 +102,12 @@ final class Crud
                     'tx_date' => ['label' => 'تاریخ', 'type' => 'date', 'placeholder' => '1404/01/01', 'required' => true],
                     'description' => ['label' => 'شرح', 'type' => 'textarea', 'required' => true],
                     'amount' => ['label' => 'مبلغ (مثبت درآمد / منفی هزینه)', 'type' => 'number', 'required' => true],
-                    'category' => ['label' => 'دسته', 'type' => 'select', 'options' => ['درآمد', 'هزینه', 'واریز تیم'], 'required' => true],
-                    'team_id' => ['label' => 'تیم (برای واریز)', 'type' => 'select', 'options' => []],
+                    'category' => ['label' => 'دسته', 'type' => 'select', 'options' => [
+                        'درآمد' => 'درآمد',
+                        'هزینه' => 'هزینه',
+                        'واریز تیم' => 'دریافت از نهاد',
+                    ], 'required' => true],
+                    'team_id' => ['label' => 'نهاد (برای دریافت شارژ)', 'type' => 'select', 'options' => []],
                     'fiscal_year' => ['label' => 'سال مالی', 'type' => 'text'],
                     'month_index' => ['label' => 'ماه', 'type' => 'select', 'options' => self::monthOptions()],
                     'confirmed' => ['label' => 'تأیید شده', 'type' => 'select', 'options' => ['1' => 'بله', '0' => 'خیر']],
@@ -150,7 +153,6 @@ final class Crud
         $resources = [];
         $teamOptions = $this->teamOptions();
         $memberOptions = $this->memberOptions();
-        $deskOptions = $this->deskOptions();
         $lockerOptions = $this->lockerOptions();
 
         foreach (self::definitions() as $name => $definition) {
@@ -160,9 +162,6 @@ final class Crud
                 }
                 if ($field === 'member_id') {
                     $definition['fields'][$field]['options'] = $memberOptions;
-                }
-                if ($field === 'desk_ids') {
-                    $definition['fields'][$field]['options'] = $deskOptions;
                 }
                 if ($field === 'locker_id') {
                     $definition['fields'][$field]['options'] = $lockerOptions;
@@ -186,7 +185,6 @@ final class Crud
     public function create(string $resource, array $payload): array
     {
         $definition = $this->definition($resource);
-        $deskIds = $this->extractDeskIds($payload);
         $data = $this->sanitizePayload($definition, $payload, true);
         $this->applyResourceRules($resource, $data, true);
 
@@ -199,10 +197,6 @@ final class Crud
         ));
         $statement->execute($data);
         $id = (int) $this->pdo->lastInsertId();
-
-        if ($resource === 'members') {
-            $this->syncMemberDesks($id, $deskIds);
-        }
         if ($resource === 'transactions') {
             $this->syncTeamDepositIncome($id);
         }
@@ -218,14 +212,10 @@ final class Crud
     {
         $definition = $this->definition($resource);
         $this->assertExists($definition, $id);
-        $deskIds = $this->extractDeskIds($payload);
         $data = $this->sanitizePayload($definition, $payload, false);
-        $this->applyResourceRules($resource, $data, false);
+        $this->applyResourceRules($resource, $data, false, $id);
 
         if ($data === []) {
-            if ($resource === 'members' && $deskIds !== null) {
-                $this->syncMemberDesks($id, $deskIds);
-            }
             return $this->find($resource, $id);
         }
 
@@ -241,9 +231,6 @@ final class Crud
         ));
         $statement->execute($data);
 
-        if ($resource === 'members' && $deskIds !== null) {
-            $this->syncMemberDesks($id, $deskIds);
-        }
         if ($resource === 'transactions') {
             $this->syncTeamDepositIncome($id);
         }
@@ -255,9 +242,6 @@ final class Crud
     {
         $definition = $this->definition($resource);
         $this->assertExists($definition, $id);
-        if ($resource === 'members') {
-            $this->pdo->prepare('DELETE FROM member_desks WHERE member_id = :id')->execute(['id' => $id]);
-        }
         $this->pdo->prepare(sprintf('DELETE FROM %s WHERE id = :id', $definition['table']))->execute(['id' => $id]);
     }
 
@@ -280,9 +264,6 @@ final class Crud
         $row = $statement->fetch();
         if ($row === false) {
             throw new InvalidArgumentException('رکورد پیدا نشد.');
-        }
-        if ($resource === 'members') {
-            $row['desk_ids'] = $this->memberDeskIds($id);
         }
 
         return $row;
@@ -307,9 +288,6 @@ final class Crud
     {
         $data = [];
         foreach ($definition['fields'] as $field => $meta) {
-            if ($field === 'desk_ids') {
-                continue;
-            }
             if (!$creating && !array_key_exists($field, $payload)) {
                 continue;
             }
@@ -326,7 +304,7 @@ final class Crud
     /**
      * @param array<string, mixed> $data
      */
-    private function applyResourceRules(string $resource, array &$data, bool $creating): void
+    private function applyResourceRules(string $resource, array &$data, bool $creating, int $recordId = 0): void
     {
         if (($creating || isset($data['source_file'])) && in_array($resource, ['teams', 'members', 'lockers'], true)) {
             $data['source_file'] = 'manual';
@@ -344,8 +322,24 @@ final class Crud
         if ($resource === 'members' && $creating) {
             $data['member_code'] = $this->ids->nextMemberCode();
         }
-        if ($resource === 'lockers' && $creating && empty($data['status'])) {
-            $data['status'] = 'خالی';
+        if ($resource === 'lockers') {
+            if ($creating && empty($data['status'])) {
+                $data['status'] = 'خالی';
+            }
+            $lockerNumber = (int) ($data['locker_number'] ?? 0);
+            if ($lockerNumber > 0) {
+                $statement = $this->pdo->prepare(
+                    'SELECT id FROM lockers WHERE locker_number = :number' . ($creating ? '' : ' AND id <> :id')
+                );
+                $params = ['number' => $lockerNumber];
+                if (!$creating && $recordId > 0) {
+                    $params['id'] = $recordId;
+                }
+                $statement->execute($params);
+                if ($statement->fetchColumn() !== false) {
+                    throw new InvalidArgumentException('این شماره کمد قبلاً ثبت شده است.');
+                }
+            }
         }
         if ($resource === 'transactions') {
             $data['source_file'] = 'manual';
@@ -380,55 +374,6 @@ final class Crud
         if ($resource === 'lockers' && !empty($data['team_id']) && empty($data['status'])) {
             $data['status'] = 'تخصیص یافته';
         }
-    }
-
-    /**
-     * @return list<int>|null
-     */
-    private function extractDeskIds(array &$payload): ?array
-    {
-        if (!array_key_exists('desk_ids', $payload)) {
-            return null;
-        }
-        $raw = $payload['desk_ids'];
-        unset($payload['desk_ids']);
-        if ($raw === null || $raw === '' || $raw === []) {
-            return [];
-        }
-        if (is_string($raw)) {
-            $raw = array_filter(array_map('trim', explode(',', $raw)));
-        }
-        if (!is_array($raw)) {
-            return [];
-        }
-
-        return array_values(array_unique(array_map('intval', $raw)));
-    }
-
-    /**
-     * @param list<int> $deskIds
-     */
-    private function syncMemberDesks(int $memberId, array $deskIds): void
-    {
-        $this->pdo->prepare('DELETE FROM member_desks WHERE member_id = :member_id')->execute(['member_id' => $memberId]);
-        foreach ($deskIds as $deskId) {
-            if ($deskId < 1) {
-                continue;
-            }
-            $this->pdo->prepare('INSERT INTO member_desks (member_id, desk_id) VALUES (:member_id, :desk_id)')
-                ->execute(['member_id' => $memberId, 'desk_id' => $deskId]);
-        }
-    }
-
-    /**
-     * @return list<int>
-     */
-    private function memberDeskIds(int $memberId): array
-    {
-        $statement = $this->pdo->prepare('SELECT desk_id FROM member_desks WHERE member_id = :member_id');
-        $statement->execute(['member_id' => $memberId]);
-
-        return array_map('intval', array_column($statement->fetchAll(), 'desk_id'));
     }
 
     private function syncTeamDepositIncome(int $transactionId): void

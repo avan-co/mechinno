@@ -43,7 +43,8 @@ if ($configured) {
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>ورود به پنل Mechinno</title>
-    <link rel="stylesheet" href="assets/styles.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="assets/styles.css?v=<?= e((string) filemtime(__DIR__ . '/assets/styles.css')) ?>" />
   </head>
   <body>
     <main class="setup-screen">

@@ -1,0 +1,252 @@
+/* گزارش چاپی A4 — مستقل از تم پنل */
+@page {
+  size: A4 portrait;
+  margin: 12mm 11mm 14mm;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html {
+  font-family: "Vazirmatn", Tahoma, sans-serif;
+  font-size: 11pt;
+  line-height: 1.55;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+body {
+  margin: 0;
+  color: #0f2744;
+  background: #e8eef5;
+  direction: rtl;
+}
+
+.report-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 20px;
+  background: #fff;
+  border-bottom: 1px solid #c5d7ef;
+  box-shadow: 0 4px 16px rgba(15, 39, 68, 0.08);
+}
+
+.report-toolbar h1 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.report-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 1px solid #2563eb;
+  border-radius: 8px;
+  background: #2563eb;
+  color: #fff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: none;
+}
+.btn--ghost {
+  background: #fff;
+  color: #2563eb;
+}
+
+.report-doc {
+  width: 210mm;
+  min-height: 297mm;
+  margin: 16px auto;
+  padding: 14mm 12mm;
+  background: #fff;
+  box-shadow: 0 8px 32px rgba(15, 39, 68, 0.12);
+}
+
+/* ── سربرگ ── */
+.report-cover {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 18px;
+  padding-bottom: 16px;
+  border-bottom: 3px solid #2563eb;
+}
+
+.report-brand {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.report-brand-mark {
+  display: grid;
+  width: 52px;
+  height: 52px;
+  place-items: center;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #2563eb, #7c3aed);
+  color: #fff;
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.report-brand-text strong {
+  display: block;
+  font-size: 18pt;
+  font-weight: 800;
+  color: #0f2744;
+}
+.report-brand-text small {
+  display: block;
+  color: #5b7a99;
+  font-size: 10pt;
+}
+
+.report-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 10pt;
+  color: #4a6282;
+}
+.report-meta span {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+}
+
+/* ── KPI ── */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.kpi {
+  padding: 10px 12px;
+  border: 1px solid #c5d7ef;
+  border-radius: 10px;
+  background: #f8fbff;
+}
+.kpi-label {
+  display: block;
+  font-size: 9pt;
+  color: #5b7a99;
+  font-weight: 600;
+}
+.kpi-value {
+  display: block;
+  margin-top: 4px;
+  font-size: 13pt;
+  font-weight: 800;
+  color: #1d4ed8;
+}
+.kpi--danger .kpi-value { color: #dc2626; }
+.kpi--success .kpi-value { color: #059669; }
+
+.section-title {
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  font-size: 13pt;
+  font-weight: 800;
+  color: #1e3a5f;
+  border-bottom: 2px solid #dbeafe;
+  page-break-after: avoid;
+}
+
+.section-note {
+  margin: 0 0 10px;
+  font-size: 9.5pt;
+  color: #5b7a99;
+}
+
+.report-section {
+  margin-bottom: 18px;
+}
+
+.report-section--break {
+  page-break-before: always;
+  break-before: page;
+}
+
+/* ── جداول ── */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 9.5pt;
+  margin-bottom: 4px;
+}
+.data-table th,
+.data-table td {
+  padding: 6px 8px;
+  border: 1px solid #c5d7ef;
+  text-align: right;
+  vertical-align: top;
+}
+.data-table th {
+  background: #dbeafe;
+  color: #1e3a5f;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.data-table tbody tr:nth-child(even) { background: #f8fbff; }
+.data-table .num { font-variant-numeric: tabular-nums; direction: ltr; text-align: left; white-space: nowrap; }
+.data-table .status-paid { color: #059669; font-weight: 700; }
+.data-table .status-debt { color: #dc2626; font-weight: 700; }
+.data-table .status-partial { color: #d97706; font-weight: 700; }
+
+.empty-row td {
+  text-align: center;
+  color: #94a3b8;
+  font-style: italic;
+  padding: 14px;
+}
+
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.report-footer {
+  margin-top: 20px;
+  padding-top: 10px;
+  border-top: 1px dashed #c5d7ef;
+  font-size: 9pt;
+  color: #94a3b8;
+  text-align: center;
+}
+
+/* ── چاپ ── */
+@media print {
+  body { background: #fff; }
+  .no-print { display: none !important; }
+  .report-doc {
+    width: auto;
+    min-height: auto;
+    margin: 0;
+    padding: 0;
+    box-shadow: none;
+  }
+  .report-section { break-inside: avoid-page; }
+  .data-table { break-inside: auto; }
+  .data-table thead { display: table-header-group; }
+  .data-table tr { break-inside: avoid; }
+}
+
+@media screen and (max-width: 800px) {
+  .report-doc { width: 100%; margin: 0; padding: 16px; box-shadow: none; }
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .two-col { grid-template-columns: 1fr; }
+}
