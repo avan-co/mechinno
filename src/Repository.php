@@ -40,7 +40,7 @@ final class Repository
             ),
             'latest_import' => $this->row('SELECT imported_at, source_files FROM import_runs ORDER BY id DESC LIMIT 1'),
             'debt_by_team' => $this->rows(
-                "SELECT t.name AS team_name, COALESCE(SUM(c.amount), 0) - COALESCE(p.paid, 0) AS debt
+                "SELECT t.id AS team_id, t.name AS team_name, COALESCE(SUM(c.amount), 0) - COALESCE(p.paid, 0) AS debt
                  FROM teams t
                  LEFT JOIN charges c ON c.team_id = t.id
                  LEFT JOIN (
@@ -69,7 +69,142 @@ final class Repository
                 'desks_free' => $this->scalar('SELECT COUNT(*) FROM desks WHERE team_id IS NULL'),
                 'lockers_assigned' => $this->scalar("SELECT COUNT(*) FROM lockers WHERE status = 'تخصیص یافته'"),
             ],
+            'current_month' => $this->currentMonthSummary(),
+            'action_items' => $this->actionItems(),
         ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function currentMonthSummary(): array
+    {
+        $today = JalaliDate::todayParts();
+        $year = (string) $today['year'];
+        $month = (int) $today['month'];
+
+        $chargeTotal = $this->preparedScalar(
+            'SELECT COALESCE(SUM(amount), 0) FROM charges WHERE fiscal_year = :year AND month_index = :month',
+            ['year' => $year, 'month' => $month]
+        );
+        $paidTotal = $this->preparedScalar(
+            "SELECT COALESCE(SUM(amount), 0) FROM transactions
+             WHERE category = 'واریز تیم' AND confirmed = 1 AND fiscal_year = :year AND month_index = :month",
+            ['year' => $year, 'month' => $month]
+        );
+
+        return [
+            'fiscal_year' => $year,
+            'month_index' => $month,
+            'month_name' => $today['month_name'],
+            'today' => $today['formatted'],
+            'charge_total' => $chargeTotal,
+            'paid_total' => $paidTotal,
+            'debt_total' => max(0, $chargeTotal - $paidTotal),
+            'debtor_count' => $this->preparedScalar(
+                "SELECT COUNT(*) FROM (
+                    SELECT c.team_id,
+                           COALESCE(SUM(c.amount), 0) - COALESCE(p.paid, 0) AS debt
+                    FROM charges c
+                    LEFT JOIN (
+                        SELECT team_id, SUM(amount) AS paid
+                        FROM transactions
+                        WHERE category = 'واریز تیم' AND confirmed = 1
+                          AND fiscal_year = :year AND month_index = :month
+                        GROUP BY team_id
+                    ) p ON p.team_id = c.team_id
+                    WHERE c.fiscal_year = :year2 AND c.month_index = :month2
+                    GROUP BY c.team_id, p.paid
+                    HAVING debt > 0
+                 ) AS debtors",
+                ['year' => $year, 'year2' => $year, 'month' => $month, 'month2' => $month]
+            ),
+        ];
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function actionItems(): array
+    {
+        $items = [];
+        $today = JalaliDate::todayParts();
+        $year = (string) $today['year'];
+        $month = (int) $today['month'];
+
+        $debtors = $this->preparedRows(
+            "SELECT t.id AS team_id, t.name AS team_name,
+                    COALESCE(SUM(c.amount), 0) - COALESCE(p.paid, 0) AS debt
+             FROM charges c
+             JOIN teams t ON t.id = c.team_id
+             LEFT JOIN (
+                SELECT team_id, SUM(amount) AS paid
+                FROM transactions
+                WHERE category = 'واریز تیم' AND confirmed = 1
+                  AND fiscal_year = :year AND month_index = :month
+                GROUP BY team_id
+             ) p ON p.team_id = c.team_id
+             WHERE c.fiscal_year = :year2 AND c.month_index = :month2 AND c.amount > 0
+             GROUP BY t.id, t.name, p.paid
+             HAVING debt > 0
+             ORDER BY debt DESC
+             LIMIT 5",
+            ['year' => $year, 'year2' => $year, 'month' => $month, 'month2' => $month]
+        );
+        foreach ($debtors as $row) {
+            $items[] = [
+                'type' => 'debt',
+                'label' => (string) $row['team_name'],
+                'detail' => 'بدهی ' . $today['month_name'] . ': ' . number_format((int) $row['debt']) . ' ریال',
+                'section' => 'charges',
+                'team_id' => (int) $row['team_id'],
+            ];
+        }
+
+        $emptyLockers = $this->scalar("SELECT COUNT(*) FROM lockers WHERE status = 'خالی'");
+        if ($emptyLockers > 0) {
+            $items[] = [
+                'type' => 'locker',
+                'label' => number_format($emptyLockers) . ' کمد خالی',
+                'detail' => 'آماده تخصیص',
+                'section' => 'lockers',
+            ];
+        }
+
+        $freeDesks = $this->scalar('SELECT COUNT(*) FROM desks WHERE team_id IS NULL');
+        if ($freeDesks > 0) {
+            $items[] = [
+                'type' => 'desk',
+                'label' => number_format($freeDesks) . ' میز آزاد',
+                'detail' => 'از ۲۴ میز',
+                'section' => 'desks',
+            ];
+        }
+
+        $hasRate = (int) $this->preparedScalar(
+            'SELECT COUNT(*) FROM rate_settings WHERE fiscal_year = :year',
+            ['year' => $year]
+        ) > 0;
+        if (!$hasRate) {
+            $items[] = [
+                'type' => 'rate',
+                'label' => 'نرخ سال ' . $year . ' تنظیم نشده',
+                'detail' => 'برای محاسبه خودکار شارژ لازم است',
+                'section' => 'rate_settings',
+            ];
+        }
+
+        $activePlans = $this->scalar("SELECT COUNT(*) FROM plans WHERE status = 'در حال اجرا'");
+        if ($activePlans > 0) {
+            $items[] = [
+                'type' => 'plan',
+                'label' => number_format($activePlans) . ' برنامه در حال اجرا',
+                'detail' => 'پیگیری وضعیت',
+                'section' => 'plans',
+            ];
+        }
+
+        return $items;
     }
 
     /**
