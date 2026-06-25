@@ -104,10 +104,7 @@ $ratesPage = $repo->paginatedResource('rate_settings', 1, 25);
 $rateCols = array_keys($ratesPage['rows'][0] ?? []);
 $assert(!in_array('rent_rate', $rateCols, true), 'rates: no rent_rate');
 
-$reflection = new ReflectionClass($repo);
-$strip = $reflection->getMethod('stripLegacyColumns');
-$strip->setAccessible(true);
-$stripped = $strip->invoke($repo, [
+$stripped = Repository::stripLegacyColumns([
     'name' => 'Test',
     'row_number' => 1,
     'lockers' => 2,

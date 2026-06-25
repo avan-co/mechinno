@@ -227,7 +227,7 @@ final class Repository
         $total = $this->resourceCount($name);
         $offset = ($page - 1) * $perPage;
         $rows = array_map(
-            fn (array $row): array => $this->stripLegacyColumns($row),
+            fn (array $row): array => $this->stripLegacyRow($row),
             $this->rows($sql . ' LIMIT ' . $perPage . ' OFFSET ' . $offset)
         );
 
@@ -262,7 +262,7 @@ final class Repository
     public function resource(string $name): array
     {
         return array_map(
-            fn (array $row): array => $this->stripLegacyColumns($row),
+            fn (array $row): array => $this->stripLegacyRow($row),
             $this->rows($this->resourceSql($name))
         );
     }
@@ -413,9 +413,9 @@ final class Repository
         }
 
         return [
-            'team' => $this->stripLegacyColumns($team),
+            'team' => self::stripLegacyColumns($team),
             'desks' => array_map(
-                fn (array $row): array => $this->stripLegacyColumns($row),
+                fn (array $row): array => $this->stripLegacyRow($row),
                 $this->preparedRows('SELECT id, number, team_id, usage_type, formal_seats, informal_seats, row_index, col_index, notes FROM desks WHERE team_id = :id ORDER BY number', ['id' => $teamId])
             ),
             'members' => $this->preparedRows(
@@ -525,12 +525,17 @@ final class Repository
      * @param array<string, mixed> $row
      * @return array<string, mixed>
      */
-    private function stripLegacyColumns(array $row): array
+    public static function stripLegacyColumns(array $row): array
     {
         foreach (self::LEGACY_COLUMNS as $column) {
             unset($row[$column]);
         }
 
         return $row;
+    }
+
+    private function stripLegacyRow(array $row): array
+    {
+        return self::stripLegacyColumns($row);
     }
 }

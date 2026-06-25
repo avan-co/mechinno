@@ -12,6 +12,7 @@ final class Schema
             self::migrateMysql($pdo);
         }
         self::ensureColumns($pdo);
+        self::dropLegacyColumns($pdo);
         self::seedDesks($pdo);
     }
 
@@ -313,6 +314,29 @@ final class Schema
 
         if (self::columnExists($pdo, 'members', 'code') && self::columnExists($pdo, 'members', 'access_code')) {
             $pdo->exec("UPDATE members SET access_code = code WHERE (access_code IS NULL OR access_code = '') AND code IS NOT NULL");
+        }
+    }
+
+    private static function dropLegacyColumns(PDO $pdo): void
+    {
+        $drops = [
+            'teams' => ['row_number', 'lockers', 'power_strips'],
+            'rate_settings' => ['rent_rate'],
+        ];
+
+        foreach ($drops as $table => $columns) {
+            foreach ($columns as $column) {
+                if (!self::columnExists($pdo, $table, $column)) {
+                    continue;
+                }
+                try {
+                    $pdo->exec(
+                        'ALTER TABLE ' . $table . ' DROP COLUMN ' . Sql::quoteIdentifier($column)
+                    );
+                } catch (PDOException) {
+                    // نسخه‌های قدیمی SQLite یا محدودیت میزبان — فیلتر API/UI همچنان فعال است.
+                }
+            }
         }
     }
 
