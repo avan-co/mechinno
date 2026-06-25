@@ -8,6 +8,7 @@ $isConfigured = is_file(__DIR__ . '/config.php');
 if ($isConfigured) {
     require_auth();
 }
+$today = JalaliDate::todayParts();
 ?>
 <!doctype html>
 <html lang="fa" dir="rtl">
@@ -31,8 +32,23 @@ if ($isConfigured) {
         </section>
       </main>
     <?php else: ?>
+      <div class="sidebar-backdrop" id="sidebarBackdrop" hidden></div>
+      <nav class="bottom-nav" aria-label="ناوبری سریع">
+        <button class="bottom-nav-item active" data-section="overview" type="button" aria-label="داشبورد">
+          <span class="bottom-nav-icon">⌂</span><span>داشبورد</span>
+        </button>
+        <button class="bottom-nav-item" data-section="teams" type="button" aria-label="نهادها">
+          <span class="bottom-nav-icon">◉</span><span>نهادها</span>
+        </button>
+        <button class="bottom-nav-item" data-section="charges" type="button" aria-label="شارژ">
+          <span class="bottom-nav-icon">₪</span><span>شارژ</span>
+        </button>
+        <button class="bottom-nav-item" data-section="transactions" type="button" aria-label="مالی">
+          <span class="bottom-nav-icon">◈</span><span>مالی</span>
+        </button>
+      </nav>
       <div class="shell">
-        <aside class="sidebar">
+        <aside class="sidebar" id="sidebar">
           <div class="brand">
             <span class="brand-mark">M</span>
             <div>
@@ -41,16 +57,16 @@ if ($isConfigured) {
             </div>
           </div>
           <nav class="nav">
-            <button class="nav-item active" data-section="overview">داشبورد</button>
-            <button class="nav-item" data-section="teams">نهادها</button>
-            <button class="nav-item" data-section="members">اعضا</button>
-            <button class="nav-item" data-section="desks">میزها</button>
-            <button class="nav-item" data-section="lockers">کمدها</button>
-            <button class="nav-item" data-section="charges">شارژ</button>
-            <button class="nav-item" data-section="transactions">مالی</button>
-            <button class="nav-item" data-section="plans">برنامه‌ها</button>
-            <button class="nav-item" data-section="rate_settings">نرخ‌ها</button>
-            <button class="nav-item" data-section="backups">پشتیبان‌ها</button>
+            <button class="nav-item active" data-section="overview" type="button">داشبورد</button>
+            <button class="nav-item" data-section="teams" type="button">نهادها</button>
+            <button class="nav-item" data-section="members" type="button">اعضا</button>
+            <button class="nav-item" data-section="desks" type="button">میزها</button>
+            <button class="nav-item" data-section="lockers" type="button">کمدها</button>
+            <button class="nav-item" data-section="charges" type="button">شارژ</button>
+            <button class="nav-item" data-section="transactions" type="button">مالی</button>
+            <button class="nav-item" data-section="plans" type="button">برنامه‌ها</button>
+            <button class="nav-item" data-section="rate_settings" type="button">نرخ‌ها</button>
+            <button class="nav-item" data-section="backups" type="button">پشتیبان‌ها</button>
           </nav>
           <a class="export-all" href="export.php?report=all">خروجی Excel</a>
           <a class="export-all secondary" href="report.php">گزارش PDF</a>
@@ -58,18 +74,29 @@ if ($isConfigured) {
         </aside>
 
         <main class="content">
+          <header class="mobile-topbar">
+            <button class="menu-toggle" id="menuToggle" type="button" aria-label="باز کردن منو">☰</button>
+            <strong>Mechinno</strong>
+            <span class="kbd-hint" title="میانبر: / برای جست‌وجو">/</span>
+          </header>
+
           <header class="hero compact">
             <div>
               <p class="eyebrow">Management Panel</p>
               <h1>پنل مدیریت مرکز نوآوری</h1>
               <p>مدیریت مستقل نهادها، میزها، شارژ و مالی — پس از راه‌اندازی اولیه نیازی به Excel نیست.</p>
             </div>
-            <div class="hero-actions">
-              <button id="reimportButton" class="button ghost">بازنشانی داده نمونه</button>
-            </div>
           </header>
 
           <section id="overview" class="section active">
+            <article class="panel highlight-panel" id="currentMonthPanel">
+              <div class="panel-head"><h2>خلاصه ماه جاری</h2><span id="currentMonthLabel" class="hint"></span></div>
+              <div id="currentMonthSummary" class="current-month-grid"></div>
+            </article>
+            <article class="panel">
+              <div class="panel-head"><h2>نیاز به اقدام</h2></div>
+              <div id="actionItems" class="action-list"></div>
+            </article>
             <div id="cards" class="cards"></div>
             <div class="grid two">
               <article class="panel">
@@ -107,7 +134,7 @@ if ($isConfigured) {
             <article class="panel">
               <div class="panel-head">
                 <h2>نقشه ۲۴ میز (۳ ردیف × ۸)</h2>
-                <span class="hint">هر میز ۲ صندلی — رسمی / غیررسمی / ترکیبی</span>
+                <span class="hint">کلیک روی میز — جزئیات | کلیک روی نام نهاد — پروفایل</span>
               </div>
               <div id="deskGrid" class="desk-grid"></div>
             </article>
@@ -125,6 +152,7 @@ if ($isConfigured) {
                   <button id="recalcChargesButton" class="button ghost" type="button">محاسبه خودکار شارژ از نرخ</button>
                 </div>
               </div>
+              <p class="hint collage-hint">روی سلول‌های بدهکار یا ناقص کلیک کنید تا واریز ثبت شود.</p>
               <div id="chargesCollage" class="charges-collage"></div>
             </article>
             <data-table title="ویرایش دستی مبالغ شارژ" endpoint="api.php?resource=charges"></data-table>
@@ -141,11 +169,30 @@ if ($isConfigured) {
           </section>
           <section id="backups" class="section">
             <data-table title="پشتیبان‌ها" endpoint="api.php?resource=backups"></data-table>
+            <article class="panel danger-zone">
+              <div class="panel-head"><h2>بازنشانی کامل داده</h2></div>
+              <p class="danger-text">همه داده‌های دیتابیس پاک و دوباره از <code>install-bundle.json</code> بارگذاری می‌شود. رکوردهای دستی از بین می‌رود.</p>
+              <label class="check-row">
+                <input type="checkbox" id="reimportAck" />
+                <span>می‌دانم این عملیات برگشت‌پذیر نیست.</span>
+              </label>
+              <label class="wide-label">
+                <span>برای تأیید، کلمه <strong>بازنشانی</strong> را تایپ کنید:</span>
+                <input type="text" id="reimportConfirm" class="search" placeholder="بازنشانی" autocomplete="off" />
+              </label>
+              <button id="reimportButton" class="button danger" type="button" disabled>بازنشانی داده از bundle</button>
+            </article>
           </section>
         </main>
       </div>
+      <div id="toastHost" class="toast-host" aria-live="polite"></div>
       <script>
-        window.MECHINNO = { csrfToken: "<?= e(csrf_token()) ?>" };
+        window.MECHINNO = {
+          csrfToken: "<?= e(csrf_token()) ?>",
+          today: "<?= e($today['formatted']) ?>",
+          fiscalYear: "<?= e((string) $today['year']) ?>",
+          monthIndex: <?= (int) $today['month'] ?>,
+        };
       </script>
       <script src="assets/app.js"></script>
     <?php endif; ?>
