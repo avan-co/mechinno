@@ -50,7 +50,6 @@ const labels = {
 
 const formatNumber = (value) => {
   if (value === null || value === undefined || value === "") return "-";
-  if (typeof value === "number") return value.toLocaleString("fa-IR");
   const maybe = Number(value);
   if (!Number.isNaN(maybe) && String(value).trim() !== "") {
     return maybe.toLocaleString("fa-IR");
@@ -63,10 +62,11 @@ const formatMoney = (value) => {
   return `${Number(value).toLocaleString("fa-IR")} ریال`;
 };
 
-const fetchJson = async (url) => {
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`Request failed: ${url}`);
-  return response.json();
+const fetchJson = async (url, options = {}) => {
+  const response = await fetch(url, options);
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || `Request failed: ${url}`);
+  return data;
 };
 
 const activateSection = (id) => {
@@ -138,7 +138,7 @@ const renderChargeChart = (rows) => {
 };
 
 const loadDashboard = async () => {
-  const data = await fetchJson("/api/summary");
+  const data = await fetchJson("api.php?resource=summary");
   renderCards(data.cards);
   renderChargeChart(data.monthly_charges);
   renderStatus("lockerStatus", data.locker_status);
@@ -217,11 +217,17 @@ document.getElementById("reimportButton").addEventListener("click", async () => 
   const button = document.getElementById("reimportButton");
   button.disabled = true;
   button.textContent = "در حال ورود اطلاعات...";
-  await fetch("/api/reimport", { method: "POST" });
-  window.location.reload();
+  try {
+    await fetchJson("api.php?resource=reimport", { method: "POST" });
+    window.location.reload();
+  } catch (error) {
+    alert(error.message);
+    button.disabled = false;
+    button.textContent = "ورود مجدد از Excel";
+  }
 });
 
 loadDashboard().catch((error) => {
   console.error(error);
-  document.getElementById("cards").innerHTML = `<article class="card"><span>خطا</span><strong>بارگذاری ناموفق</strong></article>`;
+  document.getElementById("cards").innerHTML = `<article class="card"><span>خطا</span><strong>${error.message}</strong></article>`;
 });
