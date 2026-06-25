@@ -1,0 +1,1 @@
+"""Mechinno management panel application."""

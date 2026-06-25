@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>پنل مدیریتی مرکز نوآوری</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <span class="brand-mark">M</span>
+          <div>
+            <strong>Mechinno</strong>
+            <small>مرکز نوآوری مکانیک</small>
+          </div>
+        </div>
+        <nav class="nav">
+          <button class="nav-item active" data-section="overview">داشبورد</button>
+          <button class="nav-item" data-section="teams">تیم‌ها</button>
+          <button class="nav-item" data-section="members">اعضا</button>
+          <button class="nav-item" data-section="lockers">کمدها</button>
+          <button class="nav-item" data-section="charges">شارژ</button>
+          <button class="nav-item" data-section="transactions">مالی</button>
+          <button class="nav-item" data-section="plans">برنامه‌ها</button>
+          <button class="nav-item" data-section="warnings">کیفیت داده</button>
+        </nav>
+        <a class="export-all" href="/exports/all.xlsx">دریافت گزارش کامل Excel</a>
+      </aside>
+
+      <main class="content">
+        <header class="hero">
+          <div>
+            <p class="eyebrow">Management Intelligence</p>
+            <h1>پنل مدیریتی یکپارچه مرکز نوآوری</h1>
+            <p>
+              داده‌های اعضا، تیم‌ها، کمدها، شارژ، مالی و برنامه‌های اجرایی از فایل‌های مدیریتی وارد دیتابیس شده‌اند.
+            </p>
+          </div>
+          <div class="hero-actions">
+            <button id="reimportButton" class="button ghost">ورود مجدد از Excel</button>
+            <a class="button" href="/exports/all.xlsx">خروجی کامل</a>
+          </div>
+        </header>
+
+        <section id="overview" class="section active">
+          <div id="cards" class="cards"></div>
+          <div class="grid two">
+            <article class="panel">
+              <div class="panel-head">
+                <h2>شارژ ماهانه</h2>
+                <a href="/exports/charges.xlsx">Excel</a>
+              </div>
+              <div id="chargeChart" class="bar-chart"></div>
+            </article>
+            <article class="panel">
+              <div class="panel-head">
+                <h2>وضعیت کمدها</h2>
+                <a href="/exports/lockers.xlsx">Excel</a>
+              </div>
+              <div id="lockerStatus" class="status-list"></div>
+            </article>
+          </div>
+          <div class="grid two">
+            <article class="panel">
+              <div class="panel-head">
+                <h2>مالی بر اساس دسته</h2>
+                <a href="/exports/transactions.xlsx">Excel</a>
+              </div>
+              <div id="financeStatus" class="status-list"></div>
+            </article>
+            <article class="panel">
+              <div class="panel-head">
+                <h2>برنامه‌های اجرایی</h2>
+                <a href="/exports/plans.xlsx">Excel</a>
+              </div>
+              <div id="planStatus" class="status-list"></div>
+            </article>
+          </div>
+        </section>
+
+        <section id="teams" class="section">
+          <data-table title="تیم‌ها" endpoint="/api/teams" export-url="/exports/teams.xlsx"></data-table>
+        </section>
+        <section id="members" class="section">
+          <data-table title="اعضا" endpoint="/api/members" export-url="/exports/members.xlsx"></data-table>
+        </section>
+        <section id="lockers" class="section">
+          <data-table title="کمدها" endpoint="/api/lockers" export-url="/exports/lockers.xlsx"></data-table>
+        </section>
+        <section id="charges" class="section">
+          <data-table title="شارژ و اجاره" endpoint="/api/charges" export-url="/exports/charges.xlsx"></data-table>
+        </section>
+        <section id="transactions" class="section">
+          <data-table title="مالی" endpoint="/api/transactions" export-url="/exports/transactions.xlsx"></data-table>
+        </section>
+        <section id="plans" class="section">
+          <data-table title="برنامه‌ها" endpoint="/api/plans" export-url="/exports/plans.xlsx"></data-table>
+        </section>
+        <section id="warnings" class="section">
+          <data-table title="هشدارهای کیفیت داده" endpoint="/api/warnings" export-url="/exports/warnings.xlsx"></data-table>
+        </section>
+      </main>
+    </div>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>
