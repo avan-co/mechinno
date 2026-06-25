@@ -513,7 +513,12 @@ th {
 }
 .notice.danger { color: #991b1b; background: #fef2f2; border: 1px solid #fecaca; }
 .notice.success { color: #065f46; background: #ecfdf5; border: 1px solid #a7f3d0; }
-.notice:not(.danger):not(.success) { color: #92400e; background: #fffbeb; border: 1px solid #fde68a; }
+.notice.warn { color: #92400e; background: #fffbeb; border: 1px solid #fde68a; }
+.notice:not(.danger):not(.success):not(.warn) { color: #92400e; background: #fffbeb; border: 1px solid #fde68a; }
+.post-install-guide ul,
+.install-counts { margin: 8px 0 0; padding-right: 18px; }
+.post-install-guide li,
+.install-counts li { margin: 4px 0; }
 
 .auth-form { display: grid; gap: 12px; margin-top: 18px; }
 .auth-form label { display: grid; gap: 6px; color: var(--muted); font-size: 13px; }

@@ -18,10 +18,13 @@ final class Schema
     public static function reset(PDO $pdo): void
     {
         $tables = [
+            'import_backup_items',
+            'import_backups',
             'member_desks',
             'transactions',
             'charges',
             'team_rates',
+            'rate_settings',
             'plans',
             'lockers',
             'members',
@@ -31,9 +34,34 @@ final class Schema
             'import_runs',
         ];
 
-        foreach ($tables as $table) {
-            $pdo->exec("DELETE FROM {$table}");
+        $isSqlite = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite';
+        if (!$isSqlite) {
+            $pdo->exec('SET FOREIGN_KEY_CHECKS = 0');
         }
+
+        foreach ($tables as $table) {
+            if ($isSqlite) {
+                $pdo->exec("DELETE FROM {$table}");
+                $pdo->exec("DELETE FROM sqlite_sequence WHERE name = '{$table}'");
+            } else {
+                $pdo->exec("TRUNCATE TABLE {$table}");
+            }
+        }
+
+        if (!$isSqlite) {
+            $pdo->exec('SET FOREIGN_KEY_CHECKS = 1');
+        }
+    }
+
+    public static function hasData(PDO $pdo): bool
+    {
+        foreach (['teams', 'members', 'charges', 'transactions', 'lockers'] as $table) {
+            if ((int) $pdo->query("SELECT COUNT(*) FROM {$table}")->fetchColumn() > 0) {
+                return true;
+            }
+        }
+
+        return (int) $pdo->query('SELECT COUNT(*) FROM import_runs')->fetchColumn() > 0;
     }
 
     private static function migrateMysql(PDO $pdo): void
