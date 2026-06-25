@@ -431,6 +431,14 @@ code { color: var(--gold); font-size: 0.92em; }
   border-radius: 12px;
   background: var(--bg-soft);
 }
+.metric.card-clickable {
+  cursor: pointer;
+  text-align: right;
+  font: inherit;
+  width: 100%;
+  transition: 0.18s ease;
+}
+.metric.card-clickable:hover { border-color: var(--blue); }
 .metric span { color: var(--muted); display: block; margin-bottom: 4px; font-size: 12px; }
 .metric strong { color: var(--blue); font-size: 16px; }
 
