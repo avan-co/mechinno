@@ -263,6 +263,15 @@ final class Schema
                 'access_code' => 'VARCHAR(64) NULL',
                 'locker_id' => 'INT NULL',
             ],
+            'lockers' => [
+                'team_id' => 'INT NULL',
+                'member_id' => 'INT NULL',
+            ],
+            'desks' => [
+                'usage_type' => "VARCHAR(32) NOT NULL DEFAULT 'informal'",
+                'formal_seats' => 'INT NOT NULL DEFAULT 0',
+                'informal_seats' => 'INT NOT NULL DEFAULT 0',
+            ],
             'plans' => [
                 'plan_code' => 'VARCHAR(32) NULL',
                 'priority' => 'VARCHAR(32) NULL',
