@@ -326,7 +326,19 @@ final class Repository
 
         $chargeMap = [];
         foreach ($charges as $row) {
-            $chargeMap[$row['team_id']][$row['month_index']] = $row;
+            $teamKey = (int) $row['team_id'];
+            $monthKey = (int) $row['month_index'];
+            if (!isset($chargeMap[$teamKey][$monthKey])) {
+                $chargeMap[$teamKey][$monthKey] = [
+                    'charge_amount' => (int) ($row['charge_amount'] ?? 0),
+                    'rent_amount' => (int) ($row['rent_amount'] ?? 0),
+                    'amount' => (int) ($row['amount'] ?? 0),
+                ];
+                continue;
+            }
+            $chargeMap[$teamKey][$monthKey]['charge_amount'] += (int) ($row['charge_amount'] ?? 0);
+            $chargeMap[$teamKey][$monthKey]['rent_amount'] += (int) ($row['rent_amount'] ?? 0);
+            $chargeMap[$teamKey][$monthKey]['amount'] += (int) ($row['amount'] ?? 0);
         }
         $paymentMap = [];
         foreach ($payments as $row) {

@@ -19,7 +19,7 @@ try {
         if (!is_array($payload)) {
             $payload = $_POST;
         }
-        $fiscalYear = (string) ($payload['fiscal_year'] ?? $_GET['fiscal_year'] ?? '1404');
+        $fiscalYear = JalaliDate::normalizeDigits((string) ($payload['fiscal_year'] ?? $_GET['fiscal_year'] ?? '1404'));
         (new Seeder($pdo))->recalculateCharges($fiscalYear);
         json_response(['ok' => true, 'fiscal_year' => $fiscalYear]);
     }
@@ -33,7 +33,7 @@ try {
     }
 
     if ($resource === 'charges-matrix') {
-        $year = (string) ($_GET['fiscal_year'] ?? '1404');
+        $year = JalaliDate::normalizeDigits((string) ($_GET['fiscal_year'] ?? '1404'));
         json_response($repository->chargesMatrix($year));
     }
 

@@ -333,6 +333,9 @@ final class Crud
         }
         if ($resource === 'transactions') {
             $data['source_file'] = 'manual';
+            if (isset($data['fiscal_year'])) {
+                $data['fiscal_year'] = JalaliDate::normalizeDigits($data['fiscal_year']);
+            }
             if (($data['category'] ?? '') === 'واریز تیم' && (int) ($data['amount'] ?? 0) < 0) {
                 $data['amount'] = abs((int) $data['amount']);
             }
@@ -345,6 +348,9 @@ final class Crud
         if ($resource === 'charges') {
             $data['source_file'] = 'manual';
             $data['source_sheet'] = 'panel';
+            if (isset($data['fiscal_year'])) {
+                $data['fiscal_year'] = JalaliDate::normalizeDigits($data['fiscal_year']);
+            }
             if (isset($data['month_index'])) {
                 $data['month_name'] = self::monthName((int) $data['month_index']);
             }
@@ -353,6 +359,9 @@ final class Crud
             if (empty($data['amount']) && ($charge > 0 || $rent > 0)) {
                 $data['amount'] = $charge + $rent;
             }
+        }
+        if ($resource === 'rate_settings' && isset($data['fiscal_year'])) {
+            $data['fiscal_year'] = JalaliDate::normalizeDigits($data['fiscal_year']);
         }
         if ($resource === 'desks') {
             $formal = (int) ($data['formal_seats'] ?? 0);

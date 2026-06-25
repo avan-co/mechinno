@@ -10,8 +10,15 @@ final class Seeder
 
     public function recalculateCharges(string $fiscalYear): void
     {
+        $fiscalYear = JalaliDate::normalizeDigits($fiscalYear);
         $this->pdo->prepare('DELETE FROM charges WHERE fiscal_year = :fiscal_year AND source_file = :source')
             ->execute(['fiscal_year' => $fiscalYear, 'source' => 'system']);
+
+        $manualCheck = $this->pdo->prepare(
+            'SELECT id FROM charges
+             WHERE team_id = :team_id AND fiscal_year = :fiscal_year AND month_index = :month_index
+               AND source_file = :source LIMIT 1'
+        );
 
         $teams = $this->pdo->query('SELECT id FROM teams')->fetchAll();
         foreach ($teams as $team) {
@@ -19,6 +26,15 @@ final class Seeder
             $amounts = $this->monthlyAmountsForTeam($teamId, $fiscalYear);
             foreach ($amounts as $monthIndex => $parts) {
                 if (($parts['amount'] ?? 0) <= 0) {
+                    continue;
+                }
+                $manualCheck->execute([
+                    'team_id' => $teamId,
+                    'fiscal_year' => $fiscalYear,
+                    'month_index' => $monthIndex,
+                    'source' => 'manual',
+                ]);
+                if ($manualCheck->fetchColumn() !== false) {
                     continue;
                 }
                 $this->insert('charges', [
@@ -77,6 +93,7 @@ final class Seeder
      */
     private function ratesForMonth(string $fiscalYear, int $monthIndex): array
     {
+        $fiscalYear = JalaliDate::normalizeDigits($fiscalYear);
         $statement = $this->pdo->prepare(
             'SELECT charge_rate, informal_rent_rate, effective_from
              FROM rate_settings

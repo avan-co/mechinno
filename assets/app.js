@@ -814,7 +814,24 @@ class DataTable extends HTMLElement {
         </div>
       </article>`;
     this.querySelector(".search").addEventListener("input", (e) => {
-      this.filter = e.target.value;
+      const next = e.target.value;
+      const hadFilter = Boolean(this.filter.trim());
+      const hasFilter = Boolean(next.trim());
+      this.filter = next;
+      if (!hadFilter && hasFilter) {
+        this.searchPerPage = this.perPage;
+        this.perPage = 100;
+        this.page = 1;
+        this.load();
+        return;
+      }
+      if (hadFilter && !hasFilter && this.searchPerPage) {
+        this.perPage = this.searchPerPage;
+        this.searchPerPage = null;
+        this.page = 1;
+        this.load();
+        return;
+      }
       this.render();
     });
     this.querySelector(".add-button").addEventListener("click", () => {
