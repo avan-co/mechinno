@@ -13,13 +13,12 @@ final class ExcelExporter
             'members' => [
                 'title' => 'اعضا',
                 'query' => "SELECT m.member_code, m.access_code, m.full_name, t.name AS team_label,
-                            GROUP_CONCAT(d.number ORDER BY d.number) AS desk_numbers, l.locker_number, m.phone, m.national_id
+                            (SELECT GROUP_CONCAT(d.number ORDER BY d.number) FROM desks d WHERE d.team_id = m.team_id) AS desk_numbers,
+                            l.locker_number, m.phone, m.national_id
                             FROM members m
                             LEFT JOIN teams t ON t.id = m.team_id
                             LEFT JOIN lockers l ON l.id = m.locker_id
-                            LEFT JOIN member_desks md ON md.member_id = m.id
-                            LEFT JOIN desks d ON d.id = md.desk_id
-                            GROUP BY m.id ORDER BY m.id",
+                            ORDER BY m.id",
                 'headers' => ['کد عضو', 'کد تردد', 'نام', 'نهاد', 'میزها', 'کمد', 'تماس', 'کدملی'],
             ],
             'teams' => [

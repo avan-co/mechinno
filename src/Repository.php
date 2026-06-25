@@ -221,8 +221,7 @@ final class Repository
         $page = max(1, $page);
         $perPage = min(100, max(10, $perPage));
         $sql = $this->resourceSql($name);
-        $countSql = 'SELECT COUNT(*) FROM (' . $sql . ') AS counted_rows';
-        $total = (int) $this->pdo->query($countSql)->fetchColumn();
+        $total = $this->resourceCount($name);
         $offset = ($page - 1) * $perPage;
         $rows = $this->rows($sql . ' LIMIT ' . $perPage . ' OFFSET ' . $offset);
 
@@ -233,6 +232,22 @@ final class Repository
             'per_page' => $perPage,
             'pages' => max(1, (int) ceil($total / $perPage)),
         ];
+    }
+
+    private function resourceCount(string $name): int
+    {
+        $sql = match ($name) {
+            'teams' => 'SELECT COUNT(*) FROM teams',
+            'members' => 'SELECT COUNT(*) FROM members',
+            'desks' => 'SELECT COUNT(*) FROM desks',
+            'lockers' => 'SELECT COUNT(*) FROM lockers',
+            'charges' => 'SELECT COUNT(*) FROM charges',
+            'transactions' => 'SELECT COUNT(*) FROM transactions',
+            'rate_settings' => 'SELECT COUNT(*) FROM rate_settings',
+            default => throw new InvalidArgumentException('Unknown resource.'),
+        };
+
+        return (int) $this->pdo->query($sql)->fetchColumn();
     }
 
     /**
@@ -254,14 +269,11 @@ final class Repository
             'members' => "SELECT m.id, m.member_code, m.team_id, m.access_code, m.full_name, m.phone, m.national_id,
                         m.locker_id, m.notes, t.name AS team_label, t.entity_type,
                         l.locker_number,
-                        GROUP_CONCAT(md.desk_id) AS desk_ids,
-                        GROUP_CONCAT(d.number ORDER BY d.number) AS desk_numbers
+                        (SELECT GROUP_CONCAT(d.number ORDER BY d.number)
+                         FROM desks d WHERE d.team_id = m.team_id) AS desk_numbers
                  FROM members m
                  LEFT JOIN teams t ON t.id = m.team_id
                  LEFT JOIN lockers l ON l.id = m.locker_id
-                 LEFT JOIN member_desks md ON md.member_id = m.id
-                 LEFT JOIN desks d ON d.id = md.desk_id
-                 GROUP BY m.id
                  ORDER BY m.id",
             'desks' => "SELECT d.*, t.name AS team_name, t.entity_type
                  FROM desks d
@@ -381,13 +393,11 @@ final class Repository
             'team' => $team,
             'desks' => $this->preparedRows('SELECT * FROM desks WHERE team_id = :id ORDER BY number', ['id' => $teamId]),
             'members' => $this->preparedRows(
-                "SELECT m.*, GROUP_CONCAT(d.number ORDER BY d.number) AS desk_numbers
+                'SELECT m.*, l.locker_number
                  FROM members m
-                 LEFT JOIN member_desks md ON md.member_id = m.id
-                 LEFT JOIN desks d ON d.id = md.desk_id
+                 LEFT JOIN lockers l ON l.id = m.locker_id
                  WHERE m.team_id = :id
-                 GROUP BY m.id
-                 ORDER BY m.full_name",
+                 ORDER BY m.full_name',
                 ['id' => $teamId]
             ),
             'lockers' => $this->preparedRows('SELECT * FROM lockers WHERE team_id = :id ORDER BY locker_number', ['id' => $teamId]),
