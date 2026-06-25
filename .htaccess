@@ -5,7 +5,7 @@ DirectoryIndex index.php
   <FilesMatch "^(config\.php|config\.sample\.php|.*\.(xlsx|sqlite3|db|sql|log|bak|env))$">
     Require all denied
   </FilesMatch>
-  RedirectMatch 403 ^/(src|data|tests|scripts|app)(/|$)
+  RedirectMatch 403 ^/(src|data|tests|scripts|tools|app)(/|$)
 </IfModule>
 
 <IfModule !mod_authz_core.c>
