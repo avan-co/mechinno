@@ -94,7 +94,7 @@ $statusClass = static function (?string $status): string {
                   <td><?= e(ReportData::entityLabel($row['entity_type'] ?? null)) ?></td>
                   <td><?= e(ReportData::cell($row['name'] ?? null)) ?></td>
                   <td><?= e(ReportData::cell($row['leader'] ?? null)) ?></td>
-                  <td><?= e(ReportData::cell($row['phone'] ?? null)) ?></td>
+                  <td><?= e(ReportData::plain($row['phone'] ?? null)) ?></td>
                   <td class="num"><?= ReportData::money($row['desk_count'] ?? 0) ?></td>
                   <td class="num"><?= ReportData::money($row['informal_seats'] ?? 0) ?></td>
                   <td><?= e(ReportData::cell($row['joined_at'] ?? null)) ?></td>
@@ -111,7 +111,7 @@ $statusClass = static function (?string $status): string {
         <table class="data-table">
           <thead>
             <tr>
-              <th>کد عضو</th><th>نام</th><th>نهاد</th><th>نوع نهاد</th><th>میزهای نهاد</th><th>کد تردد</th><th>کمد</th><th>تماس</th>
+              <th>کد عضو</th><th>نام</th><th>نهاد</th><th>نوع نهاد</th><th>میزهای نهاد</th><th>کد تردد</th><th>تماس</th><th>کدملی</th>
             </tr>
           </thead>
           <tbody>
@@ -125,9 +125,9 @@ $statusClass = static function (?string $status): string {
                   <td><?= e(ReportData::cell($row['team_label'] ?? null)) ?></td>
                   <td><?= e(ReportData::entityLabel($row['entity_type'] ?? null)) ?></td>
                   <td><?= e(ReportData::cell($row['desk_numbers'] ?? null)) ?></td>
-                  <td><?= e(ReportData::cell($row['access_code'] ?? null)) ?></td>
-                  <td class="num"><?= e(ReportData::cell($row['locker_number'] ?? null)) ?></td>
-                  <td><?= e(ReportData::cell($row['phone'] ?? null)) ?></td>
+                  <td><?= e(ReportData::plain($row['access_code'] ?? null)) ?></td>
+                  <td><?= e(ReportData::plain($row['phone'] ?? null)) ?></td>
+                  <td><?= e(ReportData::plain($row['national_id'] ?? null)) ?></td>
                 </tr>
               <?php endforeach; ?>
             <?php endif; ?>
@@ -160,18 +160,17 @@ $statusClass = static function (?string $status): string {
             <h2 class="section-title">کمدها</h2>
             <table class="data-table">
               <thead>
-                <tr><th>شماره</th><th>وضعیت</th><th>نهاد</th><th>عضو</th><th>تحویل</th></tr>
+                <tr><th>شماره</th><th>وضعیت</th><th>نهاد</th><th>تحویل</th></tr>
               </thead>
               <tbody>
                 <?php if ($data['lockers'] === []): ?>
-                  <tr class="empty-row"><td colspan="5">کمدی ثبت نشده است.</td></tr>
+                  <tr class="empty-row"><td colspan="4">کمدی ثبت نشده است.</td></tr>
                 <?php else: ?>
                   <?php foreach ($data['lockers'] as $row): ?>
                     <tr>
                       <td class="num"><?= e(ReportData::cell($row['locker_number'] ?? null)) ?></td>
                       <td><?= e(ReportData::cell($row['status'] ?? null)) ?></td>
                       <td><?= e(ReportData::cell($row['team_label'] ?? null)) ?></td>
-                      <td><?= e(ReportData::cell($row['member_name'] ?? null)) ?></td>
                       <td><?= e(ReportData::cell($row['delivered_at'] ?? null)) ?></td>
                     </tr>
                   <?php endforeach; ?>

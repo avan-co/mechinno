@@ -202,6 +202,7 @@ $assetVer = (string) max(
             </section>
 
             <section id="charges" class="section">
+              <p class="hint">نرخ شارژ و اجاره <strong>به ازای هر میز (۲ صندلی)</strong> است. با «تاریخ اثر» مشخص کنید از چه ماهی اعمال می‌شود — مثلاً نرخ فروردین ۲۰۰/۴۰۰ و نرخ جدید از تیر ۴۰۰/۶۰۰.</p>
               <data-table title="نرخ‌های سالانه" endpoint="api.php?resource=rate_settings"></data-table>
               <article class="panel">
                 <div class="panel-head">

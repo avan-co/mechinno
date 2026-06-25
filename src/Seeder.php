@@ -10,8 +10,15 @@ final class Seeder
 
     public function recalculateCharges(string $fiscalYear): void
     {
+        $fiscalYear = JalaliDate::normalizeDigits($fiscalYear);
         $this->pdo->prepare('DELETE FROM charges WHERE fiscal_year = :fiscal_year AND source_file = :source')
             ->execute(['fiscal_year' => $fiscalYear, 'source' => 'system']);
+
+        $manualCheck = $this->pdo->prepare(
+            'SELECT id FROM charges
+             WHERE team_id = :team_id AND fiscal_year = :fiscal_year AND month_index = :month_index
+               AND source_file = :source LIMIT 1'
+        );
 
         $teams = $this->pdo->query('SELECT id FROM teams')->fetchAll();
         foreach ($teams as $team) {
@@ -21,11 +28,20 @@ final class Seeder
                 if (($parts['amount'] ?? 0) <= 0) {
                     continue;
                 }
+                $manualCheck->execute([
+                    'team_id' => $teamId,
+                    'fiscal_year' => $fiscalYear,
+                    'month_index' => $monthIndex,
+                    'source' => 'manual',
+                ]);
+                if ($manualCheck->fetchColumn() !== false) {
+                    continue;
+                }
                 $this->insert('charges', [
                     'team_id' => $teamId,
                     'fiscal_year' => $fiscalYear,
                     'month_index' => $monthIndex,
-                    'month_name' => $this->monthName($monthIndex),
+                    'month_name' => JalaliDate::monthName($monthIndex),
                     'charge_amount' => $parts['charge_amount'],
                     'rent_amount' => $parts['rent_amount'],
                     'amount' => $parts['amount'],
@@ -44,31 +60,28 @@ final class Seeder
     {
         $deskStats = $this->pdo->prepare(
             'SELECT COUNT(*) AS desk_count,
-                    COALESCE(SUM(formal_seats), 0) AS formal_seats,
-                    COALESCE(SUM(informal_seats), 0) AS informal_seats
+                    COALESCE(SUM(CASE WHEN informal_seats > 0 OR usage_type IN (\'informal\', \'mixed\') THEN 1 ELSE 0 END), 0) AS informal_desk_count
              FROM desks WHERE team_id = :team_id'
         );
         $deskStats->execute(['team_id' => $teamId]);
-        $stats = $deskStats->fetch() ?: ['desk_count' => 0, 'informal_seats' => 0];
+        $stats = $deskStats->fetch() ?: ['desk_count' => 0, 'informal_desk_count' => 0];
         $deskCount = (int) ($stats['desk_count'] ?? 0);
-        $informalSeats = (int) ($stats['informal_seats'] ?? 0);
+        $informalDeskCount = (int) ($stats['informal_desk_count'] ?? 0);
         if ($deskCount === 0) {
             return [];
         }
 
-        $rates = $this->defaultRates($fiscalYear);
-        $chargeRate = (int) ($rates['charge_rate'] ?? 0);
-        $rentRate = (int) ($rates['informal_rent_rate'] ?? 0);
-        $monthlyCharge = $deskCount * $chargeRate;
-        $monthlyRent = $informalSeats * $rentRate;
-        $total = $monthlyCharge + $monthlyRent;
-
         $months = [];
         for ($month = 1; $month <= 12; $month++) {
+            $rates = $this->ratesForMonth($fiscalYear, $month);
+            $chargeRate = (int) ($rates['charge_rate'] ?? 0);
+            $rentRate = (int) ($rates['informal_rent_rate'] ?? 0);
+            $monthlyCharge = $deskCount * $chargeRate;
+            $monthlyRent = $informalDeskCount * $rentRate;
             $months[$month] = [
                 'charge_amount' => $monthlyCharge,
                 'rent_amount' => $monthlyRent,
-                'amount' => $total,
+                'amount' => $monthlyCharge + $monthlyRent,
             ];
         }
 
@@ -78,30 +91,42 @@ final class Seeder
     /**
      * @return array{charge_rate:int, informal_rent_rate:int}
      */
-    private function defaultRates(string $fiscalYear): array
+    private function ratesForMonth(string $fiscalYear, int $monthIndex): array
     {
+        $fiscalYear = JalaliDate::normalizeDigits($fiscalYear);
         $statement = $this->pdo->prepare(
-            'SELECT charge_rate, informal_rent_rate FROM rate_settings
-             WHERE fiscal_year = :fiscal_year ORDER BY id DESC LIMIT 1'
+            'SELECT charge_rate, informal_rent_rate, effective_from
+             FROM rate_settings
+             WHERE fiscal_year = :fiscal_year
+             ORDER BY COALESCE(effective_from, :year_start) ASC, id ASC'
         );
-        $statement->execute(['fiscal_year' => $fiscalYear]);
-        $row = $statement->fetch() ?: [];
+        $yearStart = sprintf('%s/01/01', $fiscalYear);
+        $statement->execute(['fiscal_year' => $fiscalYear, 'year_start' => $yearStart]);
+        $rows = $statement->fetchAll();
+        if ($rows === []) {
+            return ['charge_rate' => 0, 'informal_rent_rate' => 0];
+        }
+
+        $monthStart = JalaliDate::monthStart($fiscalYear, $monthIndex);
+        $applicable = null;
+        foreach ($rows as $row) {
+            $effectiveFrom = JalaliDate::tryNormalize($row['effective_from'] ?? '');
+            if ($effectiveFrom === '') {
+                $effectiveFrom = $yearStart;
+            }
+            if (JalaliDate::compare($effectiveFrom, $monthStart) <= 0) {
+                $applicable = $row;
+            }
+        }
+
+        if ($applicable === null) {
+            return ['charge_rate' => 0, 'informal_rent_rate' => 0];
+        }
 
         return [
-            'charge_rate' => (int) ($row['charge_rate'] ?? 0),
-            'informal_rent_rate' => (int) ($row['informal_rent_rate'] ?? 0),
+            'charge_rate' => (int) ($applicable['charge_rate'] ?? 0),
+            'informal_rent_rate' => (int) ($applicable['informal_rent_rate'] ?? 0),
         ];
-    }
-
-    private function monthName(int $index): string
-    {
-        $months = [
-            1 => 'فروردین', 2 => 'اردیبهشت', 3 => 'خرداد', 4 => 'تیر',
-            5 => 'مرداد', 6 => 'شهریور', 7 => 'مهر', 8 => 'آبان',
-            9 => 'آذر', 10 => 'دی', 11 => 'بهمن', 12 => 'اسفند',
-        ];
-
-        return $months[$index] ?? '';
     }
 
     private function insert(string $table, array $data): void

@@ -129,6 +129,34 @@ final class JalaliDate
         return $months[$index] ?? '';
     }
 
+    /** Compare two Jalali dates (YYYY/MM/DD). Returns -1, 0, or 1. */
+    public static function compare(string $left, string $right): int
+    {
+        $left = self::tryNormalize($left);
+        $right = self::tryNormalize($right);
+        if ($left === '' || $right === '') {
+            return strcmp($left, $right);
+        }
+
+        return strcmp($left, $right);
+    }
+
+    public static function monthStart(string $fiscalYear, int $monthIndex): string
+    {
+        $year = (int) self::normalizeDigits($fiscalYear);
+        return sprintf('%04d/%02d/01', $year, $monthIndex);
+    }
+
+    public static function normalizeDigits(mixed $value): string
+    {
+        return strtr(trim((string) ($value ?? '')), [
+            '۰' => '0', '۱' => '1', '۲' => '2', '۳' => '3', '۴' => '4',
+            '۵' => '5', '۶' => '6', '۷' => '7', '۸' => '8', '۹' => '9',
+            '٠' => '0', '١' => '1', '٢' => '2', '٣' => '3', '٤' => '4',
+            '٥' => '5', '٦' => '6', '٧' => '7', '٨' => '8', '٩' => '9',
+        ]);
+    }
+
     /**
      * @return array{0:int,1:int,2:int}
      */

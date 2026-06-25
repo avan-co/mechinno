@@ -31,12 +31,11 @@ final class ExcelExporter
                 'query' => "SELECT m.member_code, m.full_name, t.name AS team_label,
                     CASE t.entity_type WHEN 'team' THEN 'تیم' WHEN 'company' THEN 'شرکت' WHEN 'student' THEN 'دانشجو' ELSE t.entity_type END,
                     (SELECT GROUP_CONCAT(d.number ORDER BY d.number) FROM desks d WHERE d.team_id = m.team_id),
-                    m.access_code, l.locker_number, m.phone, m.national_id, m.notes
+                    m.access_code, m.phone, m.national_id, m.notes
                     FROM members m
                     LEFT JOIN teams t ON t.id = m.team_id
-                    LEFT JOIN lockers l ON l.id = m.locker_id
                     ORDER BY t.name, m.full_name",
-                'headers' => ['کد عضو', 'نام', 'نهاد', 'نوع نهاد', 'میزهای نهاد', 'کد تردد', 'کمد', 'تماس', 'کدملی', 'توضیحات'],
+                'headers' => ['کد عضو', 'نام', 'نهاد', 'نوع نهاد', 'میزهای نهاد', 'کد تردد', 'تماس', 'کدملی', 'توضیحات'],
             ],
             'desks' => [
                 'title' => 'میزها',
@@ -53,13 +52,12 @@ final class ExcelExporter
             ],
             'lockers' => [
                 'title' => 'کمدها',
-                'query' => 'SELECT l.locker_number, l.status, t.name AS team_label, m.full_name AS member_name,
+                'query' => 'SELECT l.locker_number, l.status, t.name AS team_label,
                             l.delivered_at, l.key_number, l.spare_key, l.notes
                             FROM lockers l
                             LEFT JOIN teams t ON t.id = l.team_id
-                            LEFT JOIN members m ON m.id = l.member_id
                             ORDER BY l.locker_number',
-                'headers' => ['شماره کمد', 'وضعیت', 'نهاد', 'عضو', 'تاریخ تحویل', 'شماره کلید', 'کلید یدک', 'توضیحات'],
+                'headers' => ['شماره کمد', 'وضعیت', 'نهاد', 'تاریخ تحویل', 'شماره کلید', 'کلید یدک', 'توضیحات'],
             ],
             'rate_settings' => [
                 'title' => 'نرخ‌ها',
