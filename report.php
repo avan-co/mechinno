@@ -16,7 +16,7 @@ $assetVer = (string) filemtime(__DIR__ . '/assets/report.css');
 $statusClass = static function (?string $status): string {
     return match ($status) {
         'پرداخت‌شده' => 'status-paid',
-        'بدهکار' => 'status-debt',
+        'بدهکار به مرکز' => 'status-debt',
         'ناقص' => 'status-partial',
         default => '',
     };
@@ -67,11 +67,11 @@ $statusClass = static function (?string $status): string {
           <div class="kpi kpi--success"><span class="kpi-label">دریافتی (ریال)</span><span class="kpi-value"><?= ReportData::money($cards['income_total']) ?></span></div>
           <div class="kpi"><span class="kpi-label">هزینه (ریال)</span><span class="kpi-value"><?= ReportData::money($cards['expense_total']) ?></span></div>
           <div class="kpi"><span class="kpi-label">جمع شارژ (ریال)</span><span class="kpi-value"><?= ReportData::money($cards['charge_total']) ?></span></div>
-          <div class="kpi"><span class="kpi-label">واریز تیم (ریال)</span><span class="kpi-value"><?= ReportData::money($cards['paid_total']) ?></span></div>
-          <div class="kpi kpi--danger"><span class="kpi-label">بدهی کل (ریال)</span><span class="kpi-value"><?= ReportData::money($cards['debt_total']) ?></span></div>
+          <div class="kpi"><span class="kpi-label">دریافت از نهادها (ریال)</span><span class="kpi-value"><?= ReportData::money($cards['paid_total']) ?></span></div>
+          <div class="kpi kpi--danger"><span class="kpi-label">طلب کل از نهادها (ریال)</span><span class="kpi-value"><?= ReportData::money($cards['debt_total']) ?></span></div>
           <div class="kpi"><span class="kpi-label">شارژ ماه جاری</span><span class="kpi-value"><?= ReportData::money($month['charge_total'] ?? 0) ?></span></div>
           <div class="kpi"><span class="kpi-label">واریز ماه جاری</span><span class="kpi-value"><?= ReportData::money($month['paid_total'] ?? 0) ?></span></div>
-          <div class="kpi kpi--danger"><span class="kpi-label">بدهی ماه جاری</span><span class="kpi-value"><?= ReportData::money($month['debt_total'] ?? 0) ?></span></div>
+          <div class="kpi kpi--danger"><span class="kpi-label">مانده طلب ماه جاری</span><span class="kpi-value"><?= ReportData::money($month['debt_total'] ?? 0) ?></span></div>
         </div>
       </section>
 
@@ -208,10 +208,10 @@ $statusClass = static function (?string $status): string {
       </section>
 
       <section class="report-section">
-        <h2 class="section-title">شارژ ماهانه و وضعیت پرداخت</h2>
+        <h2 class="section-title">شارژ ماهانه — مطالبات مرکز از نهادها</h2>
         <table class="data-table">
           <thead>
-            <tr><th>نهاد</th><th>سال</th><th>ماه</th><th>شارژ</th><th>اجاره</th><th>جمع بدهی</th><th>پرداخت</th><th>وضعیت</th></tr>
+            <tr><th>نهاد</th><th>سال</th><th>ماه</th><th>شارژ</th><th>اجاره</th><th>مبلغ مستحق</th><th>دریافت‌شده</th><th>وضعیت</th></tr>
           </thead>
           <tbody>
             <?php if ($data['debts'] === []): ?>

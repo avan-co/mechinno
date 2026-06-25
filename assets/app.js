@@ -54,7 +54,7 @@ const sectionMeta = {
   desks: { eyebrow: "میزها", title: "نقشه و تخصیص ۲۴ میز", subtitle: "میزها را به نهادها اختصاص دهید" },
   lockers: { eyebrow: "کمدها", title: "مدیریت کمدها", subtitle: "شماره کمدها را خودتان تعریف و تخصیص دهید" },
   charges: { eyebrow: "شارژ", title: "نرخ و شارژ ماهانه", subtitle: "تعریف نرخ سالانه، محاسبه خودکار و پیگیری پرداخت" },
-  transactions: { eyebrow: "مالی", title: "درآمد، هزینه و واریز", subtitle: "ثبت تراکنش‌ها و واریز شارژ تیم‌ها" },
+  transactions: { eyebrow: "مالی", title: "دریافت، درآمد و هزینه", subtitle: "نهادها به مرکز بدهکارند — دریافت شارژ، طلب مطالبات" },
 };
 
 const cardNavMap = {
@@ -76,8 +76,8 @@ const cardConfig = [
   ["charge_total", "جمع شارژ", "₪", "charge"],
   ["income_total", "دریافتی", "↓", "income"],
   ["expense_total", "هزینه", "↑", "expense"],
-  ["debt_total", "بدهی", "!", "debt"],
-  ["paid_total", "واریز تیم", "✓", "paid"],
+  ["debt_total", "طلب از نهادها", "!", "debt"],
+  ["paid_total", "دریافت از نهادها", "✓", "paid"],
   ["available_lockers", "کمد آزاد", "▣", "lockers"],
 ];
 
@@ -349,8 +349,8 @@ const renderCurrentMonth = (month) => {
   container.innerHTML = `
     <div class="month-stat"><span>شارژ ماه</span><strong>${escapeHtml(formatMoney(month.charge_total))}</strong></div>
     <div class="month-stat"><span>واریز ماه</span><strong>${escapeHtml(formatMoney(month.paid_total))}</strong></div>
-    <div class="month-stat"><span>بدهی باقی‌مانده</span><strong class="debt-value">${escapeHtml(formatMoney(month.debt_total))}</strong></div>
-    <div class="month-stat"><span>نهاد بدهکار</span><strong>${escapeHtml(formatNumber(month.debtor_count))}</strong></div>`;
+    <div class="month-stat"><span>مانده طلب ماه</span><strong class="debt-value">${escapeHtml(formatMoney(month.debt_total))}</strong></div>
+    <div class="month-stat"><span>نهاد بدهکار به مرکز</span><strong>${escapeHtml(formatNumber(month.debtor_count))}</strong></div>`;
 };
 
 const renderActionItems = (items) => {
@@ -392,7 +392,7 @@ const renderDebtChart = (rows) => {
         <div class="bar-track"><div class="bar-fill danger-fill" style="width:${(Number(row.debt || 0) / max) * 100}%"></div></div>
         <strong>${escapeHtml(formatMoney(row.debt))}</strong>
       </div>`).join("")
-    : `<div class="empty">بدهی ثبت‌شده‌ای نیست.</div>`;
+    : `<div class="empty">مطالبه ثبت‌شده‌ای از نهادها نیست.</div>`;
 };
 
 const loadDashboard = async () => {
@@ -472,8 +472,8 @@ const loadChargesCollage = async () => {
         <br>${entityBadge(row.team.entity_type)}
       </td>
       ${row.cells.map((cell) => {
-        const cls = cell.status === "پرداخت‌شده" ? "cell-paid" : cell.status === "ناقص" ? "cell-partial" : cell.status === "بدهکار" ? "cell-debt" : "cell-empty";
-        const clickable = cell.status === "بدهکار" || cell.status === "ناقص";
+        const cls = cell.status === "پرداخت‌شده" ? "cell-paid" : cell.status === "ناقص" ? "cell-partial" : cell.status === "بدهکار به مرکز" ? "cell-debt" : "cell-empty";
+        const clickable = cell.status === "بدهکار به مرکز" || cell.status === "ناقص";
         const attrs = clickable
           ? `class="${cls} cell-clickable" role="button" tabindex="0"
              data-team-id="${row.team.id}" data-team-name="${escapeHtml(row.team.name)}"
@@ -542,12 +542,12 @@ const openTeamProfile = async (teamId) => {
       <div><span>مسئول</span><strong>${escapeHtml(data.team.leader || "—")}</strong></div>
       <div><span>میزها</span><strong>${escapeHtml(deskList)}</strong></div>
       <div><span>جمع شارژ</span><strong>${escapeHtml(formatMoney(data.summary.charge_total || 0))}</strong></div>
-      <div><span>واریز</span><strong>${escapeHtml(formatMoney(data.summary.paid_total || 0))}</strong></div>
-      <div><span>بدهی</span><strong class="debt-value">${escapeHtml(formatMoney(data.summary.debt_total || 0))}</strong></div>
+      <div><span>دریافت از نهاد</span><strong>${escapeHtml(formatMoney(data.summary.paid_total || 0))}</strong></div>
+      <div><span>مانده طلب</span><strong class="debt-value">${escapeHtml(formatMoney(data.summary.debt_total || 0))}</strong></div>
     </div>
     <div class="profile-actions">
       <button type="button" class="button" data-profile-action="add-member">افزودن عضو</button>
-      <button type="button" class="button ghost" data-profile-action="deposit">ثبت واریز</button>
+      <button type="button" class="button ghost" data-profile-action="deposit">ثبت دریافت شارژ</button>
       <button type="button" class="button ghost" data-profile-action="charges">مشاهده شارژ</button>
       <button type="button" class="button ghost" data-profile-action="desks">مدیریت میزها</button>
     </div>
@@ -559,7 +559,7 @@ const openTeamProfile = async (teamId) => {
       return null;
     })}
     ${profileSection("شارژها", data.charges, ["fiscal_year", "month_name", "charge_amount", "rent_amount", "amount"])}
-    ${profileSection("واریز تیم", data.payments, ["tx_date", "fiscal_year", "month_index", "amount"])}
+    ${profileSection("دریافت شارژ از نهاد", data.payments, ["tx_date", "fiscal_year", "month_index", "amount"])}
     <div class="modal-actions"><button class="button ghost" type="button" data-close-modal>بستن</button></div>`;
 
   form.querySelector("[data-close-modal]").addEventListener("click", closeModal);
@@ -611,21 +611,21 @@ const openDepositModal = async ({ teamId, teamName, fiscalYear, monthIndex, mont
   openRecordModal({
     resource: "transactions",
     definition,
-    title: `ثبت واریز — ${teamName}`,
+    title: `ثبت دریافت شارژ — ${teamName}`,
     record: {
       category: "واریز تیم",
       team_id: String(teamId),
       fiscal_year: fiscalYear,
       month_index: String(monthIndex),
       amount: remaining || amountDue,
-      description: `واریز شارژ ${resolvedMonthName} ${fiscalYear}`,
+      description: `دریافت شارژ ${resolvedMonthName} ${fiscalYear}`,
       tx_date: window.MECHINNO?.today || "",
       confirmed: "1",
     },
     onSaved: async () => {
       await refreshAfterMutation("transactions");
       await loadChargesCollage();
-      showToast("واریز ثبت شد.", "success");
+      showToast("دریافت شارژ ثبت شد.", "success");
     },
   });
 };
@@ -717,6 +717,10 @@ const openRecordModal = ({ resource, definition, record = null, onSaved, title =
 const formatCell = (column, value, row, resource) => {
   if (column === "entity_type") return entityBadge(value);
   if (column === "usage_type") return escapeHtml(usageLabels[value] || value || "—");
+  if (column === "category") {
+    if (value === "واریز تیم") return "دریافت از نهاد";
+    return escapeHtml(value || "—");
+  }
   if (column === "confirmed") return Number(value) === 1 ? "بله" : "خیر";
   if (column === "status" && resource === "lockers") return lockerStatusBadge(value);
   if (linkColumns[column] && row[linkColumns[column]] && value) {

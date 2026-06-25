@@ -169,7 +169,7 @@ $assetVer = (string) max(
 
               <div class="grid two">
                 <article class="panel"><div class="panel-head"><h2>شارژ ماهانه</h2></div><div id="chargeChart" class="bar-chart"></div></article>
-                <article class="panel"><div class="panel-head"><h2>بدهی نهادها</h2></div><div id="debtChart" class="bar-chart"></div></article>
+                <article class="panel"><div class="panel-head"><h2>طلب از نهادها</h2><span class="hint">مطالبات مرکز — نهاد بدهکار، مرکز طلبکار</span></div><div id="debtChart" class="bar-chart"></div></article>
               </div>
             </section>
 
@@ -211,7 +211,7 @@ $assetVer = (string) max(
                     <button id="recalcChargesButton" class="button ghost" type="button">محاسبه خودکار از نرخ</button>
                   </div>
                 </div>
-                <p class="hint">روی سلول بدهکار کلیک کنید تا واریز ثبت شود.</p>
+                <p class="hint">روی سلول «بدهکار به مرکز» کلیک کنید تا دریافت شارژ ثبت شود.</p>
                 <div id="chargesCollage" class="charges-collage"></div>
               </article>
               <data-table title="ثبت و ویرایش شارژ" endpoint="api.php?resource=charges"></data-table>
@@ -224,11 +224,11 @@ $assetVer = (string) max(
                     <option value="">همه</option>
                     <option value="درآمد">درآمد</option>
                     <option value="هزینه">هزینه</option>
-                    <option value="واریز تیم">واریز تیم</option>
+                    <option value="واریز تیم">دریافت از نهاد</option>
                   </select>
                 </label>
               </div>
-              <data-table title="مالی و واریز تیم‌ها" endpoint="api.php?resource=transactions"></data-table>
+              <data-table title="مالی — دریافت و هزینه" endpoint="api.php?resource=transactions"></data-table>
             </section>
           </main>
         </div>

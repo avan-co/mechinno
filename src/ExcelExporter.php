@@ -78,12 +78,12 @@ final class ExcelExporter
                 'headers' => ['سال', 'نهاد', 'نوع نهاد', 'ماه', 'شماره ماه', 'شارژ', 'اجاره غیررسمی', 'جمع', 'یادداشت'],
             ],
             'debts' => [
-                'title' => 'بدهی و پرداخت',
+                'title' => 'مطالبات مرکز',
                 'query' => "SELECT t.name AS team_name, c.fiscal_year, c.month_name,
                             c.charge_amount, c.rent_amount, c.amount AS amount_due,
                             COALESCE(p.paid, 0) AS amount_paid,
                             CASE WHEN COALESCE(p.paid, 0) >= c.amount THEN 'پرداخت‌شده'
-                                 WHEN COALESCE(p.paid, 0) > 0 THEN 'ناقص' ELSE 'بدهکار' END AS status
+                                 WHEN COALESCE(p.paid, 0) > 0 THEN 'ناقص' ELSE 'بدهکار به مرکز' END AS status
                      FROM charges c
                      JOIN teams t ON t.id = c.team_id
                      LEFT JOIN (
@@ -92,11 +92,13 @@ final class ExcelExporter
                         GROUP BY team_id, fiscal_year, month_index
                      ) p ON p.team_id = c.team_id AND p.fiscal_year = c.fiscal_year AND p.month_index = c.month_index
                      ORDER BY c.fiscal_year, t.name, c.month_index",
-                'headers' => ['نهاد', 'سال', 'ماه', 'شارژ', 'اجاره', 'جمع بدهی', 'پرداخت', 'وضعیت'],
+                'headers' => ['نهاد', 'سال', 'ماه', 'شارژ', 'اجاره', 'مبلغ مستحق', 'دریافت‌شده', 'وضعیت'],
             ],
             'transactions' => [
                 'title' => 'مالی',
-                'query' => "SELECT t.tx_date, t.description, t.amount, t.category, tm.name AS team_name,
+                'query' => "SELECT t.tx_date, t.description, t.amount,
+                            CASE t.category WHEN 'واریز تیم' THEN 'دریافت از نهاد' ELSE t.category END,
+                            tm.name AS team_name,
                             t.fiscal_year, t.month_index, t.confirmed, t.notes
                             FROM transactions t
                             LEFT JOIN teams tm ON tm.id = t.team_id
@@ -244,11 +246,11 @@ final class ExcelExporter
             ['جمع شارژ (ریال)', (int) $cards['charge_total']],
             ['دریافتی (ریال)', (int) $cards['income_total']],
             ['هزینه (ریال)', (int) $cards['expense_total']],
-            ['واریز تیم (ریال)', (int) $cards['paid_total']],
-            ['بدهی کل (ریال)', (int) $cards['debt_total']],
+            ['دریافت از نهادها (ریال)', (int) $cards['paid_total']],
+            ['طلب کل از نهادها (ریال)', (int) $cards['debt_total']],
             ['شارژ ماه ' . ($month['month_name'] ?? ''), (int) ($month['charge_total'] ?? 0)],
             ['واریز ماه ' . ($month['month_name'] ?? ''), (int) ($month['paid_total'] ?? 0)],
-            ['بدهی ماه ' . ($month['month_name'] ?? ''), (int) ($month['debt_total'] ?? 0)],
+            ['مانده طلب ماه ' . ($month['month_name'] ?? ''), (int) ($month['debt_total'] ?? 0)],
         ];
 
         $xml = '<Worksheet ss:Name="خلاصه" ss:RightToLeft="1">' . "\n";

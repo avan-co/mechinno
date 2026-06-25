@@ -162,7 +162,7 @@ final class Repository
             $items[] = [
                 'type' => 'debt',
                 'label' => (string) $row['team_name'],
-                'detail' => 'بدهی ' . $today['month_name'] . ': ' . number_format((int) $row['debt']) . ' ریال',
+                'detail' => 'مانده طلب ' . $today['month_name'] . ' به مرکز: ' . number_format((int) $row['debt']) . ' ریال',
                 'section' => 'charges',
                 'team_id' => (int) $row['team_id'],
             ];
@@ -348,7 +348,7 @@ final class Repository
                     'rent_amount' => (int) ($due['rent_amount'] ?? 0),
                     'amount_due' => $amountDue,
                     'amount_paid' => $paid,
-                    'status' => $amountDue <= 0 ? '—' : ($paid >= $amountDue ? 'پرداخت‌شده' : ($paid > 0 ? 'ناقص' : 'بدهکار')),
+                    'status' => $amountDue <= 0 ? '—' : ($paid >= $amountDue ? 'پرداخت‌شده' : ($paid > 0 ? 'ناقص' : 'بدهکار به مرکز')),
                 ];
             }
             $rows[] = ['team' => $team, 'cells' => $cells];
@@ -367,7 +367,7 @@ final class Repository
                     c.charge_amount, c.rent_amount, c.amount AS amount_due,
                     COALESCE(p.paid, 0) AS amount_paid,
                     CASE WHEN COALESCE(p.paid, 0) >= c.amount THEN 'پرداخت‌شده'
-                         WHEN COALESCE(p.paid, 0) > 0 THEN 'ناقص' ELSE 'بدهکار' END AS status
+                         WHEN COALESCE(p.paid, 0) > 0 THEN 'ناقص' ELSE 'بدهکار به مرکز' END AS status
              FROM charges c
              JOIN teams t ON t.id = c.team_id
              LEFT JOIN (
