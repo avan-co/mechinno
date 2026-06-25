@@ -124,6 +124,7 @@ if ($isConfigured) {
               </div>
               <div id="chargesCollage" class="charges-collage"></div>
             </article>
+            <data-table title="ویرایش دستی مبالغ شارژ" endpoint="api.php?resource=charges"></data-table>
           </section>
           <section id="transactions" class="section">
             <data-table title="مالی (تنخواه + واریز تیم‌ها)" endpoint="api.php?resource=transactions"></data-table>

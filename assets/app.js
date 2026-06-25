@@ -68,7 +68,7 @@ const usageLabels = { formal: "رسمی", informal: "غیررسمی", mixed: "ت
 const csrfToken = window.MECHINNO?.csrfToken || "";
 let crudMetaPromise = null;
 
-const editableResources = new Set(["members", "teams", "desks", "lockers", "plans", "transactions", "rate_settings", "team_rates"]);
+const editableResources = new Set(["members", "teams", "desks", "lockers", "plans", "charges", "transactions", "rate_settings", "team_rates"]);
 
 const hiddenColumns = new Set([
   "source_sheet", "source_file", "team_id", "owner_team_id", "locker_id", "member_id", "row_index", "col_index",

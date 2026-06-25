@@ -30,8 +30,12 @@ final class Seeder
 
         $meta = $payload['meta'] ?? [];
         $fiscalYear = (string) ($meta['fiscal_year'] ?? '1404');
-        $lockerCount = (int) ($meta['locker_count'] ?? 30);
-        Schema::seedLockerSlots($this->pdo, $lockerCount);
+        $excelLockers = LockerCatalog::bootstrap($this->pdo, $this->basePath);
+        $seedLockerNumbers = array_map(static fn (array $row): int => (int) ($row['number'] ?? 0), $payload['lockers'] ?? []);
+        $seedLockerNumbers = array_values(array_filter($seedLockerNumbers, static fn (int $n): bool => $n > 0));
+        if ($excelLockers === [] && $seedLockerNumbers !== []) {
+            Schema::ensureLockerNumbers($this->pdo, $seedLockerNumbers);
+        }
 
         $this->insertRateSetting($fiscalYear, $meta);
         $teamMap = $this->seedEntities($payload['entities'] ?? [], $fiscalYear);
@@ -39,7 +43,6 @@ final class Seeder
         $this->seedLockers($payload['lockers'] ?? [], $teamMap, $memberMap);
         $this->seedPlans($payload['plans'] ?? [], $teamMap);
         $this->seedFinance($payload['finance'] ?? [], $teamMap, $fiscalYear);
-        $this->recalculateCharges($fiscalYear);
 
         $this->insert('import_runs', [
             'source_files' => json_encode(['initial-seed.json'], JSON_UNESCAPED_UNICODE),
@@ -174,13 +177,15 @@ final class Seeder
             }
 
             $rates = $entity['rates'] ?? [];
-            $this->insert('team_rates', [
-                'team_id' => $teamId,
-                'fiscal_year' => $fiscalYear,
-                'charge_rate' => $rates['charge_rate'] ?? null,
-                'informal_rent_rate' => $rates['informal_rent_rate'] ?? null,
-                'notes' => 'seed',
-            ]);
+            if ($rates !== []) {
+                $this->insert('team_rates', [
+                    'team_id' => $teamId,
+                    'fiscal_year' => $fiscalYear,
+                    'charge_rate' => $rates['charge_rate'] ?? null,
+                    'informal_rent_rate' => $rates['informal_rent_rate'] ?? null,
+                    'notes' => 'seed',
+                ]);
+            }
         }
 
         return $map;
@@ -318,6 +323,10 @@ final class Seeder
      */
     private function insertRateSetting(string $fiscalYear, array $meta): void
     {
+        if (!isset($meta['default_charge_rate']) && !isset($meta['default_informal_rent_rate'])) {
+            return;
+        }
+
         $this->insert('rate_settings', [
             'fiscal_year' => $fiscalYear,
             'title' => 'نرخ پیش‌فرض مرکز',

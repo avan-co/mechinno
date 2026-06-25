@@ -13,7 +13,6 @@ final class Schema
         }
         self::ensureColumns($pdo);
         self::seedDesks($pdo);
-        self::seedLockerSlots($pdo);
     }
 
     public static function reset(PDO $pdo): void
@@ -311,6 +310,24 @@ final class Schema
                 'usage_type' => 'informal',
                 'number_check' => $number,
             ]);
+        }
+    }
+
+    /**
+     * @param list<int> $numbers
+     */
+    public static function ensureLockerNumbers(PDO $pdo, array $numbers): void
+    {
+        foreach ($numbers as $number) {
+            if ($number < 1) {
+                continue;
+            }
+            $statement = $pdo->prepare(
+                "INSERT INTO lockers (locker_number, status, source_file, source_sheet)
+                 SELECT :number, 'خالی', 'system', 'catalog'
+                 WHERE NOT EXISTS (SELECT 1 FROM lockers WHERE locker_number = :number_check)"
+            );
+            $statement->execute(['number' => $number, 'number_check' => $number]);
         }
     }
 

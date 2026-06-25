@@ -84,7 +84,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $configured) {
             </label>
             <label class="check-row">
               <input type="radio" name="import_source" value="excel" />
-              <span>ورود یک‌باره از فایل‌های Excel (در صورت وجود در ریشه پروژه)</span>
+              <span>ورود یک‌باره از Excel — شماره کمدها از شیت lockers فایل Innovation Center.xlsx خوانده می‌شود</span>
             </label>
             <label class="check-row">
               <input type="checkbox" name="confirm_import" value="1" />

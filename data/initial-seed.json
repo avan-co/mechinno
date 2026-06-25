@@ -1,9 +1,6 @@
 {
   "meta": {
-    "fiscal_year": "1404",
-    "default_charge_rate": 3500000,
-    "default_informal_rent_rate": 1200000,
-    "locker_count": 30
+    "fiscal_year": "1404"
   },
   "entities": [
     {
@@ -15,8 +12,7 @@
       "desks": [
         {"number": 1, "usage_type": "mixed", "formal_seats": 1, "informal_seats": 1},
         {"number": 2, "usage_type": "informal", "formal_seats": 0, "informal_seats": 2}
-      ],
-      "rates": {"charge_rate": 3500000, "informal_rent_rate": 1200000}
+      ]
     },
     {
       "entity_type": "team",
@@ -26,8 +22,7 @@
       "joined_at": "1403/08/15",
       "desks": [
         {"number": 3, "usage_type": "formal", "formal_seats": 2, "informal_seats": 0}
-      ],
-      "rates": {"charge_rate": 3500000, "informal_rent_rate": 1200000}
+      ]
     },
     {
       "entity_type": "company",
@@ -38,19 +33,17 @@
       "desks": [
         {"number": 9, "usage_type": "informal", "formal_seats": 0, "informal_seats": 2},
         {"number": 10, "usage_type": "informal", "formal_seats": 0, "informal_seats": 2}
-      ],
-      "rates": {"charge_rate": 4000000, "informal_rent_rate": 1500000}
+      ]
     },
     {
       "entity_type": "student",
-      "name": "دانشجوی مستقل — امیر حسینی",
+      "name": "امیر حسینی",
       "leader": "امیر حسینی",
       "phone": "09120003333",
       "joined_at": "1404/01/10",
       "desks": [
         {"number": 17, "usage_type": "informal", "formal_seats": 0, "informal_seats": 1}
-      ],
-      "rates": {"charge_rate": 3000000, "informal_rent_rate": 1000000}
+      ]
     }
   ],
   "members": [
@@ -59,14 +52,7 @@
     {"team": "تیم IoT", "full_name": "سارا احمدی", "access_code": "10031", "phone": "09120002222", "desks": [3]},
     {"team": "شرکت فناوران نوین", "full_name": "رضا کریمی", "access_code": "20011", "phone": "02188776655", "desks": [9]},
     {"team": "شرکت فناوران نوین", "full_name": "نگار صادقی", "access_code": "20012", "desks": [10]},
-    {"team": "دانشجوی مستقل — امیر حسینی", "full_name": "امیر حسینی", "access_code": "30001", "phone": "09120003333", "desks": [17]}
-  ],
-  "lockers": [
-    {"number": 1, "team": "تیم رباتیک", "member": "علی محمدی", "status": "تخصیص یافته"},
-    {"number": 2, "team": "تیم رباتیک", "member": "مریم رضایی", "status": "تخصیص یافته"},
-    {"number": 5, "team": "تیم IoT", "member": "سارا احمدی", "status": "تخصیص یافته"},
-    {"number": 12, "team": "شرکت فناوران نوین", "status": "تخصیص یافته"},
-    {"number": 20, "status": "خالی"}
+    {"team": "امیر حسینی", "full_name": "امیر حسینی", "access_code": "30001", "phone": "09120003333", "desks": [17]}
   ],
   "plans": [
     {
@@ -78,21 +64,7 @@
       "start_date": "1404/02/01",
       "end_date": "1404/06/30",
       "progress": 35
-    },
-    {
-      "title": "برگزاری رویداد دمو دی",
-      "status": "پیشنهادی",
-      "priority": "متوسط",
-      "owner_team": "تیم رباتیک",
-      "proposed_budget": 42000000,
-      "start_date": "1404/08/01",
-      "end_date": "1404/08/15",
-      "progress": 0
     }
   ],
-  "finance": [
-    {"tx_date": "1404/01/05", "description": "واریز شارژ تیم رباتیک — دی", "amount": 9400000, "category": "واریز تیم", "team": "تیم رباتیک", "fiscal_year": "1404", "month_index": 10},
-    {"tx_date": "1404/01/12", "description": "خرید لوازم اداری", "amount": -1850000, "category": "هزینه"},
-    {"tx_date": "1404/02/03", "description": "واریز شارژ شرکت فناوران نوین — بهمن", "amount": 11000000, "category": "واریز تیم", "team": "شرکت فناوران نوین", "fiscal_year": "1404", "month_index": 11}
-  ]
+  "finance": []
 }

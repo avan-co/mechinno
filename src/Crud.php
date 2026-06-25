@@ -45,7 +45,7 @@ final class Crud
                 'status_field' => null,
                 'source' => true,
                 'fields' => [
-                    'team_id' => ['label' => 'تیم / شرکت / دانشجو', 'type' => 'select', 'options' => [], 'required' => true],
+                    'team_id' => ['label' => 'نهاد (تیم / شرکت / دانشجو)', 'type' => 'select', 'options' => [], 'required' => true],
                     'full_name' => ['label' => 'نام', 'type' => 'text', 'required' => true],
                     'access_code' => ['label' => 'کد دستگاه تردد', 'type' => 'text'],
                     'desk_ids' => ['label' => 'میزها', 'type' => 'multi_select', 'options' => []],
@@ -128,6 +128,22 @@ final class Crud
                     'month_index' => ['label' => 'ماه', 'type' => 'select', 'options' => self::monthOptions()],
                     'confirmed' => ['label' => 'تأیید شده', 'type' => 'select', 'options' => ['1' => 'بله', '0' => 'خیر']],
                     'notes' => ['label' => 'توضیحات', 'type' => 'textarea'],
+                ],
+            ],
+            'charges' => [
+                'table' => 'charges',
+                'title' => 'شارژ ماهانه',
+                'order' => 'fiscal_year, month_index, team_id',
+                'status_field' => null,
+                'source' => false,
+                'fields' => [
+                    'team_id' => ['label' => 'نهاد', 'type' => 'select', 'options' => [], 'required' => true],
+                    'fiscal_year' => ['label' => 'سال مالی', 'type' => 'text', 'required' => true],
+                    'month_index' => ['label' => 'ماه', 'type' => 'select', 'options' => self::monthOptions(), 'required' => true],
+                    'charge_amount' => ['label' => 'مبلغ شارژ', 'type' => 'number'],
+                    'rent_amount' => ['label' => 'مبلغ اجاره غیررسمی', 'type' => 'number'],
+                    'amount' => ['label' => 'جمع کل (دستی)', 'type' => 'number', 'required' => true],
+                    'note' => ['label' => 'یادداشت', 'type' => 'textarea'],
                 ],
             ],
             'rate_settings' => [
@@ -223,9 +239,6 @@ final class Crud
         if ($resource === 'transactions') {
             $this->syncTeamDepositIncome($id);
         }
-        if (in_array($resource, ['desks', 'team_rates', 'teams'], true)) {
-            (new Seeder($this->pdo, app_base_path()))->recalculateCharges($this->currentFiscalYear());
-        }
 
         return $this->find($resource, $id);
     }
@@ -266,9 +279,6 @@ final class Crud
         }
         if ($resource === 'transactions') {
             $this->syncTeamDepositIncome($id);
-        }
-        if (in_array($resource, ['desks', 'team_rates', 'teams'], true)) {
-            (new Seeder($this->pdo, app_base_path()))->recalculateCharges($this->currentFiscalYear());
         }
 
         return $this->find($resource, $id);
@@ -355,9 +365,14 @@ final class Crud
             $data['source_file'] = 'manual';
             $data['source_sheet'] = 'panel';
         }
-        if ($resource === 'teams' && $creating) {
+        if ($resource === 'teams') {
             $type = (string) ($data['entity_type'] ?? 'team');
-            $data['entity_code'] = $this->ids->nextEntityCode($type);
+            if (!in_array($type, ['team', 'company', 'student'], true)) {
+                throw new InvalidArgumentException('نوع نهاد معتبر نیست.');
+            }
+            if ($creating) {
+                $data['entity_code'] = $this->ids->nextEntityCode($type);
+            }
         }
         if ($resource === 'members' && $creating) {
             $data['member_code'] = $this->ids->nextMemberCode();
@@ -374,6 +389,18 @@ final class Crud
                 $data['team_id'] = null;
                 $data['fiscal_year'] = null;
                 $data['month_index'] = null;
+            }
+        }
+        if ($resource === 'charges') {
+            $data['source_file'] = 'manual';
+            $data['source_sheet'] = 'panel';
+            if (isset($data['month_index'])) {
+                $data['month_name'] = self::monthName((int) $data['month_index']);
+            }
+            $charge = (int) ($data['charge_amount'] ?? 0);
+            $rent = (int) ($data['rent_amount'] ?? 0);
+            if (empty($data['amount']) && ($charge > 0 || $rent > 0)) {
+                $data['amount'] = $charge + $rent;
             }
         }
         if ($resource === 'desks') {
@@ -595,5 +622,10 @@ final class Crud
             5 => 'مرداد', 6 => 'شهریور', 7 => 'مهر', 8 => 'آبان',
             9 => 'آذر', 10 => 'دی', 11 => 'بهمن', 12 => 'اسفند',
         ];
+    }
+
+    private static function monthName(int $index): string
+    {
+        return self::months()[$index] ?? '';
     }
 }

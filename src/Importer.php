@@ -33,7 +33,6 @@ final class Importer
         try {
             Schema::reset($this->pdo);
             Schema::seedDesks($this->pdo);
-            Schema::seedLockerSlots($this->pdo, 30);
 
             $this->importInnovationCenter($this->basePath . '/Innovation Center.xlsx');
             $this->importCharges($this->basePath . '/CHARGE.xlsx');
@@ -72,8 +71,11 @@ final class Importer
         }
         $this->resolveTeamRelations();
         $this->mapDeskAssignmentsFromLegacyText();
-        $fiscalYear = (string) ($this->pdo->query('SELECT fiscal_year FROM rate_settings ORDER BY id DESC LIMIT 1')->fetchColumn() ?: '1404');
-        (new Seeder($this->pdo, $this->basePath))->recalculateCharges($fiscalYear);
+        $excelChargeCount = (int) $this->pdo->query("SELECT COUNT(*) FROM charges WHERE source_file LIKE '%.xlsx'")->fetchColumn();
+        if ($excelChargeCount === 0) {
+            $fiscalYear = (string) ($this->pdo->query('SELECT fiscal_year FROM rate_settings ORDER BY id DESC LIMIT 1')->fetchColumn() ?: '1404');
+            (new Seeder($this->pdo, $this->basePath))->recalculateCharges($fiscalYear);
+        }
     }
 
     private function importInnovationCenter(string $path): void
