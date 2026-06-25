@@ -133,6 +133,24 @@ final class Crud
                     'notes' => ['label' => 'توضیحات', 'type' => 'textarea'],
                 ],
             ],
+            'team_payments' => [
+                'table' => 'team_payments',
+                'title' => 'پرداخت تیم',
+                'order' => 'fiscal_year, month_index, team_id',
+                'status_field' => 'status',
+                'status_options' => ['بدهکار', 'پرداخت ناقص', 'پرداخت‌شده'],
+                'source' => false,
+                'fields' => [
+                    'team_id' => ['label' => 'تیم مرتبط', 'type' => 'select', 'options' => [], 'required' => true],
+                    'fiscal_year' => ['label' => 'سال مالی', 'type' => 'text', 'required' => true],
+                    'month_index' => ['label' => 'ماه', 'type' => 'select', 'options' => self::monthOptions(), 'required' => true],
+                    'amount_due' => ['label' => 'مبلغ بدهی', 'type' => 'number', 'required' => true],
+                    'amount_paid' => ['label' => 'مبلغ پرداخت‌شده', 'type' => 'number'],
+                    'status' => ['label' => 'وضعیت', 'type' => 'select', 'options' => ['بدهکار', 'پرداخت ناقص', 'پرداخت‌شده']],
+                    'paid_at' => ['label' => 'تاریخ پرداخت', 'type' => 'date', 'placeholder' => '1404/01/01'],
+                    'notes' => ['label' => 'توضیحات', 'type' => 'textarea'],
+                ],
+            ],
         ];
     }
 
@@ -177,6 +195,10 @@ final class Crud
             $data['month_name'] = self::monthName((int) ($data['month_index'] ?? 0));
             $this->applyDefaultRates($data);
         }
+        if ($resource === 'team_payments') {
+            $data['month_name'] = self::monthName((int) ($data['month_index'] ?? 0));
+            $data['status'] = $this->paymentStatus((int) ($data['amount_due'] ?? 0), (int) ($data['amount_paid'] ?? 0), $data['status'] ?? null);
+        }
         if ($resource === 'transactions') {
             $data['batch_id'] = $this->manualBatchId();
         }
@@ -210,6 +232,15 @@ final class Crud
         $this->applyRelations($resource, $data);
         if ($resource === 'charges' && isset($data['month_index'])) {
             $data['month_name'] = self::monthName((int) $data['month_index']);
+        }
+        if ($resource === 'team_payments') {
+            if (isset($data['month_index'])) {
+                $data['month_name'] = self::monthName((int) $data['month_index']);
+            }
+            $current = $this->find($resource, $id);
+            $due = (int) ($data['amount_due'] ?? $current['amount_due'] ?? 0);
+            $paid = (int) ($data['amount_paid'] ?? $current['amount_paid'] ?? 0);
+            $data['status'] = $this->paymentStatus($due, $paid, $data['status'] ?? null);
         }
         if ($resource === 'transactions') {
             $data['batch_id'] = $this->manualBatchId();
@@ -378,7 +409,7 @@ final class Crud
      */
     private function applyRelations(string $resource, array &$data): void
     {
-        if (!in_array($resource, ['members', 'lockers', 'charges'], true) || empty($data['team_id'])) {
+        if (!in_array($resource, ['members', 'lockers', 'charges', 'team_payments'], true) || empty($data['team_id'])) {
             return;
         }
         $team = $this->teamById((int) $data['team_id']);
@@ -398,6 +429,18 @@ final class Crud
                 $data['desk_count'] = $team['desk_count'];
             }
         }
+    }
+
+    private function paymentStatus(int $due, int $paid, mixed $fallback): string
+    {
+        if ($paid >= $due && $due > 0) {
+            return 'پرداخت‌شده';
+        }
+        if ($paid > 0) {
+            return 'پرداخت ناقص';
+        }
+
+        return in_array($fallback, ['بدهکار', 'پرداخت ناقص', 'پرداخت‌شده'], true) ? (string) $fallback : 'بدهکار';
     }
 
     /**

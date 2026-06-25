@@ -76,6 +76,7 @@ code { color: var(--gold-soft); }
   background: linear-gradient(135deg, var(--gold-soft), var(--gold));
   font-weight: 700;
 }
+.export-all.secondary { background: rgba(255, 255, 255, 0.08); color: var(--gold-soft); border: 1px solid var(--line); }
 .logout-link {
   display: block;
   margin-top: 14px;
@@ -154,6 +155,14 @@ code { color: var(--gold-soft); }
 .bar-row { display: grid; grid-template-columns: 140px 1fr 110px; align-items: center; gap: 12px; }
 .bar-track { height: 12px; overflow: hidden; border-radius: 100px; background: rgba(255, 255, 255, 0.08); }
 .bar-fill { height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--gold), var(--gold-soft)); }
+.danger-fill { background: linear-gradient(90deg, #ef4444, #f97316); }
+.success-fill { background: linear-gradient(90deg, #10b981, #72e0a4); }
+.danger-track { background: rgba(239, 68, 68, 0.12); }
+.double-bar { display: grid; grid-template-columns: 120px 1fr 1fr; gap: 10px; align-items: center; }
+.metric-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.metric { padding: 16px; border: 1px solid var(--line); border-radius: 16px; background: rgba(255, 255, 255, 0.04); }
+.metric span { color: var(--muted); display: block; margin-bottom: 8px; }
+.metric strong { color: var(--gold-soft); font-size: 20px; }
 
 .table-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
 .table-toolbar h2 { margin: 0; }
@@ -165,6 +174,21 @@ code { color: var(--gold-soft); }
   border-radius: 14px;
   color: var(--text);
   background: rgba(255, 255, 255, 0.06);
+  outline: none;
+}
+.advanced-filters {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(140px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.advanced-filters input,
+.advanced-filters select {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--text);
+  background: #111827;
   outline: none;
 }
 .table-wrap { overflow: auto; border: 1px solid var(--line); border-radius: 20px; }
@@ -261,6 +285,38 @@ td { color: #e5e7eb; }
   gap: 10px;
   margin-top: 20px;
 }
+.profile-summary {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.profile-summary div {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+}
+.profile-summary span { display: block; color: var(--muted); margin-bottom: 6px; }
+.profile-summary strong { color: var(--gold-soft); }
+.profile-table { overflow: auto; margin-bottom: 18px; }
+.profile-table table { min-width: 650px; }
+.report-body { background: #f3f4f6; color: #111827; }
+.report-page {
+  width: min(1100px, 100%);
+  margin: 24px auto;
+  padding: 36px;
+  background: #fff;
+  box-shadow: 0 18px 60px rgba(0,0,0,.12);
+}
+.report-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #c9a44c; padding-bottom: 18px; margin-bottom: 22px; }
+.report-header h1 { margin: 0; }
+.report-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 20px 0; }
+.report-cards div { border: 1px solid #d1d5db; border-radius: 12px; padding: 14px; }
+.report-cards span { display: block; color: #6b7280; margin-bottom: 8px; }
+.report-table { width: 100%; min-width: 0; border-collapse: collapse; color: #111827; background: #fff; margin-bottom: 22px; }
+.report-table th { background: #111827; color: #fff; position: static; }
+.report-table td, .report-table th { border: 1px solid #d1d5db; padding: 9px; }
 
 .setup-screen {
   display: grid;
@@ -331,7 +387,13 @@ pre { overflow: auto; direction: ltr; text-align: left; }
 @media (max-width: 720px) {
   .content, .sidebar, .hero, .setup-card { padding: 20px; }
   .hero, .table-toolbar { align-items: stretch; flex-direction: column; }
-  .cards, .grid.two, .requirements, .crud-grid { grid-template-columns: 1fr; }
+  .cards, .grid.two, .requirements, .crud-grid, .advanced-filters, .metric-grid, .profile-summary, .report-cards { grid-template-columns: 1fr; }
   .search { min-width: 0; width: 100%; }
   .table-actions, .modal-actions { flex-direction: column; }
+}
+
+@media print {
+  .no-print { display: none !important; }
+  .report-body { background: #fff; }
+  .report-page { width: 100%; margin: 0; padding: 0; box-shadow: none; }
 }

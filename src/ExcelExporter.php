@@ -55,6 +55,11 @@ final class ExcelExporter
                 'query' => 'SELECT id, created_at, reason, summary FROM import_backups ORDER BY id DESC',
                 'headers' => ['شناسه', 'تاریخ ایجاد', 'دلیل', 'خلاصه'],
             ],
+            'team_payments' => [
+                'title' => 'بدهی و پرداخت تیم‌ها',
+                'query' => 'SELECT t.name, p.fiscal_year, p.month_name, p.amount_due, p.amount_paid, p.status, p.paid_at, p.notes FROM team_payments p LEFT JOIN teams t ON t.id = p.team_id ORDER BY p.fiscal_year, p.month_index, t.name',
+                'headers' => ['تیم', 'سال', 'ماه', 'بدهی', 'پرداخت', 'وضعیت', 'تاریخ پرداخت', 'توضیحات'],
+            ],
         ];
     }
 

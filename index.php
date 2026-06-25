@@ -43,6 +43,7 @@ if ($isConfigured) {
             <button class="nav-item" data-section="members">اعضا</button>
             <button class="nav-item" data-section="lockers">کمدها</button>
             <button class="nav-item" data-section="charges">شارژ</button>
+            <button class="nav-item" data-section="team_payments">پرداخت‌ها</button>
             <button class="nav-item" data-section="transactions">مالی</button>
             <button class="nav-item" data-section="plans">برنامه‌ها</button>
             <button class="nav-item" data-section="rate_settings">نرخ‌ها</button>
@@ -50,6 +51,7 @@ if ($isConfigured) {
             <button class="nav-item" data-section="warnings">کیفیت داده</button>
           </nav>
           <a class="export-all" href="export.php?report=all">دریافت گزارش کامل Excel</a>
+          <a class="export-all secondary" href="report.php">گزارش رسمی PDF</a>
           <a class="logout-link" href="logout.php">خروج از پنل</a>
         </aside>
 
@@ -100,6 +102,20 @@ if ($isConfigured) {
                 <div id="planStatus" class="status-list"></div>
               </article>
             </div>
+            <div class="grid two">
+              <article class="panel">
+                <div class="panel-head"><h2>بدهی تیم‌ها</h2></div>
+                <div id="debtChart" class="bar-chart"></div>
+              </article>
+              <article class="panel">
+                <div class="panel-head"><h2>درآمد و هزینه ماهانه</h2></div>
+                <div id="financeChart" class="bar-chart"></div>
+              </article>
+            </div>
+            <article class="panel">
+              <div class="panel-head"><h2>اشغال منابع</h2></div>
+              <div id="occupancyChart" class="metric-grid"></div>
+            </article>
           </section>
 
           <section id="teams" class="section">
@@ -113,6 +129,9 @@ if ($isConfigured) {
           </section>
           <section id="charges" class="section">
             <data-table title="شارژ و اجاره" endpoint="api.php?resource=charges" export-url="export.php?report=charges"></data-table>
+          </section>
+          <section id="team_payments" class="section">
+            <data-table title="بدهی و پرداخت تیم‌ها" endpoint="api.php?resource=team_payments" export-url="export.php?report=team_payments"></data-table>
           </section>
           <section id="transactions" class="section">
             <data-table title="مالی" endpoint="api.php?resource=transactions" export-url="export.php?report=transactions"></data-table>

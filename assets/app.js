@@ -35,6 +35,9 @@ const labels = {
   note: "یادداشت",
   charge_rate: "نرخ شارژ",
   rent_rate: "نرخ اجاره",
+  amount_due: "بدهی",
+  amount_paid: "پرداخت‌شده",
+  paid_at: "تاریخ پرداخت",
   batch_id: "دوره",
   invoice_count: "تعداد فاکتور",
   tx_date: "تاریخ",
@@ -133,9 +136,11 @@ const cardDefinitions = [
   ["reserved_lockers", "کمد رزرو"],
   ["warnings", "هشدار داده"],
   ["backups", "پشتیبان‌ها"],
+  ["debt_total", "بدهی کل"],
+  ["paid_total", "پرداخت ثبت‌شده"],
 ];
 
-const moneyCards = new Set(["charge_total", "income_total", "expense_total"]);
+const moneyCards = new Set(["charge_total", "income_total", "expense_total", "debt_total", "paid_total"]);
 
 const renderCards = (cards) => {
   const container = document.getElementById("cards");
@@ -183,9 +188,54 @@ const loadDashboard = async () => {
   const data = await fetchJson("api.php?resource=summary");
   renderCards(data.cards);
   renderChargeChart(data.monthly_charges);
+  renderDebtChart(data.debt_by_team || []);
+  renderFinanceChart(data.finance_monthly || []);
+  renderOccupancy(data.occupancy || {});
   renderStatus("lockerStatus", data.locker_status);
   renderStatus("planStatus", data.plan_status);
   renderStatus("financeStatus", data.finance_by_category, "category", "amount", true);
+};
+
+const renderDebtChart = (rows) => {
+  const container = document.getElementById("debtChart");
+  const max = Math.max(...rows.map((row) => Number(row.debt || 0)), 1);
+  container.innerHTML = rows.length
+    ? rows.map((row) => `
+        <div class="bar-row">
+          <span>${escapeHtml(row.team_name || "نامشخص")}</span>
+          <div class="bar-track danger-track"><div class="bar-fill danger-fill" style="width:${(Number(row.debt || 0) / max) * 100}%"></div></div>
+          <strong>${escapeHtml(formatMoney(row.debt))}</strong>
+        </div>
+      `).join("")
+    : `<div class="empty">بدهی ثبت‌شده‌ای وجود ندارد.</div>`;
+};
+
+const renderFinanceChart = (rows) => {
+  const container = document.getElementById("financeChart");
+  const max = Math.max(...rows.flatMap((row) => [Number(row.income || 0), Number(row.expense || 0)]), 1);
+  container.innerHTML = rows.length
+    ? rows.slice(-12).map((row) => `
+        <div class="double-bar">
+          <span>${escapeHtml(row.period || "-")}</span>
+          <div class="bar-track"><div class="bar-fill success-fill" style="width:${(Number(row.income || 0) / max) * 100}%"></div></div>
+          <div class="bar-track"><div class="bar-fill danger-fill" style="width:${(Number(row.expense || 0) / max) * 100}%"></div></div>
+        </div>
+      `).join("")
+    : `<div class="empty">داده مالی ماهانه موجود نیست.</div>`;
+};
+
+const renderOccupancy = (stats) => {
+  const container = document.getElementById("occupancyChart");
+  const total = Number(stats.lockers_total || 0);
+  const assigned = Number(stats.lockers_assigned || 0);
+  const reserved = Number(stats.lockers_reserved || 0);
+  const available = Math.max(total - assigned - reserved, 0);
+  container.innerHTML = `
+    <div class="metric"><span>کمد تخصیص‌یافته</span><strong>${assigned.toLocaleString("fa-IR")} از ${total.toLocaleString("fa-IR")}</strong></div>
+    <div class="metric"><span>کمد رزرو</span><strong>${reserved.toLocaleString("fa-IR")}</strong></div>
+    <div class="metric"><span>کمد آزاد تقریبی</span><strong>${available.toLocaleString("fa-IR")}</strong></div>
+    <div class="metric"><span>میزهای استفاده‌شده</span><strong>${formatNumber(stats.desks_used || 0)}</strong></div>
+  `;
 };
 
 const ensureModal = () => {
@@ -292,6 +342,37 @@ const openRecordModal = ({ resource, definition, record = null, onSaved }) => {
   modal.hidden = false;
 };
 
+const openTeamProfile = async (teamId) => {
+  const data = await fetchJson(`api.php?resource=team-profile&id=${encodeURIComponent(teamId)}`);
+  const modal = ensureModal();
+  const form = modal.querySelector("#crudForm");
+  modal.querySelector("#crudModalTitle").textContent = `پروفایل تیم: ${data.team.name || "-"}`;
+  const section = (title, rows, cols) => `
+    <h3>${escapeHtml(title)}</h3>
+    <div class="profile-table">
+      <table><thead><tr>${cols.map((c) => `<th>${escapeHtml(labels[c] || c)}</th>`).join("")}</tr></thead>
+      <tbody>${rows.length ? rows.map((row) => `<tr>${cols.map((c) => `<td>${escapeHtml(formatNumber(row[c] ?? "-"))}</td>`).join("")}</tr>`).join("") : `<tr><td colspan="${cols.length}">داده‌ای موجود نیست.</td></tr>`}</tbody></table>
+    </div>
+  `;
+  form.innerHTML = `
+    <div class="profile-summary">
+      <div><span>سرگروه</span><strong>${escapeHtml(data.team.leader || "-")}</strong></div>
+      <div><span>تعداد میز</span><strong>${escapeHtml(formatNumber(data.team.desk_count || 0))}</strong></div>
+      <div><span>جمع شارژ</span><strong>${escapeHtml(formatMoney(data.summary.charge_total || 0))}</strong></div>
+      <div><span>بدهی</span><strong>${escapeHtml(formatMoney(data.summary.debt_total || 0))}</strong></div>
+      <div><span>پرداخت</span><strong>${escapeHtml(formatMoney(data.summary.paid_total || 0))}</strong></div>
+    </div>
+    ${section("اعضا", data.members, ["full_name", "phone", "desks", "lockers"])}
+    ${section("کمدها", data.lockers, ["locker_number", "status", "delivered_at", "spare_key"])}
+    ${section("شارژها", data.charges, ["fiscal_year", "month_name", "amount", "note"])}
+    ${section("پرداخت‌ها", data.payments, ["fiscal_year", "month_name", "amount_due", "amount_paid", "status"])}
+    ${section("تراکنش‌های مرتبط تقریبی", data.transactions, ["tx_date", "description", "amount", "category"])}
+    <div class="modal-actions"><button class="button ghost" type="button" data-close-modal>بستن</button></div>
+  `;
+  form.querySelector("[data-close-modal]").addEventListener("click", closeModal);
+  modal.hidden = false;
+};
+
 class DataTable extends HTMLElement {
   connectedCallback() {
     this.title = this.getAttribute("title");
@@ -306,6 +387,7 @@ class DataTable extends HTMLElement {
           <h2>${this.title}</h2>
           <div class="table-actions">
             <button class="button add-button" type="button" hidden>افزودن</button>
+            <button class="button ghost profile-button" type="button" hidden>پروفایل تیم</button>
             <input class="search" placeholder="جست‌وجو..." />
             <a class="button" href="${this.exportUrl}">Excel</a>
           </div>
@@ -323,6 +405,10 @@ class DataTable extends HTMLElement {
         onSaved: () => this.load(),
       });
     });
+    this.querySelector(".profile-button").addEventListener("click", () => {
+      const selected = this.querySelector(".team-profile-select")?.value;
+      if (selected) openTeamProfile(selected).catch((error) => alert(error.message));
+    });
     this.addEventListener("click", (event) => this.handleClick(event));
     this.addEventListener("change", (event) => this.handleChange(event));
     this.load();
@@ -334,6 +420,7 @@ class DataTable extends HTMLElement {
       this.definition = meta.resources[this.resource] || null;
       this.querySelector(".add-button").hidden = !this.definition || !editableResources.has(this.resource);
       this.rows = await fetchJson(this.endpoint);
+      this.renderFilters();
       this.render("");
     } catch (error) {
       this.querySelector(".table-wrap").innerHTML = `<div class="empty">خطا در بارگذاری: ${escapeHtml(error.message)}</div>`;
@@ -343,9 +430,9 @@ class DataTable extends HTMLElement {
   render(filter) {
     const wrap = this.querySelector(".table-wrap");
     const normalized = filter.trim().toLowerCase();
-    const rows = normalized
+    const rows = this.applyAdvancedFilters(normalized
       ? this.rows.filter((row) => JSON.stringify(row).toLowerCase().includes(normalized))
-      : this.rows;
+      : this.rows);
     if (!rows.length) {
       wrap.innerHTML = `<div class="empty">رکوردی یافت نشد.</div>`;
       return;
@@ -389,6 +476,48 @@ class DataTable extends HTMLElement {
       })
       .join("");
     wrap.innerHTML = `<table><thead><tr>${head}${editable ? "<th>عملیات</th>" : ""}</tr></thead><tbody>${body}</tbody></table>`;
+  }
+
+  renderFilters() {
+    const toolbar = this.querySelector(".table-toolbar");
+    let filterBox = this.querySelector(".advanced-filters");
+    if (!filterBox) {
+      toolbar.insertAdjacentHTML("afterend", `<div class="advanced-filters"></div>`);
+      filterBox = this.querySelector(".advanced-filters");
+      filterBox.addEventListener("input", () => this.render(this.querySelector(".search").value));
+      filterBox.addEventListener("change", () => this.render(this.querySelector(".search").value));
+    }
+    const years = [...new Set(this.rows.map((r) => r.fiscal_year).filter(Boolean))];
+    const statuses = [...new Set(this.rows.map((r) => r.status || r.category).filter(Boolean))];
+    const teams = [...new Map(this.rows.filter((r) => r.team_id || r.related_team || r.name).map((r) => [r.team_id || r.id, r.related_team || r.name || r.team_name])).entries()].filter(([id]) => id);
+    this.querySelector(".profile-button").hidden = this.resource !== "teams";
+    filterBox.innerHTML = `
+      ${years.length ? `<select data-filter="year"><option value="">همه سال‌ها</option>${years.map((y) => `<option>${escapeHtml(y)}</option>`).join("")}</select>` : ""}
+      ${statuses.length ? `<select data-filter="status"><option value="">همه وضعیت‌ها</option>${statuses.map((s) => `<option>${escapeHtml(s)}</option>`).join("")}</select>` : ""}
+      ${teams.length && this.resource !== "teams" ? `<select data-filter="team"><option value="">همه تیم‌ها</option>${teams.map(([id, name]) => `<option value="${escapeHtml(id)}">${escapeHtml(name)}</option>`).join("")}</select>` : ""}
+      ${this.resource === "teams" ? `<select class="team-profile-select"><option value="">انتخاب تیم برای پروفایل</option>${this.rows.map((r) => `<option value="${escapeHtml(r.id)}">${escapeHtml(r.name || "-")}</option>`).join("")}</select>` : ""}
+      <input data-filter="from" placeholder="از تاریخ 1404/01/01" />
+      <input data-filter="to" placeholder="تا تاریخ 1404/12/29" />
+    `;
+  }
+
+  applyAdvancedFilters(rows) {
+    const box = this.querySelector(".advanced-filters");
+    if (!box) return rows;
+    const year = box.querySelector('[data-filter="year"]')?.value || "";
+    const status = box.querySelector('[data-filter="status"]')?.value || "";
+    const team = box.querySelector('[data-filter="team"]')?.value || "";
+    const from = box.querySelector('[data-filter="from"]')?.value || "";
+    const to = box.querySelector('[data-filter="to"]')?.value || "";
+    return rows.filter((row) => {
+      const rowStatus = row.status || row.category || "";
+      const rowDate = row.tx_date || row.paid_at || row.delivered_at || row.effective_from || "";
+      return (!year || row.fiscal_year === year)
+        && (!status || rowStatus === status)
+        && (!team || String(row.team_id || "") === String(team))
+        && (!from || String(rowDate) >= from)
+        && (!to || String(rowDate) <= to);
+    });
   }
 
   async handleClick(event) {

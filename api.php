@@ -31,6 +31,10 @@ try {
         json_response($repository->summary());
     }
 
+    if ($resource === 'team-profile') {
+        json_response($repository->teamProfile((int) ($_GET['id'] ?? 0)));
+    }
+
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($action, ['create', 'update', 'delete', 'status'], true)) {
         require_csrf_json();
         $payload = json_decode((string) file_get_contents('php://input'), true);

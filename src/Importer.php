@@ -38,9 +38,11 @@ final class Importer
             $this->importCharges($this->basePath . '/CHARGE.xlsx');
             $this->importFinance($this->basePath . '/finance.xlsx');
             $this->resolveTeamRelations();
+            $this->syncTeamPayments();
             if ($backupId !== null) {
                 (new BackupManager($this->pdo))->restoreManualRows($backupId);
                 $this->resolveTeamRelations();
+                $this->syncTeamPayments();
             }
             $this->insert('import_runs', [
                 'source_files' => json_encode(
@@ -340,6 +342,62 @@ final class Importer
         $this->resolveTableTeam('members', 'team_name', $teamByName, $teamByLeader);
         $this->resolveTableTeam('lockers', 'assigned_to', $teamByName, $teamByLeader);
         $this->resolveTableTeam('charges', 'team_name', $teamByName, $teamByLeader);
+    }
+
+    private function syncTeamPayments(): void
+    {
+        $rows = $this->pdo->query(
+            "SELECT team_id, fiscal_year, month_index, month_name, SUM(amount) AS amount_due
+             FROM charges
+             WHERE team_id IS NOT NULL
+             GROUP BY team_id, fiscal_year, month_index, month_name"
+        )->fetchAll();
+
+        $select = $this->pdo->prepare(
+            'SELECT id, amount_paid FROM team_payments
+             WHERE team_id = :team_id AND fiscal_year = :fiscal_year AND month_index = :month_index
+             LIMIT 1'
+        );
+        $insert = $this->pdo->prepare(
+            'INSERT INTO team_payments
+                (team_id, fiscal_year, month_index, month_name, amount_due, amount_paid, status, paid_at, notes)
+             VALUES
+                (:team_id, :fiscal_year, :month_index, :month_name, :amount_due, 0, :status, NULL, NULL)'
+        );
+        $update = $this->pdo->prepare(
+            'UPDATE team_payments
+             SET amount_due = :amount_due, month_name = :month_name, status = :status
+             WHERE id = :id'
+        );
+
+        foreach ($rows as $row) {
+            $amountDue = (int) ($row['amount_due'] ?? 0);
+            $select->execute([
+                'team_id' => $row['team_id'],
+                'fiscal_year' => $row['fiscal_year'],
+                'month_index' => $row['month_index'],
+            ]);
+            $existing = $select->fetch();
+            if ($existing === false) {
+                $insert->execute([
+                    'team_id' => $row['team_id'],
+                    'fiscal_year' => $row['fiscal_year'],
+                    'month_index' => $row['month_index'],
+                    'month_name' => $row['month_name'],
+                    'amount_due' => $amountDue,
+                    'status' => $amountDue > 0 ? 'بدهکار' : 'پرداخت‌شده',
+                ]);
+                continue;
+            }
+
+            $amountPaid = (int) ($existing['amount_paid'] ?? 0);
+            $update->execute([
+                'id' => $existing['id'],
+                'amount_due' => $amountDue,
+                'month_name' => $row['month_name'],
+                'status' => $amountPaid >= $amountDue ? 'پرداخت‌شده' : ($amountPaid > 0 ? 'پرداخت ناقص' : 'بدهکار'),
+            ]);
+        }
     }
 
     /**
