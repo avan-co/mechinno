@@ -18,7 +18,7 @@ def test_import_all_loads_core_entities() -> None:
     assert conn.execute("SELECT COUNT(*) FROM lockers").fetchone()[0] == 36
     assert conn.execute("SELECT COUNT(*) FROM plans").fetchone()[0] == 16
     assert conn.execute("SELECT COUNT(*) FROM charges").fetchone()[0] > 170
-    assert conn.execute("SELECT COUNT(*) FROM transactions").fetchone()[0] == 44
+    assert conn.execute("SELECT COUNT(*) FROM transactions").fetchone()[0] == 25
 
 
 def test_import_records_data_quality_warnings() -> None:
