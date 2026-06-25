@@ -57,9 +57,26 @@ final class ReportData
         return self::USAGE_LABELS[$type ?? ''] ?? ($type ?: '—');
     }
 
-    public static function money(int|float|null $value): string
+    public static function money(mixed $value): string
     {
-        return number_format((int) ($value ?? 0));
+        if ($value === null || $value === '') {
+            return '0';
+        }
+        if (is_string($value)) {
+            $digits = preg_replace('/[^\d-]/', '', $value);
+            $value = $digits === '' || $digits === '-' ? 0 : (int) $digits;
+        }
+
+        return number_format((int) $value);
+    }
+
+    public static function plain(mixed $value): string
+    {
+        if ($value === null || $value === '') {
+            return '—';
+        }
+
+        return preg_replace('/[^\d]/', '', (string) $value) ?: (string) $value;
     }
 
     public static function cell(mixed $value): string

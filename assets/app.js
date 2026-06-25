@@ -85,9 +85,9 @@ const moneyCards = new Set(["charge_total", "income_total", "expense_total", "de
 
 const resourceColumns = {
   teams: ["entity_code", "entity_type", "name", "leader", "phone", "desk_count", "informal_seats", "joined_at", "warning"],
-  members: ["member_code", "full_name", "team_label", "entity_type", "desk_numbers", "access_code", "locker_number", "phone"],
+  members: ["member_code", "full_name", "team_label", "entity_type", "desk_numbers", "access_code", "phone", "national_id"],
   desks: ["number", "team_name", "usage_type", "formal_seats", "informal_seats"],
-  lockers: ["locker_number", "status", "team_label", "member_name", "delivered_at", "key_number", "spare_key"],
+  lockers: ["locker_number", "status", "team_label", "delivered_at", "key_number", "spare_key"],
   rate_settings: ["fiscal_year", "title", "charge_rate", "informal_rent_rate", "effective_from", "notes"],
   charges: ["fiscal_year", "team_name", "month_name", "charge_amount", "rent_amount", "amount", "note"],
   transactions: ["tx_date", "description", "amount", "category", "team_name", "fiscal_year", "month_index", "confirmed"],
@@ -95,8 +95,14 @@ const resourceColumns = {
 
 const editableResources = new Set(["members", "teams", "desks", "lockers", "charges", "transactions", "rate_settings"]);
 const hiddenColumns = new Set([
-  "source_sheet", "source_file", "team_id", "locker_id", "member_id",
+  "id", "source_sheet", "source_file", "team_id", "locker_id", "member_id",
   "row_index", "col_index", "created_at", "entity_type",
+  "row_number", "lockers", "power_strips", "rent_rate",
+]);
+const plainColumns = new Set([
+  "phone", "national_id", "access_code", "member_code", "entity_code",
+  "fiscal_year", "tx_date", "effective_from", "joined_at", "delivered_at",
+  "key_number", "number", "locker_number", "desk_numbers", "month_index",
 ]);
 
 const linkColumns = {
@@ -142,6 +148,11 @@ const loadCrudMeta = () => {
     crudMetaPromise = fetchJson("api.php?resource=crud-meta");
   }
   return crudMetaPromise;
+};
+
+const formatPlain = (value) => {
+  if (value === null || value === undefined || value === "") return "—";
+  return String(value);
 };
 
 const formatNumber = (value) => {
@@ -451,12 +462,20 @@ const loadDeskGrid = async () => {
 const loadChargesCollage = async () => {
   const yearSelect = document.getElementById("chargesYear");
   if (!yearSelect) return;
-  if (!yearSelect.options.length) {
-    [window.MECHINNO?.fiscalYear || "1404", "1405"].filter((v, i, a) => a.indexOf(v) === i).forEach((y) => {
-      yearSelect.insertAdjacentHTML("beforeend", `<option value="${y}">${y}</option>`);
-    });
+  if (!yearSelect.dataset.ready) {
+    yearSelect.dataset.ready = "1";
     yearSelect.addEventListener("change", () => loadChargesCollage().catch((error) => showToast(error.message, "error")));
   }
+  const { rows: rateRows } = await fetchResource("api.php?resource=rate_settings", { page: 1, perPage: 100 });
+  const { rows: chargeRows } = await fetchResource("api.php?resource=charges", { page: 1, perPage: 200 });
+  const years = [...new Set([
+    window.MECHINNO?.fiscalYear || "1404",
+    ...rateRows.map((r) => String(r.fiscal_year || "")),
+    ...chargeRows.map((r) => String(r.fiscal_year || "")),
+  ].filter(Boolean))].sort((a, b) => Number(b) - Number(a));
+  const current = yearSelect.value || window.MECHINNO?.fiscalYear || years[0] || "1404";
+  yearSelect.innerHTML = years.map((y) => `<option value="${escapeHtml(y)}">${escapeHtml(y)}</option>`).join("");
+  yearSelect.value = years.includes(current) ? current : years[0];
   const year = yearSelect.value || window.MECHINNO?.fiscalYear || "1404";
   const data = await fetchJson(`api.php?resource=charges-matrix&fiscal_year=${encodeURIComponent(year)}`);
   const container = document.getElementById("chargesCollage");
@@ -523,6 +542,7 @@ const profileSection = (title, rows, cols, cellRenderer = null) => `
           if (["amount", "charge_amount", "rent_amount"].includes(c)) return `<td>${escapeHtml(formatMoney(value))}</td>`;
           if (c === "usage_type") return `<td>${usageLabels[value] || value || "—"}</td>`;
           if (c === "number") return `<td>${deskLink(value)}</td>`;
+          if (plainColumns.has(c)) return `<td>${escapeHtml(formatPlain(value))}</td>`;
           return `<td>${escapeHtml(formatNumber(value ?? "—"))}</td>`;
         }).join("")}</tr>`).join("")
         : `<tr><td colspan="${cols.length}">داده‌ای موجود نیست.</td></tr>`}
@@ -552,7 +572,7 @@ const openTeamProfile = async (teamId) => {
       <button type="button" class="button ghost" data-profile-action="desks">مدیریت میزها</button>
     </div>
     ${profileSection("میزهای نهاد", data.desks, ["number", "usage_type", "formal_seats", "informal_seats"])}
-    ${profileSection("اعضا", data.members, ["full_name", "access_code", "locker_number", "phone"])}
+    ${profileSection("اعضا", data.members, ["member_code", "full_name", "access_code", "phone", "national_id"])}
     ${profileSection("کمدها", data.lockers, ["locker_number", "status", "delivered_at", "key_number"], (column, row) => {
       if (column === "locker_number") return lockerLink(row.locker_number);
       if (column === "status") return lockerStatusBadge(row.status);
@@ -740,16 +760,18 @@ const formatCell = (column, value, row, resource) => {
   if (["amount", "charge_amount", "rent_amount", "charge_rate", "informal_rent_rate"].includes(column)) {
     return formatMoney(value);
   }
+  if (plainColumns.has(column)) return formatPlain(value);
   return formatNumber(value);
 };
 
 const resolveColumns = (rows, resource) => {
-  if (!rows.length) return [];
-  const preferred = resourceColumns[resource] || [];
-  const available = Object.keys(rows[0]).filter((c) => !hiddenColumns.has(c));
-  const ordered = preferred.filter((c) => available.includes(c));
-  const rest = available.filter((c) => !ordered.includes(c));
-  return [...ordered, ...rest];
+  const preferred = resourceColumns[resource];
+  if (!preferred) {
+    return rows.length ? Object.keys(rows[0]).filter((c) => !hiddenColumns.has(c)) : [];
+  }
+  if (!rows.length) return preferred;
+  const available = new Set(Object.keys(rows[0]));
+  return preferred.filter((c) => available.has(c) && !hiddenColumns.has(c));
 };
 
 class DataTable extends HTMLElement {

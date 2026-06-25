@@ -261,28 +261,26 @@ final class Repository
     private function resourceSql(string $name): string
     {
         return match ($name) {
-            'teams' => "SELECT t.*,
+            'teams' => "SELECT t.id, t.entity_code, t.entity_type, t.name, t.leader, t.phone, t.joined_at, t.warning, t.notes,
                         (SELECT COUNT(*) FROM desks d WHERE d.team_id = t.id) AS desk_count,
                         (SELECT COALESCE(SUM(d.informal_seats), 0) FROM desks d WHERE d.team_id = t.id) AS informal_seats
                  FROM teams t
                  ORDER BY t.entity_type, t.name",
-            'members' => "SELECT m.id, m.member_code, m.team_id, m.access_code, m.full_name, m.phone, m.national_id,
-                        m.locker_id, m.notes, t.name AS team_label, t.entity_type,
-                        l.locker_number,
+            'members' => "SELECT m.id, m.member_code, m.team_id, m.access_code, m.full_name, m.phone, m.national_id, m.notes,
+                        t.name AS team_label, t.entity_type,
                         (SELECT GROUP_CONCAT(d.number ORDER BY d.number)
                          FROM desks d WHERE d.team_id = m.team_id) AS desk_numbers
                  FROM members m
                  LEFT JOIN teams t ON t.id = m.team_id
-                 LEFT JOIN lockers l ON l.id = m.locker_id
                  ORDER BY m.id",
             'desks' => "SELECT d.*, t.name AS team_name, t.entity_type
                  FROM desks d
                  LEFT JOIN teams t ON t.id = d.team_id
                  ORDER BY d.number",
-            'lockers' => "SELECT l.*, t.name AS team_label, m.full_name AS member_name
+            'lockers' => "SELECT l.id, l.locker_number, l.team_id, l.status, l.delivered_at, l.key_number, l.spare_key, l.notes,
+                        t.name AS team_label
                  FROM lockers l
                  LEFT JOIN teams t ON t.id = l.team_id
-                 LEFT JOIN members m ON m.id = l.member_id
                  ORDER BY l.locker_number",
             'charges' => 'SELECT c.*, t.name AS team_name, t.entity_type
                  FROM charges c
@@ -294,7 +292,8 @@ final class Repository
                  FROM transactions t
                  LEFT JOIN teams tm ON tm.id = t.team_id
                  ORDER BY t.tx_date DESC, t.id DESC",
-            'rate_settings' => 'SELECT * FROM rate_settings ORDER BY fiscal_year, effective_from, id',
+            'rate_settings' => 'SELECT id, fiscal_year, title, charge_rate, informal_rent_rate, effective_from, notes
+                 FROM rate_settings ORDER BY fiscal_year, effective_from, id',
             default => throw new InvalidArgumentException('Unknown resource.'),
         };
     }
@@ -393,14 +392,15 @@ final class Repository
             'team' => $team,
             'desks' => $this->preparedRows('SELECT * FROM desks WHERE team_id = :id ORDER BY number', ['id' => $teamId]),
             'members' => $this->preparedRows(
-                'SELECT m.*, l.locker_number
-                 FROM members m
-                 LEFT JOIN lockers l ON l.id = m.locker_id
-                 WHERE m.team_id = :id
-                 ORDER BY m.full_name',
+                'SELECT m.id, m.member_code, m.full_name, m.access_code, m.phone, m.national_id, m.notes
+                 FROM members m WHERE m.team_id = :id ORDER BY m.full_name',
                 ['id' => $teamId]
             ),
-            'lockers' => $this->preparedRows('SELECT * FROM lockers WHERE team_id = :id ORDER BY locker_number', ['id' => $teamId]),
+            'lockers' => $this->preparedRows(
+                'SELECT l.id, l.locker_number, l.status, l.delivered_at, l.key_number, l.spare_key, l.notes
+                 FROM lockers l WHERE l.team_id = :id ORDER BY l.locker_number',
+                ['id' => $teamId]
+            ),
             'charges' => $this->preparedRows('SELECT * FROM charges WHERE team_id = :id ORDER BY fiscal_year, month_index', ['id' => $teamId]),
             'payments' => $this->preparedRows(
                 "SELECT * FROM transactions

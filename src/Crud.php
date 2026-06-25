@@ -48,7 +48,6 @@ final class Crud
                     'team_id' => ['label' => 'نهاد (تیم / شرکت / دانشجو)', 'type' => 'select', 'options' => [], 'required' => true],
                     'full_name' => ['label' => 'نام', 'type' => 'text', 'required' => true],
                     'access_code' => ['label' => 'کد دستگاه تردد', 'type' => 'text'],
-                    'locker_id' => ['label' => 'کمد', 'type' => 'select', 'options' => []],
                     'phone' => ['label' => 'تماس', 'type' => 'text'],
                     'national_id' => ['label' => 'کدملی', 'type' => 'text'],
                     'notes' => ['label' => 'توضیحات', 'type' => 'textarea'],
@@ -82,8 +81,7 @@ final class Crud
                 'source' => true,
                 'fields' => [
                     'locker_number' => ['label' => 'شماره کمد', 'type' => 'number', 'required' => true],
-                    'team_id' => ['label' => 'تیم / شرکت', 'type' => 'select', 'options' => []],
-                    'member_id' => ['label' => 'عضو', 'type' => 'select', 'options' => []],
+                    'team_id' => ['label' => 'نهاد', 'type' => 'select', 'options' => [], 'required' => true],
                     'status' => ['label' => 'وضعیت', 'type' => 'select', 'options' => ['تخصیص یافته', 'رزرو', 'خالی', 'خراب']],
                     'delivered_at' => ['label' => 'تاریخ تحویل', 'type' => 'date', 'placeholder' => '1404/01/01'],
                     'key_number' => ['label' => 'شماره کلید', 'type' => 'text'],
@@ -139,9 +137,9 @@ final class Crud
                 'fields' => [
                     'fiscal_year' => ['label' => 'سال مالی', 'type' => 'text', 'required' => true],
                     'title' => ['label' => 'عنوان', 'type' => 'text', 'required' => true],
-                    'charge_rate' => ['label' => 'نرخ شارژ هر میز', 'type' => 'number', 'required' => true],
-                    'informal_rent_rate' => ['label' => 'نرخ اجاره صندلی غیررسمی', 'type' => 'number', 'required' => true],
-                    'effective_from' => ['label' => 'تاریخ اثرگذاری', 'type' => 'date', 'placeholder' => '1404/01/01'],
+                    'charge_rate' => ['label' => 'نرخ شارژ ماهانه هر میز (۲ صندلی)', 'type' => 'number', 'required' => true],
+                    'informal_rent_rate' => ['label' => 'نرخ اجاره غیررسمی هر میز', 'type' => 'number', 'required' => true],
+                    'effective_from' => ['label' => 'تاریخ اثر (شروع ماه)', 'type' => 'date', 'placeholder' => '1405/01/01'],
                     'notes' => ['label' => 'توضیحات', 'type' => 'textarea'],
                 ],
             ],
@@ -152,19 +150,11 @@ final class Crud
     {
         $resources = [];
         $teamOptions = $this->teamOptions();
-        $memberOptions = $this->memberOptions();
-        $lockerOptions = $this->lockerOptions();
 
         foreach (self::definitions() as $name => $definition) {
             foreach ($definition['fields'] as $field => $meta) {
                 if ($field === 'team_id' || $field === 'owner_team_id') {
                     $definition['fields'][$field]['options'] = $teamOptions;
-                }
-                if ($field === 'member_id') {
-                    $definition['fields'][$field]['options'] = $memberOptions;
-                }
-                if ($field === 'locker_id') {
-                    $definition['fields'][$field]['options'] = $lockerOptions;
                 }
             }
             $resources[$name] = [
@@ -492,20 +482,6 @@ final class Crud
                 $label .= ' (آزاد)';
             }
             $options[(string) $desk['id']] = $label;
-        }
-
-        return $options;
-    }
-
-    /**
-     * @return array<string, string>
-     */
-    private function lockerOptions(): array
-    {
-        $options = ['' => '—'];
-        foreach ($this->pdo->query('SELECT id, locker_number, status FROM lockers ORDER BY locker_number')->fetchAll() as $locker) {
-            $options[(string) $locker['id']] = 'کمد ' . $locker['locker_number'] . ' — ' . ($locker['status'] ?? '');
-            $options[(string) $locker['locker_number']] = 'کمد ' . $locker['locker_number'] . ' — ' . ($locker['status'] ?? '');
         }
 
         return $options;
