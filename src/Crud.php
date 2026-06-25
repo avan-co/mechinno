@@ -82,32 +82,13 @@ final class Crud
                 'status_options' => ['تخصیص یافته', 'رزرو', 'خالی', 'خراب'],
                 'source' => true,
                 'fields' => [
-                    'locker_number' => ['label' => 'شماره کمد', 'type' => 'select', 'options' => [], 'required' => true],
+                    'locker_number' => ['label' => 'شماره کمد', 'type' => 'number', 'required' => true],
                     'team_id' => ['label' => 'تیم / شرکت', 'type' => 'select', 'options' => []],
                     'member_id' => ['label' => 'عضو', 'type' => 'select', 'options' => []],
                     'status' => ['label' => 'وضعیت', 'type' => 'select', 'options' => ['تخصیص یافته', 'رزرو', 'خالی', 'خراب']],
                     'delivered_at' => ['label' => 'تاریخ تحویل', 'type' => 'date', 'placeholder' => '1404/01/01'],
                     'key_number' => ['label' => 'شماره کلید', 'type' => 'text'],
                     'spare_key' => ['label' => 'کلید یدک', 'type' => 'select', 'options' => ['دارد', 'ندارد']],
-                    'notes' => ['label' => 'توضیحات', 'type' => 'textarea'],
-                ],
-            ],
-            'plans' => [
-                'table' => 'plans',
-                'title' => 'برنامه',
-                'order' => 'priority, start_date',
-                'status_field' => 'status',
-                'status_options' => ['پیشنهادی', 'در حال اجرا', 'انجام‌شده', 'متوقف', 'لغو شده'],
-                'source' => true,
-                'fields' => [
-                    'title' => ['label' => 'عنوان', 'type' => 'textarea', 'required' => true],
-                    'status' => ['label' => 'وضعیت', 'type' => 'select', 'options' => ['پیشنهادی', 'در حال اجرا', 'انجام‌شده', 'متوقف', 'لغو شده']],
-                    'priority' => ['label' => 'اولویت', 'type' => 'select', 'options' => ['بالا', 'متوسط', 'پایین']],
-                    'owner_team_id' => ['label' => 'تیم مجری', 'type' => 'select', 'options' => []],
-                    'proposed_budget' => ['label' => 'بودجه پیشنهادی', 'type' => 'number'],
-                    'start_date' => ['label' => 'شروع', 'type' => 'date', 'placeholder' => '1404/01/01'],
-                    'end_date' => ['label' => 'پایان', 'type' => 'date', 'placeholder' => '1404/12/29'],
-                    'progress' => ['label' => 'پیشرفت (٪)', 'type' => 'number'],
                     'notes' => ['label' => 'توضیحات', 'type' => 'textarea'],
                 ],
             ],
@@ -161,20 +142,6 @@ final class Crud
                     'notes' => ['label' => 'توضیحات', 'type' => 'textarea'],
                 ],
             ],
-            'team_rates' => [
-                'table' => 'team_rates',
-                'title' => 'نرخ اختصاصی تیم',
-                'order' => 'fiscal_year, team_id',
-                'status_field' => null,
-                'source' => false,
-                'fields' => [
-                    'team_id' => ['label' => 'تیم / شرکت', 'type' => 'select', 'options' => [], 'required' => true],
-                    'fiscal_year' => ['label' => 'سال مالی', 'type' => 'text', 'required' => true],
-                    'charge_rate' => ['label' => 'نرخ شارژ هر میز', 'type' => 'number', 'required' => true],
-                    'informal_rent_rate' => ['label' => 'نرخ اجاره صندلی غیررسمی', 'type' => 'number', 'required' => true],
-                    'notes' => ['label' => 'توضیحات', 'type' => 'textarea'],
-                ],
-            ],
         ];
     }
 
@@ -197,7 +164,7 @@ final class Crud
                 if ($field === 'desk_ids') {
                     $definition['fields'][$field]['options'] = $deskOptions;
                 }
-                if ($field === 'locker_id' || $field === 'locker_number') {
+                if ($field === 'locker_id') {
                     $definition['fields'][$field]['options'] = $lockerOptions;
                 }
             }
@@ -361,7 +328,7 @@ final class Crud
      */
     private function applyResourceRules(string $resource, array &$data, bool $creating): void
     {
-        if (($creating || isset($data['source_file'])) && in_array($resource, ['teams', 'members', 'lockers', 'plans'], true)) {
+        if (($creating || isset($data['source_file'])) && in_array($resource, ['teams', 'members', 'lockers'], true)) {
             $data['source_file'] = 'manual';
             $data['source_sheet'] = 'panel';
         }
@@ -377,8 +344,8 @@ final class Crud
         if ($resource === 'members' && $creating) {
             $data['member_code'] = $this->ids->nextMemberCode();
         }
-        if ($resource === 'plans' && $creating) {
-            $data['plan_code'] = $this->ids->nextPlanCode();
+        if ($resource === 'lockers' && $creating && empty($data['status'])) {
+            $data['status'] = 'خالی';
         }
         if ($resource === 'transactions') {
             $data['source_file'] = 'manual';

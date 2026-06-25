@@ -6,9 +6,6 @@ require_once __DIR__ . '/src/bootstrap.php';
 
 require_auth();
 $pdo = require_database();
-if ((int) $pdo->query('SELECT COUNT(*) FROM import_runs')->fetchColumn() === 0) {
-    (new Importer($pdo, app_base_path()))->importAll();
-}
 $repo = new Repository($pdo);
 $summary = $repo->summary();
 $debts = $repo->chargeDebtRows();
@@ -18,29 +15,26 @@ $transactions = $repo->resource('transactions');
 <html lang="fa" dir="rtl">
   <head>
     <meta charset="utf-8" />
-    <title>گزارش رسمی مالی و تنخواه</title>
+    <title>گزارش مالی</title>
     <link rel="stylesheet" href="assets/styles.css" />
   </head>
   <body class="report-body">
     <main class="report-page">
       <header class="report-header">
         <div>
-          <h1>گزارش رسمی مالی و تنخواه</h1>
-          <p>مرکز نوآوری دانشکده مکانیک</p>
+          <h1>گزارش مالی مرکز نوآوری</h1>
         </div>
-        <button class="button no-print" onclick="window.print()">چاپ / ذخیره PDF</button>
+        <button class="button no-print" onclick="window.print()">چاپ / PDF</button>
       </header>
-
       <section class="report-cards">
-        <div><span>جمع دریافت‌ها</span><strong><?= number_format((int) $summary['cards']['income_total']) ?> ریال</strong></div>
-        <div><span>جمع هزینه‌ها</span><strong><?= number_format(abs((int) $summary['cards']['expense_total'])) ?> ریال</strong></div>
-        <div><span>بدهی تیم‌ها</span><strong><?= number_format((int) $summary['cards']['debt_total']) ?> ریال</strong></div>
-        <div><span>پرداخت ثبت‌شده</span><strong><?= number_format((int) $summary['cards']['paid_total']) ?> ریال</strong></div>
+        <div><span>دریافتی</span><strong><?= number_format((int) $summary['cards']['income_total']) ?></strong></div>
+        <div><span>هزینه</span><strong><?= number_format(abs((int) $summary['cards']['expense_total'])) ?></strong></div>
+        <div><span>بدهی</span><strong><?= number_format((int) $summary['cards']['debt_total']) ?></strong></div>
+        <div><span>واریز تیم</span><strong><?= number_format((int) $summary['cards']['paid_total']) ?></strong></div>
       </section>
-
-      <h2>وضعیت بدهی و پرداخت تیم‌ها</h2>
+      <h2>بدهی و پرداخت</h2>
       <table class="report-table">
-        <thead><tr><th>تیم</th><th>سال</th><th>ماه</th><th>بدهی</th><th>پرداخت</th><th>وضعیت</th></tr></thead>
+        <thead><tr><th>نهاد</th><th>سال</th><th>ماه</th><th>بدهی</th><th>پرداخت</th><th>وضعیت</th></tr></thead>
         <tbody>
           <?php foreach ($debts as $row): ?>
             <tr>
@@ -54,10 +48,9 @@ $transactions = $repo->resource('transactions');
           <?php endforeach; ?>
         </tbody>
       </table>
-
-      <h2>تراکنش‌های مالی</h2>
+      <h2>تراکنش‌ها</h2>
       <table class="report-table">
-        <thead><tr><th>تاریخ</th><th>شرح</th><th>مبلغ</th><th>دسته</th><th>توضیحات</th></tr></thead>
+        <thead><tr><th>تاریخ</th><th>شرح</th><th>مبلغ</th><th>دسته</th></tr></thead>
         <tbody>
           <?php foreach ($transactions as $row): ?>
             <tr>
@@ -65,7 +58,6 @@ $transactions = $repo->resource('transactions');
               <td><?= e($row['description'] ?? '-') ?></td>
               <td><?= number_format((int) ($row['amount'] ?? 0)) ?></td>
               <td><?= e($row['category'] ?? '-') ?></td>
-              <td><?= e($row['notes'] ?? '-') ?></td>
             </tr>
           <?php endforeach; ?>
         </tbody>

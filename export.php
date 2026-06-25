@@ -7,9 +7,6 @@ require_once __DIR__ . '/src/bootstrap.php';
 try {
     require_auth();
     $pdo = require_database();
-    if ((int) $pdo->query('SELECT COUNT(*) FROM import_runs')->fetchColumn() === 0) {
-        (new Importer($pdo, app_base_path()))->importAll();
-    }
     $report = (string) ($_GET['report'] ?? 'all');
     (new ExcelExporter($pdo))->output($report);
 } catch (Throwable $exception) {

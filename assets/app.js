@@ -27,15 +27,6 @@ const labels = {
   delivered_at: "تاریخ تحویل",
   key_number: "شماره کلید",
   spare_key: "کلید یدک",
-  plan_code: "کد برنامه",
-  title: "عنوان",
-  priority: "اولویت",
-  owner_team: "تیم مجری",
-  owner_team_id: "تیم مجری",
-  proposed_budget: "بودجه",
-  start_date: "شروع",
-  end_date: "پایان",
-  progress: "پیشرفت",
   fiscal_year: "سال",
   month_index: "ماه",
   month_name: "ماه",
@@ -81,7 +72,7 @@ let highlightDesk = null;
 let highlightLocker = null;
 let lastProfileTeamId = null;
 
-const editableResources = new Set(["members", "teams", "desks", "lockers", "plans", "charges", "transactions", "rate_settings", "team_rates"]);
+const editableResources = new Set(["members", "teams", "desks", "lockers", "charges", "transactions", "rate_settings"]);
 const hiddenColumns = new Set([
   "source_sheet", "source_file", "team_id", "owner_team_id", "locker_id", "member_id", "row_index", "col_index",
 ]);
@@ -201,6 +192,10 @@ document.querySelectorAll(".nav-item, .bottom-nav-item").forEach((item) => {
 document.getElementById("menuToggle")?.addEventListener("click", openDrawer);
 document.getElementById("sidebarBackdrop")?.addEventListener("click", closeDrawer);
 
+document.querySelectorAll(".start-steps [data-go]").forEach((item) => {
+  item.addEventListener("click", () => activateSection(item.dataset.go));
+});
+
 const teamLink = (teamId, label) => {
   if (!teamId || !label) return escapeHtml(label || "—");
   return `<button type="button" class="text-link" data-team-id="${escapeHtml(teamId)}">${escapeHtml(label)}</button>`;
@@ -290,13 +285,6 @@ const renderActionItems = (items) => {
     </button>`).join("");
 };
 
-const renderStatus = (id, rows, labelKey = "status", valueKey = "count", isMoney = false) => {
-  const container = document.getElementById(id);
-  container.innerHTML = rows.length
-    ? rows.map((row) => `<div class="status-row"><span>${escapeHtml(row[labelKey] || "—")}</span><strong>${escapeHtml(isMoney ? formatMoney(row[valueKey]) : formatNumber(row[valueKey]))}</strong></div>`).join("")
-    : `<div class="empty">داده‌ای موجود نیست.</div>`;
-};
-
 const renderChargeChart = (rows) => {
   const container = document.getElementById("chargeChart");
   const max = Math.max(...rows.map((r) => Number(r.amount || 0)), 1);
@@ -321,27 +309,6 @@ const renderDebtChart = (rows) => {
     : `<div class="empty">بدهی ثبت‌شده‌ای نیست.</div>`;
 };
 
-const renderFinanceChart = (rows) => {
-  const container = document.getElementById("financeChart");
-  const max = Math.max(...rows.flatMap((r) => [Number(r.income || 0), Number(r.expense || 0)]), 1);
-  container.innerHTML = rows.length
-    ? rows.slice(-8).map((row) => `
-      <div class="double-bar">
-        <span>${escapeHtml(row.period || "—")}</span>
-        <div class="bar-track"><div class="bar-fill success-fill" style="width:${(Number(row.income || 0) / max) * 100}%"></div></div>
-        <div class="bar-track"><div class="bar-fill danger-fill" style="width:${(Number(row.expense || 0) / max) * 100}%"></div></div>
-      </div>`).join("")
-    : `<div class="empty">داده مالی نیست.</div>`;
-};
-
-const renderOccupancy = (stats) => {
-  document.getElementById("occupancyChart").innerHTML = `
-    <button type="button" class="metric card-clickable" data-nav-section="desks"><span>میز اشغال</span><strong>${formatNumber(stats.desks_occupied || 0)} / 24</strong></button>
-    <button type="button" class="metric card-clickable" data-nav-section="desks"><span>میز آزاد</span><strong>${formatNumber(stats.desks_free || 0)}</strong></button>
-    <button type="button" class="metric card-clickable" data-nav-section="lockers"><span>کمد تخصیص‌یافته</span><strong>${formatNumber(stats.lockers_assigned || 0)}</strong></button>
-    <div class="metric"><span>ظرفیت صندلی غیررسمی</span><strong>${formatNumber(stats.desks_occupied || 0)} میز</strong></div>`;
-};
-
 const loadDashboard = async () => {
   const data = await fetchJson("api.php?resource=summary");
   renderCurrentMonth(data.current_month || {});
@@ -349,9 +316,8 @@ const loadDashboard = async () => {
   renderCards(data.cards);
   renderChargeChart(data.monthly_charges || []);
   renderDebtChart(data.debt_by_team || []);
-  renderFinanceChart(data.finance_monthly || []);
-  renderOccupancy(data.occupancy || {});
-  renderStatus("lockerStatus", data.locker_status || []);
+  const welcome = document.getElementById("welcomePanel");
+  if (welcome) welcome.hidden = Number(data.cards?.teams || 0) > 0;
 };
 
 const loadDeskGrid = async () => {
@@ -686,10 +652,6 @@ const formatCell = (column, value, row, resource) => {
   if (column === "entity_type") return entityTypeLabels[value] || value;
   if (column === "usage_type") return usageLabels[value] || value;
   if (column === "confirmed") return Number(value) === 1 ? "بله" : "خیر";
-  if (column === "progress") {
-    const pct = Math.min(100, Math.max(0, Number(value || 0)));
-    return `${pct}%<div class="progress-bar"><span style="width:${pct}%"></span></div>`;
-  }
   if (linkColumns[column] && row[linkColumns[column]] && value) {
     if (column === "name" && resource === "teams") {
       return `<button type="button" class="text-link" data-team-id="${escapeHtml(row.id)}">${escapeHtml(value)}</button>`;
@@ -705,7 +667,7 @@ const formatCell = (column, value, row, resource) => {
   if (column === "number" && resource === "desks") {
     return deskLink(value);
   }
-  if (["amount", "proposed_budget", "charge_amount", "rent_amount", "charge_rate", "informal_rent_rate"].includes(column)) {
+  if (["amount", "charge_amount", "rent_amount", "charge_rate", "informal_rent_rate"].includes(column)) {
     return formatMoney(value);
   }
   return formatNumber(value);
@@ -924,34 +886,6 @@ class DataTable extends HTMLElement {
 }
 
 customElements.define("data-table", DataTable);
-
-const reimportAck = document.getElementById("reimportAck");
-const reimportConfirm = document.getElementById("reimportConfirm");
-const reimportButton = document.getElementById("reimportButton");
-
-const syncReimportButton = () => {
-  if (!reimportButton) return;
-  const ok = reimportAck?.checked && reimportConfirm?.value.trim() === "بازنشانی";
-  reimportButton.disabled = !ok;
-};
-
-reimportAck?.addEventListener("change", syncReimportButton);
-reimportConfirm?.addEventListener("input", syncReimportButton);
-
-if (reimportButton) {
-  reimportButton.addEventListener("click", async () => {
-    if (reimportConfirm?.value.trim() !== "بازنشانی" || !reimportAck?.checked) return;
-    reimportButton.disabled = true;
-    try {
-      await fetchJson("api.php?resource=reimport", { method: "POST", headers: { "X-CSRF-Token": csrfToken } });
-      showToast("بازنشانی انجام شد — بارگذاری مجدد...");
-      window.location.reload();
-    } catch (error) {
-      showToast(error.message, "error");
-      syncReimportButton();
-    }
-  });
-}
 
 const recalcChargesButton = document.getElementById("recalcChargesButton");
 if (recalcChargesButton) {

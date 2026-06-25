@@ -9,7 +9,6 @@ final class Identifier
     'company' => 'C',
     'student' => 'S',
     'member' => 'M',
-    'plan' => 'P',
   ];
 
   public function __construct(private readonly PDO $pdo)
@@ -42,19 +41,6 @@ final class Identifier
     $last = (string) ($statement->fetchColumn() ?: '');
 
     return 'M-' . str_pad((string) ($this->sequence($last) + 1), 3, '0', STR_PAD_LEFT);
-  }
-
-  public function nextPlanCode(): string
-  {
-    $statement = $this->pdo->query(
-      "SELECT plan_code FROM plans
-       WHERE plan_code LIKE 'P-%'
-       ORDER BY id DESC
-       LIMIT 1"
-    );
-    $last = (string) ($statement->fetchColumn() ?: '');
-
-    return 'P-' . str_pad((string) ($this->sequence($last) + 1), 3, '0', STR_PAD_LEFT);
   }
 
   private function sequence(string $code): int
