@@ -14,6 +14,7 @@
 - دیتابیس MySQL با جداول جداگانه برای اعضا، تیم‌ها، کمدها، شارژ، مالی، برنامه‌ها و هشدارهای داده
 - خواندن مستقیم فایل‌های XLSX با PHP `ZipArchive` و `SimpleXML`
 - نصب و import از طریق `install.php`
+- لاگین ادمین و محافظت CSRF برای عملیات حساس
 - API ساده با `api.php`
 - خروجی Excel-compatible با قالب‌بندی زیبا از طریق `export.php`
 - ثبت هشدارهای کیفیت داده برای موارد مشکوک مثل تاریخ نامعتبر یا مبلغ ثبت‌شده در ستون توضیحات
@@ -43,14 +44,32 @@
 'password' => 'YOUR_PASSWORD',
 ```
 
-6. در مرورگر باز کنید:
+6. حتماً رمز ورود پنل را هم عوض کنید:
+
+```php
+'auth' => [
+    'enabled' => true,
+    'username' => 'admin',
+    'password' => 'یک_رمز_قوی',
+    'password_hash' => '',
+],
+```
+
+برای امنیت بیشتر می‌توانید به جای `password` از `password_hash` استفاده کنید:
+
+```bash
+php -r "echo password_hash('YOUR_STRONG_PASSWORD', PASSWORD_DEFAULT), PHP_EOL;"
+```
+
+7. در مرورگر باز کنید:
 
 ```text
 https://your-domain.com/install.php
 ```
 
-7. روی **ساخت دیتابیس و ورود داده‌ها** بزنید.
-8. سپس پنل را باز کنید:
+8. با نام کاربری و رمز تنظیم‌شده وارد شوید.
+9. checkbox تأیید import را بزنید و روی **ساخت دیتابیس و ورود داده‌ها** کلیک کنید.
+10. سپس پنل را باز کنید:
 
 ```text
 https://your-domain.com/index.php
@@ -59,6 +78,8 @@ https://your-domain.com/index.php
 ## مسیرهای اصلی
 
 - پنل: `index.php`
+- ورود: `login.php`
+- خروج: `logout.php`
 - نصب/import: `install.php`
 - API: `api.php?resource=summary`
 - ورود مجدد داده‌ها: دکمه داخل پنل یا `POST api.php?resource=reimport`

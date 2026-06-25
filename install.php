@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/src/bootstrap.php';
+
 $configured = is_file(__DIR__ . '/config.php');
 $result = null;
 $error = null;
@@ -16,13 +18,22 @@ $requirements = [
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $configured) {
     try {
-        require_once __DIR__ . '/src/bootstrap.php';
+        require_auth();
+        $csrfError = require_csrf_html();
+        if ($csrfError !== null) {
+            throw new RuntimeException($csrfError);
+        }
+        if (($_POST['confirm_import'] ?? '') !== '1') {
+            throw new RuntimeException('برای جلوگیری از reset ناخواسته دیتابیس، گزینه تأیید ورود مجدد داده‌ها را فعال کنید.');
+        }
         $pdo = Database::connect();
         Schema::migrate($pdo);
         $result = (new Importer($pdo, app_base_path()))->importAll();
     } catch (Throwable $exception) {
-        $error = $exception->getMessage();
+        $error = $exception instanceof RuntimeException ? $exception->getMessage() : safe_error_message($exception);
     }
+} elseif ($configured) {
+    require_auth();
 }
 ?>
 <!doctype html>
@@ -38,7 +49,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $configured) {
       <section class="setup-card wide">
         <span class="brand-mark">M</span>
         <h1>نصب پنل مدیریتی</h1>
-        <p>ابتدا در cPanel یک MySQL Database و User بسازید، سپس <code>config.sample.php</code> را به <code>config.php</code> کپی کرده و اطلاعات دیتابیس را وارد کنید.</p>
+        <p>ابتدا در cPanel یک MySQL Database و User بسازید، سپس <code>config.sample.php</code> را به <code>config.php</code> کپی کرده و اطلاعات دیتابیس و رمز عبور پنل را وارد کنید.</p>
 
         <div class="requirements">
           <?php foreach ($requirements as $name => $ok): ?>
@@ -52,6 +63,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $configured) {
         <?php if (!$configured): ?>
           <div class="notice danger">
             فایل <code>config.php</code> پیدا نشد. لطفاً <code>config.sample.php</code> را کپی و تنظیم کنید.
+          </div>
+        <?php else: ?>
+          <div class="notice">
+            این عملیات جداول مدیریتی را از فایل‌های Excel بازسازی می‌کند. قبل از import مجدد مطمئن شوید فایل‌های Excel نسخه صحیح هستند.
           </div>
         <?php endif; ?>
 
@@ -67,6 +82,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $configured) {
         <?php endif; ?>
 
         <form method="post">
+          <?php if ($configured): ?>
+            <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>" />
+            <label class="check-row">
+              <input type="checkbox" name="confirm_import" value="1" />
+              <span>تأیید می‌کنم داده‌های فعلی از روی فایل‌های Excel بازسازی شوند.</span>
+            </label>
+          <?php endif; ?>
           <button class="button" type="submit" <?= $configured ? '' : 'disabled' ?>>ساخت دیتابیس و ورود داده‌ها</button>
           <a class="button ghost" href="index.php">بازگشت به پنل</a>
         </form>

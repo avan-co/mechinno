@@ -2,7 +2,12 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/src/bootstrap.php';
+
 $isConfigured = is_file(__DIR__ . '/config.php');
+if ($isConfigured) {
+    require_auth();
+}
 ?>
 <!doctype html>
 <html lang="fa" dir="rtl">
@@ -43,6 +48,7 @@ $isConfigured = is_file(__DIR__ . '/config.php');
             <button class="nav-item" data-section="warnings">کیفیت داده</button>
           </nav>
           <a class="export-all" href="export.php?report=all">دریافت گزارش کامل Excel</a>
+          <a class="logout-link" href="logout.php">خروج از پنل</a>
         </aside>
 
         <main class="content">
@@ -117,6 +123,9 @@ $isConfigured = is_file(__DIR__ . '/config.php');
           </section>
         </main>
       </div>
+      <script>
+        window.MECHINNO = { csrfToken: "<?= e(csrf_token()) ?>" };
+      </script>
       <script src="assets/app.js"></script>
     <?php endif; ?>
   </body>

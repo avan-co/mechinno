@@ -76,6 +76,14 @@ code { color: var(--gold-soft); }
   background: linear-gradient(135deg, var(--gold-soft), var(--gold));
   font-weight: 700;
 }
+.logout-link {
+  display: block;
+  margin-top: 14px;
+  padding: 12px 14px;
+  color: var(--muted);
+  text-align: center;
+}
+.logout-link:hover { color: var(--gold-soft); }
 
 .content { padding: 34px; }
 .hero {
@@ -204,7 +212,29 @@ td { color: #e5e7eb; }
 }
 .notice.danger { color: #fecaca; background: rgba(127, 29, 29, 0.45); border: 1px solid rgba(248, 113, 113, 0.35); }
 .notice.success { color: #bbf7d0; background: rgba(20, 83, 45, 0.45); border: 1px solid rgba(74, 222, 128, 0.35); }
+.notice:not(.danger):not(.success) { color: #fde68a; background: rgba(113, 63, 18, 0.34); border: 1px solid rgba(251, 191, 36, 0.26); }
 pre { overflow: auto; direction: ltr; text-align: left; }
+.auth-form { display: grid; gap: 16px; margin-top: 22px; }
+.auth-form label { display: grid; gap: 8px; color: var(--muted); }
+.auth-form input {
+  width: 100%;
+  padding: 13px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+  outline: none;
+}
+.auth-form input:focus { border-color: var(--gold); }
+.check-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 16px 0;
+  color: var(--muted);
+  line-height: 1.8;
+}
+.check-row input { margin-top: 7px; }
 
 @media (max-width: 1100px) {
   .shell { grid-template-columns: 1fr; }

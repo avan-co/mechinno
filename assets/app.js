@@ -48,6 +48,16 @@ const labels = {
   payload: "جزئیات",
 };
 
+const csrfToken = window.MECHINNO?.csrfToken || "";
+
+const escapeHtml = (value) =>
+  String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+
 const formatNumber = (value) => {
   if (value === null || value === undefined || value === "") return "-";
   const maybe = Number(value);
@@ -64,7 +74,10 @@ const formatMoney = (value) => {
 
 const fetchJson = async (url, options = {}) => {
   const response = await fetch(url, options);
-  const data = await response.json();
+  const contentType = response.headers.get("content-type") || "";
+  const data = contentType.includes("application/json")
+    ? await response.json()
+    : { error: await response.text() };
   if (!response.ok) throw new Error(data.error || `Request failed: ${url}`);
   return data;
 };
@@ -100,7 +113,7 @@ const renderCards = (cards) => {
   container.innerHTML = cardDefinitions
     .map(([key, title]) => {
       const value = moneyCards.has(key) ? formatMoney(cards[key]) : formatNumber(cards[key]);
-      return `<article class="card"><span>${title}</span><strong>${value}</strong></article>`;
+      return `<article class="card"><span>${escapeHtml(title)}</span><strong>${escapeHtml(value)}</strong></article>`;
     })
     .join("");
 };
@@ -111,9 +124,9 @@ const renderStatus = (id, rows, labelKey = "status", valueKey = "count", isMoney
     ? rows
         .map(
           (row) =>
-            `<div class="status-row"><span>${row[labelKey] || "نامشخص"}</span><strong>${
-              isMoney ? formatMoney(row[valueKey]) : formatNumber(row[valueKey])
-            }</strong></div>`,
+            `<div class="status-row"><span>${escapeHtml(row[labelKey] || "نامشخص")}</span><strong>${escapeHtml(
+              isMoney ? formatMoney(row[valueKey]) : formatNumber(row[valueKey]),
+            )}</strong></div>`,
         )
         .join("")
     : `<div class="empty">داده‌ای موجود نیست.</div>`;
@@ -128,9 +141,9 @@ const renderChargeChart = (rows) => {
       const width = (Number(row.amount || 0) / max) * 100;
       return `
         <div class="bar-row">
-          <span>${row.fiscal_year} - ${row.month_name}</span>
+          <span>${escapeHtml(row.fiscal_year)} - ${escapeHtml(row.month_name)}</span>
           <div class="bar-track"><div class="bar-fill" style="width:${width}%"></div></div>
-          <strong>${formatMoney(row.amount)}</strong>
+          <strong>${escapeHtml(formatMoney(row.amount))}</strong>
         </div>
       `;
     })
@@ -171,8 +184,12 @@ class DataTable extends HTMLElement {
   }
 
   async load() {
-    this.rows = await fetchJson(this.endpoint);
-    this.render("");
+    try {
+      this.rows = await fetchJson(this.endpoint);
+      this.render("");
+    } catch (error) {
+      this.querySelector(".table-wrap").innerHTML = `<div class="empty">خطا در بارگذاری: ${escapeHtml(error.message)}</div>`;
+    }
   }
 
   render(filter) {
@@ -186,7 +203,7 @@ class DataTable extends HTMLElement {
       return;
     }
     const columns = Object.keys(rows[0]).filter((column) => !["source_sheet", "source_file"].includes(column));
-    const head = columns.map((column) => `<th>${labels[column] || column}</th>`).join("");
+    const head = columns.map((column) => `<th>${escapeHtml(labels[column] || column)}</th>`).join("");
     const body = rows
       .map((row) => {
         const cells = columns
@@ -201,7 +218,7 @@ class DataTable extends HTMLElement {
             const display = ["amount", "proposed_budget", "charge_rate", "rent_rate", "suspected_amount_note"].includes(column)
               ? formatMoney(value)
               : formatNumber(value);
-            return `<td class="${className}">${display}</td>`;
+            return `<td class="${className}">${escapeHtml(display)}</td>`;
           })
           .join("");
         return `<tr>${cells}</tr>`;
@@ -214,11 +231,17 @@ class DataTable extends HTMLElement {
 customElements.define("data-table", DataTable);
 
 document.getElementById("reimportButton").addEventListener("click", async () => {
+  if (!window.confirm("ورود مجدد داده‌ها جداول را از روی فایل‌های Excel بازسازی می‌کند. ادامه می‌دهید؟")) {
+    return;
+  }
   const button = document.getElementById("reimportButton");
   button.disabled = true;
   button.textContent = "در حال ورود اطلاعات...";
   try {
-    await fetchJson("api.php?resource=reimport", { method: "POST" });
+    await fetchJson("api.php?resource=reimport", {
+      method: "POST",
+      headers: { "X-CSRF-Token": csrfToken },
+    });
     window.location.reload();
   } catch (error) {
     alert(error.message);
@@ -229,5 +252,5 @@ document.getElementById("reimportButton").addEventListener("click", async () => 
 
 loadDashboard().catch((error) => {
   console.error(error);
-  document.getElementById("cards").innerHTML = `<article class="card"><span>خطا</span><strong>${error.message}</strong></article>`;
+  document.getElementById("cards").innerHTML = `<article class="card"><span>خطا</span><strong>${escapeHtml(error.message)}</strong></article>`;
 });

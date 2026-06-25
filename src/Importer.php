@@ -29,10 +29,10 @@ final class Importer
     public function importAll(): array
     {
         Schema::migrate($this->pdo);
-        Schema::reset($this->pdo);
 
         $this->pdo->beginTransaction();
         try {
+            Schema::reset($this->pdo);
             $this->importInnovationCenter($this->basePath . '/Innovation Center.xlsx');
             $this->importCharges($this->basePath . '/CHARGE.xlsx');
             $this->importFinance($this->basePath . '/finance.xlsx');
