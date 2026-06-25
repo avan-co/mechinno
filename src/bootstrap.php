@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/Database.php';
 require_once __DIR__ . '/Sql.php';
+require_once __DIR__ . '/Identifier.php';
 require_once __DIR__ . '/Auth.php';
 require_once __DIR__ . '/JalaliDate.php';
 require_once __DIR__ . '/Schema.php';
+require_once __DIR__ . '/Seeder.php';
 require_once __DIR__ . '/BackupManager.php';
 require_once __DIR__ . '/XlsxReader.php';
 require_once __DIR__ . '/Importer.php';
@@ -63,7 +65,6 @@ function require_auth(): void
     if (!Auth::isEnabled($config) || Auth::check()) {
         return;
     }
-
     redirect_to('login.php?next=' . rawurlencode(current_path_with_query()));
 }
 
@@ -73,7 +74,6 @@ function require_auth_json(): void
     if (!Auth::isEnabled($config) || Auth::check()) {
         return;
     }
-
     json_response(['error' => 'برای دسترسی باید وارد پنل شوید.'], 401);
 }
 
@@ -96,7 +96,6 @@ function require_csrf_html(): ?string
     if (!Auth::verifyCsrf(is_string($token) ? $token : null)) {
         return 'درخواست امنیتی معتبر نیست. صفحه را refresh کنید و دوباره تلاش کنید.';
     }
-
     return null;
 }
 
@@ -109,16 +108,13 @@ function safe_error_message(Throwable $exception): string
             return $exception->getMessage();
         }
     } catch (Throwable) {
-        // Fall through to the generic production-safe error.
     }
-
-    return 'خطای داخلی رخ داد. تنظیمات دیتابیس، افزونه‌های PHP و فایل‌های Excel را بررسی کنید.';
+    return 'خطای داخلی رخ داد. تنظیمات دیتابیس و فایل‌های راه‌اندازی را بررسی کنید.';
 }
 
 function require_database(): PDO
 {
     $pdo = Database::connect();
     Schema::migrate($pdo);
-
     return $pdo;
 }

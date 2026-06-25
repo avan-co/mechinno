@@ -15,7 +15,7 @@ try {
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && $resource === 'reimport') {
         require_csrf_json();
-        $summary = (new Importer($pdo, app_base_path()))->importAll();
+        $summary = (new Seeder($pdo, app_base_path()))->seedFromFile();
         json_response(['ok' => true, 'summary' => $summary]);
     }
 
@@ -29,6 +29,11 @@ try {
 
     if ($resource === 'summary') {
         json_response($repository->summary());
+    }
+
+    if ($resource === 'charges-matrix') {
+        $year = (string) ($_GET['fiscal_year'] ?? '1404');
+        json_response($repository->chargesMatrix($year));
     }
 
     if ($resource === 'team-profile') {

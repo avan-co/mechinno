@@ -24,11 +24,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $configured) {
             throw new RuntimeException($csrfError);
         }
         if (($_POST['confirm_import'] ?? '') !== '1') {
-            throw new RuntimeException('برای جلوگیری از reset ناخواسته دیتابیس، گزینه تأیید ورود مجدد داده‌ها را فعال کنید.');
+            throw new RuntimeException('برای ادامه، گزینه تأیید را فعال کنید.');
         }
         $pdo = Database::connect();
         Schema::migrate($pdo);
-        $result = (new Importer($pdo, app_base_path()))->importAll();
+        $useExcel = ($_POST['import_source'] ?? 'seed') === 'excel';
+        $result = (new Importer($pdo, app_base_path()))->importAll($useExcel);
     } catch (Throwable $exception) {
         $error = $exception instanceof RuntimeException ? $exception->getMessage() : safe_error_message($exception);
     }
@@ -42,6 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $configured) {
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>نصب پنل Mechinno</title>
+    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;600&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="assets/styles.css" />
   </head>
   <body>
@@ -49,7 +51,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $configured) {
       <section class="setup-card wide">
         <span class="brand-mark">M</span>
         <h1>نصب پنل مدیریتی</h1>
-        <p>ابتدا در cPanel یک MySQL Database و User بسازید، سپس <code>config.sample.php</code> را به <code>config.php</code> کپی کرده و اطلاعات دیتابیس و رمز عبور پنل را وارد کنید.</p>
+        <p>ابتدا <code>config.sample.php</code> را به <code>config.php</code> کپی کنید. سپس داده اولیه را وارد کنید. پس از نصب، پنل مستقل از Excel کار می‌کند.</p>
 
         <div class="requirements">
           <?php foreach ($requirements as $name => $ok): ?>
@@ -61,22 +63,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $configured) {
         </div>
 
         <?php if (!$configured): ?>
-          <div class="notice danger">
-            فایل <code>config.php</code> پیدا نشد. لطفاً <code>config.sample.php</code> را کپی و تنظیم کنید.
-          </div>
-        <?php else: ?>
-          <div class="notice">
-            این عملیات جداول مدیریتی را از فایل‌های Excel بازسازی می‌کند. قبل از import مجدد مطمئن شوید فایل‌های Excel نسخه صحیح هستند.
-          </div>
+          <div class="notice danger">فایل <code>config.php</code> پیدا نشد.</div>
         <?php endif; ?>
-
         <?php if ($error): ?>
           <div class="notice danger"><?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?></div>
         <?php endif; ?>
-
         <?php if ($result): ?>
           <div class="notice success">
-            نصب و ورود اطلاعات انجام شد:
+            نصب انجام شد:
             <pre><?= htmlspecialchars(json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8') ?></pre>
           </div>
         <?php endif; ?>
@@ -85,11 +79,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $configured) {
           <?php if ($configured): ?>
             <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>" />
             <label class="check-row">
+              <input type="radio" name="import_source" value="seed" checked />
+              <span>ورود داده اولیه از <code>data/initial-seed.json</code> (پیشنهادی)</span>
+            </label>
+            <label class="check-row">
+              <input type="radio" name="import_source" value="excel" />
+              <span>ورود یک‌باره از فایل‌های Excel (در صورت وجود در ریشه پروژه)</span>
+            </label>
+            <label class="check-row">
               <input type="checkbox" name="confirm_import" value="1" />
-              <span>تأیید می‌کنم داده‌های فعلی از روی فایل‌های Excel بازسازی شوند.</span>
+              <span>تأیید می‌کنم داده‌های فعلی بازنشانی شوند.</span>
             </label>
           <?php endif; ?>
-          <button class="button" type="submit" <?= $configured ? '' : 'disabled' ?>>ساخت دیتابیس و ورود داده‌ها</button>
+          <button class="button" type="submit" <?= $configured ? '' : 'disabled' ?>>ساخت دیتابیس و ورود داده</button>
           <a class="button ghost" href="index.php">بازگشت به پنل</a>
         </form>
       </section>

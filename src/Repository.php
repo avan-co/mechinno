@@ -17,40 +17,39 @@ final class Repository
             'cards' => [
                 'members' => $this->scalar('SELECT COUNT(*) FROM members'),
                 'teams' => $this->scalar('SELECT COUNT(*) FROM teams'),
+                'desks_occupied' => $this->scalar('SELECT COUNT(*) FROM desks WHERE team_id IS NOT NULL'),
+                'desks_total' => 24,
                 'lockers' => $this->scalar('SELECT COUNT(*) FROM lockers'),
                 'available_lockers' => $this->scalar("SELECT COUNT(*) FROM lockers WHERE status = 'خالی'"),
-                'reserved_lockers' => $this->scalar("SELECT COUNT(*) FROM lockers WHERE status = 'رزرو'"),
                 'charge_total' => $this->scalar('SELECT COALESCE(SUM(amount), 0) FROM charges'),
                 'income_total' => $this->scalar('SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE amount > 0'),
-                'expense_total' => $this->scalar('SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE amount < 0'),
-                'warnings' => $this->scalar('SELECT COUNT(*) FROM import_warnings'),
-                'backups' => $this->scalar('SELECT COUNT(*) FROM import_backups'),
-                'debt_total' => $this->scalar("SELECT COALESCE(SUM(amount_due - amount_paid), 0) FROM team_payments WHERE status <> 'پرداخت‌شده'"),
-                'paid_total' => $this->scalar('SELECT COALESCE(SUM(amount_paid), 0) FROM team_payments'),
-                'occupied_lockers' => $this->scalar("SELECT COUNT(*) FROM lockers WHERE status = 'تخصیص یافته'"),
-                'reserved_lockers_count' => $this->scalar("SELECT COUNT(*) FROM lockers WHERE status = 'رزرو'"),
+                'expense_total' => $this->scalar('SELECT COALESCE(SUM(ABS(amount)), 0) FROM transactions WHERE amount < 0'),
+                'debt_total' => $this->scalar($this->debtSql()),
+                'paid_total' => $this->scalar("SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE category = 'واریز تیم' AND confirmed = 1"),
             ],
             'locker_status' => $this->rows('SELECT status, COUNT(*) AS count FROM lockers GROUP BY status ORDER BY count DESC'),
             'plan_status' => $this->rows('SELECT status, COUNT(*) AS count FROM plans GROUP BY status ORDER BY count DESC'),
             'monthly_charges' => $this->rows(
                 'SELECT fiscal_year, month_index, month_name, SUM(amount) AS amount
-                 FROM charges
-                 GROUP BY fiscal_year, month_index, month_name
+                 FROM charges GROUP BY fiscal_year, month_index, month_name
                  ORDER BY fiscal_year, month_index'
             ),
             'finance_by_category' => $this->rows(
                 'SELECT category, COUNT(*) AS count, COALESCE(SUM(amount), 0) AS amount
-                 FROM transactions
-                 GROUP BY category
-                 ORDER BY amount DESC'
+                 FROM transactions GROUP BY category ORDER BY amount DESC'
             ),
             'latest_import' => $this->row('SELECT imported_at, source_files FROM import_runs ORDER BY id DESC LIMIT 1'),
             'debt_by_team' => $this->rows(
-                "SELECT t.name AS team_name, COALESCE(SUM(p.amount_due - p.amount_paid), 0) AS debt
-                 FROM team_payments p
-                 LEFT JOIN teams t ON t.id = p.team_id
-                 WHERE p.status <> 'پرداخت‌شده'
-                 GROUP BY p.team_id, t.name
+                "SELECT t.name AS team_name, COALESCE(SUM(c.amount), 0) - COALESCE(p.paid, 0) AS debt
+                 FROM teams t
+                 LEFT JOIN charges c ON c.team_id = t.id
+                 LEFT JOIN (
+                    SELECT team_id, COALESCE(SUM(amount), 0) AS paid
+                    FROM transactions
+                    WHERE category = 'واریز تیم' AND confirmed = 1
+                    GROUP BY team_id
+                 ) p ON p.team_id = t.id
+                 GROUP BY t.id, t.name, p.paid
                  HAVING debt > 0
                  ORDER BY debt DESC
                  LIMIT 10"
@@ -65,10 +64,10 @@ final class Repository
                  ORDER BY period"
             ),
             'occupancy' => [
-                'lockers_total' => $this->scalar('SELECT COUNT(*) FROM lockers'),
+                'desks_total' => 24,
+                'desks_occupied' => $this->scalar('SELECT COUNT(*) FROM desks WHERE team_id IS NOT NULL'),
+                'desks_free' => $this->scalar('SELECT COUNT(*) FROM desks WHERE team_id IS NULL'),
                 'lockers_assigned' => $this->scalar("SELECT COUNT(*) FROM lockers WHERE status = 'تخصیص یافته'"),
-                'lockers_reserved' => $this->scalar("SELECT COUNT(*) FROM lockers WHERE status = 'رزرو'"),
-                'desks_used' => $this->scalar('SELECT COALESCE(SUM(desk_count), 0) FROM teams'),
             ],
         ];
     }
@@ -79,45 +78,129 @@ final class Repository
     public function resource(string $name): array
     {
         return match ($name) {
-            'teams' => $this->rows('SELECT * FROM teams ORDER BY id'),
+            'teams' => $this->rows(
+                "SELECT t.*,
+                        (SELECT COUNT(*) FROM desks d WHERE d.team_id = t.id) AS desk_count,
+                        (SELECT COALESCE(SUM(d.informal_seats), 0) FROM desks d WHERE d.team_id = t.id) AS informal_seats
+                 FROM teams t
+                 ORDER BY t.entity_type, t.name"
+            ),
             'members' => $this->rows(
-                'SELECT m.*, t.name AS related_team
+                "SELECT m.id, m.member_code, m.team_id, m.access_code, m.full_name, m.phone, m.national_id,
+                        m.locker_id, m.notes, t.name AS team_label, t.entity_type,
+                        l.locker_number,
+                        GROUP_CONCAT(md.desk_id) AS desk_ids,
+                        GROUP_CONCAT(d.number ORDER BY d.number) AS desk_numbers
                  FROM members m
                  LEFT JOIN teams t ON t.id = m.team_id
-                 ORDER BY m.id'
+                 LEFT JOIN lockers l ON l.id = m.locker_id
+                 LEFT JOIN member_desks md ON md.member_id = m.id
+                 LEFT JOIN desks d ON d.id = md.desk_id
+                 GROUP BY m.id
+                 ORDER BY m.id"
+            ),
+            'desks' => $this->rows(
+                "SELECT d.*, t.name AS team_name, t.entity_type
+                 FROM desks d
+                 LEFT JOIN teams t ON t.id = d.team_id
+                 ORDER BY d.number"
             ),
             'lockers' => $this->rows(
-                'SELECT l.*, t.name AS related_team
+                "SELECT l.*, t.name AS team_label, m.full_name AS member_name
                  FROM lockers l
                  LEFT JOIN teams t ON t.id = l.team_id
-                 ORDER BY l.locker_number'
+                 LEFT JOIN members m ON m.id = l.member_id
+                 ORDER BY l.locker_number"
             ),
-            'plans' => $this->rows('SELECT * FROM plans ORDER BY plan_number'),
+            'plans' => $this->rows(
+                "SELECT p.*, t.name AS owner_team
+                 FROM plans p
+                 LEFT JOIN teams t ON t.id = p.owner_team_id
+                 ORDER BY CASE p.priority WHEN 'بالا' THEN 1 WHEN 'متوسط' THEN 2 ELSE 3 END, p.start_date"
+            ),
             'charges' => $this->rows(
-                'SELECT c.id, c.team_id, t.name AS related_team, c.fiscal_year, c.team_name, c.leader,
-                        c.desk_count, c.month_index, c.month_name, c.amount, c.note,
-                        c.charge_rate, c.rent_rate, c.source_file, c.source_sheet
+                'SELECT c.*, t.name AS team_name, t.entity_type
                  FROM charges c
                  LEFT JOIN teams t ON t.id = c.team_id
-                 ORDER BY c.fiscal_year, c.team_name, c.month_index'
+                 ORDER BY c.fiscal_year, t.name, c.month_index'
             ),
             'transactions' => $this->rows(
-                'SELECT t.*, b.sheet_name, b.petty_cash_holder
+                "SELECT t.id, t.tx_date, t.description, t.amount, t.category, t.team_id,
+                        t.fiscal_year, t.month_index, t.confirmed, t.notes,
+                        tm.name AS team_name
                  FROM transactions t
-                 JOIN financial_batches b ON b.id = t.batch_id
-                 ORDER BY b.id, t.id'
+                 LEFT JOIN teams tm ON tm.id = t.team_id
+                 ORDER BY t.tx_date DESC, t.id DESC"
             ),
             'rate_settings' => $this->rows('SELECT * FROM rate_settings ORDER BY fiscal_year, effective_from, id'),
-            'backups' => $this->rows('SELECT * FROM import_backups ORDER BY id DESC'),
-            'team_payments' => $this->rows(
-                'SELECT p.*, t.name AS related_team
-                 FROM team_payments p
-                 LEFT JOIN teams t ON t.id = p.team_id
-                 ORDER BY p.fiscal_year, p.month_index, t.name'
+            'team_rates' => $this->rows(
+                'SELECT r.*, t.name AS team_name
+                 FROM team_rates r
+                 LEFT JOIN teams t ON t.id = r.team_id
+                 ORDER BY r.fiscal_year, t.name'
             ),
+            'backups' => $this->rows('SELECT * FROM import_backups ORDER BY id DESC'),
             'warnings' => $this->rows('SELECT * FROM import_warnings ORDER BY id'),
             default => throw new InvalidArgumentException('Unknown resource.'),
         };
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function chargesMatrix(string $fiscalYear): array
+    {
+        $teams = $this->preparedRows(
+            'SELECT id, entity_code, entity_type, name FROM teams ORDER BY entity_type, name'
+        );
+        $months = [];
+        for ($i = 1; $i <= 12; $i++) {
+            $months[] = ['index' => $i, 'name' => $this->monthName($i)];
+        }
+
+        $charges = $this->preparedRows(
+            'SELECT team_id, month_index, charge_amount, rent_amount, amount
+             FROM charges WHERE fiscal_year = :year',
+            ['year' => $fiscalYear]
+        );
+        $payments = $this->preparedRows(
+            "SELECT team_id, month_index, SUM(amount) AS paid
+             FROM transactions
+             WHERE category = 'واریز تیم' AND confirmed = 1 AND fiscal_year = :year
+             GROUP BY team_id, month_index",
+            ['year' => $fiscalYear]
+        );
+
+        $chargeMap = [];
+        foreach ($charges as $row) {
+            $chargeMap[$row['team_id']][$row['month_index']] = $row;
+        }
+        $paymentMap = [];
+        foreach ($payments as $row) {
+            $paymentMap[$row['team_id']][$row['month_index']] = (int) $row['paid'];
+        }
+
+        $rows = [];
+        foreach ($teams as $team) {
+            $cells = [];
+            foreach ($months as $month) {
+                $idx = (int) $month['index'];
+                $due = $chargeMap[$team['id']][$idx] ?? null;
+                $paid = $paymentMap[$team['id']][$idx] ?? 0;
+                $amountDue = (int) ($due['amount'] ?? 0);
+                $cells[] = [
+                    'month_index' => $idx,
+                    'charge_amount' => (int) ($due['charge_amount'] ?? 0),
+                    'rent_amount' => (int) ($due['rent_amount'] ?? 0),
+                    'amount_due' => $amountDue,
+                    'amount_paid' => $paid,
+                    'status' => $amountDue <= 0 ? '—' : ($paid >= $amountDue ? 'پرداخت‌شده' : ($paid > 0 ? 'ناقص' : 'بدهکار')),
+                ];
+            }
+            $rows[] = ['team' => $team, 'cells' => $cells];
+        }
+
+        return ['fiscal_year' => $fiscalYear, 'months' => $months, 'rows' => $rows];
     }
 
     /**
@@ -129,29 +212,55 @@ final class Repository
         if ($team === null) {
             throw new InvalidArgumentException('تیم پیدا نشد.');
         }
-        $name = (string) ($team['name'] ?? '');
-        $leader = (string) ($team['leader'] ?? '');
 
         return [
             'team' => $team,
-            'members' => $this->preparedRows('SELECT * FROM members WHERE team_id = :id ORDER BY id', ['id' => $teamId]),
+            'desks' => $this->preparedRows('SELECT * FROM desks WHERE team_id = :id ORDER BY number', ['id' => $teamId]),
+            'members' => $this->preparedRows(
+                "SELECT m.*, GROUP_CONCAT(d.number ORDER BY d.number) AS desk_numbers
+                 FROM members m
+                 LEFT JOIN member_desks md ON md.member_id = m.id
+                 LEFT JOIN desks d ON d.id = md.desk_id
+                 WHERE m.team_id = :id
+                 GROUP BY m.id
+                 ORDER BY m.full_name",
+                ['id' => $teamId]
+            ),
             'lockers' => $this->preparedRows('SELECT * FROM lockers WHERE team_id = :id ORDER BY locker_number', ['id' => $teamId]),
             'charges' => $this->preparedRows('SELECT * FROM charges WHERE team_id = :id ORDER BY fiscal_year, month_index', ['id' => $teamId]),
-            'payments' => $this->preparedRows('SELECT * FROM team_payments WHERE team_id = :id ORDER BY fiscal_year, month_index', ['id' => $teamId]),
-            'transactions' => $this->preparedRows(
-                'SELECT t.*, b.sheet_name
-                 FROM transactions t
-                 JOIN financial_batches b ON b.id = t.batch_id
-                 WHERE t.description LIKE :name OR t.description LIKE :leader OR t.notes LIKE :name OR t.notes LIKE :leader
-                 ORDER BY t.id',
-                ['name' => '%' . $name . '%', 'leader' => '%' . $leader . '%']
+            'payments' => $this->preparedRows(
+                "SELECT * FROM transactions
+                 WHERE team_id = :id AND category = 'واریز تیم'
+                 ORDER BY fiscal_year, month_index, tx_date",
+                ['id' => $teamId]
             ),
             'summary' => [
                 'charge_total' => $this->preparedScalar('SELECT COALESCE(SUM(amount), 0) FROM charges WHERE team_id = :id', ['id' => $teamId]),
-                'debt_total' => $this->preparedScalar("SELECT COALESCE(SUM(amount_due - amount_paid), 0) FROM team_payments WHERE team_id = :id AND status <> 'پرداخت‌شده'", ['id' => $teamId]),
-                'paid_total' => $this->preparedScalar('SELECT COALESCE(SUM(amount_paid), 0) FROM team_payments WHERE team_id = :id', ['id' => $teamId]),
+                'paid_total' => $this->preparedScalar("SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE team_id = :id AND category = 'واریز تیم' AND confirmed = 1", ['id' => $teamId]),
+                'debt_total' => $this->preparedScalar(
+                    'SELECT COALESCE((SELECT SUM(amount) FROM charges WHERE team_id = :id), 0)
+                          - COALESCE((SELECT SUM(amount) FROM transactions WHERE team_id = :id2 AND category = \'واریز تیم\' AND confirmed = 1), 0)',
+                    ['id' => $teamId, 'id2' => $teamId]
+                ),
             ],
         ];
+    }
+
+    private function debtSql(): string
+    {
+        return 'SELECT COALESCE((SELECT SUM(amount) FROM charges), 0)
+                     - COALESCE((SELECT SUM(amount) FROM transactions WHERE category = \'واریز تیم\' AND confirmed = 1), 0)';
+    }
+
+    private function monthName(int $index): string
+    {
+        $months = [
+            1 => 'فروردین', 2 => 'اردیبهشت', 3 => 'خرداد', 4 => 'تیر',
+            5 => 'مرداد', 6 => 'شهریور', 7 => 'مهر', 8 => 'آبان',
+            9 => 'آذر', 10 => 'دی', 11 => 'بهمن', 12 => 'اسفند',
+        ];
+
+        return $months[$index] ?? '';
     }
 
     public function scalar(string $sql): int
@@ -165,6 +274,7 @@ final class Repository
     public function row(string $sql): ?array
     {
         $row = $this->pdo->query($sql)->fetch();
+
         return $row === false ? null : $row;
     }
 
@@ -183,6 +293,7 @@ final class Repository
     {
         $statement = $this->pdo->prepare($sql);
         $statement->execute($params);
+
         return (int) $statement->fetchColumn();
     }
 
@@ -190,9 +301,10 @@ final class Repository
      * @param array<string, mixed> $params
      * @return array<string, mixed>|null
      */
-    private function preparedRow(string $sql, array $params): ?array
+    private function preparedRow(string $sql, array $params = []): ?array
     {
         $rows = $this->preparedRows($sql, $params);
+
         return $rows[0] ?? null;
     }
 
@@ -200,10 +312,11 @@ final class Repository
      * @param array<string, mixed> $params
      * @return list<array<string, mixed>>
      */
-    private function preparedRows(string $sql, array $params): array
+    private function preparedRows(string $sql, array $params = []): array
     {
         $statement = $this->pdo->prepare($sql);
         $statement->execute($params);
+
         return $statement->fetchAll();
     }
 }

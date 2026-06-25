@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 final class BackupManager
 {
-    private const TABLES = ['teams', 'members', 'lockers', 'plans', 'charges', 'financial_batches', 'transactions'];
+    private const TABLES = ['teams', 'members', 'member_desks', 'desks', 'lockers', 'plans', 'charges', 'transactions', 'team_rates'];
 
     public function __construct(private readonly PDO $pdo)
     {
@@ -49,32 +49,21 @@ final class BackupManager
             "SELECT table_name, payload
              FROM import_backup_items
              WHERE backup_id = :backup_id
-               AND table_name IN ('teams', 'members', 'lockers', 'plans', 'charges', 'financial_batches', 'transactions')
+               AND table_name IN ('teams', 'members', 'member_desks', 'desks', 'lockers', 'plans', 'charges', 'transactions', 'team_rates')
              ORDER BY id"
         );
         $items->execute(['backup_id' => $backupId]);
-        $manualBatchMap = [];
-
         foreach ($items->fetchAll() as $item) {
             $table = (string) $item['table_name'];
             $row = json_decode((string) $item['payload'], true);
             if (!is_array($row) || !$this->isManualRow($table, $row)) {
                 continue;
             }
-            $oldId = (int) ($row['id'] ?? 0);
             unset($row['id']);
             if ($table === 'transactions') {
-                $oldBatchId = (int) ($row['batch_id'] ?? 0);
-                if ($oldBatchId > 0 && isset($manualBatchMap[$oldBatchId])) {
-                    $row['batch_id'] = $manualBatchMap[$oldBatchId];
-                } else {
-                    continue;
-                }
+                unset($row['batch_id']);
             }
-            $newId = $this->insertRow($table, $row);
-            if ($table === 'financial_batches' && $oldId > 0) {
-                $manualBatchMap[$oldId] = $newId;
-            }
+            $this->insertRow($table, $row);
         }
     }
 
@@ -84,7 +73,7 @@ final class BackupManager
     private function isManualRow(string $table, array $row): bool
     {
         if ($table === 'transactions') {
-            return true;
+            return ($row['source_file'] ?? null) === 'manual';
         }
 
         return ($row['source_file'] ?? null) === 'manual';
