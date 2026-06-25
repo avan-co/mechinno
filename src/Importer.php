@@ -268,7 +268,7 @@ final class Importer
         $sql = sprintf(
             'INSERT INTO %s (%s) VALUES (%s)',
             $table,
-            implode(', ', $columns),
+            Sql::columnList($columns),
             implode(', ', $placeholders)
         );
         $statement = $this->pdo->prepare($sql);

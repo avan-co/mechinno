@@ -19,7 +19,7 @@ final class Schema
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
             "CREATE TABLE IF NOT EXISTS teams (
                 id INT AUTO_INCREMENT PRIMARY KEY,
-                row_number INT NULL,
+                `row_number` INT NULL,
                 name VARCHAR(255) NULL,
                 leader VARCHAR(255) NULL,
                 phone VARCHAR(64) NULL,
@@ -35,7 +35,7 @@ final class Schema
             "CREATE TABLE IF NOT EXISTS members (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 team_id INT NULL,
-                row_number INT NULL,
+                `row_number` INT NULL,
                 code VARCHAR(64) NULL,
                 full_name VARCHAR(255) NOT NULL,
                 team_name VARCHAR(255) NULL,
@@ -109,7 +109,7 @@ final class Schema
             "CREATE TABLE IF NOT EXISTS transactions (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 batch_id INT NOT NULL,
-                row_number INT NULL,
+                `row_number` INT NULL,
                 invoice_count VARCHAR(64) NULL,
                 tx_date VARCHAR(32) NULL,
                 description TEXT NULL,
@@ -124,7 +124,7 @@ final class Schema
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 file_name VARCHAR(255) NULL,
                 sheet_name VARCHAR(255) NULL,
-                row_number INT NULL,
+                `row_number` INT NULL,
                 message TEXT NOT NULL,
                 payload TEXT NULL
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",

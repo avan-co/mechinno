@@ -212,7 +212,7 @@ final class Crud
         $statement = $this->pdo->prepare(sprintf(
             'INSERT INTO %s (%s) VALUES (%s)',
             $definition['table'],
-            implode(', ', $columns),
+            Sql::columnList($columns),
             implode(', ', $placeholders)
         ));
         $statement->execute($data);
@@ -253,7 +253,10 @@ final class Crud
             return $this->find($resource, $id);
         }
 
-        $assignments = array_map(static fn (string $column): string => "{$column} = :{$column}", array_keys($data));
+        $assignments = array_map(
+            static fn (string $column): string => Sql::quoteIdentifier($column) . " = :{$column}",
+            array_keys($data)
+        );
         $data['id'] = $id;
         $statement = $this->pdo->prepare(sprintf(
             'UPDATE %s SET %s WHERE id = :id',

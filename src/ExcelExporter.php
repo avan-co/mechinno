@@ -42,7 +42,7 @@ final class ExcelExporter
             ],
             'warnings' => [
                 'title' => 'هشدارهای داده',
-                'query' => 'SELECT file_name, sheet_name, row_number, message, payload FROM import_warnings ORDER BY id',
+                'query' => 'SELECT file_name, sheet_name, `row_number`, message, payload FROM import_warnings ORDER BY id',
                 'headers' => ['فایل', 'شیت', 'ردیف', 'پیام', 'جزئیات'],
             ],
             'rate_settings' => [

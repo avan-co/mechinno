@@ -103,7 +103,7 @@ final class BackupManager
         $statement = $this->pdo->prepare(sprintf(
             'INSERT INTO %s (%s) VALUES (%s)',
             $table,
-            implode(', ', $columns),
+            Sql::columnList($columns),
             implode(', ', $placeholders)
         ));
         $statement->execute($row);
