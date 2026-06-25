@@ -765,13 +765,10 @@ const formatCell = (column, value, row, resource) => {
 };
 
 const resolveColumns = (rows, resource) => {
-  const preferred = resourceColumns[resource];
-  if (!preferred) {
-    return rows.length ? Object.keys(rows[0]).filter((c) => !hiddenColumns.has(c)) : [];
-  }
+  const preferred = resourceColumns[resource] ?? [];
   if (!rows.length) return preferred;
   const available = new Set(Object.keys(rows[0]));
-  return preferred.filter((c) => available.has(c) && !hiddenColumns.has(c));
+  return preferred.filter((c) => available.has(c));
 };
 
 class DataTable extends HTMLElement {

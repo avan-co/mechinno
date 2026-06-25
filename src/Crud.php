@@ -256,7 +256,7 @@ final class Crud
             throw new InvalidArgumentException('رکورد پیدا نشد.');
         }
 
-        return $row;
+        return Repository::stripLegacyColumns($row);
     }
 
     private function definition(string $resource): array
