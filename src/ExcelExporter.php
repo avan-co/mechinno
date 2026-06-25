@@ -45,6 +45,16 @@ final class ExcelExporter
                 'query' => 'SELECT file_name, sheet_name, row_number, message, payload FROM import_warnings ORDER BY id',
                 'headers' => ['فایل', 'شیت', 'ردیف', 'پیام', 'جزئیات'],
             ],
+            'rate_settings' => [
+                'title' => 'نرخ‌ها',
+                'query' => 'SELECT fiscal_year, title, charge_rate, rent_rate, effective_from, notes, created_at FROM rate_settings ORDER BY fiscal_year, effective_from, id',
+                'headers' => ['سال مالی', 'عنوان', 'نرخ شارژ', 'نرخ اجاره', 'تاریخ اثرگذاری', 'توضیحات', 'تاریخ ایجاد'],
+            ],
+            'backups' => [
+                'title' => 'پشتیبان‌ها',
+                'query' => 'SELECT id, created_at, reason, summary FROM import_backups ORDER BY id DESC',
+                'headers' => ['شناسه', 'تاریخ ایجاد', 'دلیل', 'خلاصه'],
+            ],
         ];
     }
 

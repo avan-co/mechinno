@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/Database.php';
 require_once __DIR__ . '/Auth.php';
+require_once __DIR__ . '/JalaliDate.php';
 require_once __DIR__ . '/Schema.php';
+require_once __DIR__ . '/BackupManager.php';
 require_once __DIR__ . '/XlsxReader.php';
 require_once __DIR__ . '/Importer.php';
 require_once __DIR__ . '/Crud.php';

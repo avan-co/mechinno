@@ -4,6 +4,8 @@ const labels = {
   code: "کد",
   full_name: "نام",
   team_name: "تیم/شرکت",
+  team_id: "تیم مرتبط",
+  related_team: "تیم مرتبط",
   name: "نام",
   leader: "سرگروه",
   phone: "تماس",
@@ -46,6 +48,12 @@ const labels = {
   source_sheet: "شیت منبع",
   message: "پیام",
   payload: "جزئیات",
+  backups: "پشتیبان‌ها",
+  reason: "دلیل",
+  summary: "خلاصه",
+  created_at: "تاریخ ایجاد",
+  fiscal_year: "سال مالی",
+  effective_from: "تاریخ اثرگذاری",
 };
 
 const csrfToken = window.MECHINNO?.csrfToken || "";
@@ -59,7 +67,7 @@ const escapeHtml = (value) =>
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
 
-const editableResources = new Set(["members", "teams", "lockers", "plans", "charges", "transactions"]);
+const editableResources = new Set(["members", "teams", "lockers", "plans", "charges", "transactions", "rate_settings"]);
 
 const loadCrudMeta = () => {
   if (!crudMetaPromise) {
@@ -124,6 +132,7 @@ const cardDefinitions = [
   ["expense_total", "هزینه‌ها"],
   ["reserved_lockers", "کمد رزرو"],
   ["warnings", "هشدار داده"],
+  ["backups", "پشتیبان‌ها"],
 ];
 
 const moneyCards = new Set(["charge_total", "income_total", "expense_total"]);
@@ -341,7 +350,8 @@ class DataTable extends HTMLElement {
       wrap.innerHTML = `<div class="empty">رکوردی یافت نشد.</div>`;
       return;
     }
-    const columns = Object.keys(rows[0]).filter((column) => !["source_sheet", "source_file"].includes(column));
+    const hiddenColumns = new Set(["source_sheet", "source_file", "team_id"]);
+    const columns = Object.keys(rows[0]).filter((column) => !hiddenColumns.has(column));
     const head = columns.map((column) => `<th>${escapeHtml(labels[column] || column)}</th>`).join("");
     const editable = this.definition && editableResources.has(this.resource);
     const statusField = this.definition?.status_field;

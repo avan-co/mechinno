@@ -45,6 +45,8 @@ if ($isConfigured) {
             <button class="nav-item" data-section="charges">شارژ</button>
             <button class="nav-item" data-section="transactions">مالی</button>
             <button class="nav-item" data-section="plans">برنامه‌ها</button>
+            <button class="nav-item" data-section="rate_settings">نرخ‌ها</button>
+            <button class="nav-item" data-section="backups">پشتیبان‌ها</button>
             <button class="nav-item" data-section="warnings">کیفیت داده</button>
           </nav>
           <a class="export-all" href="export.php?report=all">دریافت گزارش کامل Excel</a>
@@ -117,6 +119,12 @@ if ($isConfigured) {
           </section>
           <section id="plans" class="section">
             <data-table title="برنامه‌ها" endpoint="api.php?resource=plans" export-url="export.php?report=plans"></data-table>
+          </section>
+          <section id="rate_settings" class="section">
+            <data-table title="تنظیمات نرخ شارژ و اجاره" endpoint="api.php?resource=rate_settings" export-url="export.php?report=rate_settings"></data-table>
+          </section>
+          <section id="backups" class="section">
+            <data-table title="پشتیبان‌های import" endpoint="api.php?resource=backups" export-url="export.php?report=backups"></data-table>
           </section>
           <section id="warnings" class="section">
             <data-table title="هشدارهای کیفیت داده" endpoint="api.php?resource=warnings" export-url="export.php?report=warnings"></data-table>

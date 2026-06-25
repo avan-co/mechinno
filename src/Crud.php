@@ -17,6 +17,7 @@ final class Crud
                 'status_field' => null,
                 'source' => true,
                 'fields' => [
+                    'team_id' => ['label' => 'تیم مرتبط', 'type' => 'select', 'options' => []],
                     'code' => ['label' => 'کد', 'type' => 'text'],
                     'full_name' => ['label' => 'نام', 'type' => 'text', 'required' => true],
                     'team_name' => ['label' => 'تیم/شرکت', 'type' => 'text'],
@@ -41,7 +42,7 @@ final class Crud
                     'desk_count' => ['label' => 'تعداد میز', 'type' => 'number'],
                     'lockers' => ['label' => 'کمد', 'type' => 'text'],
                     'power_strips' => ['label' => 'سه‌راهی', 'type' => 'text'],
-                    'joined_at' => ['label' => 'تاریخ عضویت', 'type' => 'text', 'placeholder' => '1404/01/01'],
+                    'joined_at' => ['label' => 'تاریخ عضویت', 'type' => 'date', 'placeholder' => '1404/01/01'],
                     'warning' => ['label' => 'اخطار', 'type' => 'text'],
                     'notes' => ['label' => 'توضیحات', 'type' => 'textarea'],
                 ],
@@ -54,10 +55,11 @@ final class Crud
                 'status_options' => ['تخصیص یافته', 'رزرو', 'خالی', 'خراب'],
                 'source' => true,
                 'fields' => [
+                    'team_id' => ['label' => 'تیم مرتبط', 'type' => 'select', 'options' => []],
                     'locker_number' => ['label' => 'شماره کمد', 'type' => 'number', 'required' => true],
                     'status' => ['label' => 'وضعیت', 'type' => 'select', 'options' => ['تخصیص یافته', 'رزرو', 'خالی', 'خراب']],
                     'assigned_to' => ['label' => 'اختصاص به', 'type' => 'text'],
-                    'delivered_at' => ['label' => 'تاریخ تحویل', 'type' => 'text', 'placeholder' => '1404/01/01'],
+                    'delivered_at' => ['label' => 'تاریخ تحویل', 'type' => 'date', 'placeholder' => '1404/01/01'],
                     'key_number' => ['label' => 'شماره کلید', 'type' => 'text'],
                     'spare_key' => ['label' => 'کلید یدک', 'type' => 'select', 'options' => ['دارد', 'ندارد']],
                     'notes' => ['label' => 'توضیحات', 'type' => 'textarea'],
@@ -87,8 +89,9 @@ final class Crud
                 'status_field' => null,
                 'source' => true,
                 'fields' => [
+                    'team_id' => ['label' => 'تیم مرتبط', 'type' => 'select', 'options' => []],
                     'fiscal_year' => ['label' => 'سال', 'type' => 'text', 'required' => true],
-                    'team_name' => ['label' => 'تیم', 'type' => 'text', 'required' => true],
+                    'team_name' => ['label' => 'تیم', 'type' => 'text'],
                     'leader' => ['label' => 'سرگروه', 'type' => 'text'],
                     'desk_count' => ['label' => 'تعداد میز', 'type' => 'number'],
                     'month_index' => ['label' => 'ماه', 'type' => 'select', 'options' => self::monthOptions(), 'required' => true],
@@ -106,13 +109,28 @@ final class Crud
                 'status_options' => ['درآمد', 'هزینه', 'دریافت', 'نامشخص'],
                 'source' => false,
                 'fields' => [
-                    'tx_date' => ['label' => 'تاریخ', 'type' => 'text', 'placeholder' => '1404/01/01'],
+                    'tx_date' => ['label' => 'تاریخ', 'type' => 'date', 'placeholder' => '1404/01/01'],
                     'description' => ['label' => 'شرح', 'type' => 'textarea', 'required' => true],
                     'amount' => ['label' => 'مبلغ', 'type' => 'number', 'required' => true],
                     'category' => ['label' => 'دسته', 'type' => 'select', 'options' => ['درآمد', 'هزینه', 'دریافت', 'نامشخص']],
                     'invoice_count' => ['label' => 'تعداد فاکتور', 'type' => 'text'],
                     'notes' => ['label' => 'توضیحات', 'type' => 'textarea'],
                     'suspected_amount_note' => ['label' => 'مبلغ مشکوک در توضیحات', 'type' => 'number'],
+                ],
+            ],
+            'rate_settings' => [
+                'table' => 'rate_settings',
+                'title' => 'نرخ شارژ/اجاره',
+                'order' => 'fiscal_year, id',
+                'status_field' => null,
+                'source' => false,
+                'fields' => [
+                    'fiscal_year' => ['label' => 'سال مالی', 'type' => 'text', 'required' => true],
+                    'title' => ['label' => 'عنوان', 'type' => 'text', 'required' => true],
+                    'charge_rate' => ['label' => 'نرخ شارژ هر میز', 'type' => 'number', 'required' => true],
+                    'rent_rate' => ['label' => 'نرخ اجاره هر میز', 'type' => 'number'],
+                    'effective_from' => ['label' => 'تاریخ اثرگذاری', 'type' => 'date', 'placeholder' => '1404/01/01'],
+                    'notes' => ['label' => 'توضیحات', 'type' => 'textarea'],
                 ],
             ],
         ];
@@ -128,7 +146,13 @@ final class Crud
     public function meta(): array
     {
         $resources = [];
+        $teamOptions = $this->teamOptions();
         foreach (self::definitions() as $name => $definition) {
+            foreach ($definition['fields'] as $field => $meta) {
+                if ($field === 'team_id') {
+                    $definition['fields'][$field]['options'] = $teamOptions;
+                }
+            }
             $resources[$name] = [
                 'title' => $definition['title'],
                 'fields' => $definition['fields'],
@@ -148,8 +172,10 @@ final class Crud
     {
         $definition = $this->definition($resource);
         $data = $this->sanitizePayload($definition, $payload, true);
+        $this->applyRelations($resource, $data);
         if ($resource === 'charges') {
             $data['month_name'] = self::monthName((int) ($data['month_index'] ?? 0));
+            $this->applyDefaultRates($data);
         }
         if ($resource === 'transactions') {
             $data['batch_id'] = $this->manualBatchId();
@@ -181,8 +207,16 @@ final class Crud
         $definition = $this->definition($resource);
         $this->assertExists($definition, $id);
         $data = $this->sanitizePayload($definition, $payload, false);
+        $this->applyRelations($resource, $data);
         if ($resource === 'charges' && isset($data['month_index'])) {
             $data['month_name'] = self::monthName((int) $data['month_index']);
+        }
+        if ($resource === 'transactions') {
+            $data['batch_id'] = $this->manualBatchId();
+        }
+        if (($definition['source'] ?? false) === true) {
+            $data['source_file'] = 'manual';
+            $data['source_sheet'] = 'panel';
         }
         if ($data === []) {
             return $this->find($resource, $id);
@@ -295,6 +329,9 @@ final class Crud
             }
             return (int) $number;
         }
+        if ($type === 'date') {
+            return JalaliDate::normalize($value);
+        }
 
         return (string) $value;
     }
@@ -334,6 +371,85 @@ final class Crud
         $insert->execute();
 
         return (int) $this->pdo->lastInsertId();
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    private function applyRelations(string $resource, array &$data): void
+    {
+        if (!in_array($resource, ['members', 'lockers', 'charges'], true) || empty($data['team_id'])) {
+            return;
+        }
+        $team = $this->teamById((int) $data['team_id']);
+        if ($team === null) {
+            throw new InvalidArgumentException('تیم انتخاب‌شده معتبر نیست.');
+        }
+        if ($resource === 'members') {
+            $data['team_name'] = $team['name'];
+        }
+        if ($resource === 'lockers' && empty($data['assigned_to'])) {
+            $data['assigned_to'] = $team['name'];
+        }
+        if ($resource === 'charges') {
+            $data['team_name'] = $team['name'];
+            $data['leader'] = $team['leader'];
+            if (empty($data['desk_count'])) {
+                $data['desk_count'] = $team['desk_count'];
+            }
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    private function applyDefaultRates(array &$data): void
+    {
+        if (!empty($data['charge_rate']) && !empty($data['rent_rate'])) {
+            return;
+        }
+        $statement = $this->pdo->prepare(
+            'SELECT charge_rate, rent_rate FROM rate_settings
+             WHERE fiscal_year = :fiscal_year
+             ORDER BY effective_from DESC, id DESC
+             LIMIT 1'
+        );
+        $statement->execute(['fiscal_year' => $data['fiscal_year'] ?? '']);
+        $rate = $statement->fetch();
+        if ($rate === false) {
+            return;
+        }
+        $data['charge_rate'] = $data['charge_rate'] ?: $rate['charge_rate'];
+        $data['rent_rate'] = $data['rent_rate'] ?: $rate['rent_rate'];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function teamOptions(): array
+    {
+        $options = [];
+        foreach ($this->pdo->query('SELECT id, name, leader FROM teams ORDER BY name')->fetchAll() as $team) {
+            $label = trim((string) ($team['name'] ?? ''));
+            if (($team['leader'] ?? '') !== '') {
+                $label .= ' - ' . $team['leader'];
+            }
+            $options[(string) $team['id']] = $label;
+        }
+
+        return $options;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function teamById(int $id): ?array
+    {
+        $statement = $this->pdo->prepare('SELECT id, name, leader, desk_count FROM teams WHERE id = :id');
+        $statement->execute(['id' => $id]);
+        $team = $statement->fetch();
+
+        return $team === false ? null : $team;
     }
 
     /**
