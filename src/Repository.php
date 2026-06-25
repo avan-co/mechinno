@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 final class Repository
 {
+    /** @var list<string> Legacy DB columns that must never appear in API/UI. */
+    private const LEGACY_COLUMNS = ['row_number', 'lockers', 'power_strips', 'rent_rate'];
+
     public function __construct(private readonly PDO $pdo)
     {
     }
@@ -223,7 +226,10 @@ final class Repository
         $sql = $this->resourceSql($name);
         $total = $this->resourceCount($name);
         $offset = ($page - 1) * $perPage;
-        $rows = $this->rows($sql . ' LIMIT ' . $perPage . ' OFFSET ' . $offset);
+        $rows = array_map(
+            fn (array $row): array => $this->stripLegacyColumns($row),
+            $this->rows($sql . ' LIMIT ' . $perPage . ' OFFSET ' . $offset)
+        );
 
         return [
             'rows' => $rows,
@@ -255,7 +261,10 @@ final class Repository
      */
     public function resource(string $name): array
     {
-        return $this->rows($this->resourceSql($name));
+        return array_map(
+            fn (array $row): array => $this->stripLegacyColumns($row),
+            $this->rows($this->resourceSql($name))
+        );
     }
 
     private function resourceSql(string $name): string
@@ -273,7 +282,8 @@ final class Repository
                  FROM members m
                  LEFT JOIN teams t ON t.id = m.team_id
                  ORDER BY m.id",
-            'desks' => "SELECT d.*, t.name AS team_name, t.entity_type
+            'desks' => "SELECT d.id, d.number, d.team_id, d.usage_type, d.formal_seats, d.informal_seats,
+                        d.row_index, d.col_index, d.notes, t.name AS team_name, t.entity_type
                  FROM desks d
                  LEFT JOIN teams t ON t.id = d.team_id
                  ORDER BY d.number",
@@ -282,7 +292,9 @@ final class Repository
                  FROM lockers l
                  LEFT JOIN teams t ON t.id = l.team_id
                  ORDER BY l.locker_number",
-            'charges' => 'SELECT c.*, t.name AS team_name, t.entity_type
+            'charges' => 'SELECT c.id, c.team_id, c.fiscal_year, c.month_index, c.month_name,
+                        c.charge_amount, c.rent_amount, c.amount, c.note,
+                        t.name AS team_name, t.entity_type
                  FROM charges c
                  LEFT JOIN teams t ON t.id = c.team_id
                  ORDER BY c.fiscal_year, t.name, c.month_index',
@@ -401,8 +413,11 @@ final class Repository
         }
 
         return [
-            'team' => $team,
-            'desks' => $this->preparedRows('SELECT * FROM desks WHERE team_id = :id ORDER BY number', ['id' => $teamId]),
+            'team' => $this->stripLegacyColumns($team),
+            'desks' => array_map(
+                fn (array $row): array => $this->stripLegacyColumns($row),
+                $this->preparedRows('SELECT id, number, team_id, usage_type, formal_seats, informal_seats, row_index, col_index, notes FROM desks WHERE team_id = :id ORDER BY number', ['id' => $teamId])
+            ),
             'members' => $this->preparedRows(
                 'SELECT m.id, m.member_code, m.full_name, m.access_code, m.phone, m.national_id, m.notes
                  FROM members m WHERE m.team_id = :id ORDER BY m.full_name',
@@ -504,5 +519,18 @@ final class Repository
         $statement->execute($params);
 
         return $statement->fetchAll();
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     * @return array<string, mixed>
+     */
+    private function stripLegacyColumns(array $row): array
+    {
+        foreach (self::LEGACY_COLUMNS as $column) {
+            unset($row[$column]);
+        }
+
+        return $row;
     }
 }

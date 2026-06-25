@@ -104,6 +104,18 @@ $ratesPage = $repo->paginatedResource('rate_settings', 1, 25);
 $rateCols = array_keys($ratesPage['rows'][0] ?? []);
 $assert(!in_array('rent_rate', $rateCols, true), 'rates: no rent_rate');
 
+$reflection = new ReflectionClass($repo);
+$strip = $reflection->getMethod('stripLegacyColumns');
+$strip->setAccessible(true);
+$stripped = $strip->invoke($repo, [
+    'name' => 'Test',
+    'row_number' => 1,
+    'lockers' => 2,
+    'power_strips' => 3,
+    'rent_rate' => 4,
+]);
+$assert(!isset($stripped['row_number'], $stripped['lockers'], $stripped['power_strips'], $stripped['rent_rate']), 'legacy columns stripped');
+
 $matrix = $repo->chargesMatrix('1405');
 $assert(count($matrix['rows']) === 1, 'charges matrix has one team');
 $assert($matrix['rows'][0]['cells'][0]['amount_due'] === 600, 'Farvardin due amount');
