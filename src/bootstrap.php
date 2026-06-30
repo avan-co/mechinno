@@ -101,9 +101,21 @@ function require_csrf_html(): ?string
     return null;
 }
 
+function log_exception(Throwable $exception): void
+{
+    $message = sprintf(
+        '[%s] %s in %s:%d',
+        $exception::class,
+        $exception->getMessage(),
+        $exception->getFile(),
+        $exception->getLine()
+    );
+    error_log($message);
+}
+
 function safe_error_message(Throwable $exception): string
 {
-    error_log($exception->__toString());
+    log_exception($exception);
     try {
         $config = app_configured() ? app_config() : [];
         if ((bool) ($config['debug'] ?? false)) {
