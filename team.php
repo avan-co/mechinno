@@ -78,6 +78,7 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
             <button class="nav-item" data-section="desks" type="button">میزها</button>
             <button class="nav-item" data-section="lockers" type="button">کمدها</button>
             <button class="nav-item" data-section="charges" type="button">شارژ و پرداخت</button>
+            <button class="nav-item" data-section="payments" type="button">اعلام واریز</button>
           </nav>
           <div class="sidebar-foot">
             <a class="logout-link" href="logout.php">خروج</a>
@@ -92,14 +93,14 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
               <h1 id="pageTitle"><?= e($team['name']) ?></h1>
             </div>
             <div class="topbar-actions">
-              <span class="role-chip">پنل نهاد — مشاهده</span>
+              <span class="role-chip">پنل نهاد</span>
               <span class="date-chip"><?= e($today['formatted']) ?></span>
               <button class="icon-btn" id="themeToggle" type="button" title="تغییر تم">◐</button>
             </div>
           </header>
 
           <main class="content">
-            <p class="page-subtitle" id="pageSubtitle">وضعیت نهاد، اعضا، میزها و شارژ — فقط مشاهده</p>
+            <p class="page-subtitle" id="pageSubtitle">مشاهده وضعیت نهاد، ثبت عضو و اعلام واریز</p>
 
             <section id="overview" class="section active">
               <div id="cards" class="stat-cards"></div>
@@ -123,23 +124,16 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
             </section>
 
             <section id="members" class="section">
+              <p class="hint">می‌توانید عضو جدید ثبت کنید. تا زمان تأیید مدیر، وضعیت «در انتظار» نمایش داده می‌شود.</p>
               <data-table title="اعضای نهاد" endpoint="api.php?resource=members"></data-table>
             </section>
 
             <section id="desks" class="section">
               <article class="panel">
-                <div class="panel-head">
-                  <h2>نقشه میزهای مرکز</h2>
-                  <div class="desk-legend">
-                    <span class="legend-item legend-free">آزاد</span>
-                    <span class="legend-item legend-occupied">میز نهاد شما</span>
-                    <span class="legend-item">سایر نهادها</span>
-                  </div>
-                </div>
-                <p class="hint">میزهای سبز متعلق به نهاد شماست. میزهای اشغال‌شده توسط دیگران فقط به‌صورت «نهاد دیگر» نمایش داده می‌شوند.</p>
-                <div id="deskGrid" class="desk-map"></div>
+                <div class="panel-head"><h2>میزهای اختصاص‌یافته</h2></div>
+                <p class="hint">شماره میزهای تخصیص‌یافته به نهاد شما:</p>
+                <div id="teamDeskNumbers" class="desk-number-list">در حال بارگذاری…</div>
               </article>
-              <data-table title="جزئیات میزهای نهاد" endpoint="api.php?resource=desks"></data-table>
             </section>
 
             <section id="lockers" class="section">
@@ -156,6 +150,16 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
               </article>
               <data-table title="جزئیات شارژ" endpoint="api.php?resource=charges"></data-table>
             </section>
+
+            <section id="payments" class="section">
+              <article class="panel" id="paymentGuidePanel">
+                <div class="panel-head"><h2>راهنمای پرداخت شارژ</h2></div>
+                <div id="paymentGuideContent" class="payment-guide">در حال بارگذاری…</div>
+              </article>
+              <p class="hint">پس از واریز، اعلام کنید. واریزهای در انتظار در جدول اول نمایش داده می‌شوند.</p>
+              <data-table title="اعلام‌های در انتظار تأیید" endpoint="api.php?resource=transactions" data-payment-filter="pending"></data-table>
+              <data-table title="سوابق پرداخت تأییدشده" endpoint="api.php?resource=payment-history"></data-table>
+            </section>
           </main>
         </div>
       </div>
@@ -171,6 +175,7 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
           panel: "team",
           role: "<?= e($authContext['role']) ?>",
           canWrite: false,
+          canTeamSubmit: true,
           teamId: <?= (int) $teamId ?>,
           teamName: "<?= e($team['name'] ?? '') ?>",
           username: "<?= e($authContext['username']) ?>",

@@ -9,6 +9,8 @@ require_once __DIR__ . '/Auth.php';
 require_once __DIR__ . '/Access.php';
 require_once __DIR__ . '/UserAccounts.php';
 require_once __DIR__ . '/EntityAccounts.php';
+require_once __DIR__ . '/Workflow.php';
+require_once __DIR__ . '/CenterSettings.php';
 require_once __DIR__ . '/JalaliDate.php';
 require_once __DIR__ . '/Schema.php';
 require_once __DIR__ . '/Installer.php';

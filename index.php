@@ -112,6 +112,12 @@ $assetVer = (string) max(
               <span class="nav-icon nav-icon--pink"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4Zm2 2v2h12V7Zm0 4v2h8v-2Z" fill="currentColor"/></svg></span>
               مالی
             </button>
+            <?php if (Access::canWrite()): ?>
+            <button class="nav-item" data-section="development" type="button">
+              <span class="nav-icon nav-icon--purple"><svg viewBox="0 0 24 24"><path d="M4 4h16v4H4V4Zm0 6h10v4H4v-4Zm0 6h16v4H4v-4Z" fill="currentColor"/></svg></span>
+              برنامه توسعه
+            </button>
+            <?php endif; ?>
             <?php if (Access::isAdmin()): ?>
             <button class="nav-item" data-section="users" type="button">
               <span class="nav-icon nav-icon--purple"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm-8 9a8 8 0 0 1 16 0Z" fill="currentColor"/></svg></span>
@@ -179,7 +185,7 @@ $assetVer = (string) max(
                   <div id="currentMonthSummary" class="month-grid"></div>
                 </article>
                 <article class="panel">
-                  <div class="panel-head"><h2>نیاز به اقدام</h2></div>
+                  <div class="panel-head"><h2>کارهای امروز</h2><span class="hint">اولویت‌بندی اقدامات فوری</span></div>
                   <div id="actionItems" class="action-list"></div>
                 </article>
               </div>
@@ -196,7 +202,11 @@ $assetVer = (string) max(
             </section>
 
             <section id="members" class="section">
-              <data-table title="اعضا" endpoint="api.php?resource=members"></data-table>
+              <p class="hint">اعضای تأییدشده در لیست اصلی نمایش داده می‌شوند. درخواست‌های نهادها در جدول «در انتظار تأیید» بررسی می‌شود.</p>
+              <?php if (Access::canWrite()): ?>
+              <data-table title="اعضا — در انتظار تأیید نهاد" endpoint="api.php?resource=pending-members" data-workflow="members" data-table-key="pending-members"></data-table>
+              <?php endif; ?>
+              <data-table title="اعضای تأییدشده" endpoint="api.php?resource=members"></data-table>
             </section>
 
             <section id="desks" class="section">
@@ -232,25 +242,70 @@ $assetVer = (string) max(
                     <?php endif; ?>
                   </div>
                 </div>
-                <p class="hint"><?php if (Access::canWrite()): ?>روی سلول «بدهکار به مرکز» کلیک کنید تا دریافت شارژ ثبت شود.<?php else: ?>وضعیت پرداخت هر نهاد در هر ماه — فقط مشاهده.<?php endif; ?></p>
+                <p class="hint"><?php if (Access::canWrite()): ?>روی سلول «بدهکار به مرکز» کلیک کنید تا <strong>ثبت مستقیم مدیر</strong> انجام شود (بدون صف تأیید). اعلام واریز نهادها جداگانه در بخش مالی بررسی می‌شود.<?php else: ?>وضعیت پرداخت هر نهاد در هر ماه — فقط مشاهده.<?php endif; ?></p>
                 <div id="chargesCollage" class="charges-collage"></div>
               </article>
               <data-table title="ثبت و ویرایش شارژ" endpoint="api.php?resource=charges"></data-table>
             </section>
 
             <section id="transactions" class="section">
-              <div class="filter-bar">
-                <label>فیلتر دسته
-                  <select id="txCategoryFilter" class="year-select">
-                    <option value="">همه</option>
-                    <option value="درآمد">درآمد</option>
-                    <option value="هزینه">هزینه</option>
-                    <option value="واریز تیم">دریافت از نهاد</option>
-                  </select>
-                </label>
+              <p class="hint">شارژ و اجاره از بخش شارژ محاسبه می‌شود. نهادها واریز را اعلام می‌کنند و پس از تأیید شما در درآمد مرکز ثبت می‌شود.</p>
+              <?php if (Access::canWrite()): ?>
+              <article class="panel" id="paymentSettingsPanel">
+                <div class="panel-head">
+                  <h2>اطلاعات واریز شارژ</h2>
+                  <span class="hint">در پنل نهادها نمایش داده می‌شود</span>
+                </div>
+                <form id="paymentSettingsForm" class="crud-grid payment-settings-form">
+                  <label><span>نام بانک</span><input name="bank_name" type="text" /></label>
+                  <label><span>نام صاحب حساب</span><input name="account_holder" type="text" /></label>
+                  <label><span>شماره حساب</span><input name="account_number" type="text" dir="ltr" /></label>
+                  <label><span>شماره کارت</span><input name="card_number" type="text" dir="ltr" placeholder="xxxx-xxxx-xxxx-xxxx" /></label>
+                  <label><span>شماره شبا</span><input name="sheba" type="text" dir="ltr" placeholder="IR..." /></label>
+                  <label class="wide"><span>راهنمای پرداخت برای نهادها</span><textarea name="payment_guide" rows="4"></textarea></label>
+                  <div class="wide form-actions">
+                    <button class="button" type="submit">ذخیره اطلاعات واریز</button>
+                  </div>
+                </form>
+              </article>
+              <data-table title="اعلام واریز — در انتظار تأیید" endpoint="api.php?resource=pending-payments" data-workflow="payments" data-table-key="pending-payments"></data-table>
+              <?php endif; ?>
+              <div class="grid two finance-actions">
+                <article class="panel">
+                  <div class="panel-head">
+                    <h2>درآمد دستی</h2>
+                    <?php if (Access::canWrite()): ?>
+                    <button class="button ghost" type="button" id="addIncomeButton">+ درآمد</button>
+                    <?php endif; ?>
+                  </div>
+                  <p class="hint">درآمدهای غیر از شارژ نهادها (اجاره سالن، فروش خدمات و …)</p>
+                  <data-table title="" endpoint="api.php?resource=transactions" data-tx-filter="درآمد"></data-table>
+                </article>
+                <article class="panel">
+                  <div class="panel-head">
+                    <h2>هزینه‌ها</h2>
+                    <?php if (Access::canWrite()): ?>
+                    <button class="button ghost" type="button" id="addExpenseButton">+ هزینه</button>
+                    <?php endif; ?>
+                  </div>
+                  <p class="hint">هزینه‌های جاری و سرمایه‌ای مرکز</p>
+                  <data-table title="" endpoint="api.php?resource=transactions" data-tx-filter="هزینه"></data-table>
+                </article>
               </div>
-              <data-table title="مالی — دریافت و هزینه" endpoint="api.php?resource=transactions"></data-table>
+              <data-table title="دریافت‌های تأییدشده از نهادها" endpoint="api.php?resource=payment-history"></data-table>
             </section>
+
+            <?php if (Access::canWrite()): ?>
+            <section id="development" class="section">
+              <p class="hint">برنامه‌ریزی توسعه مرکز — ایده‌ها، اقدامات و کارهای برنامه‌ریزی‌شده.</p>
+              <div id="devProgramSummary" class="dev-summary"></div>
+              <article class="panel">
+                <div class="panel-head"><h2>تابلوی برنامه (Kanban)</h2></div>
+                <div id="devKanban" class="dev-kanban"></div>
+              </article>
+              <data-table title="فهرست برنامه توسعه" endpoint="api.php?resource=development_plans"></data-table>
+            </section>
+            <?php endif; ?>
 
             <?php if (Access::isAdmin()): ?>
             <section id="users" class="section">
@@ -273,6 +328,7 @@ $assetVer = (string) max(
           panel: "<?= e($authContext['panel']) ?>",
           role: "<?= e($authContext['role']) ?>",
           canWrite: <?= $authContext['canWrite'] ? 'true' : 'false' ?>,
+          canTeamSubmit: <?= ($authContext['canTeamSubmit'] ?? false) ? 'true' : 'false' ?>,
           username: "<?= e($authContext['username']) ?>",
         };
       </script>
