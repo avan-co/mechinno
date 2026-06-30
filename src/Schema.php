@@ -20,6 +20,7 @@ final class Schema
     public static function reset(PDO $pdo): void
     {
         $tables = [
+            'development_plans',
             'panel_users',
             'transactions',
             'charges',
@@ -194,17 +195,20 @@ final class Schema
                 UNIQUE KEY uniq_panel_users_team (team_id, role),
                 INDEX idx_panel_users_team (team_id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
-            "CREATE TABLE IF NOT EXISTS panel_users (
+            "CREATE TABLE IF NOT EXISTS development_plans (
                 id INT AUTO_INCREMENT PRIMARY KEY,
-                username VARCHAR(64) NOT NULL,
-                password_hash VARCHAR(255) NOT NULL,
-                role VARCHAR(32) NOT NULL,
-                team_id INT NULL,
-                full_name VARCHAR(255) NULL,
-                is_active TINYINT NOT NULL DEFAULT 1,
-                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE KEY uniq_panel_users_username (username),
-                INDEX idx_panel_users_team (team_id)
+                title VARCHAR(255) NOT NULL,
+                description TEXT NULL,
+                category VARCHAR(32) NOT NULL DEFAULT 'idea',
+                priority VARCHAR(16) NOT NULL DEFAULT 'medium',
+                status VARCHAR(32) NOT NULL DEFAULT 'open',
+                due_date VARCHAR(32) NULL,
+                notes TEXT NULL,
+                sort_order INT NOT NULL DEFAULT 0,
+                created_at VARCHAR(32) NOT NULL,
+                updated_at VARCHAR(32) NULL,
+                INDEX idx_dev_plans_status (status),
+                INDEX idx_dev_plans_category (category)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
         ];
 
@@ -226,7 +230,8 @@ final class Schema
             CREATE TABLE IF NOT EXISTS import_warnings (id INTEGER PRIMARY KEY AUTOINCREMENT, file_name TEXT, sheet_name TEXT, source_row INTEGER, message TEXT NOT NULL, payload TEXT);
             CREATE TABLE IF NOT EXISTS import_backups (id INTEGER PRIMARY KEY AUTOINCREMENT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, reason TEXT, summary TEXT);
             CREATE TABLE IF NOT EXISTS import_backup_items (id INTEGER PRIMARY KEY AUTOINCREMENT, backup_id INTEGER NOT NULL, table_name TEXT NOT NULL, row_id INTEGER, payload TEXT NOT NULL);
-            CREATE TABLE IF NOT EXISTS panel_users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, password_plain TEXT, role TEXT NOT NULL, team_id INTEGER, full_name TEXT, is_active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(team_id, role));"
+            CREATE TABLE IF NOT EXISTS panel_users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, password_plain TEXT, role TEXT NOT NULL, team_id INTEGER, full_name TEXT, is_active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(team_id, role));
+            CREATE TABLE IF NOT EXISTS development_plans (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, description TEXT, category TEXT NOT NULL DEFAULT 'idea', priority TEXT NOT NULL DEFAULT 'medium', status TEXT NOT NULL DEFAULT 'open', due_date TEXT, notes TEXT, sort_order INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, updated_at TEXT);"
         );
     }
 
@@ -241,6 +246,10 @@ final class Schema
                 'member_code' => 'VARCHAR(32) NULL',
                 'access_code' => 'VARCHAR(64) NULL',
                 'locker_id' => 'INT NULL',
+                'approval_status' => "VARCHAR(32) NOT NULL DEFAULT 'approved'",
+                'submitted_at' => 'VARCHAR(32) NULL',
+                'reviewed_at' => 'VARCHAR(32) NULL',
+                'rejection_reason' => 'TEXT NULL',
             ],
             'lockers' => [
                 'team_id' => 'INT NULL',
@@ -265,6 +274,10 @@ final class Schema
                 'month_index' => 'INT NULL',
                 'confirmed' => 'TINYINT NOT NULL DEFAULT 1',
                 'source_file' => 'VARCHAR(255) NULL',
+                'payment_status' => "VARCHAR(32) NULL DEFAULT 'approved'",
+                'payment_reference' => 'VARCHAR(128) NULL',
+                'announced_at' => 'VARCHAR(32) NULL',
+                'reviewed_at' => 'VARCHAR(32) NULL',
             ],
             'panel_users' => [
                 'password_plain' => 'VARCHAR(64) NULL',
@@ -284,6 +297,14 @@ final class Schema
 
         if (self::columnExists($pdo, 'members', 'code') && self::columnExists($pdo, 'members', 'access_code')) {
             $pdo->exec("UPDATE members SET access_code = code WHERE (access_code IS NULL OR access_code = '') AND code IS NOT NULL");
+        }
+
+        if (self::columnExists($pdo, 'members', 'approval_status')) {
+            $pdo->exec("UPDATE members SET approval_status = 'approved' WHERE approval_status IS NULL OR approval_status = ''");
+        }
+        if (self::columnExists($pdo, 'transactions', 'payment_status')) {
+            $pdo->exec("UPDATE transactions SET payment_status = 'approved' WHERE payment_status IS NULL OR payment_status = ''");
+            $pdo->exec("UPDATE transactions SET payment_status = 'pending', confirmed = 0 WHERE category = 'واریز تیم' AND confirmed = 0");
         }
     }
 

@@ -112,6 +112,12 @@ $assetVer = (string) max(
               <span class="nav-icon nav-icon--pink"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4Zm2 2v2h12V7Zm0 4v2h8v-2Z" fill="currentColor"/></svg></span>
               مالی
             </button>
+            <?php if (Access::canWrite()): ?>
+            <button class="nav-item" data-section="development" type="button">
+              <span class="nav-icon nav-icon--purple"><svg viewBox="0 0 24 24"><path d="M4 4h16v4H4V4Zm0 6h10v4H4v-4Zm0 6h16v4H4v-4Z" fill="currentColor"/></svg></span>
+              برنامه توسعه
+            </button>
+            <?php endif; ?>
             <?php if (Access::isAdmin()): ?>
             <button class="nav-item" data-section="users" type="button">
               <span class="nav-icon nav-icon--purple"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm-8 9a8 8 0 0 1 16 0Z" fill="currentColor"/></svg></span>
@@ -196,7 +202,11 @@ $assetVer = (string) max(
             </section>
 
             <section id="members" class="section">
-              <data-table title="اعضا" endpoint="api.php?resource=members"></data-table>
+              <p class="hint">اعضای تأییدشده در لیست اصلی نمایش داده می‌شوند. درخواست‌های نهادها در جدول «در انتظار تأیید» بررسی می‌شود.</p>
+              <?php if (Access::canWrite()): ?>
+              <data-table title="اعضا — در انتظار تأیید نهاد" endpoint="api.php?resource=pending-members" data-workflow="members"></data-table>
+              <?php endif; ?>
+              <data-table title="اعضای تأییدشده" endpoint="api.php?resource=members"></data-table>
             </section>
 
             <section id="desks" class="section">
@@ -239,18 +249,42 @@ $assetVer = (string) max(
             </section>
 
             <section id="transactions" class="section">
-              <div class="filter-bar">
-                <label>فیلتر دسته
-                  <select id="txCategoryFilter" class="year-select">
-                    <option value="">همه</option>
-                    <option value="درآمد">درآمد</option>
-                    <option value="هزینه">هزینه</option>
-                    <option value="واریز تیم">دریافت از نهاد</option>
-                  </select>
-                </label>
+              <p class="hint">شارژ و اجاره از بخش شارژ محاسبه می‌شود. نهادها واریز را اعلام می‌کنند و پس از تأیید شما در درآمد مرکز ثبت می‌شود.</p>
+              <?php if (Access::canWrite()): ?>
+              <data-table title="اعلام واریز — در انتظار تأیید" endpoint="api.php?resource=pending-payments" data-workflow="payments"></data-table>
+              <?php endif; ?>
+              <div class="grid two finance-actions">
+                <article class="panel">
+                  <div class="panel-head">
+                    <h2>درآمد دستی</h2>
+                    <?php if (Access::canWrite()): ?>
+                    <button class="button ghost" type="button" id="addIncomeButton">+ درآمد</button>
+                    <?php endif; ?>
+                  </div>
+                  <p class="hint">درآمدهای غیر از شارژ نهادها (اجاره سالن، فروش خدمات و …)</p>
+                  <data-table title="" endpoint="api.php?resource=transactions" data-tx-filter="درآمد"></data-table>
+                </article>
+                <article class="panel">
+                  <div class="panel-head">
+                    <h2>هزینه‌ها</h2>
+                    <?php if (Access::canWrite()): ?>
+                    <button class="button ghost" type="button" id="addExpenseButton">+ هزینه</button>
+                    <?php endif; ?>
+                  </div>
+                  <p class="hint">هزینه‌های جاری و سرمایه‌ای مرکز</p>
+                  <data-table title="" endpoint="api.php?resource=transactions" data-tx-filter="هزینه"></data-table>
+                </article>
               </div>
-              <data-table title="مالی — دریافت و هزینه" endpoint="api.php?resource=transactions"></data-table>
+              <data-table title="دریافت‌های تأییدشده از نهادها" endpoint="api.php?resource=payment-history"></data-table>
             </section>
+
+            <?php if (Access::canWrite()): ?>
+            <section id="development" class="section">
+              <p class="hint">برنامه‌ریزی توسعه مرکز — ایده‌ها، اقدامات لازم و کارهای برنامه‌ریزی‌شده را اینجا مدیریت کنید.</p>
+              <div id="devProgramSummary" class="dev-summary"></div>
+              <data-table title="برنامه توسعه" endpoint="api.php?resource=development_plans"></data-table>
+            </section>
+            <?php endif; ?>
 
             <?php if (Access::isAdmin()): ?>
             <section id="users" class="section">
@@ -273,6 +307,7 @@ $assetVer = (string) max(
           panel: "<?= e($authContext['panel']) ?>",
           role: "<?= e($authContext['role']) ?>",
           canWrite: <?= $authContext['canWrite'] ? 'true' : 'false' ?>,
+          canTeamSubmit: <?= ($authContext['canTeamSubmit'] ?? false) ? 'true' : 'false' ?>,
           username: "<?= e($authContext['username']) ?>",
         };
       </script>

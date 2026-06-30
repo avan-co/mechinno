@@ -23,17 +23,19 @@ final class Repository
 
         return [
             'cards' => [
-                'members' => $this->scalar('SELECT COUNT(*) FROM members'),
+                'members' => $this->scalar("SELECT COUNT(*) FROM members WHERE approval_status = 'approved' OR approval_status IS NULL"),
                 'teams' => $this->scalar('SELECT COUNT(*) FROM teams'),
                 'desks_occupied' => $this->scalar('SELECT COUNT(*) FROM desks WHERE team_id IS NOT NULL'),
                 'desks_total' => 24,
                 'lockers' => $this->scalar('SELECT COUNT(*) FROM lockers'),
                 'available_lockers' => $this->scalar("SELECT COUNT(*) FROM lockers WHERE status = 'خالی'"),
-                'charge_total' => $this->scalar('SELECT COALESCE(SUM(amount), 0) FROM charges'),
-                'income_total' => $this->scalar('SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE amount > 0'),
-                'expense_total' => $this->scalar('SELECT COALESCE(SUM(ABS(amount)), 0) FROM transactions WHERE amount < 0'),
+                'income_year' => $this->incomeForPeriod($this->currentFiscalYear()),
+                'income_month' => $this->incomeForPeriod($this->currentFiscalYear(), $this->currentMonthIndex()),
+                'expense_year' => $this->expenseForPeriod($this->currentFiscalYear()),
+                'expense_month' => $this->expenseForPeriod($this->currentFiscalYear(), $this->currentMonthIndex()),
                 'debt_total' => $this->scalar($this->debtSql()),
-                'paid_total' => $this->scalar("SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE category = 'واریز تیم' AND confirmed = 1"),
+                'pending_members' => $this->scalar("SELECT COUNT(*) FROM members WHERE approval_status = 'pending'"),
+                'pending_payments' => $this->scalar("SELECT COUNT(*) FROM transactions WHERE category = 'واریز تیم' AND payment_status = 'pending'"),
             ],
             'locker_status' => $this->rows('SELECT status, COUNT(*) AS count FROM lockers GROUP BY status ORDER BY count DESC'),
             'monthly_charges' => $this->rows(
@@ -218,18 +220,39 @@ final class Repository
             ];
         }
 
+        $pendingMembers = $this->scalar("SELECT COUNT(*) FROM members WHERE approval_status = 'pending'");
+        if ($pendingMembers > 0) {
+            $items[] = [
+                'type' => 'member',
+                'label' => number_format($pendingMembers) . ' عضو در انتظار تأیید',
+                'detail' => 'درخواست‌های ثبت عضو از نهادها',
+                'section' => 'members',
+            ];
+        }
+
+        $pendingPayments = $this->scalar("SELECT COUNT(*) FROM transactions WHERE category = 'واریز تیم' AND payment_status = 'pending'");
+        if ($pendingPayments > 0) {
+            $items[] = [
+                'type' => 'payment',
+                'label' => number_format($pendingPayments) . ' واریز در انتظار تأیید',
+                'detail' => 'اعلام پرداخت نهادها — قبل از ثبت در درآمد مرکز',
+                'section' => 'transactions',
+            ];
+        }
+
         return $items;
     }
 
     /**
+     * @param array<string, string> $filters
      * @return array{rows:list<array<string,mixed>>,total:int,page:int,per_page:int,pages:int}
      */
-    public function paginatedResource(string $name, int $page = 1, int $perPage = 25): array
+    public function paginatedResource(string $name, int $page = 1, int $perPage = 25, array $filters = []): array
     {
         $page = max(1, $page);
         $perPage = min(100, max(10, $perPage));
-        $sql = $this->resourceSql($name);
-        $total = $this->resourceCount($name);
+        $sql = $this->resourceSql($name, $filters);
+        $total = $this->resourceCount($name, $filters);
         $offset = ($page - 1) * $perPage;
         $rows = array_map(
             fn (array $row): array => $this->stripLegacyRow($row),
@@ -245,7 +268,10 @@ final class Repository
         ];
     }
 
-    private function resourceCount(string $name): int
+    /**
+     * @param array<string, string> $filters
+     */
+    private function resourceCount(string $name, array $filters = []): int
     {
         $teamId = Access::scopedTeamId();
         if ($teamId !== null) {
@@ -255,23 +281,42 @@ final class Repository
                 'desks' => $this->preparedScalar('SELECT COUNT(*) FROM desks WHERE team_id = :id', ['id' => $teamId]),
                 'lockers' => $this->preparedScalar('SELECT COUNT(*) FROM lockers WHERE team_id = :id', ['id' => $teamId]),
                 'charges' => $this->preparedScalar('SELECT COUNT(*) FROM charges WHERE team_id = :id', ['id' => $teamId]),
+                'transactions' => $this->preparedScalar("SELECT COUNT(*) FROM transactions WHERE team_id = :id AND category = 'واریز تیم'", ['id' => $teamId]),
+                'payment-history' => $this->preparedScalar("SELECT COUNT(*) FROM transactions WHERE team_id = :id AND category = 'واریز تیم'", ['id' => $teamId]),
                 default => 0,
             };
         }
 
         $sql = match ($name) {
             'teams' => 'SELECT COUNT(*) FROM teams',
-            'members' => 'SELECT COUNT(*) FROM members',
+            'members' => "SELECT COUNT(*) FROM members WHERE approval_status = 'approved' OR approval_status IS NULL",
             'desks' => 'SELECT COUNT(*) FROM desks',
             'lockers' => 'SELECT COUNT(*) FROM lockers',
             'charges' => 'SELECT COUNT(*) FROM charges',
-            'transactions' => 'SELECT COUNT(*) FROM transactions',
+            'transactions' => $this->transactionCountSql($filters),
             'rate_settings' => 'SELECT COUNT(*) FROM rate_settings',
             'panel_users' => 'SELECT COUNT(*) FROM panel_users',
+            'development_plans' => 'SELECT COUNT(*) FROM development_plans',
+            'pending-members' => "SELECT COUNT(*) FROM members WHERE approval_status = 'pending'",
+            'pending-payments' => "SELECT COUNT(*) FROM transactions WHERE category = 'واریز تیم' AND payment_status = 'pending'",
+            'payment-history' => "SELECT COUNT(*) FROM transactions WHERE category = 'واریز تیم'",
             default => throw new InvalidArgumentException('Unknown resource.'),
         };
 
         return (int) $this->pdo->query($sql)->fetchColumn();
+    }
+
+    /**
+     * @param array<string, string> $filters
+     */
+    private function transactionCountSql(array $filters): string
+    {
+        $category = $filters['category'] ?? '';
+        if ($category !== '') {
+            return "SELECT COUNT(*) FROM transactions WHERE category = " . $this->pdo->quote($category);
+        }
+
+        return 'SELECT COUNT(*) FROM transactions';
     }
 
     /**
@@ -285,7 +330,10 @@ final class Repository
         );
     }
 
-    private function resourceSql(string $name): string
+    /**
+     * @param array<string, string> $filters
+     */
+    private function resourceSql(string $name, array $filters = []): string
     {
         $teamId = Access::scopedTeamId();
 
@@ -300,12 +348,15 @@ final class Repository
                 . ($teamId !== null ? " WHERE t.id = {$teamId}" : '')
                 . ' ORDER BY t.entity_type, t.name',
             'members' => "SELECT m.id, m.member_code, m.team_id, m.access_code, m.full_name, m.phone, m.national_id, m.notes,
+                        m.approval_status, m.submitted_at, m.reviewed_at, m.rejection_reason,
                         t.name AS team_label, t.entity_type,
                         (SELECT GROUP_CONCAT(d.number ORDER BY d.number)
                          FROM desks d WHERE d.team_id = m.team_id) AS desk_numbers
                  FROM members m
                  LEFT JOIN teams t ON t.id = m.team_id"
-                . ($teamId !== null ? " WHERE m.team_id = {$teamId}" : '')
+                . ($teamId !== null
+                    ? " WHERE m.team_id = {$teamId}"
+                    : " WHERE m.approval_status = 'approved' OR m.approval_status IS NULL")
                 . ' ORDER BY m.id',
             'desks' => "SELECT d.id, d.number, d.team_id, d.usage_type, d.formal_seats, d.informal_seats,
                         d.row_index, d.col_index, d.notes, t.name AS team_name, t.entity_type
@@ -327,7 +378,40 @@ final class Repository
                 . ($teamId !== null ? " WHERE c.team_id = {$teamId}" : '')
                 . ' ORDER BY c.fiscal_year, t.name, c.month_index',
             'transactions' => "SELECT t.id, t.tx_date, t.description, t.amount, t.category, t.team_id,
-                        t.fiscal_year, t.month_index, t.confirmed, t.notes,
+                        t.fiscal_year, t.month_index, t.confirmed, t.notes, t.payment_status, t.payment_reference, t.announced_at,
+                        tm.name AS team_name,
+                        CASE t.month_index
+                            WHEN 1 THEN 'فروردین' WHEN 2 THEN 'اردیبهشت' WHEN 3 THEN 'خرداد'
+                            WHEN 4 THEN 'تیر' WHEN 5 THEN 'مرداد' WHEN 6 THEN 'شهریور'
+                            WHEN 7 THEN 'مهر' WHEN 8 THEN 'آبان' WHEN 9 THEN 'آذر'
+                            WHEN 10 THEN 'دی' WHEN 11 THEN 'بهمن' WHEN 12 THEN 'اسفند'
+                            ELSE ''
+                        END AS month_name
+                 FROM transactions t
+                 LEFT JOIN teams tm ON tm.id = t.team_id"
+                . $this->transactionWhereClause($teamId, $filters)
+                . ' ORDER BY t.tx_date DESC, t.id DESC',
+            'pending-members' => "SELECT m.id, m.member_code, m.full_name, m.phone, m.national_id, m.submitted_at,
+                        t.name AS team_label, t.id AS team_id
+                 FROM members m
+                 INNER JOIN teams t ON t.id = m.team_id
+                 WHERE m.approval_status = 'pending'
+                 ORDER BY m.submitted_at DESC, m.id DESC",
+            'pending-payments' => "SELECT t.id, t.tx_date, t.amount, t.description, t.payment_reference, t.announced_at,
+                        t.fiscal_year, t.month_index, tm.name AS team_name, tm.id AS team_id,
+                        CASE t.month_index
+                            WHEN 1 THEN 'فروردین' WHEN 2 THEN 'اردیبهشت' WHEN 3 THEN 'خرداد'
+                            WHEN 4 THEN 'تیر' WHEN 5 THEN 'مرداد' WHEN 6 THEN 'شهریور'
+                            WHEN 7 THEN 'مهر' WHEN 8 THEN 'آبان' WHEN 9 THEN 'آذر'
+                            WHEN 10 THEN 'دی' WHEN 11 THEN 'بهمن' WHEN 12 THEN 'اسفند'
+                            ELSE ''
+                        END AS month_name
+                 FROM transactions t
+                 INNER JOIN teams tm ON tm.id = t.team_id
+                 WHERE t.category = 'واریز تیم' AND t.payment_status = 'pending'
+                 ORDER BY t.announced_at DESC, t.id DESC",
+            'payment-history' => "SELECT t.id, t.tx_date, t.amount, t.description, t.payment_reference, t.payment_status,
+                        t.fiscal_year, t.month_index, t.confirmed, t.announced_at, t.reviewed_at,
                         tm.name AS team_name,
                         CASE t.month_index
                             WHEN 1 THEN 'فروردین' WHEN 2 THEN 'اردیبهشت' WHEN 3 THEN 'خرداد'
@@ -338,7 +422,11 @@ final class Repository
                         END AS month_name
                  FROM transactions t
                  LEFT JOIN teams tm ON tm.id = t.team_id
-                 ORDER BY t.tx_date DESC, t.id DESC",
+                 WHERE t.category = 'واریز تیم'"
+                . ($teamId !== null ? " AND t.team_id = {$teamId}" : '')
+                . ' ORDER BY t.fiscal_year DESC, t.month_index DESC, t.tx_date DESC',
+            'development_plans' => 'SELECT id, title, description, category, priority, status, due_date, notes, sort_order, created_at, updated_at
+                 FROM development_plans ORDER BY sort_order, id DESC',
             'rate_settings' => 'SELECT id, fiscal_year, title, charge_rate, informal_rent_rate, effective_from, notes
                  FROM rate_settings ORDER BY fiscal_year, effective_from, id',
             'panel_users' => 'SELECT u.id, u.username, u.role, u.team_id, u.full_name, u.is_active, t.name AS team_label
@@ -347,6 +435,23 @@ final class Repository
                  ORDER BY u.username',
             default => throw new InvalidArgumentException('Unknown resource.'),
         };
+    }
+
+    /**
+     * @param array<string, string> $filters
+     */
+    private function transactionWhereClause(?int $teamId, array $filters): string
+    {
+        $clauses = [];
+        if ($teamId !== null) {
+            $clauses[] = "t.team_id = {$teamId}";
+        }
+        $category = $filters['category'] ?? '';
+        if ($category !== '') {
+            $clauses[] = 't.category = ' . $this->pdo->quote($category);
+        }
+
+        return $clauses === [] ? '' : ' WHERE ' . implode(' AND ', $clauses);
     }
 
     /**
@@ -359,13 +464,34 @@ final class Repository
         return [
             'team' => $profile['team'],
             'cards' => [
-                'members' => count($profile['members']),
+                'members' => count(array_filter($profile['members'], static fn ($m) => ($m['approval_status'] ?? 'approved') === 'approved')),
                 'desks' => count($profile['desks']),
+                'desk_numbers' => implode('، ', array_map(static fn ($d) => (string) ($d['number'] ?? ''), $profile['desks'])),
                 'lockers' => count($profile['lockers']),
-                'charge_total' => (int) ($profile['summary']['charge_total'] ?? 0),
-                'paid_total' => (int) ($profile['summary']['paid_total'] ?? 0),
                 'debt_total' => (int) ($profile['summary']['debt_total'] ?? 0),
+                'paid_total' => (int) ($profile['summary']['paid_total'] ?? 0),
+                'pending_payments' => $this->preparedScalar(
+                    "SELECT COUNT(*) FROM transactions WHERE team_id = :id AND category = 'واریز تیم' AND payment_status = 'pending'",
+                    ['id' => $teamId]
+                ),
             ],
+            'payment_history' => $this->preparedRows(
+                "SELECT id, tx_date, fiscal_year, month_index, month_name, amount, payment_status, payment_reference, announced_at, reviewed_at
+                 FROM (
+                    SELECT t.id, t.tx_date, t.fiscal_year, t.month_index, t.amount, t.payment_status, t.payment_reference, t.announced_at, t.reviewed_at,
+                           CASE t.month_index
+                               WHEN 1 THEN 'فروردین' WHEN 2 THEN 'اردیبهشت' WHEN 3 THEN 'خرداد'
+                               WHEN 4 THEN 'تیر' WHEN 5 THEN 'مرداد' WHEN 6 THEN 'شهریور'
+                               WHEN 7 THEN 'مهر' WHEN 8 THEN 'آبان' WHEN 9 THEN 'آذر'
+                               WHEN 10 THEN 'دی' WHEN 11 THEN 'بهمن' WHEN 12 THEN 'اسفند'
+                               ELSE ''
+                           END AS month_name
+                    FROM transactions t
+                    WHERE t.team_id = :team_id AND t.category = 'واریز تیم'
+                 ) q
+                 ORDER BY fiscal_year DESC, month_index DESC, tx_date DESC",
+                ['team_id' => $teamId]
+            ),
             'current_month' => $this->currentMonthSummaryForTeam($teamId),
             'monthly_charges' => $this->preparedRows(
                 'SELECT fiscal_year, month_index, month_name, amount
@@ -525,7 +651,7 @@ final class Repository
                 $this->preparedRows('SELECT id, number, team_id, usage_type, formal_seats, informal_seats, row_index, col_index, notes FROM desks WHERE team_id = :id ORDER BY number', ['id' => $teamId])
             ),
             'members' => $this->preparedRows(
-                'SELECT m.id, m.member_code, m.full_name, m.access_code, m.phone, m.national_id, m.notes
+                'SELECT m.id, m.member_code, m.full_name, m.access_code, m.phone, m.national_id, m.notes, m.approval_status
                  FROM members m WHERE m.team_id = :id ORDER BY m.full_name',
                 ['id' => $teamId]
             ),
@@ -541,6 +667,7 @@ final class Repository
             ),
             'payments' => $this->preparedRows(
                 "SELECT id, tx_date, description, amount, category, fiscal_year, month_index, confirmed, notes,
+                        payment_status, payment_reference, announced_at, reviewed_at,
                         CASE month_index
                             WHEN 1 THEN 'فروردین' WHEN 2 THEN 'اردیبهشت' WHEN 3 THEN 'خرداد'
                             WHEN 4 THEN 'تیر' WHEN 5 THEN 'مرداد' WHEN 6 THEN 'شهریور'
@@ -603,6 +730,60 @@ final class Repository
     {
         return 'SELECT COALESCE((SELECT SUM(amount) FROM charges), 0)
                      - COALESCE((SELECT SUM(amount) FROM transactions WHERE category = \'واریز تیم\' AND confirmed = 1), 0)';
+    }
+
+    private function currentFiscalYear(): string
+    {
+        return (string) JalaliDate::todayParts()['year'];
+    }
+
+    private function currentMonthIndex(): int
+    {
+        return (int) JalaliDate::todayParts()['month'];
+    }
+
+    private function incomeForPeriod(string $year, ?int $month = null): int
+    {
+        if ($month !== null) {
+            return $this->preparedScalar(
+                "SELECT COALESCE(SUM(amount), 0) FROM transactions
+                 WHERE confirmed = 1 AND amount > 0
+                 AND (
+                    (category = 'واریز تیم' AND fiscal_year = :year AND month_index = :month)
+                    OR (category = 'درآمد' AND tx_date LIKE :date_prefix)
+                 )",
+                ['year' => $year, 'month' => $month, 'date_prefix' => sprintf('%s/%02d', $year, $month) . '%']
+            );
+        }
+
+        return $this->preparedScalar(
+            "SELECT COALESCE(SUM(amount), 0) FROM transactions
+             WHERE confirmed = 1 AND amount > 0
+             AND (
+                (category = 'واریز تیم' AND fiscal_year = :year)
+                OR (category = 'درآمد' AND tx_date LIKE :year_prefix)
+             )",
+            ['year' => $year, 'year_prefix' => $year . '%']
+        );
+    }
+
+    private function expenseForPeriod(string $year, ?int $month = null): int
+    {
+        if ($month !== null) {
+            return $this->preparedScalar(
+                "SELECT COALESCE(SUM(ABS(amount)), 0) FROM transactions
+                 WHERE category = 'هزینه' AND confirmed = 1
+                 AND tx_date LIKE :date_prefix",
+                ['date_prefix' => sprintf('%s/%02d', $year, $month) . '%']
+            );
+        }
+
+        return $this->preparedScalar(
+            "SELECT COALESCE(SUM(ABS(amount)), 0) FROM transactions
+             WHERE category = 'هزینه' AND confirmed = 1
+             AND tx_date LIKE :year_prefix",
+            ['year_prefix' => $year . '%']
+        );
     }
 
     private function monthName(int $index): string

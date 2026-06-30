@@ -155,7 +155,8 @@ $assert(count($ownDesks) >= 1, 'team desk map marks own desks');
 
 $teamMeta = $crud->meta();
 $assert(!isset($teamMeta['resources']['panel_users']), 'team crud meta excludes panel_users');
-$assert(!isset($teamMeta['resources']['transactions']), 'team crud meta excludes transactions');
+$assert(isset($teamMeta['resources']['transactions']), 'team crud meta includes transactions');
+$assert(isset($teamMeta['resources']['members']), 'team crud meta includes members');
 $teamSummary = $repo->summary();
 $assert(isset($teamSummary['team']['name']), 'team summary scoped');
 $assert(!isset($teamSummary['debt_by_team']), 'team summary has no admin debt chart');

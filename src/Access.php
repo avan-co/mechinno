@@ -17,7 +17,10 @@ final class Access
         'charges',
         'charges-matrix',
         'team-profile',
-        'desks-map',
+        'transactions',
+        'pending-members',
+        'pending-payments',
+        'payment-history',
         'crud-meta',
     ];
 
@@ -34,6 +37,10 @@ final class Access
         'charges-matrix',
         'team-profile',
         'panel_users',
+        'development_plans',
+        'pending-members',
+        'pending-payments',
+        'payment-history',
         'crud-meta',
         'recalculate-charges',
     ];
@@ -65,10 +72,10 @@ final class Access
     public static function allowedCrudResources(): array
     {
         if (self::isTeam()) {
-            return ['members', 'desks', 'lockers', 'charges'];
+            return ['members', 'transactions'];
         }
 
-        $resources = ['teams', 'members', 'desks', 'lockers', 'charges', 'transactions', 'rate_settings'];
+        $resources = ['teams', 'members', 'desks', 'lockers', 'charges', 'transactions', 'rate_settings', 'development_plans'];
         if (self::isAdmin()) {
             $resources[] = 'panel_users';
         }
@@ -101,6 +108,11 @@ final class Access
     public static function canWrite(): bool
     {
         return self::role() === self::ROLE_ADMIN_EDITOR;
+    }
+
+    public static function canTeamSubmit(): bool
+    {
+        return self::isTeam();
     }
 
     public static function isTeam(): bool
@@ -148,6 +160,13 @@ final class Access
         }
     }
 
+    public static function requireWriteOrTeamSubmitJson(): void
+    {
+        if (!self::canWrite() && !self::canTeamSubmit()) {
+            json_response(['error' => 'دسترسی ویرایش مجاز نیست.'], 403);
+        }
+    }
+
     public static function assertResourceAllowed(string $resource): void
     {
         $allowed = self::allowedResources();
@@ -190,13 +209,14 @@ final class Access
     }
 
     /**
-     * @return array{role:string,canWrite:bool,panel:string,teamId:?int,username:string}
+     * @return array{role:string,canWrite:bool,canTeamSubmit:bool,panel:string,teamId:?int,username:string}
      */
     public static function clientContext(): array
     {
         return [
             'role' => self::role(),
             'canWrite' => self::canWrite(),
+            'canTeamSubmit' => self::canTeamSubmit(),
             'panel' => self::isTeam() ? 'team' : 'admin',
             'teamId' => self::scopedTeamId(),
             'username' => self::username(),

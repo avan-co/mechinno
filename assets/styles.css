@@ -684,6 +684,45 @@ code { color: var(--primary); font-size: 0.9em; }
 .badge-locker-assigned { background: color-mix(in srgb, var(--primary) 18%, transparent); color: var(--primary); }
 .badge-locker-reserved { background: color-mix(in srgb, var(--amber) 18%, transparent); color: var(--amber); }
 .badge-locker-broken { background: color-mix(in srgb, var(--danger) 18%, transparent); color: var(--danger); }
+.badge-paid { background: color-mix(in srgb, var(--green) 18%, transparent); color: var(--green); }
+.badge-partial { background: color-mix(in srgb, var(--amber) 18%, transparent); color: var(--amber); }
+.badge-debt { background: color-mix(in srgb, var(--danger) 18%, transparent); color: var(--danger); }
+
+.desk-number-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 8px 0;
+}
+.desk-number-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.dev-summary { margin-bottom: 16px; }
+.dev-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px;
+}
+
+.finance-actions .data-panel {
+  margin-top: 0;
+  box-shadow: none;
+  border: none;
+  padding: 0;
+}
+.finance-actions .data-panel .table-toolbar h2 {
+  display: none;
+}
+
+.stat-card--payments .stat-icon { background: color-mix(in srgb, var(--amber) 20%, transparent); }
 
 .row-actions { display: flex; gap: 6px; flex-wrap: wrap; white-space: nowrap; }
 .mini-button {

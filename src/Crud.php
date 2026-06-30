@@ -110,6 +110,7 @@ final class Crud
                     'month_index' => ['label' => 'ماه', 'type' => 'select', 'options' => self::monthOptions()],
                     'confirmed' => ['label' => 'تأیید شده', 'type' => 'select', 'options' => ['1' => 'بله', '0' => 'خیر']],
                     'notes' => ['label' => 'توضیحات', 'type' => 'textarea'],
+                    'payment_reference' => ['label' => 'شماره پیگیری / مرجع واریز', 'type' => 'text'],
                 ],
             ],
             'charges' => [
@@ -141,6 +142,48 @@ final class Crud
                     'informal_rent_rate' => ['label' => 'نرخ اجاره غیررسمی هر میز', 'type' => 'number', 'required' => true],
                     'effective_from' => ['label' => 'تاریخ اثر (شروع ماه)', 'type' => 'date', 'placeholder' => '1405/01/01'],
                     'notes' => ['label' => 'توضیحات', 'type' => 'textarea'],
+                ],
+            ],
+            'development_plans' => [
+                'table' => 'development_plans',
+                'title' => 'برنامه توسعه',
+                'order' => 'sort_order, id DESC',
+                'status_field' => 'status',
+                'status_options' => ['open', 'in_progress', 'done', 'cancelled'],
+                'source' => false,
+                'fields' => [
+                    'title' => ['label' => 'عنوان', 'type' => 'text', 'required' => true],
+                    'description' => ['label' => 'شرح', 'type' => 'textarea'],
+                    'category' => [
+                        'label' => 'نوع',
+                        'type' => 'select',
+                        'options' => [
+                            'idea' => 'ایده',
+                            'action' => 'اقدام',
+                            'planned' => 'برنامه‌ریزی‌شده',
+                        ],
+                        'required' => true,
+                    ],
+                    'priority' => [
+                        'label' => 'اولویت',
+                        'type' => 'select',
+                        'options' => ['high' => 'بالا', 'medium' => 'متوسط', 'low' => 'پایین'],
+                        'required' => true,
+                    ],
+                    'status' => [
+                        'label' => 'وضعیت',
+                        'type' => 'select',
+                        'options' => [
+                            'open' => 'باز',
+                            'in_progress' => 'در حال اجرا',
+                            'done' => 'انجام‌شده',
+                            'cancelled' => 'لغو‌شده',
+                        ],
+                        'required' => true,
+                    ],
+                    'due_date' => ['label' => 'موعد هدف', 'type' => 'date', 'placeholder' => '1405/06/01'],
+                    'notes' => ['label' => 'یادداشت', 'type' => 'textarea'],
+                    'sort_order' => ['label' => 'ترتیب', 'type' => 'number'],
                 ],
             ],
             'panel_users' => [
@@ -194,7 +237,7 @@ final class Crud
             }
             $resources[$name] = [
                 'title' => $definition['title'],
-                'fields' => $definition['fields'],
+                'fields' => $this->fieldsForContext($name, $definition['fields']),
                 'status_field' => $definition['status_field'],
                 'status_options' => $definition['status_options'] ?? [],
             ];
@@ -204,13 +247,41 @@ final class Crud
     }
 
     /**
+     * @param array<string, array<string, mixed>> $fields
+     * @return array<string, array<string, mixed>>
+     */
+    private function fieldsForContext(string $resource, array $fields): array
+    {
+        if (Access::isTeam() && $resource === 'members') {
+            unset($fields['team_id']);
+        }
+        if (Access::isTeam() && $resource === 'transactions') {
+            return [
+                'tx_date' => $fields['tx_date'],
+                'fiscal_year' => $fields['fiscal_year'],
+                'month_index' => $fields['month_index'],
+                'amount' => ['label' => 'مبلغ واریز (ریال)', 'type' => 'number', 'required' => true],
+                'payment_reference' => $fields['payment_reference'],
+                'description' => ['label' => 'توضیح واریز', 'type' => 'textarea', 'required' => true],
+                'notes' => $fields['notes'],
+            ];
+        }
+
+        return $fields;
+    }
+
+    /**
      * @param array<string, mixed> $payload
      * @return array<string, mixed>
      */
     public function create(string $resource, array $payload): array
     {
+        if (Access::isTeam() && !in_array($resource, ['members', 'transactions'], true)) {
+            throw new InvalidArgumentException('نهاد فقط می‌تواند عضو یا اعلام واریز ثبت کند.');
+        }
         $definition = $this->definition($resource);
-        $data = $this->sanitizePayload($definition, $payload, true);
+        $fields = $this->fieldsForContext($resource, $definition['fields']);
+        $data = $this->sanitizePayload(['fields' => $fields], $payload, true);
         $this->applyResourceRules($resource, $data, true);
 
         $columns = array_keys($data);
@@ -244,9 +315,13 @@ final class Crud
      */
     public function update(string $resource, int $id, array $payload): array
     {
+        if (Access::isTeam()) {
+            throw new InvalidArgumentException('نهاد نمی‌تواند رکوردها را ویرایش کند.');
+        }
         $definition = $this->definition($resource);
         $this->assertExists($definition, $id);
-        $data = $this->sanitizePayload($definition, $payload, false);
+        $fields = $this->fieldsForContext($resource, $definition['fields']);
+        $data = $this->sanitizePayload(['fields' => $fields], $payload, false);
         $this->applyResourceRules($resource, $data, false, $id);
 
         if ($data === []) {
@@ -277,6 +352,9 @@ final class Crud
 
     public function delete(string $resource, int $id): void
     {
+        if (Access::isTeam()) {
+            throw new InvalidArgumentException('نهاد نمی‌تواند رکوردها را حذف کند.');
+        }
         $definition = $this->definition($resource);
         $this->assertExists($definition, $id);
         if ($resource === 'panel_users') {
@@ -396,6 +474,17 @@ final class Crud
         }
         if ($resource === 'members' && $creating) {
             $data['member_code'] = $this->ids->nextMemberCode();
+            if (Access::isTeam()) {
+                $teamId = Access::scopedTeamId();
+                if ($teamId === null) {
+                    throw new InvalidArgumentException('حساب نهاد معتبر نیست.');
+                }
+                $data['team_id'] = $teamId;
+                $data['approval_status'] = 'pending';
+                $data['submitted_at'] = JalaliDate::todayParts()['formatted'];
+            } else {
+                $data['approval_status'] = 'approved';
+            }
         }
         if ($resource === 'lockers') {
             if ($creating && empty($data['status'])) {
@@ -443,10 +532,32 @@ final class Crud
             if (($data['category'] ?? '') === 'واریز تیم' && (int) ($data['amount'] ?? 0) < 0) {
                 $data['amount'] = abs((int) $data['amount']);
             }
-            if (($data['category'] ?? '') !== 'واریز تیم') {
+            if (Access::isTeam()) {
+                $teamId = Access::scopedTeamId();
+                if ($teamId === null) {
+                    throw new InvalidArgumentException('حساب نهاد معتبر نیست.');
+                }
+                $data['category'] = 'واریز تیم';
+                $data['team_id'] = $teamId;
+                $data['confirmed'] = 0;
+                $data['payment_status'] = 'pending';
+                $data['announced_at'] = JalaliDate::todayParts()['formatted'];
+                $data['amount'] = abs((int) ($data['amount'] ?? 0));
+            } elseif (($data['category'] ?? '') !== 'واریز تیم') {
                 $data['team_id'] = null;
                 $data['fiscal_year'] = null;
                 $data['month_index'] = null;
+                $data['payment_status'] = 'approved';
+                $data['confirmed'] = 1;
+                if (($data['category'] ?? '') === 'هزینه' && (int) ($data['amount'] ?? 0) > 0) {
+                    $data['amount'] = -abs((int) $data['amount']);
+                }
+                if (($data['category'] ?? '') === 'درآمد' && (int) ($data['amount'] ?? 0) < 0) {
+                    $data['amount'] = abs((int) $data['amount']);
+                }
+            } else {
+                $data['payment_status'] = 'approved';
+                $data['confirmed'] = (int) ($data['confirmed'] ?? 1);
             }
         }
         if ($resource === 'charges') {
@@ -500,6 +611,15 @@ final class Crud
             if (!isset($data['is_active'])) {
                 $data['is_active'] = 1;
             }
+        }
+        if ($resource === 'development_plans') {
+            $today = JalaliDate::todayParts()['formatted'];
+            if ($creating) {
+                $data['created_at'] = $today;
+                $data['status'] = $data['status'] ?? 'open';
+                $data['sort_order'] = (int) ($data['sort_order'] ?? 0);
+            }
+            $data['updated_at'] = $today;
         }
         if ($resource === 'desks') {
             $formal = (int) ($data['formal_seats'] ?? 0);

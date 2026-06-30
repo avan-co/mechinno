@@ -46,6 +46,18 @@ const labels = {
   portal_password: "رمز ورود نهاد",
   role: "نقش",
   is_active: "فعال",
+  approval_status: "وضعیت تأیید",
+  payment_status: "وضعیت واریز",
+  payment_reference: "شماره پیگیری",
+  announced_at: "تاریخ اعلام",
+  reviewed_at: "تاریخ بررسی",
+  submitted_at: "تاریخ درخواست",
+  rejection_reason: "دلیل رد",
+  priority: "اولویت",
+  due_date: "موعد",
+  sort_order: "ترتیب",
+  created_at: "ایجاد",
+  updated_at: "به‌روزرسانی",
 };
 
 const entityTypeLabels = { team: "تیم", company: "شرکت", student: "دانشجو" };
@@ -58,7 +70,8 @@ const sectionMeta = {
   desks: { eyebrow: "میزها", title: "نقشه و تخصیص ۲۴ میز", subtitle: "میزها را به نهادها اختصاص دهید" },
   lockers: { eyebrow: "کمدها", title: "مدیریت کمدها", subtitle: "شماره کمدها را خودتان تعریف و تخصیص دهید" },
   charges: { eyebrow: "شارژ", title: "نرخ و شارژ ماهانه", subtitle: "تعریف نرخ سالانه، محاسبه خودکار و پیگیری پرداخت" },
-  transactions: { eyebrow: "مالی", title: "دریافت، درآمد و هزینه", subtitle: "نهادها به مرکز بدهکارند — دریافت شارژ، طلب مطالبات" },
+  transactions: { eyebrow: "مالی", title: "درآمد، هزینه و تأیید واریز", subtitle: "تأیید اعلام نهادها، درآمد دستی و هزینه‌های مرکز" },
+  development: { eyebrow: "برنامه‌ریزی", title: "برنامه توسعه", subtitle: "ایده‌ها، اقدامات و برنامه اجرایی مرکز" },
   users: { eyebrow: "دسترسی", title: "کاربران پنل", subtitle: "مدیریت نقش‌ها و پنل اختصاصی نهادها" },
 };
 
@@ -67,46 +80,59 @@ const teamSectionMeta = {
   members: { eyebrow: "اعضا", title: "اعضای نهاد", subtitle: "لیست اعضای ثبت‌شده در نهاد شما" },
   desks: { eyebrow: "میزها", title: "میزهای نهاد", subtitle: "میزهای تخصیص‌یافته به نهاد" },
   lockers: { eyebrow: "کمدها", title: "کمدهای نهاد", subtitle: "کمدهای تخصیص‌یافته" },
-  charges: { eyebrow: "شارژ", title: "شارژ و پرداخت", subtitle: "وضعیت شارژ ماهانه و پرداخت‌ها" },
+  charges: { eyebrow: "شارژ", title: "شارژ و پرداخت", subtitle: "لیست شارژ سالانه و وضعیت پرداخت" },
+  payments: { eyebrow: "واریز", title: "اعلام واریز", subtitle: "ثبت واریز شارژ و پیگیری تأیید مدیر" },
 };
 
 const cardNavMap = {
-  members: "members",
-  teams: "teams",
-  desks_occupied: "desks",
-  charge_total: "charges",
-  income_total: "transactions",
-  expense_total: "transactions",
+  income_year: "transactions",
+  income_month: "transactions",
+  expense_year: "transactions",
+  expense_month: "transactions",
   debt_total: "charges",
-  paid_total: "transactions",
-  available_lockers: "lockers",
+  pending_members: "members",
+  pending_payments: "transactions",
+  members: "members",
+  desks: "desks",
+  debt_total_team: "charges",
+  paid_total: "payments",
 };
 
-const cardConfig = [
-  ["members", "اعضا", "👤", "members"],
-  ["teams", "نهادها", "◉", "teams"],
-  ["desks_occupied", "میز اشغال", "▦", "desks"],
-  ["charge_total", "جمع شارژ", "₪", "charge"],
-  ["income_total", "دریافتی", "↓", "income"],
-  ["expense_total", "هزینه", "↑", "expense"],
+const adminCardConfig = [
+  ["income_year", "درآمد سال جاری", "↓", "income"],
+  ["income_month", "درآمد ماه جاری", "↓", "income"],
+  ["expense_year", "هزینه سال جاری", "↑", "expense"],
+  ["expense_month", "هزینه ماه جاری", "↑", "expense"],
   ["debt_total", "طلب از نهادها", "!", "debt"],
-  ["paid_total", "دریافت از نهادها", "✓", "paid"],
-  ["available_lockers", "کمد آزاد", "▣", "lockers"],
 ];
 
-const moneyCards = new Set(["charge_total", "income_total", "expense_total", "debt_total", "paid_total"]);
+const teamCardConfig = [
+  ["members", "اعضای فعال", "👤", "members"],
+  ["desks", "میز", "▦", "desks"],
+  ["debt_total", "مانده طلب", "!", "debt"],
+  ["paid_total", "پرداخت‌شده", "✓", "paid"],
+  ["pending_payments", "در انتظار تأیید", "⏳", "payments"],
+];
+
+const cardConfig = adminCardConfig;
+
+const moneyCards = new Set(["income_year", "income_month", "expense_year", "expense_month", "debt_total", "paid_total", "charge_total"]);
 
 const monthNames = ["", "فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور", "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"];
 
 const resourceColumns = {
   teams: ["entity_code", "entity_type", "name", "leader", "phone", "portal_username", "portal_password", "desk_count", "informal_seats", "joined_at", "warning", "notes"],
-  members: ["member_code", "full_name", "team_label", "entity_type", "desk_numbers", "access_code", "phone", "national_id"],
+  members: ["member_code", "full_name", "team_label", "entity_type", "desk_numbers", "access_code", "phone", "national_id", "approval_status"],
   desks: ["number", "team_name", "usage_type", "formal_seats", "informal_seats"],
   lockers: ["locker_number", "status", "team_label", "delivered_at", "key_number", "spare_key"],
   rate_settings: ["fiscal_year", "title", "charge_rate", "informal_rent_rate", "effective_from", "notes"],
   panel_users: ["username", "role", "full_name", "is_active"],
   charges: ["fiscal_year", "team_name", "month_name", "charge_amount", "rent_amount", "amount", "note"],
-  transactions: ["tx_date", "description", "amount", "category", "team_name", "fiscal_year", "month_name", "confirmed"],
+  transactions: ["tx_date", "description", "amount", "category", "team_name", "fiscal_year", "month_name", "payment_status", "payment_reference", "confirmed"],
+  "pending-members": ["member_code", "full_name", "team_label", "phone", "national_id", "submitted_at"],
+  "pending-payments": ["tx_date", "team_name", "fiscal_year", "month_name", "amount", "payment_reference", "announced_at", "description"],
+  "payment-history": ["tx_date", "team_name", "fiscal_year", "month_name", "amount", "payment_status", "payment_reference", "announced_at", "reviewed_at"],
+  development_plans: ["title", "category", "priority", "status", "due_date", "description", "notes", "sort_order"],
 };
 
 const teamPanelHiddenColumns = {
@@ -114,6 +140,8 @@ const teamPanelHiddenColumns = {
   desks: ["team_name"],
   lockers: ["team_label"],
   charges: ["team_name"],
+  transactions: ["category", "team_name", "confirmed"],
+  "payment-history": ["team_name"],
 };
 
 const createDefaults = {
@@ -121,18 +149,24 @@ const createDefaults = {
   rate_settings: () => ({ fiscal_year: window.MECHINNO?.fiscalYear || "" }),
   transactions: () => ({
     fiscal_year: window.MECHINNO?.fiscalYear || "",
+    month_index: String(window.MECHINNO?.monthIndex || 1),
     tx_date: window.MECHINNO?.today || "",
     confirmed: "1",
   }),
+  development_plans: () => ({ category: "idea", priority: "medium", status: "open", sort_order: "0" }),
 };
 const csrfToken = window.MECHINNO?.csrfToken || "";
 const canWrite = window.MECHINNO?.canWrite === true;
+const canTeamSubmit = window.MECHINNO?.canTeamSubmit === true;
+const canMutate = canWrite || canTeamSubmit;
 const panelMode = window.MECHINNO?.panel || "admin";
 
 const editableResources = new Set(
   canWrite
-    ? ["members", "teams", "desks", "lockers", "charges", "transactions", "rate_settings", "panel_users"]
-    : []
+    ? ["members", "teams", "desks", "lockers", "charges", "transactions", "rate_settings", "panel_users", "development_plans"]
+    : canTeamSubmit
+      ? ["members", "transactions"]
+      : []
 );
 const hiddenColumns = new Set([
   "id", "source_sheet", "source_file", "team_id", "locker_id", "member_id",
@@ -155,7 +189,6 @@ const linkColumns = {
 let crudMetaPromise = null;
 let highlightDesk = null;
 let highlightLocker = null;
-let txCategoryFilter = "";
 
 const invalidateCrudMeta = () => {
   crudMetaPromise = null;
@@ -215,10 +248,11 @@ const fetchJson = async (url, options = {}) => {
   return data;
 };
 
-const fetchResource = async (endpoint, { page = 1, perPage = 25 } = {}) => {
+const fetchResource = async (endpoint, { page = 1, perPage = 25, category = "" } = {}) => {
   const url = new URL(endpoint, window.location.href);
   url.searchParams.set("page", String(page));
   url.searchParams.set("per_page", String(perPage));
+  if (category) url.searchParams.set("category", category);
   const data = await fetchJson(url.toString());
   if (Array.isArray(data)) {
     return { rows: data, total: data.length, page: 1, per_page: data.length, pages: 1 };
@@ -296,8 +330,10 @@ const activateSection = (id, options = {}) => {
   closeDrawer();
   reloadSectionTables(id);
 
-  if (id === "desks") loadDeskGrid().catch((error) => showToast(error.message, "error"));
+  if (id === "desks" && panelMode === "admin") loadDeskGrid().catch((error) => showToast(error.message, "error"));
+  if (id === "desks" && panelMode === "team") loadTeamDeskNumbers().catch((error) => showToast(error.message, "error"));
   if (id === "charges") loadChargesCollage().catch((error) => showToast(error.message, "error"));
+  if (id === "development") loadDevProgramSummary().catch(() => {});
   if (id === "teams" && options.teamId) {
     setTimeout(() => openTeamProfile(options.teamId).catch((error) => showToast(error.message, "error")), 120);
   }
@@ -321,11 +357,6 @@ document.getElementById("themeToggle")?.addEventListener("click", () => {
   try {
     localStorage.setItem("mechinno-theme", next);
   } catch (e) {}
-});
-
-document.getElementById("txCategoryFilter")?.addEventListener("change", (event) => {
-  txCategoryFilter = event.target.value;
-  document.querySelector("#transactions data-table")?.render?.();
 });
 
 const teamLink = (teamId, label) => {
@@ -375,19 +406,19 @@ document.addEventListener("click", (event) => {
   });
 });
 
-const renderCards = (cards) => {
+const renderCards = (cards, config = cardConfig) => {
   const container = document.getElementById("cards");
   if (!container) return;
-  container.innerHTML = cardConfig
+  container.innerHTML = config
     .map(([key, title, icon, tone]) => {
       let value = cards?.[key];
-      if (key === "desks_occupied") value = `${cards?.desks_occupied || 0} / ${cards?.desks_total || 24}`;
+      if (key === "desks" && cards?.desk_numbers) value = cards.desk_numbers || "—";
       else if (moneyCards.has(key)) value = formatMoney(value);
       else value = formatNumber(value);
-      const section = cardNavMap[key];
+      const section = cardNavMap[key] || cardNavMap.members;
       return `<article class="stat-card stat-card--${tone} card-clickable" data-nav-section="${section}" tabindex="0" role="button">
         <span class="stat-icon" aria-hidden="true">${icon}</span>
-        <div><span class="stat-label">${escapeHtml(title)}</span><strong>${escapeHtml(value)}</strong></div>
+        <div><span class="stat-label">${escapeHtml(title)}</span><strong>${escapeHtml(value ?? "—")}</strong></div>
       </article>`;
     })
     .join("");
@@ -466,18 +497,7 @@ const renderTeamDashboard = (data) => {
   const cards = document.getElementById("cards");
   const team = data.team || {};
   if (cards) {
-    const items = [
-      ["members", "اعضا", data.cards?.members || 0],
-      ["desks", "میز", data.cards?.desks || 0],
-      ["lockers", "کمد", data.cards?.lockers || 0],
-      ["debt_total", "مانده طلب", data.cards?.debt_total || 0, true],
-      ["paid_total", "پرداخت‌شده", data.cards?.paid_total || 0, true],
-      ["charge_total", "جمع شارژ", data.cards?.charge_total || 0, true],
-    ];
-    cards.innerHTML = items.map(([key, title, value, money]) => `
-      <article class="stat-card stat-card--members">
-        <div><span class="stat-label">${escapeHtml(title)}</span><strong>${escapeHtml(money ? formatMoney(value) : formatNumber(value))}</strong></div>
-      </article>`).join("");
+    renderCards({ ...data.cards, desk_numbers: data.cards?.desk_numbers || "—" }, teamCardConfig);
   }
   renderCurrentMonth(data.current_month || {});
   renderChargeChart((data.monthly_charges || []).map((row) => ({
@@ -487,6 +507,52 @@ const renderTeamDashboard = (data) => {
   })));
   const title = document.getElementById("pageTitle");
   if (title && team.name) title.textContent = team.name;
+};
+
+const loadTeamDeskNumbers = async () => {
+  const host = document.getElementById("teamDeskNumbers");
+  if (!host) return;
+  const rows = (await fetchResource("api.php?resource=desks", { page: 1, perPage: 100 })).rows;
+  const numbers = rows.map((row) => row.number).filter(Boolean);
+  host.innerHTML = numbers.length
+    ? numbers.map((n) => `<span class="desk-number-chip">میز ${escapeHtml(n)}</span>`).join("")
+    : `<div class="empty">هنوز میزی به نهاد شما تخصیص داده نشده است.</div>`;
+};
+
+const paymentStatusBadge = (status) => {
+  const map = {
+    approved: "badge-paid",
+    pending: "badge-partial",
+    rejected: "badge-debt",
+  };
+  const label = { approved: "تأیید‌شده", pending: "در انتظار تأیید", rejected: "رد‌شده" }[status] || status || "—";
+  return `<span class="badge ${map[status] || ""}">${escapeHtml(label)}</span>`;
+};
+
+const approvalStatusBadge = (status) => {
+  const map = { approved: "badge-paid", pending: "badge-partial", rejected: "badge-debt" };
+  const label = { approved: "تأیید‌شده", pending: "در انتظار", rejected: "رد‌شده" }[status] || status || "—";
+  return `<span class="badge ${map[status] || ""}">${escapeHtml(label)}</span>`;
+};
+
+const loadDevProgramSummary = async () => {
+  const host = document.getElementById("devProgramSummary");
+  if (!host) return;
+  const data = await fetchResource("api.php?resource=development_plans", { page: 1, perPage: 100 });
+  const rows = data.rows || [];
+  const counts = { idea: 0, action: 0, planned: 0, open: 0, in_progress: 0, done: 0 };
+  rows.forEach((row) => {
+    if (counts[row.category] !== undefined) counts[row.category] += 1;
+    if (counts[row.status] !== undefined) counts[row.status] += 1;
+  });
+  host.innerHTML = `
+    <div class="dev-summary-grid">
+      <div class="month-stat"><span>ایده</span><strong>${counts.idea}</strong></div>
+      <div class="month-stat"><span>اقدام</span><strong>${counts.action}</strong></div>
+      <div class="month-stat"><span>برنامه‌ریزی‌شده</span><strong>${counts.planned}</strong></div>
+      <div class="month-stat"><span>در حال اجرا</span><strong>${counts.in_progress}</strong></div>
+      <div class="month-stat"><span>انجام‌شده</span><strong>${counts.done}</strong></div>
+    </div>`;
 };
 
 const loadDeskGrid = async () => {
@@ -846,14 +912,76 @@ const openRecordModal = ({ resource, definition, record = null, onSaved, title =
   modal.hidden = false;
 };
 
+const devCategoryLabels = { idea: "ایده", action: "اقدام", planned: "برنامه‌ریزی‌شده" };
+const devStatusLabels = { open: "باز", in_progress: "در حال اجرا", done: "انجام‌شده", cancelled: "لغو‌شده" };
+const devPriorityLabels = { high: "بالا", medium: "متوسط", low: "پایین" };
+
+const workflowApprove = async (resource, id) => {
+  await postJson(`api.php?resource=${encodeURIComponent(resource)}&action=approve`, { id });
+};
+
+const workflowReject = async (resource, id, reason = "") => {
+  await postJson(`api.php?resource=${encodeURIComponent(resource)}&action=reject`, { id, reason });
+};
+
+const openFinanceModal = async (category) => {
+  const meta = await loadCrudMeta();
+  const base = meta.resources.transactions;
+  const fieldKeys = category === "هزینه"
+    ? ["tx_date", "description", "amount", "notes"]
+    : ["tx_date", "description", "amount", "notes"];
+  const fields = Object.fromEntries(fieldKeys.map((key) => [key, base.fields[key]]));
+  if (category === "هزینه") {
+    fields.amount = { label: "مبلغ هزینه (ریال)", type: "number", required: true };
+  } else {
+    fields.amount = { label: "مبلغ درآمد (ریال)", type: "number", required: true };
+  }
+  openRecordModal({
+    resource: "transactions",
+    definition: { title: category === "هزینه" ? "ثبت هزینه" : "ثبت درآمد دستی", fields },
+    record: {
+      category,
+      confirmed: "1",
+      tx_date: window.MECHINNO?.today || "",
+      amount: "",
+      description: "",
+    },
+    onSaved: async () => {
+      await refreshAfterMutation("transactions");
+      showToast(category === "هزینه" ? "هزینه ثبت شد." : "درآمد ثبت شد.", "success");
+    },
+  });
+};
+
+document.getElementById("addIncomeButton")?.addEventListener("click", () => {
+  openFinanceModal("درآمد").catch((error) => showToast(error.message, "error"));
+});
+
+document.getElementById("addExpenseButton")?.addEventListener("click", () => {
+  openFinanceModal("هزینه").catch((error) => showToast(error.message, "error"));
+});
+
 const formatCell = (column, value, row, resource) => {
   if (column === "entity_type") return entityBadge(value);
   if (column === "usage_type") return escapeHtml(usageLabels[value] || value || "—");
+  if (column === "category" && resource === "development_plans") {
+    return escapeHtml(devCategoryLabels[value] || value || "—");
+  }
   if (column === "category") {
     if (value === "واریز تیم") return "دریافت از نهاد";
     return escapeHtml(value || "—");
   }
   if (column === "confirmed") return Number(value) === 1 ? "بله" : "خیر";
+  if (column === "approval_status") return approvalStatusBadge(value);
+  if (column === "payment_status") return paymentStatusBadge(value);
+  if (column === "status" && resource === "development_plans") {
+    return escapeHtml(devStatusLabels[value] || value || "—");
+  }
+  if (column === "priority") return escapeHtml(devPriorityLabels[value] || value || "—");
+  if (column === "description" && resource === "development_plans" && value) {
+    const text = String(value);
+    return escapeHtml(text.length > 80 ? `${text.slice(0, 80)}…` : text);
+  }
   if (column === "month_name" && !value && row.month_index) {
     return formatPlain(monthNames[Number(row.month_index)] || row.month_index);
   }
@@ -904,6 +1032,8 @@ class DataTable extends HTMLElement {
     this.title = this.getAttribute("title");
     this.endpoint = this.getAttribute("endpoint");
     this.resource = new URL(this.endpoint, window.location.href).searchParams.get("resource");
+    this.workflow = this.getAttribute("data-workflow") || "";
+    this.txCategoryFilter = this.getAttribute("data-tx-filter") || "";
     this.definition = null;
     this.rows = [];
     this.page = 1;
@@ -991,8 +1121,15 @@ class DataTable extends HTMLElement {
     try {
       const meta = await loadCrudMeta();
       this.definition = meta.resources[this.resource] || null;
-      this.querySelector(".add-button").hidden = !canWrite || !this.definition || !editableResources.has(this.resource);
-      const result = await fetchResource(this.endpoint, { page: this.page, perPage: this.perPage });
+      const canAdd = (canWrite || (canTeamSubmit && ["members", "transactions"].includes(this.resource)))
+        && this.definition
+        && editableResources.has(this.resource);
+      this.querySelector(".add-button").hidden = !canAdd;
+      const result = await fetchResource(this.endpoint, {
+        page: this.page,
+        perPage: this.perPage,
+        category: this.txCategoryFilter,
+      });
       this.rows = result.rows;
       this.total = result.total;
       this.page = result.page;
@@ -1019,15 +1156,9 @@ class DataTable extends HTMLElement {
   }
 
   filteredRows() {
-    let rows = this.rows;
-    if (this.resource === "transactions" && txCategoryFilter) {
-      rows = rows.filter((row) => row.category === txCategoryFilter);
-    }
     const normalized = this.filter.trim().toLowerCase();
-    if (normalized) {
-      rows = rows.filter((row) => JSON.stringify(row).toLowerCase().includes(normalized));
-    }
-    return rows;
+    if (!normalized) return this.rows;
+    return this.rows.filter((row) => JSON.stringify(row).toLowerCase().includes(normalized));
   }
 
   renderMobileCards(rows) {
@@ -1035,6 +1166,7 @@ class DataTable extends HTMLElement {
     if (!isMobile()) return false;
     const columns = rows.length ? resolveColumns(rows, this.resource).slice(0, 6) : [];
     const editable = canWrite && this.definition && editableResources.has(this.resource);
+    const workflow = this.workflow && canWrite;
     container.innerHTML = rows.length
       ? rows.map((row) => {
         const highlighted = this.resource === "lockers" && highlightLocker === Number(row.locker_number);
@@ -1046,11 +1178,14 @@ class DataTable extends HTMLElement {
         const profileBtn = this.resource === "teams"
           ? `<button class="mini-button primary" type="button" data-action="profile" data-id="${escapeHtml(row.id)}">پروفایل</button>
              ${canWrite ? `<button class="mini-button" type="button" data-action="reset-portal" data-id="${escapeHtml(row.id)}">بازنشانی رمز</button>` : ""}` : "";
+        const workflowBtns = workflow
+          ? `<button class="mini-button primary" type="button" data-action="approve" data-id="${escapeHtml(row.id)}">تأیید</button>
+             <button class="mini-button danger" type="button" data-action="reject" data-id="${escapeHtml(row.id)}">رد</button>` : "";
         const editBtns = editable
           ? `<button class="mini-button" type="button" data-action="edit" data-id="${escapeHtml(row.id)}">ویرایش</button>
              <button class="mini-button danger" type="button" data-action="delete" data-id="${escapeHtml(row.id)}">حذف</button>` : "";
         return `<article class="mobile-card ${highlighted ? "highlighted" : ""}">${fields}
-          <div class="row-actions">${profileBtn}${editBtns}</div></article>`;
+          <div class="row-actions">${profileBtn}${workflowBtns}${editBtns}</div></article>`;
       }).join("")
       : `<div class="empty">رکوردی یافت نشد.</div>`;
     return true;
@@ -1078,6 +1213,7 @@ class DataTable extends HTMLElement {
 
     const columns = resolveColumns(rows, this.resource);
     const editable = canWrite && this.definition && editableResources.has(this.resource);
+    const workflow = this.workflow && canWrite;
     const statusField = this.definition?.status_field;
     const statusOptions = this.definition?.status_options || [];
     const head = columns.map((c) => `<th>${escapeHtml(labels[c] || c)}</th>`).join("");
@@ -1087,7 +1223,11 @@ class DataTable extends HTMLElement {
       const cells = columns.map((column) => {
         const value = row[column];
         if (editable && column === statusField && statusOptions.length) {
-          const options = statusOptions.map((o) => `<option value="${escapeHtml(o)}" ${String(o) === String(value) ? "selected" : ""}>${escapeHtml(o)}</option>`).join("");
+          const labelMap = this.resource === "development_plans" ? devStatusLabels : null;
+          const options = statusOptions.map((o) => {
+            const label = labelMap?.[o] || o;
+            return `<option value="${escapeHtml(o)}" ${String(o) === String(value) ? "selected" : ""}>${escapeHtml(label)}</option>`;
+          }).join("");
           return `<td><select class="inline-status" data-id="${escapeHtml(row.id)}">${options}</select></td>`;
         }
         let className = "";
@@ -1099,13 +1239,18 @@ class DataTable extends HTMLElement {
       const profileAction = this.resource === "teams"
         ? `<button class="mini-button primary" type="button" data-action="profile" data-id="${escapeHtml(row.id)}">پروفایل</button>
            ${canWrite ? `<button class="mini-button" type="button" data-action="reset-portal" data-id="${escapeHtml(row.id)}">بازنشانی رمز</button>` : ""}` : "";
-      const actions = editable || profileAction
-        ? `<td class="row-actions">${profileAction}${editable ? `
+      const workflowAction = workflow
+        ? `<button class="mini-button primary" type="button" data-action="approve" data-id="${escapeHtml(row.id)}">تأیید</button>
+           <button class="mini-button danger" type="button" data-action="reject" data-id="${escapeHtml(row.id)}">رد</button>`
+        : "";
+      const actions = editable || profileAction || workflowAction
+        ? `<td class="row-actions">${profileAction}${workflowAction}${editable ? `
         <button class="mini-button" type="button" data-action="edit" data-id="${escapeHtml(row.id)}">ویرایش</button>
         <button class="mini-button danger" type="button" data-action="delete" data-id="${escapeHtml(row.id)}">حذف</button>` : ""}</td>` : "";
       return `<tr class="${rowHighlight ? "highlighted" : ""}">${cells}${actions}</tr>`;
     }).join("");
-    wrap.innerHTML = `<table><thead><tr>${head}${editable || this.resource === "teams" ? "<th>عملیات</th>" : ""}</tr></thead><tbody>${body}</tbody></table>`;
+    const hasActions = editable || this.resource === "teams" || workflow;
+    wrap.innerHTML = `<table><thead><tr>${head}${hasActions ? "<th>عملیات</th>" : ""}</tr></thead><tbody>${body}</tbody></table>`;
     if (mobile) mobile.innerHTML = "";
   }
 
@@ -1126,6 +1271,30 @@ class DataTable extends HTMLElement {
         const result = await postJson("api.php?resource=teams&action=reset-portal-password", { id });
         await this.load();
         showToast(`رمز جدید: ${result.credentials?.password || "—"}`, "success");
+      } catch (error) {
+        showToast(error.message, "error");
+      }
+      return;
+    }
+    if (button.dataset.action === "approve" && this.workflow) {
+      try {
+        await workflowApprove(this.resource, id);
+        await this.load();
+        await refreshAfterMutation(this.closest(".section")?.id || null);
+        showToast("تأیید شد.", "success");
+      } catch (error) {
+        showToast(error.message, "error");
+      }
+      return;
+    }
+    if (button.dataset.action === "reject" && this.workflow) {
+      const reason = window.prompt("دلیل رد (اختیاری):") ?? "";
+      if (reason === null) return;
+      try {
+        await workflowReject(this.resource, id, reason);
+        await this.load();
+        await refreshAfterMutation(this.closest(".section")?.id || null);
+        showToast("رد شد.", "success");
       } catch (error) {
         showToast(error.message, "error");
       }

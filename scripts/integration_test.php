@@ -105,23 +105,30 @@ $assert(isset($teamSummary['team']['name']), 'api: team summary scoped');
 $assert(!isset($teamSummary['cards']['teams']), 'api: team summary has no admin teams count');
 
 $members = $repo->paginatedResource('members', 1, 25);
-$crud->create('members', ['team_id' => (string) $teamId, 'full_name' => 'عضو یک']);
+$member = $crud->create('members', ['team_id' => (string) $teamId, 'full_name' => 'عضو یک']);
 $membersAfter = $repo->paginatedResource('members', 1, 25);
-$assert(count($membersAfter['rows']) === count($members['rows']) + 1, 'crud: member created');
+$assert(count($membersAfter['rows']) === count($members['rows']) + 1, 'crud: team member submitted');
+$assert(($member['approval_status'] ?? '') === 'pending', 'workflow: team member pending approval');
 
 $allowed = Access::allowedResources();
-$assert(!in_array('transactions', $allowed, true), 'access: team cannot access transactions');
-$assert(in_array('desks-map', $allowed, true), 'access: team can access desks-map');
+$assert(in_array('transactions', $allowed, true), 'access: team can access transactions');
+$assert(in_array('payment-history', $allowed, true), 'access: team can access payment-history');
+$assert(in_array('desks', $allowed, true), 'access: team can access desks');
 
-$deskMap = $repo->deskMap();
-$assert(count($deskMap['rows']) === 24, 'api: desk map has 24 desks');
-$ownCount = count(array_filter($deskMap['rows'], static fn ($d) => !empty($d['is_own'])));
-$assert($ownCount === 0, 'api: desk map own count before desk assign'); // no desk assigned yet
+$payment = $crud->create('transactions', [
+    'tx_date' => '1405/02/10',
+    'description' => 'اعلام واریز تست',
+    'amount' => '500000',
+    'fiscal_year' => '1405',
+    'month_index' => '2',
+    'payment_reference' => 'REF-001',
+]);
+$assert(($payment['payment_status'] ?? '') === 'pending', 'workflow: team payment pending');
+$assert((int) ($payment['confirmed'] ?? 1) === 0, 'workflow: team payment not confirmed yet');
 
 $pdo->exec('UPDATE desks SET team_id = ' . $teamId . ', usage_type = "formal", formal_seats = 2 WHERE number = 1');
-$deskMap2 = $repo->deskMap();
-$ownCount2 = count(array_filter($deskMap2['rows'], static fn ($d) => !empty($d['is_own'])));
-$assert($ownCount2 === 1, 'api: desk map marks assigned desk');
+$deskMap = $repo->paginatedResource('desks', 1, 100);
+$assert(count($deskMap['rows']) >= 1, 'api: team desks list after assign');
 
 // --- Admin CRUD flow ---
 $_SESSION = [
@@ -157,6 +164,21 @@ $tx = $crud->create('transactions', [
     'confirmed' => '1',
 ]);
 $assert((int) ($tx['amount'] ?? 0) === 600, 'crud: team deposit transaction');
+
+$workflow = new Workflow($pdo);
+$approvedMember = $workflow->approveMember((int) $member['id']);
+$assert(($approvedMember['approval_status'] ?? '') === 'approved', 'workflow: member approved');
+$approvedPayment = $workflow->approvePayment((int) $payment['id']);
+$assert(($approvedPayment['payment_status'] ?? '') === 'approved', 'workflow: payment approved');
+$assert((int) ($approvedPayment['confirmed'] ?? 0) === 1, 'workflow: payment confirmed in income');
+
+$devPlan = $crud->create('development_plans', [
+    'title' => 'ایده تست',
+    'category' => 'idea',
+    'priority' => 'high',
+    'status' => 'open',
+]);
+$assert(($devPlan['title'] ?? '') === 'ایده تست', 'crud: development plan created');
 
 // --- Password reset ---
 $credentials = EntityAccounts::resetPassword($pdo, $teamId);
