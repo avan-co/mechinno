@@ -103,7 +103,7 @@ function require_csrf_html(): ?string
 
 function safe_error_message(Throwable $exception): string
 {
-    error_log($exception);
+    error_log($exception->__toString());
     try {
         $config = app_configured() ? app_config() : [];
         if ((bool) ($config['debug'] ?? false)) {
