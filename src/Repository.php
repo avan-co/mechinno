@@ -36,6 +36,7 @@ final class Repository
                 'debt_total' => $this->scalar($this->debtSql()),
                 'pending_members' => $this->scalar("SELECT COUNT(*) FROM members WHERE approval_status = 'pending'"),
                 'pending_payments' => $this->scalar("SELECT COUNT(*) FROM transactions WHERE category = 'واریز تیم' AND payment_status = 'pending'"),
+                'pending_locker_requests' => $this->scalar("SELECT COUNT(*) FROM locker_requests WHERE status = 'pending'"),
             ],
             'locker_status' => $this->rows('SELECT status, COUNT(*) AS count FROM lockers GROUP BY status ORDER BY count DESC'),
             'monthly_charges' => $this->rows(
@@ -171,6 +172,18 @@ final class Repository
                 'detail' => 'بررسی درخواست‌های ثبت عضو',
                 'section' => 'members',
                 'target' => 'pending-members',
+            ];
+        }
+
+        $pendingLockers = $this->scalar("SELECT COUNT(*) FROM locker_requests WHERE status = 'pending'");
+        if ($pendingLockers > 0) {
+            $items[] = [
+                'priority' => 15,
+                'type' => 'locker',
+                'label' => number_format($pendingLockers) . ' درخواست کمد در انتظار',
+                'detail' => 'تخصیص کمد به نهادهای درخواست‌کننده',
+                'section' => 'lockers',
+                'target' => 'pending-locker-requests',
             ];
         }
 
@@ -313,6 +326,8 @@ final class Repository
                     "SELECT COUNT(*) FROM transactions WHERE team_id = :id AND category = 'واریز تیم' AND confirmed = 1",
                     ['id' => $teamId]
                 ),
+                'locker-requests' => $this->preparedScalar('SELECT COUNT(*) FROM locker_requests WHERE team_id = :id', ['id' => $teamId]),
+                'desk-assignments' => $this->preparedScalar('SELECT COUNT(*) FROM desk_assignments WHERE team_id = :id', ['id' => $teamId]),
                 default => 0,
             };
         }
@@ -329,6 +344,9 @@ final class Repository
             'development_plans' => 'SELECT COUNT(*) FROM development_plans',
             'pending-members' => "SELECT COUNT(*) FROM members WHERE approval_status = 'pending'",
             'pending-payments' => "SELECT COUNT(*) FROM transactions WHERE category = 'واریز تیم' AND payment_status = 'pending'",
+            'pending-locker-requests' => "SELECT COUNT(*) FROM locker_requests WHERE status = 'pending'",
+            'locker-requests' => 'SELECT COUNT(*) FROM locker_requests',
+            'desk-assignments' => 'SELECT COUNT(*) FROM desk_assignments',
             'payment-history' => "SELECT COUNT(*) FROM transactions WHERE category = 'واریز تیم' AND confirmed = 1",
             default => throw new InvalidArgumentException('Unknown resource.'),
         };
@@ -396,7 +414,8 @@ final class Repository
         $teamId = Access::scopedTeamId();
 
         return match ($name) {
-            'teams' => "SELECT t.id, t.entity_code, t.entity_type, t.name, t.leader, t.phone, t.joined_at, t.warning, t.notes,
+            'teams' => "SELECT t.id, t.entity_code, t.entity_type, t.name, t.leader, t.phone, t.joined_at,
+                        t.contract_start, t.contract_end, t.warning, t.notes,
                         u.username AS portal_username,
                         u.password_plain AS portal_password,
                         (SELECT COUNT(*) FROM desks d WHERE d.team_id = t.id) AS desk_count,
@@ -406,7 +425,7 @@ final class Repository
                 . ($teamId !== null ? " WHERE t.id = {$teamId}" : '')
                 . ' ORDER BY t.entity_type, t.name',
             'members' => "SELECT m.id, m.member_code, m.team_id, m.access_code, m.full_name, m.phone, m.national_id, m.notes,
-                        m.approval_status, m.submitted_at, m.reviewed_at, m.rejection_reason,
+                        m.approval_status, m.submitted_at, m.reviewed_at, m.rejection_reason, m.wants_access,
                         t.name AS team_label, t.entity_type,
                         (SELECT GROUP_CONCAT(d.number ORDER BY d.number)
                          FROM desks d WHERE d.team_id = m.team_id) AS desk_numbers
@@ -449,7 +468,7 @@ final class Repository
                  LEFT JOIN teams tm ON tm.id = t.team_id"
                 . $this->transactionWhereClause($teamId, $filters)
                 . ' ORDER BY t.tx_date DESC, t.id DESC',
-            'pending-members' => "SELECT m.id, m.member_code, m.full_name, m.phone, m.national_id, m.submitted_at,
+            'pending-members' => "SELECT m.id, m.member_code, m.full_name, m.phone, m.national_id, m.wants_access, m.submitted_at,
                         t.name AS team_label, t.id AS team_id
                  FROM members m
                  INNER JOIN teams t ON t.id = m.team_id
@@ -468,6 +487,26 @@ final class Repository
                  INNER JOIN teams tm ON tm.id = t.team_id
                  WHERE t.category = 'واریز تیم' AND t.payment_status = 'pending'
                  ORDER BY t.announced_at DESC, t.id DESC",
+            'pending-locker-requests' => "SELECT lr.id, lr.team_id, lr.notes, lr.submitted_at,
+                        t.name AS team_label, t.entity_code
+                 FROM locker_requests lr
+                 INNER JOIN teams t ON t.id = lr.team_id
+                 WHERE lr.status = 'pending'
+                 ORDER BY lr.submitted_at DESC, lr.id DESC",
+            'locker-requests' => "SELECT lr.id, lr.team_id, lr.notes, lr.status, lr.submitted_at, lr.reviewed_at,
+                        lr.rejection_reason, lr.locker_id, l.locker_number,
+                        t.name AS team_label
+                 FROM locker_requests lr
+                 LEFT JOIN teams t ON t.id = lr.team_id
+                 LEFT JOIN lockers l ON l.id = lr.locker_id"
+                . ($teamId !== null ? " WHERE lr.team_id = {$teamId}" : '')
+                . ' ORDER BY lr.submitted_at DESC, lr.id DESC',
+            'desk-assignments' => "SELECT da.id, da.desk_id, da.desk_number, da.team_id, da.usage_type,
+                        da.assigned_from, da.assigned_until, da.notes, t.name AS team_name
+                 FROM desk_assignments da
+                 LEFT JOIN teams t ON t.id = da.team_id"
+                . ($teamId !== null ? " WHERE da.team_id = {$teamId}" : '')
+                . ' ORDER BY da.desk_number, da.assigned_from DESC',
             'payment-history' => "SELECT t.id, t.tx_date, t.amount, t.description, t.payment_reference, t.payment_status, t.notes,
                         t.fiscal_year, t.month_index, t.confirmed, t.announced_at, t.reviewed_at,
                         tm.name AS team_name,
@@ -535,7 +574,7 @@ final class Repository
                 'desks' => count($profile['desks']),
                 'desk_numbers' => implode('، ', array_map(static fn ($d) => (string) ($d['number'] ?? ''), $profile['desks'])),
                 'lockers' => count($profile['lockers']),
-                'debt_total' => (int) ($profile['summary']['debt_total'] ?? 0),
+                'debt_total' => $this->contractDebtForTeam($teamId),
                 'paid_total' => (int) ($profile['summary']['paid_total'] ?? 0),
                 'pending_payments' => $this->preparedScalar(
                     "SELECT COUNT(*) FROM transactions WHERE team_id = :id AND category = 'واریز تیم' AND payment_status = 'pending'",
@@ -608,12 +647,12 @@ final class Repository
         $teamId = Access::scopedTeamId();
         if ($teamId !== null) {
             $teams = $this->preparedRows(
-                'SELECT id, entity_code, entity_type, name FROM teams WHERE id = :id',
+                'SELECT id, entity_code, entity_type, name, contract_start, contract_end FROM teams WHERE id = :id',
                 ['id' => $teamId]
             );
         } else {
             $teams = $this->preparedRows(
-                'SELECT id, entity_code, entity_type, name FROM teams ORDER BY entity_type, name'
+                'SELECT id, entity_code, entity_type, name, contract_start, contract_end FROM teams ORDER BY entity_type, name'
             );
         }
         $months = [];
@@ -659,8 +698,21 @@ final class Repository
         $rows = [];
         foreach ($teams as $team) {
             $cells = [];
+            $contractStart = (string) ($team['contract_start'] ?? '');
+            $contractEnd = (string) ($team['contract_end'] ?? '');
             foreach ($months as $month) {
                 $idx = (int) $month['index'];
+                if (!JalaliDate::monthInContract($fiscalYear, $idx, $contractStart, $contractEnd)) {
+                    $cells[] = [
+                        'month_index' => $idx,
+                        'charge_amount' => 0,
+                        'rent_amount' => 0,
+                        'amount_due' => 0,
+                        'amount_paid' => 0,
+                        'status' => 'خارج از قرارداد',
+                    ];
+                    continue;
+                }
                 $due = $chargeMap[$team['id']][$idx] ?? null;
                 $paid = $paymentMap[$team['id']][$idx] ?? 0;
                 $amountDue = (int) ($due['amount'] ?? 0);
@@ -728,6 +780,21 @@ final class Repository
                  FROM lockers l WHERE l.team_id = :id ORDER BY l.locker_number',
                 ['id' => $teamId]
             ),
+            'desk_assignments' => $this->preparedRows(
+                'SELECT da.id, da.desk_id, da.desk_number, da.usage_type, da.assigned_from, da.assigned_until, da.notes
+                 FROM desk_assignments da
+                 WHERE da.team_id = :id
+                 ORDER BY da.desk_number, da.assigned_from DESC',
+                ['id' => $teamId]
+            ),
+            'locker_requests' => $this->preparedRows(
+                'SELECT lr.id, lr.notes, lr.status, lr.submitted_at, lr.reviewed_at, lr.rejection_reason, l.locker_number
+                 FROM locker_requests lr
+                 LEFT JOIN lockers l ON l.id = lr.locker_id
+                 WHERE lr.team_id = :id
+                 ORDER BY lr.submitted_at DESC',
+                ['id' => $teamId]
+            ),
             'charges' => $this->preparedRows(
                 'SELECT id, fiscal_year, month_index, month_name, charge_amount, rent_amount, amount, note
                  FROM charges WHERE team_id = :id ORDER BY fiscal_year, month_index',
@@ -749,13 +816,9 @@ final class Repository
                 ['id' => $teamId]
             ),
             'summary' => [
-                'charge_total' => $this->preparedScalar('SELECT COALESCE(SUM(amount), 0) FROM charges WHERE team_id = :id', ['id' => $teamId]),
-                'paid_total' => $this->preparedScalar("SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE team_id = :id AND category = 'واریز تیم' AND confirmed = 1", ['id' => $teamId]),
-                'debt_total' => $this->preparedScalar(
-                    'SELECT COALESCE((SELECT SUM(amount) FROM charges WHERE team_id = :id), 0)
-                          - COALESCE((SELECT SUM(amount) FROM transactions WHERE team_id = :id2 AND category = \'واریز تیم\' AND confirmed = 1), 0)',
-                    ['id' => $teamId, 'id2' => $teamId]
-                ),
+                'charge_total' => $this->contractChargeTotalForTeam($teamId),
+                'paid_total' => $this->contractPaidTotalForTeam($teamId),
+                'debt_total' => $this->contractDebtForTeam($teamId),
             ],
         ];
     }
@@ -798,6 +861,60 @@ final class Repository
     {
         return 'SELECT COALESCE((SELECT SUM(amount) FROM charges), 0)
                      - COALESCE((SELECT SUM(amount) FROM transactions WHERE category = \'واریز تیم\' AND confirmed = 1), 0)';
+    }
+
+    private function contractDebtForTeam(int $teamId): int
+    {
+        return max(0, $this->contractChargeTotalForTeam($teamId) - $this->contractPaidTotalForTeam($teamId));
+    }
+
+    private function contractChargeTotalForTeam(int $teamId): int
+    {
+        $team = $this->preparedRow('SELECT contract_start, contract_end FROM teams WHERE id = :id', ['id' => $teamId]);
+        if ($team === null) {
+            return 0;
+        }
+        $total = 0;
+        foreach ($this->preparedRows(
+            'SELECT fiscal_year, month_index, amount FROM charges WHERE team_id = :id',
+            ['id' => $teamId]
+        ) as $row) {
+            if (JalaliDate::monthInContract(
+                (string) ($row['fiscal_year'] ?? ''),
+                (int) ($row['month_index'] ?? 0),
+                (string) ($team['contract_start'] ?? ''),
+                (string) ($team['contract_end'] ?? '')
+            )) {
+                $total += (int) ($row['amount'] ?? 0);
+            }
+        }
+
+        return $total;
+    }
+
+    private function contractPaidTotalForTeam(int $teamId): int
+    {
+        $team = $this->preparedRow('SELECT contract_start, contract_end FROM teams WHERE id = :id', ['id' => $teamId]);
+        if ($team === null) {
+            return 0;
+        }
+        $total = 0;
+        foreach ($this->preparedRows(
+            "SELECT fiscal_year, month_index, amount FROM transactions
+             WHERE team_id = :id AND category = 'واریز تیم' AND confirmed = 1",
+            ['id' => $teamId]
+        ) as $row) {
+            if (JalaliDate::monthInContract(
+                (string) ($row['fiscal_year'] ?? ''),
+                (int) ($row['month_index'] ?? 0),
+                (string) ($team['contract_start'] ?? ''),
+                (string) ($team['contract_end'] ?? '')
+            )) {
+                $total += (int) ($row['amount'] ?? 0);
+            }
+        }
+
+        return $total;
     }
 
     private function currentFiscalYear(): string

@@ -12,9 +12,11 @@ final class Schema
             self::migrateMysql($pdo);
         }
         self::ensureColumns($pdo);
+        self::ensureWorkflowTables($pdo);
         self::dropLegacyColumns($pdo);
         self::dropUnusedTables($pdo);
         self::seedDesks($pdo);
+        self::seedDeskAssignments($pdo);
     }
 
     public static function reset(PDO $pdo): void
@@ -25,6 +27,8 @@ final class Schema
             'transactions',
             'charges',
             'rate_settings',
+            'locker_requests',
+            'desk_assignments',
             'lockers',
             'members',
             'desks',
@@ -252,6 +256,8 @@ final class Schema
             'teams' => [
                 'entity_code' => 'VARCHAR(32) NULL',
                 'entity_type' => "VARCHAR(32) NOT NULL DEFAULT 'team'",
+                'contract_start' => 'VARCHAR(32) NULL',
+                'contract_end' => 'VARCHAR(32) NULL',
             ],
             'members' => [
                 'member_code' => 'VARCHAR(32) NULL',
@@ -261,6 +267,7 @@ final class Schema
                 'submitted_at' => 'VARCHAR(32) NULL',
                 'reviewed_at' => 'VARCHAR(32) NULL',
                 'rejection_reason' => 'TEXT NULL',
+                'wants_access' => 'TINYINT NOT NULL DEFAULT 0',
             ],
             'lockers' => [
                 'team_id' => 'INT NULL',
@@ -325,6 +332,103 @@ final class Schema
         }
 
         self::seedCenterSettings($pdo);
+    }
+
+    private static function ensureWorkflowTables(PDO $pdo): void
+    {
+        $isSqlite = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite';
+        if ($isSqlite) {
+            $pdo->exec(
+                "CREATE TABLE IF NOT EXISTS locker_requests (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    team_id INTEGER NOT NULL,
+                    member_id INTEGER,
+                    notes TEXT,
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    submitted_at TEXT,
+                    reviewed_at TEXT,
+                    rejection_reason TEXT,
+                    locker_id INTEGER
+                );
+                CREATE TABLE IF NOT EXISTS desk_assignments (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    desk_id INTEGER NOT NULL,
+                    desk_number INTEGER NOT NULL,
+                    team_id INTEGER NOT NULL,
+                    usage_type TEXT NOT NULL DEFAULT 'formal',
+                    assigned_from TEXT NOT NULL,
+                    assigned_until TEXT,
+                    notes TEXT
+                );"
+            );
+        } else {
+            $pdo->exec(
+                "CREATE TABLE IF NOT EXISTS locker_requests (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    team_id INT NOT NULL,
+                    member_id INT NULL,
+                    notes TEXT NULL,
+                    status VARCHAR(32) NOT NULL DEFAULT 'pending',
+                    submitted_at VARCHAR(32) NULL,
+                    reviewed_at VARCHAR(32) NULL,
+                    rejection_reason TEXT NULL,
+                    locker_id INT NULL,
+                    INDEX idx_locker_requests_team (team_id),
+                    INDEX idx_locker_requests_status (status)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+            );
+            $pdo->exec(
+                "CREATE TABLE IF NOT EXISTS desk_assignments (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    desk_id INT NOT NULL,
+                    desk_number INT NOT NULL,
+                    team_id INT NOT NULL,
+                    usage_type VARCHAR(32) NOT NULL DEFAULT 'formal',
+                    assigned_from VARCHAR(32) NOT NULL,
+                    assigned_until VARCHAR(32) NULL,
+                    notes TEXT NULL,
+                    INDEX idx_desk_assignments_desk (desk_id),
+                    INDEX idx_desk_assignments_team (team_id)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+            );
+        }
+    }
+
+    private static function seedDeskAssignments(PDO $pdo): void
+    {
+        if (!self::tableExists($pdo, 'desk_assignments')) {
+            return;
+        }
+        $today = JalaliDate::todayParts()['formatted'];
+        $desks = $pdo->query(
+            'SELECT d.id, d.number, d.team_id, d.usage_type, d.notes, t.contract_end
+             FROM desks d
+             INNER JOIN teams t ON t.id = d.team_id
+             WHERE d.team_id IS NOT NULL'
+        )->fetchAll();
+        foreach ($desks as $desk) {
+            $deskId = (int) $desk['id'];
+            $exists = $pdo->prepare(
+                'SELECT id FROM desk_assignments WHERE desk_id = :desk_id AND assigned_until IS NULL LIMIT 1'
+            );
+            $exists->execute(['desk_id' => $deskId]);
+            if ($exists->fetchColumn() !== false) {
+                continue;
+            }
+            $contractEnd = JalaliDate::tryNormalize((string) ($desk['contract_end'] ?? ''));
+            $pdo->prepare(
+                'INSERT INTO desk_assignments (desk_id, desk_number, team_id, usage_type, assigned_from, assigned_until, notes)
+                 VALUES (:desk_id, :desk_number, :team_id, :usage_type, :assigned_from, :assigned_until, :notes)'
+            )->execute([
+                'desk_id' => $deskId,
+                'desk_number' => (int) $desk['number'],
+                'team_id' => (int) $desk['team_id'],
+                'usage_type' => (string) ($desk['usage_type'] ?? 'formal'),
+                'assigned_from' => $today,
+                'assigned_until' => $contractEnd !== '' ? $contractEnd : null,
+                'notes' => $desk['notes'] ?? null,
+            ]);
+        }
     }
 
     private static function seedCenterSettings(PDO $pdo): void

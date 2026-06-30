@@ -20,10 +20,12 @@ final class Seeder
                AND source_file = :source LIMIT 1'
         );
 
-        $teams = $this->pdo->query('SELECT id FROM teams')->fetchAll();
+        $teams = $this->pdo->query('SELECT id, contract_start, contract_end FROM teams')->fetchAll();
         foreach ($teams as $team) {
             $teamId = (int) $team['id'];
-            $amounts = $this->monthlyAmountsForTeam($teamId, $fiscalYear);
+            $contractStart = (string) ($team['contract_start'] ?? '');
+            $contractEnd = (string) ($team['contract_end'] ?? '');
+            $amounts = $this->monthlyAmountsForTeam($teamId, $fiscalYear, $contractStart, $contractEnd);
             foreach ($amounts as $monthIndex => $parts) {
                 if (($parts['amount'] ?? 0) <= 0) {
                     continue;
@@ -56,23 +58,58 @@ final class Seeder
     /**
      * @return array<int, array{charge_amount:int, rent_amount:int, amount:int}>
      */
-    public function monthlyAmountsForTeam(int $teamId, string $fiscalYear): array
-    {
-        $deskStats = $this->pdo->prepare(
-            'SELECT COUNT(*) AS desk_count,
-                    COALESCE(SUM(CASE WHEN informal_seats > 0 OR usage_type IN (\'informal\', \'mixed\') THEN 1 ELSE 0 END), 0) AS informal_desk_count
-             FROM desks WHERE team_id = :team_id'
+    public function monthlyAmountsForTeam(
+        int $teamId,
+        string $fiscalYear,
+        ?string $contractStart = null,
+        ?string $contractEnd = null
+    ): array {
+        $assignments = $this->pdo->prepare(
+            'SELECT desk_number, usage_type, assigned_from, assigned_until
+             FROM desk_assignments WHERE team_id = :team_id'
         );
-        $deskStats->execute(['team_id' => $teamId]);
-        $stats = $deskStats->fetch() ?: ['desk_count' => 0, 'informal_desk_count' => 0];
-        $deskCount = (int) ($stats['desk_count'] ?? 0);
-        $informalDeskCount = (int) ($stats['informal_desk_count'] ?? 0);
-        if ($deskCount === 0) {
-            return [];
+        $assignments->execute(['team_id' => $teamId]);
+        $rows = $assignments->fetchAll();
+        if ($rows === []) {
+            $deskRows = $this->pdo->prepare('SELECT number, usage_type FROM desks WHERE team_id = :team_id');
+            $deskRows->execute(['team_id' => $teamId]);
+            $deskList = $deskRows->fetchAll();
+            if ($deskList === []) {
+                return [];
+            }
+            $today = JalaliDate::todayParts()['formatted'];
+            $fallbackFrom = JalaliDate::tryNormalize($contractStart ?? '');
+            if ($fallbackFrom === '') {
+                $fallbackFrom = sprintf('%s/01/01', JalaliDate::normalizeDigits($fiscalYear));
+            }
+            $rows = array_map(static fn (array $desk): array => [
+                'desk_number' => (int) $desk['number'],
+                'usage_type' => (string) ($desk['usage_type'] ?? 'formal'),
+                'assigned_from' => $fallbackFrom,
+                'assigned_until' => $contractEnd,
+            ], $deskList);
         }
 
         $months = [];
         for ($month = 1; $month <= 12; $month++) {
+            if (!JalaliDate::monthInContract($fiscalYear, $month, $contractStart, $contractEnd)) {
+                continue;
+            }
+            $deskCount = 0;
+            $informalDeskCount = 0;
+            foreach ($rows as $assignment) {
+                if (!$this->assignmentOverlapsMonth($assignment, $fiscalYear, $month)) {
+                    continue;
+                }
+                $deskCount++;
+                $usage = (string) ($assignment['usage_type'] ?? 'formal');
+                if (in_array($usage, ['informal', 'mixed'], true)) {
+                    $informalDeskCount++;
+                }
+            }
+            if ($deskCount === 0) {
+                continue;
+            }
             $rates = $this->ratesForMonth($fiscalYear, $month);
             $chargeRate = (int) ($rates['charge_rate'] ?? 0);
             $rentRate = (int) ($rates['informal_rent_rate'] ?? 0);
@@ -86,6 +123,25 @@ final class Seeder
         }
 
         return $months;
+    }
+
+    /**
+     * @param array<string, mixed> $assignment
+     */
+    private function assignmentOverlapsMonth(array $assignment, string $fiscalYear, int $monthIndex): bool
+    {
+        $monthStart = JalaliDate::monthStart($fiscalYear, $monthIndex);
+        $monthEnd = JalaliDate::monthEnd($fiscalYear, $monthIndex);
+        $from = JalaliDate::tryNormalize($assignment['assigned_from'] ?? '');
+        $until = JalaliDate::tryNormalize($assignment['assigned_until'] ?? '');
+        if ($from !== '' && JalaliDate::compare($monthEnd, $from) < 0) {
+            return false;
+        }
+        if ($until !== '' && JalaliDate::compare($monthStart, $until) > 0) {
+            return false;
+        }
+
+        return true;
     }
 
     /**

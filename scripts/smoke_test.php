@@ -18,8 +18,8 @@ $assert = static function (bool $ok, string $message) use (&$errors): void {
     }
 };
 
-$pdo->exec("INSERT INTO teams (entity_type, entity_code, name, leader, phone, source_file, source_sheet)
-            VALUES ('company', 'C-001', 'آوان', 'مهدی', '09398283658', 'manual', 'panel')");
+$pdo->exec("INSERT INTO teams (entity_type, entity_code, name, leader, phone, contract_start, contract_end, source_file, source_sheet)
+            VALUES ('company', 'C-001', 'آوان', 'مهدی', '09398283658', '1405/01/01', '1405/12/29', 'manual', 'panel')");
 EntityAccounts::provisionForTeam($pdo, 1, 'C-001', 'مهدی');
 $teamsPage = $repo->paginatedResource('teams', 1, 25);
 $assert(($teamsPage['rows'][0]['portal_username'] ?? '') === 'c001', 'team portal username generated');
