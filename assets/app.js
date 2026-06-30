@@ -95,17 +95,35 @@ const cardConfig = [
 
 const moneyCards = new Set(["charge_total", "income_total", "expense_total", "debt_total", "paid_total"]);
 
+const monthNames = ["", "فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور", "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"];
+
 const resourceColumns = {
-  teams: ["entity_code", "entity_type", "name", "leader", "phone", "portal_username", "portal_password", "desk_count", "informal_seats", "joined_at", "warning"],
+  teams: ["entity_code", "entity_type", "name", "leader", "phone", "portal_username", "portal_password", "desk_count", "informal_seats", "joined_at", "warning", "notes"],
   members: ["member_code", "full_name", "team_label", "entity_type", "desk_numbers", "access_code", "phone", "national_id"],
   desks: ["number", "team_name", "usage_type", "formal_seats", "informal_seats"],
   lockers: ["locker_number", "status", "team_label", "delivered_at", "key_number", "spare_key"],
   rate_settings: ["fiscal_year", "title", "charge_rate", "informal_rent_rate", "effective_from", "notes"],
-  panel_users: ["username", "role", "team_label", "full_name", "is_active"],
+  panel_users: ["username", "role", "full_name", "is_active"],
   charges: ["fiscal_year", "team_name", "month_name", "charge_amount", "rent_amount", "amount", "note"],
-  transactions: ["tx_date", "description", "amount", "category", "team_name", "fiscal_year", "month_index", "confirmed"],
+  transactions: ["tx_date", "description", "amount", "category", "team_name", "fiscal_year", "month_name", "confirmed"],
 };
 
+const teamPanelHiddenColumns = {
+  members: ["team_label", "entity_type"],
+  desks: ["team_name"],
+  lockers: ["team_label"],
+  charges: ["team_name"],
+};
+
+const createDefaults = {
+  charges: () => ({ fiscal_year: window.MECHINNO?.fiscalYear || "" }),
+  rate_settings: () => ({ fiscal_year: window.MECHINNO?.fiscalYear || "" }),
+  transactions: () => ({
+    fiscal_year: window.MECHINNO?.fiscalYear || "",
+    tx_date: window.MECHINNO?.today || "",
+    confirmed: "1",
+  }),
+};
 const csrfToken = window.MECHINNO?.csrfToken || "";
 const canWrite = window.MECHINNO?.canWrite === true;
 const panelMode = window.MECHINNO?.panel || "admin";
@@ -123,7 +141,7 @@ const hiddenColumns = new Set([
 const plainColumns = new Set([
   "phone", "national_id", "access_code", "member_code", "entity_code",
   "fiscal_year", "tx_date", "effective_from", "joined_at", "delivered_at",
-  "key_number", "number", "locker_number", "desk_numbers", "month_index",
+  "key_number", "number", "locker_number", "desk_numbers", "month_index", "month_name",
   "portal_username", "portal_password",
 ]);
 
@@ -661,7 +679,7 @@ const openTeamProfile = async (teamId) => {
       return null;
     })}
     ${profileSection("شارژها", data.charges, ["fiscal_year", "month_name", "charge_amount", "rent_amount", "amount"])}
-    ${profileSection("دریافت شارژ از نهاد", data.payments, ["tx_date", "fiscal_year", "month_index", "amount"])}
+    ${profileSection("دریافت شارژ از نهاد", data.payments, ["tx_date", "fiscal_year", "month_name", "amount"])}
     <div class="modal-actions"><button class="button ghost" type="button" data-close-modal>بستن</button></div>`;
 
   form.querySelector("[data-close-modal]").addEventListener("click", closeModal);
@@ -710,7 +728,6 @@ const openDepositModal = async ({ teamId, teamName, fiscalYear, monthIndex, mont
   const meta = await loadCrudMeta();
   const definition = meta.resources.transactions;
   const remaining = Math.max(0, Number(amountDue) - Number(amountPaid));
-  const monthNames = ["", "فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور", "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"];
   const resolvedMonthName = monthName || monthNames[monthIndex] || "";
   openRecordModal({
     resource: "transactions",
@@ -791,13 +808,17 @@ const openRecordModal = ({ resource, definition, record = null, onSaved, title =
   const modal = ensureModal();
   const form = modal.querySelector("#crudForm");
   const isEdit = Boolean(record?.id);
+  const formRecord = { ...(record || {}) };
+  if (!isEdit && createDefaults[resource]) {
+    Object.assign(formRecord, createDefaults[resource]());
+  }
   modal.querySelector("#crudModalTitle").textContent = title || `${isEdit ? "ویرایش" : "افزودن"} ${definition.title}`;
   form.innerHTML = `
     <div class="crud-grid">
       ${Object.entries(definition.fields).map(([name, meta]) => `
         <label class="${meta.type === "textarea" ? "wide" : ""}">
           <span>${escapeHtml(meta.label)}${meta.required ? " *" : ""}</span>
-          ${fieldInput(name, meta, record ? record[name] : "")}
+          ${fieldInput(name, meta, formRecord[name] ?? "")}
         </label>`).join("")}
     </div>
     <div class="modal-actions">
@@ -832,6 +853,12 @@ const formatCell = (column, value, row, resource) => {
     return escapeHtml(value || "—");
   }
   if (column === "confirmed") return Number(value) === 1 ? "بله" : "خیر";
+  if (column === "month_name" && !value && row.month_index) {
+    return formatPlain(monthNames[Number(row.month_index)] || row.month_index);
+  }
+  if (column === "month_index") {
+    return formatPlain(monthNames[Number(value)] || value);
+  }
   if (column === "role") {
     const map = { admin_editor: "مدیر — ویرایش", admin_viewer: "مدیر — مشاهده", team: "نهاد" };
     return escapeHtml(map[value] || value || "—");
@@ -861,7 +888,11 @@ const formatCell = (column, value, row, resource) => {
 };
 
 const resolveColumns = (rows, resource) => {
-  const preferred = resourceColumns[resource] ?? [];
+  let preferred = resourceColumns[resource] ?? [];
+  if (panelMode === "team" && teamPanelHiddenColumns[resource]) {
+    const hidden = new Set(teamPanelHiddenColumns[resource]);
+    preferred = preferred.filter((column) => !hidden.has(column));
+  }
   if (!rows.length) return preferred;
   const available = new Set(Object.keys(rows[0]));
   return preferred.filter((c) => available.has(c));

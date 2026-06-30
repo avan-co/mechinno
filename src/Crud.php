@@ -81,7 +81,7 @@ final class Crud
                 'source' => true,
                 'fields' => [
                     'locker_number' => ['label' => 'شماره کمد', 'type' => 'number', 'required' => true],
-                    'team_id' => ['label' => 'نهاد', 'type' => 'select', 'options' => [], 'required' => true],
+                    'team_id' => ['label' => 'نهاد', 'type' => 'select', 'options' => []],
                     'status' => ['label' => 'وضعیت', 'type' => 'select', 'options' => ['تخصیص یافته', 'رزرو', 'خالی', 'خراب']],
                     'delivered_at' => ['label' => 'تاریخ تحویل', 'type' => 'date', 'placeholder' => '1404/01/01'],
                     'key_number' => ['label' => 'شماره کلید', 'type' => 'text'],
@@ -161,7 +161,6 @@ final class Crud
                         ],
                         'required' => true,
                     ],
-                    'team_id' => ['label' => 'نهاد (برای کاربر نهاد)', 'type' => 'select', 'options' => []],
                     'full_name' => ['label' => 'نام نمایشی', 'type' => 'text'],
                     'is_active' => ['label' => 'فعال', 'type' => 'select', 'options' => ['1' => 'بله', '0' => 'خیر'], 'required' => true],
                 ],
@@ -268,6 +267,9 @@ final class Crud
 
         if ($resource === 'transactions') {
             $this->syncTeamDepositIncome($id);
+        }
+        if ($resource === 'teams' && isset($data['leader'])) {
+            EntityAccounts::syncLeaderName($this->pdo, $id, (string) $data['leader']);
         }
 
         return $this->find($resource, $id);
@@ -399,6 +401,22 @@ final class Crud
             if ($creating && empty($data['status'])) {
                 $data['status'] = 'خالی';
             }
+            $current = [];
+            if (!$creating && $recordId > 0) {
+                $statement = $this->pdo->prepare('SELECT status, team_id FROM lockers WHERE id = :id');
+                $statement->execute(['id' => $recordId]);
+                $current = $statement->fetch() ?: [];
+            }
+            $status = (string) ($data['status'] ?? $current['status'] ?? 'خالی');
+            if (in_array($status, ['خالی', 'خراب'], true)) {
+                $data['team_id'] = null;
+            } elseif (in_array($status, ['تخصیص یافته', 'رزرو'], true)) {
+                $teamId = $data['team_id'] ?? $current['team_id'] ?? null;
+                if ($this->blank($teamId)) {
+                    throw new InvalidArgumentException('برای وضعیت «تخصیص یافته» یا «رزرو» انتخاب نهاد الزامی است.');
+                }
+                $data['team_id'] = (int) $teamId;
+            }
             $lockerNumber = (int) ($data['locker_number'] ?? 0);
             if ($lockerNumber > 0) {
                 $statement = $this->pdo->prepare(
@@ -412,6 +430,9 @@ final class Crud
                 if ($statement->fetchColumn() !== false) {
                     throw new InvalidArgumentException('این شماره کمد قبلاً ثبت شده است.');
                 }
+            }
+            if (!empty($data['team_id']) && empty($data['status']) && empty($current['status'] ?? null)) {
+                $data['status'] = 'تخصیص یافته';
             }
         }
         if ($resource === 'transactions') {
@@ -436,6 +457,15 @@ final class Crud
             }
             if (isset($data['month_index'])) {
                 $data['month_name'] = self::monthName((int) $data['month_index']);
+            }
+            $teamId = (int) ($data['team_id'] ?? 0);
+            if ($teamId > 0) {
+                $statement = $this->pdo->prepare('SELECT name FROM teams WHERE id = :id');
+                $statement->execute(['id' => $teamId]);
+                $teamName = $statement->fetchColumn();
+                if ($teamName !== false) {
+                    $data['team_name'] = (string) $teamName;
+                }
             }
             $charge = (int) ($data['charge_amount'] ?? 0);
             $rent = (int) ($data['rent_amount'] ?? 0);
@@ -477,9 +507,6 @@ final class Crud
             if ($formal + $informal > 2) {
                 throw new InvalidArgumentException('هر میز حداکثر ۲ صندلی دارد.');
             }
-        }
-        if ($resource === 'lockers' && !empty($data['team_id']) && empty($data['status'])) {
-            $data['status'] = 'تخصیص یافته';
         }
     }
 

@@ -80,6 +80,22 @@ final class EntityAccounts
         );
     }
 
+    public static function syncLeaderName(PDO $pdo, int $teamId, string $leaderName): void
+    {
+        if (!self::tableReady($pdo)) {
+            return;
+        }
+
+        $fullName = $leaderName !== '' ? $leaderName : 'مسئول نهاد';
+        $pdo->prepare(
+            'UPDATE panel_users SET full_name = :full_name WHERE team_id = :team_id AND role = :role'
+        )->execute([
+            'full_name' => $fullName,
+            'team_id' => $teamId,
+            'role' => Access::ROLE_TEAM,
+        ]);
+    }
+
     public static function deleteForTeam(PDO $pdo, int $teamId): void
     {
         $pdo->prepare('DELETE FROM panel_users WHERE team_id = :team_id AND role = :role')

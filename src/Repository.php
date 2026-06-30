@@ -328,7 +328,14 @@ final class Repository
                 . ' ORDER BY c.fiscal_year, t.name, c.month_index',
             'transactions' => "SELECT t.id, t.tx_date, t.description, t.amount, t.category, t.team_id,
                         t.fiscal_year, t.month_index, t.confirmed, t.notes,
-                        tm.name AS team_name
+                        tm.name AS team_name,
+                        CASE t.month_index
+                            WHEN 1 THEN 'فروردین' WHEN 2 THEN 'اردیبهشت' WHEN 3 THEN 'خرداد'
+                            WHEN 4 THEN 'تیر' WHEN 5 THEN 'مرداد' WHEN 6 THEN 'شهریور'
+                            WHEN 7 THEN 'مهر' WHEN 8 THEN 'آبان' WHEN 9 THEN 'آذر'
+                            WHEN 10 THEN 'دی' WHEN 11 THEN 'بهمن' WHEN 12 THEN 'اسفند'
+                            ELSE ''
+                        END AS month_name
                  FROM transactions t
                  LEFT JOIN teams tm ON tm.id = t.team_id
                  ORDER BY t.tx_date DESC, t.id DESC",
@@ -533,7 +540,14 @@ final class Repository
                 ['id' => $teamId]
             ),
             'payments' => $this->preparedRows(
-                "SELECT id, tx_date, description, amount, category, fiscal_year, month_index, confirmed, notes
+                "SELECT id, tx_date, description, amount, category, fiscal_year, month_index, confirmed, notes,
+                        CASE month_index
+                            WHEN 1 THEN 'فروردین' WHEN 2 THEN 'اردیبهشت' WHEN 3 THEN 'خرداد'
+                            WHEN 4 THEN 'تیر' WHEN 5 THEN 'مرداد' WHEN 6 THEN 'شهریور'
+                            WHEN 7 THEN 'مهر' WHEN 8 THEN 'آبان' WHEN 9 THEN 'آذر'
+                            WHEN 10 THEN 'دی' WHEN 11 THEN 'بهمن' WHEN 12 THEN 'اسفند'
+                            ELSE ''
+                        END AS month_name
                  FROM transactions
                  WHERE team_id = :id AND category = 'واریز تیم'
                  ORDER BY fiscal_year, month_index, tx_date",

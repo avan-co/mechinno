@@ -46,6 +46,16 @@ $locker = $crud->create('lockers', [
 ]);
 $assert((int) $locker['team_id'] === 1, 'locker assigned to team');
 
+$emptyLocker = $crud->create('lockers', [
+    'locker_number' => '99',
+    'status' => 'خالی',
+]);
+$assert(!isset($emptyLocker['team_id']) || $emptyLocker['team_id'] === null, 'empty locker has no team');
+
+$crud->update('teams', 1, ['leader' => 'احمد جدید']);
+$portalName = (string) $pdo->query("SELECT full_name FROM panel_users WHERE team_id = 1 AND role = 'team'")->fetchColumn();
+$assert($portalName === 'احمد جدید', 'leader update syncs portal full_name');
+
 $crud->create('rate_settings', [
     'fiscal_year' => '1405',
     'title' => 'نرخ اول',
@@ -80,6 +90,8 @@ $crud->create('charges', [
     'rent_amount' => '0',
     'amount' => '999',
 ]);
+$chargeRow = $repo->paginatedResource('charges', 1, 25)['rows'][0] ?? [];
+$assert(($chargeRow['team_name'] ?? '') === 'آوان', 'charge stores team_name from join');
 $beforeManual = count($repo->resource('charges'));
 (new Seeder($pdo))->recalculateCharges('1405');
 $afterManual = $repo->resource('charges');
@@ -151,6 +163,7 @@ $assert(!isset($teamSummary['debt_by_team']), 'team summary has no admin debt ch
 $_SESSION['mechinno_role'] = Access::ROLE_ADMIN_VIEWER;
 $viewerMeta = $crud->meta();
 $assert(isset($viewerMeta['resources']['panel_users']), 'viewer can read panel_users meta');
+$assert(!isset($viewerMeta['resources']['panel_users']['fields']['team_id']), 'panel_users form has no team_id');
 $assert(isset($viewerMeta['resources']['transactions']), 'viewer can read transactions meta');
 
 $_SESSION = [];

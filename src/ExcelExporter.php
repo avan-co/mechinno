@@ -22,9 +22,12 @@ final class ExcelExporter
                     t.name, t.leader, t.phone,
                     (SELECT COUNT(*) FROM desks d WHERE d.team_id = t.id),
                     (SELECT COALESCE(SUM(d.informal_seats), 0) FROM desks d WHERE d.team_id = t.id),
-                    t.joined_at, t.warning, t.notes
-                    FROM teams t ORDER BY t.entity_type, t.name",
-                'headers' => ['کد', 'نوع', 'نام', 'مسئول', 'تماس', 'تعداد میز', 'صندلی غیررسمی', 'عضویت', 'اخطار', 'توضیحات'],
+                    t.joined_at, t.warning, t.notes,
+                    u.username, u.password_plain
+                    FROM teams t
+                    LEFT JOIN panel_users u ON u.team_id = t.id AND u.role = 'team'
+                    ORDER BY t.entity_type, t.name",
+                'headers' => ['کد', 'نوع', 'نام', 'مسئول', 'تماس', 'تعداد میز', 'صندلی غیررسمی', 'عضویت', 'اخطار', 'توضیحات', 'نام کاربری نهاد', 'رمز ورود نهاد'],
             ],
             'members' => [
                 'title' => 'اعضا',
@@ -97,7 +100,15 @@ final class ExcelExporter
                 'query' => "SELECT t.tx_date, t.description, t.amount,
                             CASE t.category WHEN 'واریز تیم' THEN 'دریافت از نهاد' ELSE t.category END,
                             tm.name AS team_name,
-                            t.fiscal_year, t.month_index, t.confirmed, t.notes
+                            t.fiscal_year,
+                            CASE t.month_index
+                                WHEN 1 THEN 'فروردین' WHEN 2 THEN 'اردیبهشت' WHEN 3 THEN 'خرداد'
+                                WHEN 4 THEN 'تیر' WHEN 5 THEN 'مرداد' WHEN 6 THEN 'شهریور'
+                                WHEN 7 THEN 'مهر' WHEN 8 THEN 'آبان' WHEN 9 THEN 'آذر'
+                                WHEN 10 THEN 'دی' WHEN 11 THEN 'بهمن' WHEN 12 THEN 'اسفند'
+                                ELSE ''
+                            END,
+                            t.confirmed, t.notes
                             FROM transactions t
                             LEFT JOIN teams tm ON tm.id = t.team_id
                             ORDER BY t.tx_date DESC, t.id DESC",
