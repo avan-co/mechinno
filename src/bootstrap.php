@@ -123,6 +123,9 @@ function safe_error_message(Throwable $exception): string
         }
     } catch (Throwable) {
     }
+    if ($exception instanceof PDOException) {
+        return 'اتصال به دیتابیس برقرار نشد. تنظیمات db در config.php را بررسی کنید.';
+    }
     return 'خطای داخلی رخ داد. تنظیمات دیتابیس و فایل‌های راه‌اندازی را بررسی کنید.';
 }
 
