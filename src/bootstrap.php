@@ -101,15 +101,30 @@ function require_csrf_html(): ?string
     return null;
 }
 
+function log_exception(Throwable $exception): void
+{
+    $message = sprintf(
+        '[%s] %s in %s:%d',
+        $exception::class,
+        $exception->getMessage(),
+        $exception->getFile(),
+        $exception->getLine()
+    );
+    error_log($message);
+}
+
 function safe_error_message(Throwable $exception): string
 {
-    error_log($exception);
+    log_exception($exception);
     try {
         $config = app_configured() ? app_config() : [];
         if ((bool) ($config['debug'] ?? false)) {
             return $exception->getMessage();
         }
     } catch (Throwable) {
+    }
+    if ($exception instanceof PDOException) {
+        return 'اتصال به دیتابیس برقرار نشد. تنظیمات db در config.php را بررسی کنید.';
     }
     return 'خطای داخلی رخ داد. تنظیمات دیتابیس و فایل‌های راه‌اندازی را بررسی کنید.';
 }
