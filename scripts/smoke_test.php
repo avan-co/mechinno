@@ -23,6 +23,8 @@ $pdo->exec("INSERT INTO teams (entity_type, entity_code, name, leader, phone, so
 EntityAccounts::provisionForTeam($pdo, 1, 'C-001', 'مهدی');
 $teamsPage = $repo->paginatedResource('teams', 1, 25);
 $assert(($teamsPage['rows'][0]['portal_username'] ?? '') === 'c001', 'team portal username generated');
+$assert(EntityAccounts::usernameForCode('C-001') === 'c001', 'usernameForCode keeps letters');
+$assert(EntityAccounts::usernameForCode('T-012') === 't012', 'usernameForCode normalizes codes');
 $assert(($teamsPage['rows'][0]['portal_password'] ?? '') !== '', 'team portal password visible to admin');
 
 $pdo->exec('UPDATE desks SET team_id = 1, usage_type = "mixed", formal_seats = 1, informal_seats = 1 WHERE number = 1');

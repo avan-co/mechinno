@@ -113,11 +113,39 @@ final class EntityAccounts
                 (string) ($team['leader'] ?? '')
             );
         }
+
+        self::repairUsernames($pdo);
+    }
+
+    public static function repairUsernames(PDO $pdo): void
+    {
+        if (!self::tableReady($pdo)) {
+            return;
+        }
+
+        $statement = $pdo->prepare(
+            "SELECT u.id, u.username, t.entity_code
+             FROM panel_users u
+             INNER JOIN teams t ON t.id = u.team_id
+             WHERE u.role = :role"
+        );
+        $statement->execute(['role' => Access::ROLE_TEAM]);
+        $rows = $statement->fetchAll();
+
+        foreach ($rows as $row) {
+            $expected = self::usernameForCode((string) ($row['entity_code'] ?? ''));
+            if ($expected === '' || $expected === (string) ($row['username'] ?? '')) {
+                continue;
+            }
+            $username = self::ensureUniqueUsername($pdo, $expected, (int) $row['id']);
+            $pdo->prepare('UPDATE panel_users SET username = :username WHERE id = :id')
+                ->execute(['username' => $username, 'id' => (int) $row['id']]);
+        }
     }
 
     public static function usernameForCode(string $entityCode): string
     {
-        $username = strtolower(preg_replace('/[^a-z0-9]/', '', $entityCode) ?? '');
+        $username = strtolower(preg_replace('/[^a-zA-Z0-9]/', '', $entityCode) ?? '');
 
         return $username !== '' ? $username : 'entity' . random_int(1000, 9999);
     }

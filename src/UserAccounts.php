@@ -22,11 +22,11 @@ final class UserAccounts
             self::upsertUser(
                 $pdo,
                 $adminUser,
-                $adminHash !== '' ? $adminHash : password_hash($adminPassword, PASSWORD_DEFAULT),
                 Access::ROLE_ADMIN_EDITOR,
                 null,
                 'مدیر ویرایشگر',
-                $adminHash === '' ? $adminPassword : null
+                $adminHash !== '' ? null : $adminPassword,
+                $adminHash !== '' ? $adminHash : null
             );
         }
 
@@ -37,11 +37,11 @@ final class UserAccounts
             self::upsertUser(
                 $pdo,
                 $viewerUser,
-                $viewerHash !== '' ? $viewerHash : password_hash($viewerPassword, PASSWORD_DEFAULT),
                 Access::ROLE_ADMIN_VIEWER,
                 null,
                 'مدیر مشاهده‌گر',
-                $viewerHash === '' ? $viewerPassword : null
+                $viewerHash === '' ? $viewerPassword : null,
+                $viewerHash !== '' ? $viewerHash : null
             );
         }
     }
@@ -67,21 +67,28 @@ final class UserAccounts
     private static function upsertUser(
         PDO $pdo,
         string $username,
-        string $passwordHash,
         string $role,
         ?int $teamId,
         string $fullName,
-        ?string $passwordPlain = null
+        ?string $passwordPlain = null,
+        ?string $passwordHashFromConfig = null
     ): void {
         $existing = $pdo->prepare('SELECT id, password_hash FROM panel_users WHERE username = :username');
         $existing->execute(['username' => $username]);
         $row = $existing->fetch();
 
+        $passwordHash = self::resolvePasswordHash(
+            (string) ($row['password_hash'] ?? ''),
+            $passwordPlain,
+            $passwordHashFromConfig
+        );
+
         if ($row !== false) {
-            if (!hash_equals((string) ($row['password_hash'] ?? ''), $passwordHash)) {
+            $storedHash = (string) ($row['password_hash'] ?? '');
+            if ($passwordHash !== null && !hash_equals($storedHash, $passwordHash)) {
                 $update = $pdo->prepare(
                     'UPDATE panel_users SET password_hash = :password_hash, full_name = :full_name'
-                    . ($passwordPlain !== null ? ', password_plain = :password_plain' : '')
+                    . ($passwordPlain !== null && $passwordPlain !== '' ? ', password_plain = :password_plain' : '')
                     . ' WHERE id = :id'
                 );
                 $params = [
@@ -89,12 +96,16 @@ final class UserAccounts
                     'full_name' => $fullName,
                     'id' => (int) $row['id'],
                 ];
-                if ($passwordPlain !== null) {
+                if ($passwordPlain !== null && $passwordPlain !== '') {
                     $params['password_plain'] = $passwordPlain;
                 }
                 $update->execute($params);
             }
 
+            return;
+        }
+
+        if ($passwordHash === null) {
             return;
         }
 
@@ -109,5 +120,29 @@ final class UserAccounts
             'team_id' => $teamId,
             'full_name' => $fullName,
         ]);
+    }
+
+    private static function resolvePasswordHash(
+        string $storedHash,
+        ?string $passwordPlain,
+        ?string $passwordHashFromConfig
+    ): ?string {
+        if ($passwordPlain !== null && $passwordPlain !== '') {
+            if ($storedHash !== '' && password_verify($passwordPlain, $storedHash)) {
+                return $storedHash;
+            }
+
+            return password_hash($passwordPlain, PASSWORD_DEFAULT);
+        }
+
+        if ($passwordHashFromConfig !== null && $passwordHashFromConfig !== '') {
+            if ($storedHash !== '' && hash_equals($storedHash, $passwordHashFromConfig)) {
+                return $storedHash;
+            }
+
+            return $passwordHashFromConfig;
+        }
+
+        return $storedHash !== '' ? $storedHash : null;
     }
 }
