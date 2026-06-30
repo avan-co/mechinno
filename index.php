@@ -138,9 +138,12 @@ $assetVer = (string) max(
 
         <div class="main-wrap">
           <header class="topbar">
-            <button class="menu-toggle" id="menuToggle" type="button" aria-label="منو">
-              <svg viewBox="0 0 24 24"><path d="M4 7h16v2H4V7Zm0 5h16v2H4v-2Zm0 5h16v2H4v-2Z" fill="currentColor"/></svg>
-            </button>
+            <div class="topbar-start">
+              <a class="logout-top" href="logout.php" title="خروج از پنل">خروج</a>
+              <button class="menu-toggle" id="menuToggle" type="button" aria-label="منو">
+                <svg viewBox="0 0 24 24"><path d="M4 7h16v2H4V7Zm0 5h16v2H4v-2Zm0 5h16v2H4v-2Z" fill="currentColor"/></svg>
+              </button>
+            </div>
             <div class="topbar-title">
               <p class="topbar-eyebrow" id="pageEyebrow">داشبورد</p>
               <h1 id="pageTitle">مدیریت مرکز نوآوری</h1>
@@ -204,7 +207,7 @@ $assetVer = (string) max(
             <section id="members" class="section">
               <p class="hint">اعضای تأییدشده در لیست اصلی نمایش داده می‌شوند. درخواست‌های نهادها در جدول «در انتظار تأیید» بررسی می‌شود.</p>
               <?php if (Access::canWrite()): ?>
-              <data-table title="اعضا — در انتظار تأیید نهاد" endpoint="api.php?resource=pending-members" data-workflow="members" data-table-key="pending-members"></data-table>
+              <data-table title="اعضا — در انتظار تأیید نهاد" endpoint="api.php?resource=pending-members" data-workflow="members" data-workflow-type="member-approve" data-table-key="pending-members"></data-table>
               <?php endif; ?>
               <data-table title="اعضای تأییدشده" endpoint="api.php?resource=members"></data-table>
             </section>
@@ -226,6 +229,9 @@ $assetVer = (string) max(
             </section>
 
             <section id="lockers" class="section">
+              <?php if (Access::canWrite()): ?>
+              <data-table title="درخواست کمد — در انتظار تأیید" endpoint="api.php?resource=pending-locker-requests" data-workflow="lockers" data-workflow-type="locker-request" data-table-key="pending-locker-requests"></data-table>
+              <?php endif; ?>
               <data-table title="کمدها" endpoint="api.php?resource=lockers"></data-table>
             </section>
 
@@ -314,6 +320,11 @@ $assetVer = (string) max(
             </section>
             <?php endif; ?>
           </main>
+
+          <footer class="app-footer">
+            <span>پنل مدیریت مرکز نوآوری</span>
+            <span>Mechinno · مرکز نوآوری مکانیک</span>
+          </footer>
         </div>
       </div>
 

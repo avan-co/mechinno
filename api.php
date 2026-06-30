@@ -97,12 +97,16 @@ try {
         }
         $id = (int) ($payload['id'] ?? 0);
         $reason = trim((string) ($payload['reason'] ?? ''));
+        $accessCode = trim((string) ($payload['access_code'] ?? ''));
+        $lockerNumber = (int) ($payload['locker_number'] ?? 0);
 
         $result = match ($resource . ':' . $action) {
-            'members:approve', 'pending-members:approve' => $workflow->approveMember($id),
+            'members:approve', 'pending-members:approve' => $workflow->approveMember($id, $accessCode),
             'members:reject', 'pending-members:reject' => $workflow->rejectMember($id, $reason),
             'transactions:approve', 'pending-payments:approve' => $workflow->approvePayment($id),
             'transactions:reject', 'pending-payments:reject' => $workflow->rejectPayment($id, $reason),
+            'pending-locker-requests:approve', 'locker-requests:approve' => $workflow->approveLockerRequest($id, $lockerNumber),
+            'pending-locker-requests:reject', 'locker-requests:reject' => $workflow->rejectLockerRequest($id, $reason),
             default => throw new InvalidArgumentException('عملیات تأیید/رد برای این بخش تعریف نشده است.'),
         };
 
@@ -111,7 +115,7 @@ try {
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($action, ['create', 'update', 'delete', 'status'], true)) {
         require_csrf_json();
-        if (in_array($resource, ['members', 'transactions'], true) && $action === 'create') {
+        if (in_array($resource, ['members', 'transactions', 'locker-requests'], true) && $action === 'create') {
             Access::requireWriteOrTeamSubmitJson();
         } else {
             Access::requireWriteJson();
@@ -124,15 +128,16 @@ try {
             $payload = $_POST;
         }
         $id = (int) ($payload['id'] ?? 0);
+        $crudResource = $resource === 'locker-requests' ? 'locker_requests' : $resource;
 
         $result = match ($action) {
-            'create' => $crud->create($resource, $payload),
-            'update' => $crud->update($resource, $id, $payload),
-            'delete' => (function () use ($crud, $resource, $id): array {
-                $crud->delete($resource, $id);
+            'create' => $crud->create($crudResource, $payload),
+            'update' => $crud->update($crudResource, $id, $payload),
+            'delete' => (function () use ($crud, $crudResource, $id): array {
+                $crud->delete($crudResource, $id);
                 return ['deleted' => true, 'id' => $id];
             })(),
-            'status' => $crud->updateStatus($resource, $id, (string) ($payload['status'] ?? '')),
+            'status' => $crud->updateStatus($crudResource, $id, (string) ($payload['status'] ?? '')),
         };
 
         json_response(['ok' => true, 'record' => $result]);
@@ -140,7 +145,8 @@ try {
 
     $paginatedResources = [
         'teams', 'members', 'desks', 'lockers', 'charges', 'transactions', 'rate_settings', 'panel_users',
-        'development_plans', 'pending-members', 'pending-payments', 'payment-history',
+        'development_plans', 'pending-members', 'pending-payments', 'pending-locker-requests',
+        'locker-requests', 'desk-assignments', 'payment-history',
     ];
     if (in_array($resource, $paginatedResources, true)) {
         $page = (int) ($_GET['page'] ?? 1);

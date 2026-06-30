@@ -4,6 +4,9 @@ const labels = {
   entity_type: "نوع",
   member_code: "کد عضو",
   access_code: "کد تردد",
+  wants_access: "دسترسی تردد",
+  contract_start: "شروع قرارداد",
+  contract_end: "پایان قرارداد",
   full_name: "نام",
   team_id: "نهاد",
   team_label: "نهاد",
@@ -90,7 +93,8 @@ const teamSectionMeta = {
   overview: { eyebrow: "داشبورد نهاد", title: "وضعیت نهاد", subtitle: "خلاصه اعضا، میزها، کمدها و شارژ" },
   members: { eyebrow: "اعضا", title: "اعضای نهاد", subtitle: "لیست اعضای ثبت‌شده در نهاد شما" },
   desks: { eyebrow: "میزها", title: "میزهای نهاد", subtitle: "میزهای تخصیص‌یافته به نهاد" },
-  lockers: { eyebrow: "کمدها", title: "کمدهای نهاد", subtitle: "کمدهای تخصیص‌یافته" },
+  lockers: { eyebrow: "کمدها", title: "کمدهای نهاد", subtitle: "درخواست کمد و کمدهای تخصیص‌یافته" },
+  profile: { eyebrow: "پروفایل", title: "پروفایل نهاد", subtitle: "اطلاعات تکمیلی قرارداد و وضعیت نهاد" },
   charges: { eyebrow: "شارژ", title: "شارژ و پرداخت", subtitle: "لیست شارژ سالانه و وضعیت پرداخت" },
   payments: { eyebrow: "واریز", title: "اعلام واریز", subtitle: "ثبت واریز شارژ و پیگیری تأیید مدیر" },
 };
@@ -120,9 +124,9 @@ const adminCardConfig = [
 const teamCardConfig = [
   ["members", "اعضای فعال", "👤", "members"],
   ["desks", "میز", "▦", "desks"],
-  ["debt_total", "مانده طلب", "!", "debt"],
+  ["debt_total", "مانده بدهی قرارداد", "!", "debt"],
   ["paid_total", "پرداخت‌شده", "✓", "paid"],
-  ["pending_payments", "در انتظار تأیید", "⏳", "payments"],
+  ["pending_payments", "واریزهای در انتظار تأیید", "⏳", "payments"],
 ];
 
 const cardConfig = adminCardConfig;
@@ -132,24 +136,28 @@ const moneyCards = new Set(["income_year", "income_month", "expense_year", "expe
 const monthNames = ["", "فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور", "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"];
 
 const resourceColumns = {
-  teams: ["entity_code", "entity_type", "name", "leader", "phone", "portal_username", "portal_password", "desk_count", "informal_seats", "joined_at", "warning", "notes"],
-  members: ["member_code", "full_name", "team_label", "entity_type", "desk_numbers", "access_code", "phone", "national_id", "approval_status", "rejection_reason"],
-  desks: ["number", "team_name", "usage_type", "formal_seats", "informal_seats"],
+  teams: ["entity_code", "entity_type", "name", "leader", "phone", "contract_start", "contract_end", "portal_username", "portal_password", "desk_count", "joined_at", "warning", "notes"],
+  members: ["member_code", "full_name", "team_label", "entity_type", "desk_numbers", "wants_access", "access_code", "phone", "national_id", "approval_status", "rejection_reason"],
+  desks: ["number", "team_name", "usage_type", "notes"],
+  "desk-assignments": ["desk_number", "team_name", "usage_type", "assigned_from", "assigned_until", "notes"],
   lockers: ["locker_number", "status", "team_label", "delivered_at", "key_number", "spare_key"],
+  "locker-requests": ["submitted_at", "status", "locker_number", "notes", "reviewed_at", "rejection_reason"],
+  "pending-locker-requests": ["team_label", "submitted_at", "notes"],
   rate_settings: ["fiscal_year", "title", "charge_rate", "informal_rent_rate", "effective_from", "notes"],
   panel_users: ["username", "role", "full_name", "is_active"],
   charges: ["fiscal_year", "team_name", "month_name", "charge_amount", "rent_amount", "amount", "note"],
   transactions: ["tx_date", "description", "amount", "category", "team_name", "fiscal_year", "month_name", "payment_status", "payment_reference", "confirmed"],
-  "pending-members": ["member_code", "full_name", "team_label", "phone", "national_id", "submitted_at"],
+  "pending-members": ["member_code", "full_name", "team_label", "phone", "national_id", "wants_access", "submitted_at"],
   "pending-payments": ["tx_date", "team_name", "fiscal_year", "month_name", "amount", "payment_reference", "announced_at", "notes", "description"],
   "payment-history": ["tx_date", "team_name", "fiscal_year", "month_name", "amount", "payment_status", "payment_reference", "announced_at", "reviewed_at", "notes"],
   development_plans: ["title", "category", "priority", "status", "due_date", "depends_on_title", "estimated_cost", "estimated_revenue", "related_section", "description", "notes", "sort_order"],
 };
 
 const teamPanelHiddenColumns = {
-  members: ["team_label", "entity_type"],
+  members: ["team_label", "entity_type", "access_code"],
   desks: ["team_name"],
   lockers: ["team_label"],
+  "locker-requests": ["team_label"],
   charges: ["team_name"],
   transactions: ["category", "team_name", "confirmed"],
   "payment-history": ["team_name"],
@@ -165,6 +173,8 @@ const createDefaults = {
     confirmed: "1",
   }),
   development_plans: () => ({ category: "idea", priority: "medium", status: "open", sort_order: "0" }),
+  members: () => ({ wants_access: "0" }),
+  "locker-requests": () => ({}),
 };
 const csrfToken = window.MECHINNO?.csrfToken || "";
 const canWrite = window.MECHINNO?.canWrite === true;
@@ -176,7 +186,7 @@ const editableResources = new Set(
   canWrite
     ? ["members", "teams", "desks", "lockers", "charges", "transactions", "rate_settings", "panel_users", "development_plans"]
     : canTeamSubmit
-      ? ["members", "transactions"]
+      ? ["members", "transactions", "locker-requests"]
       : []
 );
 const hiddenColumns = new Set([
@@ -343,7 +353,8 @@ const activateSection = (id, options = {}) => {
   reloadSectionTables(id);
 
   if (id === "desks" && panelMode === "admin") loadDeskGrid().catch((error) => showToast(error.message, "error"));
-  if (id === "desks" && panelMode === "team") loadTeamDeskNumbers().catch((error) => showToast(error.message, "error"));
+  if (id === "desks" && panelMode === "team") loadTeamDeskAssignments().catch((error) => showToast(error.message, "error"));
+  if (id === "profile" && panelMode === "team") loadTeamProfile().catch((error) => showToast(error.message, "error"));
   if (id === "charges") loadChargesCollage().catch((error) => showToast(error.message, "error"));
   if (id === "development") {
     loadDevProgramSummary().catch(() => {});
@@ -458,11 +469,12 @@ const renderCurrentMonth = (month) => {
   const container = document.getElementById("currentMonthSummary");
   if (!month || !container) return;
   if (label) label.textContent = `${month.month_name} ${month.fiscal_year}`;
+  const debtLabel = panelMode === "team" ? "مانده ماه" : "مانده طلب ماه";
   container.innerHTML = `
     <div class="month-stat"><span>شارژ ماه</span><strong>${escapeHtml(formatMoney(month.charge_total))}</strong></div>
     <div class="month-stat"><span>واریز ماه</span><strong>${escapeHtml(formatMoney(month.paid_total))}</strong></div>
-    <div class="month-stat"><span>مانده طلب ماه</span><strong class="debt-value">${escapeHtml(formatMoney(month.debt_total))}</strong></div>
-    <div class="month-stat"><span>نهاد بدهکار به مرکز</span><strong>${escapeHtml(formatNumber(month.debtor_count))}</strong></div>`;
+    <div class="month-stat"><span>${escapeHtml(debtLabel)}</span><strong class="debt-value">${escapeHtml(formatMoney(month.debt_total))}</strong></div>
+    ${panelMode === "admin" ? `<div class="month-stat"><span>نهاد بدهکار به مرکز</span><strong>${escapeHtml(formatNumber(month.debtor_count))}</strong></div>` : ""}`;
 };
 
 const renderActionItems = (items) => {
@@ -539,14 +551,50 @@ const renderTeamDashboard = (data) => {
   if (title && team.name) title.textContent = team.name;
 };
 
-const loadTeamDeskNumbers = async () => {
-  const host = document.getElementById("teamDeskNumbers");
+const loadTeamDeskAssignments = async () => {
+  const host = document.getElementById("teamDeskAssignments");
   if (!host) return;
-  const rows = (await fetchResource("api.php?resource=desks", { page: 1, perPage: 100 })).rows;
-  const numbers = rows.map((row) => row.number).filter(Boolean);
-  host.innerHTML = numbers.length
-    ? numbers.map((n) => `<span class="desk-number-chip">میز ${escapeHtml(n)}</span>`).join("")
-    : `<div class="empty">هنوز میزی به نهاد شما تخصیص داده نشده است.</div>`;
+  const { rows } = await fetchResource("api.php?resource=desk-assignments", { page: 1, perPage: 100 });
+  if (!rows.length) {
+    host.innerHTML = `<div class="empty">هنوز میزی به نهاد شما تخصیص داده نشده است.</div>`;
+    return;
+  }
+  host.innerHTML = `<div class="desk-assignment-grid">${rows.map((row) => `
+    <article class="desk-assignment-card">
+      <strong>میز ${escapeHtml(row.desk_number)}</strong>
+      <span class="badge">${escapeHtml(usageLabels[row.usage_type] || row.usage_type || "—")}</span>
+      <div class="desk-assignment-dates">
+        <span>از ${escapeHtml(formatPlain(row.assigned_from))}</span>
+        <span>${row.assigned_until ? `تا ${escapeHtml(formatPlain(row.assigned_until))}` : "فعال"}</span>
+      </div>
+      ${row.notes ? `<p class="hint">${escapeHtml(row.notes)}</p>` : ""}
+    </article>`).join("")}</div>`;
+};
+
+const loadTeamProfile = async () => {
+  const host = document.getElementById("teamProfileContent");
+  if (!host || !window.MECHINNO?.teamId) return;
+  const data = await fetchJson(`api.php?resource=team-profile&id=${encodeURIComponent(window.MECHINNO.teamId)}`);
+  const team = data.team || {};
+  host.innerHTML = `
+    <div class="profile-summary team-profile-grid">
+      <div><span>نام نهاد</span><strong>${escapeHtml(team.name || "—")}</strong></div>
+      <div><span>نوع</span><strong>${entityBadge(team.entity_type)}</strong></div>
+      <div><span>کد نهاد</span><strong>${escapeHtml(team.entity_code || "—")}</strong></div>
+      <div><span>مسئول</span><strong>${escapeHtml(team.leader || "—")}</strong></div>
+      <div><span>تماس</span><strong>${escapeHtml(team.phone || "—")}</strong></div>
+      <div><span>شروع قرارداد</span><strong>${escapeHtml(team.contract_start || "—")}</strong></div>
+      <div><span>پایان قرارداد</span><strong>${escapeHtml(team.contract_end || "—")}</strong></div>
+      <div><span>تاریخ عضویت</span><strong>${escapeHtml(team.joined_at || "—")}</strong></div>
+      <div><span>مانده بدهی قرارداد</span><strong class="debt-value">${escapeHtml(formatMoney(data.summary?.debt_total || 0))}</strong></div>
+      <div><span>پرداخت‌شده</span><strong>${escapeHtml(formatMoney(data.summary?.paid_total || 0))}</strong></div>
+    </div>
+    ${team.warning ? `<p class="hint warning-text">اخطار: ${escapeHtml(team.warning)}</p>` : ""}
+    ${team.notes ? `<p class="hint">${escapeHtml(team.notes)}</p>` : ""}
+    ${profileSection("میزها و تاریخ تخصیص", data.desk_assignments || [], ["desk_number", "usage_type", "assigned_from", "assigned_until", "notes"])}
+    ${profileSection("اعضا", data.members || [], ["full_name", "phone", "national_id", "approval_status"])}
+    ${profileSection("کمدهای تخصیص‌یافته", data.lockers || [], ["locker_number", "status", "delivered_at"])}
+    ${profileSection("درخواست‌های کمد", data.locker_requests || [], ["submitted_at", "status", "locker_number", "notes"])}`;
 };
 
 const paymentStatusBadge = (status) => {
@@ -713,7 +761,6 @@ const loadDeskGrid = async () => {
             <span class="desk-status">${occupied ? "اشغال" : "آزاد"}</span>
             ${meta}
             <span class="desk-badge">${escapeHtml(usageLabels[desk.usage_type] || desk.usage_type || "—")}</span>
-            <span class="desk-meta">ر:${desk.formal_seats || 0} · غ:${desk.informal_seats || 0}</span>
           </button>`;
         }).join("")}
       </div>
@@ -753,11 +800,23 @@ const loadChargesCollage = async () => {
     }
   }
   const { rows: chargeRows } = await fetchResource("api.php?resource=charges", { page: 1, perPage: 200 });
-  const years = [...new Set([
+  const yearSet = new Set([
     window.MECHINNO?.fiscalYear || "1404",
     ...rateRows.map((r) => String(r.fiscal_year || "")),
     ...chargeRows.map((r) => String(r.fiscal_year || "")),
-  ].filter(Boolean))].sort((a, b) => Number(b) - Number(a));
+  ]);
+  if (panelMode === "team" && window.MECHINNO?.teamId) {
+    try {
+      const profile = await fetchJson(`api.php?resource=team-profile&id=${encodeURIComponent(window.MECHINNO.teamId)}`);
+      const team = profile.team || {};
+      if (team.contract_start) yearSet.add(String(team.contract_start).slice(0, 4));
+      if (team.contract_end) yearSet.add(String(team.contract_end).slice(0, 4));
+      (profile.charges || []).forEach((row) => yearSet.add(String(row.fiscal_year || "")));
+    } catch (error) {
+      // ignore profile year enrichment errors
+    }
+  }
+  const years = [...yearSet].filter(Boolean).sort((a, b) => Number(b) - Number(a));
   const current = yearSelect.value || window.MECHINNO?.fiscalYear || years[0] || "1404";
   yearSelect.innerHTML = years.map((y) => `<option value="${escapeHtml(y)}">${escapeHtml(y)}</option>`).join("");
   yearSelect.value = years.includes(current) ? current : years[0];
@@ -776,7 +835,11 @@ const loadChargesCollage = async () => {
         <br>${entityBadge(row.team.entity_type)}
       </td>
       ${row.cells.map((cell) => {
-        const cls = cell.status === "پرداخت‌شده" ? "cell-paid" : cell.status === "ناقص" ? "cell-partial" : cell.status === "بدهکار به مرکز" ? "cell-debt" : "cell-empty";
+        const cls = cell.status === "پرداخت‌شده" ? "cell-paid"
+          : cell.status === "ناقص" ? "cell-partial"
+            : cell.status === "بدهکار به مرکز" ? "cell-debt"
+              : cell.status === "خارج از قرارداد" ? "cell-outside"
+                : "cell-empty";
         const clickable = canWrite && (cell.status === "بدهکار به مرکز" || cell.status === "ناقص");
         const attrs = clickable
           ? `class="${cls} cell-clickable" role="button" tabindex="0"
@@ -848,7 +911,7 @@ const openTeamProfile = async (teamId) => {
       <div><span>میزها</span><strong>${escapeHtml(deskList)}</strong></div>
       <div><span>جمع شارژ</span><strong>${escapeHtml(formatMoney(data.summary.charge_total || 0))}</strong></div>
       <div><span>دریافت از نهاد</span><strong>${escapeHtml(formatMoney(data.summary.paid_total || 0))}</strong></div>
-      <div><span>مانده طلب</span><strong class="debt-value">${escapeHtml(formatMoney(data.summary.debt_total || 0))}</strong></div>
+      <div><span>مانده بدهی قرارداد</span><strong class="debt-value">${escapeHtml(formatMoney(data.summary.debt_total || 0))}</strong></div>
     </div>
     ${canWrite ? `<div class="profile-actions">
       <button type="button" class="button" data-profile-action="add-member">افزودن عضو</button>
@@ -859,7 +922,8 @@ const openTeamProfile = async (teamId) => {
       <button type="button" class="button ghost" data-profile-action="charges">مشاهده شارژ</button>
       <button type="button" class="button ghost" data-profile-action="desks">مشاهده میزها</button>
     </div>`}
-    ${profileSection("میزهای نهاد", data.desks, ["number", "usage_type", "formal_seats", "informal_seats"])}
+    ${profileSection("میزهای نهاد", data.desks, ["number", "usage_type", "notes"])}
+    ${profileSection("تاریخچه تخصیص میز", data.desk_assignments || [], ["desk_number", "usage_type", "assigned_from", "assigned_until"])}
     ${profileSection("اعضا", data.members, ["member_code", "full_name", "access_code", "phone", "national_id"])}
     ${profileSection("کمدها", data.lockers, ["locker_number", "status", "delivered_at", "key_number"], (column, row) => {
       if (column === "locker_number") return lockerLink(row.locker_number);
@@ -1040,7 +1104,32 @@ const relatedSectionLabels = {
   teams: "نهادها", members: "اعضا", desks: "میزها", lockers: "کمدها", charges: "شارژ", transactions: "مالی",
 };
 
-const workflowApprove = async (resource, id) => {
+const workflowApprove = async (resource, id, row = {}) => {
+  const workflowType = document.querySelector(`data-table[data-table-key="${resource}"]`)?.getAttribute("data-workflow-type")
+    || document.querySelector(`data-table[data-workflow="${resource.replace("pending-", "")}"]`)?.getAttribute("data-workflow-type")
+    || "";
+
+  if (resource === "pending-members" || workflowType === "member-approve") {
+    const wantsAccess = Number(row.wants_access) === 1;
+    const accessCode = wantsAccess
+      ? window.prompt("در صورت نیاز کد دستگاه تردد را وارد کنید (اختیاری):", "") ?? ""
+      : "";
+    await postJson(`api.php?resource=${encodeURIComponent(resource)}&action=approve`, { id, access_code: accessCode });
+    return;
+  }
+
+  if (resource === "pending-locker-requests" || workflowType === "locker-request") {
+    const lockerNumber = window.prompt("شماره کمد برای تخصیص:", "");
+    if (lockerNumber === null || lockerNumber.trim() === "") {
+      throw new Error("شماره کمد الزامی است.");
+    }
+    await postJson(`api.php?resource=${encodeURIComponent(resource)}&action=approve`, {
+      id,
+      locker_number: Number(lockerNumber.replace(/[^\d]/g, "")),
+    });
+    return;
+  }
+
   await postJson(`api.php?resource=${encodeURIComponent(resource)}&action=approve`, { id });
 };
 
@@ -1096,6 +1185,7 @@ const formatCell = (column, value, row, resource) => {
     return escapeHtml(value || "—");
   }
   if (column === "confirmed") return Number(value) === 1 ? "بله" : "خیر";
+  if (column === "wants_access") return Number(value) === 1 ? "بله — نیاز به تردد" : "خیر";
   if (column === "approval_status") return approvalStatusBadge(value);
   if (column === "payment_status") return paymentStatusBadge(value);
   if (column === "status" && resource === "development_plans") {
@@ -1168,6 +1258,8 @@ class DataTable extends HTMLElement {
     this.endpoint = this.getAttribute("endpoint");
     this.resource = new URL(this.endpoint, window.location.href).searchParams.get("resource");
     this.workflow = this.getAttribute("data-workflow") || "";
+    this.workflowType = this.getAttribute("data-workflow-type") || "";
+    this.noAdd = this.hasAttribute("data-no-add");
     this.txCategoryFilter = this.getAttribute("data-tx-filter") || "";
     this.paymentStatusFilter = this.getAttribute("data-payment-filter") || "";
     this.tableKey = this.getAttribute("data-table-key") || "";
@@ -1257,8 +1349,11 @@ class DataTable extends HTMLElement {
   async load() {
     try {
       const meta = await loadCrudMeta();
-      this.definition = meta.resources[this.resource] || null;
-      const canAdd = (canWrite || (canTeamSubmit && ["members", "transactions"].includes(this.resource)))
+      this.definition = meta.resources[this.resource]
+        || meta.resources[this.resource.replace(/-/g, "_")]
+        || null;
+      const canAdd = !this.noAdd
+        && (canWrite || (canTeamSubmit && ["members", "transactions", "locker-requests"].includes(this.resource)))
         && this.definition
         && editableResources.has(this.resource);
       this.querySelector(".add-button").hidden = !canAdd;
@@ -1415,8 +1510,9 @@ class DataTable extends HTMLElement {
       return;
     }
     if (button.dataset.action === "approve" && this.workflow) {
+      const row = this.rows.find((item) => String(item.id) === String(id)) || {};
       try {
-        await workflowApprove(this.resource, id);
+        await workflowApprove(this.resource, id, row);
         await this.load();
         await refreshAfterMutation(this.closest(".section")?.id || null);
         showToast("تأیید شد.", "success");

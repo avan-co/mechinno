@@ -13,7 +13,10 @@ $pdo = $isConfigured ? require_database() : null;
 $teamId = Access::scopedTeamId() ?? 0;
 $team = null;
 if ($teamId > 0 && $pdo) {
-    $statement = $pdo->prepare('SELECT id, entity_code, entity_type, name, leader FROM teams WHERE id = :id');
+    $statement = $pdo->prepare(
+        'SELECT id, entity_code, entity_type, name, leader, phone, contract_start, contract_end, joined_at, warning, notes
+         FROM teams WHERE id = :id'
+    );
     $statement->execute(['id' => $teamId]);
     $team = $statement->fetch() ?: null;
 }
@@ -32,6 +35,8 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>پنل <?= e($team['name'] ?? 'نهاد') ?> — Mechinno</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="assets/styles.css?v=<?= e($assetVer) ?>" />
     <script>
@@ -53,14 +58,30 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
         </section>
       </main>
     <?php else: ?>
-      <div class="bg-blobs" aria-hidden="true"><span class="blob blob-a"></span><span class="blob blob-b"></span></div>
+      <div class="bg-blobs" aria-hidden="true">
+        <span class="blob blob-a"></span>
+        <span class="blob blob-b"></span>
+        <span class="blob blob-c"></span>
+      </div>
       <div class="sidebar-backdrop" id="sidebarBackdrop" hidden></div>
 
       <nav class="bottom-nav" aria-label="ناوبری موبایل">
-        <button class="bottom-nav-item active" data-section="overview" type="button"><span>خانه</span></button>
-        <button class="bottom-nav-item" data-section="members" type="button"><span>اعضا</span></button>
-        <button class="bottom-nav-item" data-section="desks" type="button"><span>میزها</span></button>
-        <button class="bottom-nav-item" data-section="charges" type="button"><span>شارژ</span></button>
+        <button class="bottom-nav-item active" data-section="overview" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5Z" fill="currentColor"/></svg>
+          <span>خانه</span>
+        </button>
+        <button class="bottom-nav-item" data-section="members" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm-7 8a7 7 0 0 1 14 0Z" fill="currentColor"/></svg>
+          <span>اعضا</span>
+        </button>
+        <button class="bottom-nav-item" data-section="desks" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16a1 1 0 0 1 1 1v3H3V6a1 1 0 0 1 1-1Zm17 6v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-8h18ZM8 17h2v-3H8v3Zm6 0h2v-3h-2v3Z" fill="currentColor"/></svg>
+          <span>میزها</span>
+        </button>
+        <button class="bottom-nav-item" data-section="charges" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 4 6v6c0 5 3.4 9.7 8 11 4.6-1.3 8-6 8-11V6l-8-4Zm0 6.5A2.5 2.5 0 1 1 9.5 6 2.5 2.5 0 0 1 12 8.5Z" fill="currentColor"/></svg>
+          <span>شارژ</span>
+        </button>
       </nav>
 
       <div class="shell">
@@ -69,33 +90,60 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
             <span class="brand-mark">M</span>
             <div>
               <strong><?= e($team['name']) ?></strong>
-              <small>پنل <?= e($entityLabel) ?></small>
+              <small><?= e($entityLabel) ?> — <?= e($team['entity_code'] ?? '') ?></small>
             </div>
           </div>
-          <nav class="nav">
-            <button class="nav-item active" data-section="overview" type="button">داشبورد نهاد</button>
-            <button class="nav-item" data-section="members" type="button">اعضا</button>
-            <button class="nav-item" data-section="desks" type="button">میزها</button>
-            <button class="nav-item" data-section="lockers" type="button">کمدها</button>
-            <button class="nav-item" data-section="charges" type="button">شارژ و پرداخت</button>
-            <button class="nav-item" data-section="payments" type="button">اعلام واریز</button>
+          <nav class="nav" aria-label="منوی نهاد">
+            <button class="nav-item active" data-section="overview" type="button">
+              <span class="nav-icon nav-icon--blue"><svg viewBox="0 0 24 24"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5Z" fill="currentColor"/></svg></span>
+              داشبورد
+            </button>
+            <button class="nav-item" data-section="profile" type="button">
+              <span class="nav-icon nav-icon--purple"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm-8 9a8 8 0 0 1 16 0Z" fill="currentColor"/></svg></span>
+              پروفایل نهاد
+            </button>
+            <button class="nav-item" data-section="members" type="button">
+              <span class="nav-icon nav-icon--teal"><svg viewBox="0 0 24 24"><path d="M16 11c1.7 0 3-1.3 3-3S17.7 5 16 5s-3 1.3-3 3 1.3 3 3 3ZM8 11c1.7 0 3-1.3 3-3S9.7 5 8 5 5 6.3 5 8s1.3 3 3 3Zm0 2c-2.7 0-8 1.3-8 4v3h10v-3c0-1.1.4-2.1 1.1-2.9C9.8 13.1 8.9 13 8 13Zm8 0c-.9 0-1.8.1-2.6.3.7.8 1.1 1.8 1.1 2.9v3h7v-3c0-2.7-5.3-4-8-4Z" fill="currentColor"/></svg></span>
+              اعضا
+            </button>
+            <button class="nav-item" data-section="desks" type="button">
+              <span class="nav-icon nav-icon--orange"><svg viewBox="0 0 24 24"><path d="M4 5h16a1 1 0 0 1 1 1v3H3V6a1 1 0 0 1 1-1Zm17 6v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-8h18ZM8 17h2v-3H8v3Zm6 0h2v-3h-2v3Z" fill="currentColor"/></svg></span>
+              میزها
+            </button>
+            <button class="nav-item" data-section="lockers" type="button">
+              <span class="nav-icon nav-icon--green"><svg viewBox="0 0 24 24"><path d="M6 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm0 4v12h12V7H6Zm3 2h2v2H9V9Zm4 0h2v2h-2V9Z" fill="currentColor"/></svg></span>
+              کمدها
+            </button>
+            <button class="nav-item" data-section="charges" type="button">
+              <span class="nav-icon nav-icon--amber"><svg viewBox="0 0 24 24"><path d="M12 2 4 6v6c0 5 3.4 9.7 8 11 4.6-1.3 8-6 8-11V6l-8-4Zm0 6.5A2.5 2.5 0 1 1 9.5 6 2.5 2.5 0 0 1 12 8.5Z" fill="currentColor"/></svg></span>
+              شارژ
+            </button>
+            <button class="nav-item" data-section="payments" type="button">
+              <span class="nav-icon nav-icon--pink"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4Zm2 2v2h12V7Zm0 4v2h8v-2Z" fill="currentColor"/></svg></span>
+              اعلام واریز
+            </button>
           </nav>
-          <div class="sidebar-foot">
-            <a class="logout-link" href="logout.php">خروج</a>
-          </div>
         </aside>
 
         <div class="main-wrap">
           <header class="topbar">
-            <button class="menu-toggle" id="menuToggle" type="button" aria-label="منو">☰</button>
+            <div class="topbar-start">
+              <a class="logout-top" href="logout.php" title="خروج از پنل">خروج</a>
+              <button class="menu-toggle" id="menuToggle" type="button" aria-label="منو">
+                <svg viewBox="0 0 24 24"><path d="M4 7h16v2H4V7Zm0 5h16v2H4v-2Zm0 5h16v2H4v-2Z" fill="currentColor"/></svg>
+              </button>
+            </div>
             <div class="topbar-title">
-              <p class="topbar-eyebrow"><?= e($entityLabel) ?> — <?= e($team['entity_code'] ?? '') ?></p>
+              <p class="topbar-eyebrow" id="pageEyebrow"><?= e($entityLabel) ?> — <?= e($team['entity_code'] ?? '') ?></p>
               <h1 id="pageTitle"><?= e($team['name']) ?></h1>
             </div>
             <div class="topbar-actions">
-              <span class="role-chip">پنل نهاد</span>
+              <span class="role-chip entity-name-chip"><?= e($team['name']) ?></span>
               <span class="date-chip"><?= e($today['formatted']) ?></span>
-              <button class="icon-btn" id="themeToggle" type="button" title="تغییر تم">◐</button>
+              <button class="icon-btn" id="themeToggle" type="button" title="تغییر تم" aria-label="تغییر تم">
+                <svg class="icon-sun" viewBox="0 0 24 24"><path d="M12 18a6 6 0 1 1 6-6 6 6 0 0 1-6 6Zm0-16h2v3h-2V2Zm0 19h2v3h-2v-3ZM2 11h3v2H2v-2Zm19 0h3v2h-3v-2Z" fill="currentColor"/></svg>
+                <svg class="icon-moon" viewBox="0 0 24 24"><path d="M21 14.5A7.5 7.5 0 0 1 9.5 3a6 6 0 1 0 11.5 11.5Z" fill="currentColor"/></svg>
+              </button>
             </div>
           </header>
 
@@ -110,10 +158,12 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
                   <div id="currentMonthSummary" class="month-grid"></div>
                 </article>
                 <article class="panel">
-                  <div class="panel-head"><h2>اطلاعات نهاد</h2></div>
+                  <div class="panel-head"><h2>قرارداد نهاد</h2></div>
                   <div class="month-grid">
+                    <div class="month-stat"><span>شروع</span><strong><?= e($team['contract_start'] ?? '—') ?></strong></div>
+                    <div class="month-stat"><span>پایان</span><strong><?= e($team['contract_end'] ?? '—') ?></strong></div>
                     <div class="month-stat"><span>مسئول</span><strong><?= e($team['leader'] ?? '—') ?></strong></div>
-                    <div class="month-stat"><span>کد نهاد</span><strong><?= e($team['entity_code'] ?? '—') ?></strong></div>
+                    <div class="month-stat"><span>تماس</span><strong><?= e($team['phone'] ?? '—') ?></strong></div>
                   </div>
                 </article>
               </div>
@@ -123,21 +173,30 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
               </article>
             </section>
 
+            <section id="profile" class="section">
+              <article class="panel">
+                <div class="panel-head"><h2>اطلاعات تکمیلی نهاد</h2></div>
+                <div id="teamProfileContent" class="team-profile-content">در حال بارگذاری…</div>
+              </article>
+            </section>
+
             <section id="members" class="section">
-              <p class="hint">می‌توانید عضو جدید ثبت کنید. تا زمان تأیید مدیر، وضعیت «در انتظار» نمایش داده می‌شود.</p>
+              <p class="hint">نام، موبایل و کد ملی اجباری است. در صورت نیاز به دسترسی تردد اعلام کنید — کد دستگاه پس از تأیید مدیر ثبت می‌شود.</p>
               <data-table title="اعضای نهاد" endpoint="api.php?resource=members"></data-table>
             </section>
 
             <section id="desks" class="section">
               <article class="panel">
                 <div class="panel-head"><h2>میزهای اختصاص‌یافته</h2></div>
-                <p class="hint">شماره میزهای تخصیص‌یافته به نهاد شما:</p>
-                <div id="teamDeskNumbers" class="desk-number-list">در حال بارگذاری…</div>
+                <p class="hint">تاریخ شروع و پایان تخصیص هر میز — در صورت تغییر میز در طول قرارداد، سابقه نمایش داده می‌شود.</p>
+                <div id="teamDeskAssignments" class="desk-assignment-list">در حال بارگذاری…</div>
               </article>
             </section>
 
             <section id="lockers" class="section">
-              <data-table title="کمدهای نهاد" endpoint="api.php?resource=lockers"></data-table>
+              <p class="hint">برای درخواست کمد جدید، درخواست ثبت کنید. پس از تأیید مدیر، کمد به نهاد تخصیص می‌یابد.</p>
+              <data-table title="درخواست‌های کمد" endpoint="api.php?resource=locker-requests"></data-table>
+              <data-table title="کمدهای تخصیص‌یافته" endpoint="api.php?resource=lockers" data-no-add></data-table>
             </section>
 
             <section id="charges" class="section">
@@ -148,7 +207,7 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
                 </div>
                 <div id="chargesCollage" class="charges-collage"></div>
               </article>
-              <data-table title="جزئیات شارژ" endpoint="api.php?resource=charges"></data-table>
+              <data-table title="جزئیات شارژ" endpoint="api.php?resource=charges" data-no-add></data-table>
             </section>
 
             <section id="payments" class="section">
@@ -158,13 +217,18 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
               </article>
               <p class="hint">پس از واریز، اعلام کنید. واریزهای در انتظار در جدول اول نمایش داده می‌شوند.</p>
               <data-table title="اعلام‌های در انتظار تأیید" endpoint="api.php?resource=transactions" data-payment-filter="pending"></data-table>
-              <data-table title="سوابق پرداخت تأییدشده" endpoint="api.php?resource=payment-history"></data-table>
+              <data-table title="سوابق پرداخت تأییدشده" endpoint="api.php?resource=payment-history" data-no-add></data-table>
             </section>
           </main>
+
+          <footer class="app-footer">
+            <span>پنل <?= e($entityLabel) ?> — <?= e($team['name']) ?></span>
+            <span>Mechinno · مرکز نوآوری مکانیک</span>
+          </footer>
         </div>
       </div>
 
-      <div id="toastHost" class="toast-host"></div>
+      <div id="toastHost" class="toast-host" aria-live="polite"></div>
       <script>
         window.MECHINNO = {
           csrfToken: "<?= e(csrf_token()) ?>",

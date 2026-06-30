@@ -147,6 +147,35 @@ final class JalaliDate
         return sprintf('%04d/%02d/01', $year, $monthIndex);
     }
 
+    public static function monthEnd(string $fiscalYear, int $monthIndex): string
+    {
+        $year = (int) self::normalizeDigits($fiscalYear);
+        $day = self::daysInMonth($year, $monthIndex);
+
+        return sprintf('%04d/%02d/%02d', $year, $monthIndex, $day);
+    }
+
+    /** Whether a fiscal month overlaps a contract date range (inclusive). */
+    public static function monthInContract(string $fiscalYear, int $monthIndex, ?string $contractStart, ?string $contractEnd): bool
+    {
+        $start = self::tryNormalize($contractStart ?? '');
+        $end = self::tryNormalize($contractEnd ?? '');
+        if ($start === '' && $end === '') {
+            return true;
+        }
+
+        $monthStart = self::monthStart($fiscalYear, $monthIndex);
+        $monthEnd = self::monthEnd($fiscalYear, $monthIndex);
+        if ($start !== '' && self::compare($monthEnd, $start) < 0) {
+            return false;
+        }
+        if ($end !== '' && self::compare($monthStart, $end) > 0) {
+            return false;
+        }
+
+        return true;
+    }
+
     public static function normalizeDigits(mixed $value): string
     {
         return strtr(trim((string) ($value ?? '')), [

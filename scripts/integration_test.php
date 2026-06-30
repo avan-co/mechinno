@@ -53,6 +53,8 @@ $team = $crud->create('teams', [
     'name' => 'شرکت آزمایشی',
     'leader' => 'علی رضایی',
     'phone' => '09121234567',
+    'contract_start' => '1405/01/01',
+    'contract_end' => '1405/12/29',
 ]);
 $teamId = (int) $team['id'];
 $assert($teamId > 0 && ($team['entity_code'] ?? '') !== '', 'crud: team created with entity_code');
@@ -105,7 +107,13 @@ $assert(isset($teamSummary['team']['name']), 'api: team summary scoped');
 $assert(!isset($teamSummary['cards']['teams']), 'api: team summary has no admin teams count');
 
 $members = $repo->paginatedResource('members', 1, 25);
-$member = $crud->create('members', ['team_id' => (string) $teamId, 'full_name' => 'عضو یک']);
+$member = $crud->create('members', [
+    'team_id' => (string) $teamId,
+    'full_name' => 'عضو یک',
+    'phone' => '09121111111',
+    'national_id' => '1234567890',
+    'wants_access' => '1',
+]);
 $membersAfter = $repo->paginatedResource('members', 1, 25);
 $assert(count($membersAfter['rows']) === count($members['rows']) + 1, 'crud: team member submitted');
 $assert(($member['approval_status'] ?? '') === 'pending', 'workflow: team member pending approval');

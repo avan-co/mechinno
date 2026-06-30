@@ -34,6 +34,8 @@ final class Crud
                     'leader' => ['label' => 'سرگروه / مسئول', 'type' => 'text'],
                     'phone' => ['label' => 'تماس', 'type' => 'text'],
                     'joined_at' => ['label' => 'تاریخ عضویت', 'type' => 'date', 'placeholder' => '1404/01/01'],
+                    'contract_start' => ['label' => 'شروع قرارداد', 'type' => 'date', 'placeholder' => '1404/01/01'],
+                    'contract_end' => ['label' => 'پایان قرارداد', 'type' => 'date', 'placeholder' => '1404/12/29'],
                     'warning' => ['label' => 'اخطار', 'type' => 'text'],
                     'notes' => ['label' => 'توضیحات', 'type' => 'textarea'],
                 ],
@@ -48,9 +50,25 @@ final class Crud
                     'team_id' => ['label' => 'نهاد (تیم / شرکت / دانشجو)', 'type' => 'select', 'options' => [], 'required' => true],
                     'full_name' => ['label' => 'نام', 'type' => 'text', 'required' => true],
                     'access_code' => ['label' => 'کد دستگاه تردد', 'type' => 'text'],
+                    'wants_access' => [
+                        'label' => 'دسترسی تردد',
+                        'type' => 'select',
+                        'options' => ['0' => 'خیر', '1' => 'بله — نیاز به کد تردد دارد'],
+                    ],
                     'phone' => ['label' => 'تماس', 'type' => 'text'],
                     'national_id' => ['label' => 'کدملی', 'type' => 'text'],
                     'notes' => ['label' => 'توضیحات', 'type' => 'textarea'],
+                ],
+            ],
+            'locker_requests' => [
+                'table' => 'locker_requests',
+                'title' => 'درخواست کمد',
+                'order' => 'submitted_at DESC, id DESC',
+                'status_field' => 'status',
+                'status_options' => ['pending', 'approved', 'rejected'],
+                'source' => false,
+                'fields' => [
+                    'notes' => ['label' => 'توضیحات درخواست', 'type' => 'textarea'],
                 ],
             ],
             'desks' => [
@@ -64,11 +82,9 @@ final class Crud
                     'usage_type' => [
                         'label' => 'نوع استفاده',
                         'type' => 'select',
-                        'options' => ['formal' => 'رسمی', 'informal' => 'غیررسمی', 'mixed' => 'ترکیبی'],
+                        'options' => ['formal' => 'رسمی', 'informal' => 'غیررسمی'],
                         'required' => true,
                     ],
-                    'formal_seats' => ['label' => 'صندلی رسمی', 'type' => 'number'],
-                    'informal_seats' => ['label' => 'صندلی غیررسمی', 'type' => 'number'],
                     'notes' => ['label' => 'توضیحات', 'type' => 'textarea'],
                 ],
             ],
@@ -277,7 +293,21 @@ final class Crud
     private function fieldsForContext(string $resource, array $fields): array
     {
         if (Access::isTeam() && $resource === 'members') {
-            unset($fields['team_id']);
+            return [
+                'full_name' => array_merge($fields['full_name'], ['required' => true]),
+                'phone' => array_merge($fields['phone'], ['required' => true]),
+                'national_id' => array_merge($fields['national_id'], ['required' => true]),
+                'wants_access' => array_merge($fields['wants_access'], ['required' => true]),
+                'notes' => $fields['notes'],
+            ];
+        }
+        if (!Access::isTeam() && $resource === 'members') {
+            $optional = [];
+            foreach ($fields as $key => $meta) {
+                $optional[$key] = array_merge($meta, ['required' => false]);
+            }
+
+            return $optional;
         }
         if (Access::isTeam() && $resource === 'transactions') {
             return [
@@ -300,8 +330,8 @@ final class Crud
      */
     public function create(string $resource, array $payload): array
     {
-        if (Access::isTeam() && !in_array($resource, ['members', 'transactions'], true)) {
-            throw new InvalidArgumentException('نهاد فقط می‌تواند عضو یا اعلام واریز ثبت کند.');
+        if (Access::isTeam() && !in_array($resource, ['members', 'transactions', 'locker_requests'], true)) {
+            throw new InvalidArgumentException('نهاد فقط می‌تواند عضو، درخواست کمد یا اعلام واریز ثبت کند.');
         }
         $definition = $this->definition($resource);
         $fields = $this->fieldsForContext($resource, $definition['fields']);
@@ -319,6 +349,9 @@ final class Crud
         $id = (int) $this->pdo->lastInsertId();
         if ($resource === 'transactions') {
             $this->syncTeamDepositIncome($id);
+        }
+        if ($resource === 'desks') {
+            (new DeskAssignments($this->pdo))->syncDeskAssignment($id, $this->find($resource, $id));
         }
         if ($resource === 'teams') {
             $record = $this->find($resource, $id);
@@ -366,6 +399,9 @@ final class Crud
 
         if ($resource === 'transactions') {
             $this->syncTeamDepositIncome($id);
+        }
+        if ($resource === 'desks') {
+            (new DeskAssignments($this->pdo))->syncDeskAssignment($id, $this->find($resource, $id));
         }
         if ($resource === 'teams' && isset($data['leader'])) {
             EntityAccounts::syncLeaderName($this->pdo, $id, (string) $data['leader']);
@@ -506,8 +542,39 @@ final class Crud
                 $data['team_id'] = $teamId;
                 $data['approval_status'] = 'pending';
                 $data['submitted_at'] = JalaliDate::todayParts()['formatted'];
+                unset($data['access_code']);
             } else {
                 $data['approval_status'] = 'approved';
+                if ($this->blank($data['full_name'] ?? null)) {
+                    $data['full_name'] = 'بدون نام';
+                }
+            }
+            if (isset($data['wants_access'])) {
+                $data['wants_access'] = (int) $data['wants_access'];
+            } else {
+                $data['wants_access'] = 0;
+            }
+        }
+        if ($resource === 'locker_requests' && $creating) {
+            $teamId = Access::scopedTeamId();
+            if ($teamId === null) {
+                throw new InvalidArgumentException('حساب نهاد معتبر نیست.');
+            }
+            $data['team_id'] = $teamId;
+            $data['status'] = 'pending';
+            $data['submitted_at'] = JalaliDate::todayParts()['formatted'];
+        }
+        if ($resource === 'teams' && $creating) {
+            if (empty($data['contract_start'])) {
+                $today = JalaliDate::todayParts();
+                $data['contract_start'] = sprintf('%04d/%02d/01', $today['year'], $today['month']);
+            }
+            if (empty($data['contract_end'])) {
+                $start = JalaliDate::tryNormalize($data['contract_start'] ?? '');
+                if ($start !== '') {
+                    $year = (int) substr($start, 0, 4);
+                    $data['contract_end'] = sprintf('%04d/12/29', $year);
+                }
             }
         }
         if ($resource === 'lockers') {
@@ -666,10 +733,8 @@ final class Crud
             $data['updated_at'] = $today;
         }
         if ($resource === 'desks') {
-            $formal = (int) ($data['formal_seats'] ?? 0);
-            $informal = (int) ($data['informal_seats'] ?? 0);
-            if ($formal + $informal > 2) {
-                throw new InvalidArgumentException('هر میز حداکثر ۲ صندلی دارد.');
+            if (isset($data['usage_type']) && ($data['usage_type'] ?? '') === 'mixed') {
+                $data['usage_type'] = 'formal';
             }
         }
     }
