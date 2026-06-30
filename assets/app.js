@@ -44,6 +44,7 @@ const labels = {
   warning: "اخطار",
   portal_username: "نام کاربری نهاد",
   portal_password: "رمز ورود نهاد",
+  role: "نقش",
   is_active: "فعال",
 };
 
