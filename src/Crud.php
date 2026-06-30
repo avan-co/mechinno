@@ -81,7 +81,7 @@ final class Crud
                 'source' => true,
                 'fields' => [
                     'locker_number' => ['label' => 'شماره کمد', 'type' => 'number', 'required' => true],
-                    'team_id' => ['label' => 'نهاد', 'type' => 'select', 'options' => [], 'required' => true],
+                    'team_id' => ['label' => 'نهاد', 'type' => 'select', 'options' => []],
                     'status' => ['label' => 'وضعیت', 'type' => 'select', 'options' => ['تخصیص یافته', 'رزرو', 'خالی', 'خراب']],
                     'delivered_at' => ['label' => 'تاریخ تحویل', 'type' => 'date', 'placeholder' => '1404/01/01'],
                     'key_number' => ['label' => 'شماره کلید', 'type' => 'text'],
@@ -158,11 +158,9 @@ final class Crud
                         'options' => [
                             'admin_editor' => 'مدیر — ویرایشگر',
                             'admin_viewer' => 'مدیر — مشاهده‌گر',
-                            'team' => 'نهاد (تیم / شرکت)',
                         ],
                         'required' => true,
                     ],
-                    'team_id' => ['label' => 'نهاد (برای کاربر نهاد)', 'type' => 'select', 'options' => []],
                     'full_name' => ['label' => 'نام نمایشی', 'type' => 'text'],
                     'is_active' => ['label' => 'فعال', 'type' => 'select', 'options' => ['1' => 'بله', '0' => 'خیر'], 'required' => true],
                 ],
@@ -174,11 +172,24 @@ final class Crud
     {
         $resources = [];
         $teamOptions = $this->teamOptions();
+        $allowed = array_flip(Access::allowedCrudResources());
 
         foreach (self::definitions() as $name => $definition) {
+            if (!isset($allowed[$name])) {
+                continue;
+            }
             foreach ($definition['fields'] as $field => $meta) {
                 if ($field === 'team_id' || $field === 'owner_team_id') {
                     $definition['fields'][$field]['options'] = $teamOptions;
+                }
+                if ($field === 'team_id' && Access::isTeam()) {
+                    $scopedTeamId = Access::scopedTeamId();
+                    if ($scopedTeamId !== null) {
+                        $definition['fields'][$field]['options'] = array_intersect_key(
+                            $teamOptions,
+                            [(string) $scopedTeamId => true]
+                        );
+                    }
                 }
             }
             $resources[$name] = [
@@ -214,6 +225,15 @@ final class Crud
         if ($resource === 'transactions') {
             $this->syncTeamDepositIncome($id);
         }
+        if ($resource === 'teams') {
+            $record = $this->find($resource, $id);
+            EntityAccounts::provisionForTeam(
+                $this->pdo,
+                $id,
+                (string) ($record['entity_code'] ?? ''),
+                (string) ($record['leader'] ?? '')
+            );
+        }
 
         return $this->find($resource, $id);
     }
@@ -248,6 +268,9 @@ final class Crud
         if ($resource === 'transactions') {
             $this->syncTeamDepositIncome($id);
         }
+        if ($resource === 'teams' && isset($data['leader'])) {
+            EntityAccounts::syncLeaderName($this->pdo, $id, (string) $data['leader']);
+        }
 
         return $this->find($resource, $id);
     }
@@ -256,6 +279,12 @@ final class Crud
     {
         $definition = $this->definition($resource);
         $this->assertExists($definition, $id);
+        if ($resource === 'panel_users') {
+            $this->assertPanelUserDeletable($id);
+        }
+        if ($resource === 'teams') {
+            EntityAccounts::deleteForTeam($this->pdo, $id);
+        }
         $this->pdo->prepare(sprintf('DELETE FROM %s WHERE id = :id', $definition['table']))->execute(['id' => $id]);
     }
 
@@ -286,10 +315,33 @@ final class Crud
     private function stripSensitiveFields(string $resource, array $row): array
     {
         if ($resource === 'panel_users') {
-            unset($row['password_hash']);
+            unset($row['password_hash'], $row['password_plain']);
         }
 
         return $row;
+    }
+
+    private function assertPanelUserDeletable(int $id): void
+    {
+        if (Access::userId() > 0 && $id === Access::userId()) {
+            throw new InvalidArgumentException('نمی‌توانید حساب کاربری خود را حذف کنید.');
+        }
+
+        $statement = $this->pdo->prepare('SELECT role FROM panel_users WHERE id = :id');
+        $statement->execute(['id' => $id]);
+        $role = (string) ($statement->fetchColumn() ?: '');
+        if ($role !== Access::ROLE_ADMIN_EDITOR) {
+            return;
+        }
+
+        $countStatement = $this->pdo->prepare(
+            'SELECT COUNT(*) FROM panel_users WHERE role = :role AND is_active = 1'
+        );
+        $countStatement->execute(['role' => Access::ROLE_ADMIN_EDITOR]);
+        $count = (int) $countStatement->fetchColumn();
+        if ($count <= 1) {
+            throw new InvalidArgumentException('حداقل یک مدیر ویرایشگر باید فعال بماند.');
+        }
     }
 
     private function definition(string $resource): array
@@ -349,6 +401,22 @@ final class Crud
             if ($creating && empty($data['status'])) {
                 $data['status'] = 'خالی';
             }
+            $current = [];
+            if (!$creating && $recordId > 0) {
+                $statement = $this->pdo->prepare('SELECT status, team_id FROM lockers WHERE id = :id');
+                $statement->execute(['id' => $recordId]);
+                $current = $statement->fetch() ?: [];
+            }
+            $status = (string) ($data['status'] ?? $current['status'] ?? 'خالی');
+            if (in_array($status, ['خالی', 'خراب'], true)) {
+                $data['team_id'] = null;
+            } elseif (in_array($status, ['تخصیص یافته', 'رزرو'], true)) {
+                $teamId = $data['team_id'] ?? $current['team_id'] ?? null;
+                if ($this->blank($teamId)) {
+                    throw new InvalidArgumentException('برای وضعیت «تخصیص یافته» یا «رزرو» انتخاب نهاد الزامی است.');
+                }
+                $data['team_id'] = (int) $teamId;
+            }
             $lockerNumber = (int) ($data['locker_number'] ?? 0);
             if ($lockerNumber > 0) {
                 $statement = $this->pdo->prepare(
@@ -362,6 +430,9 @@ final class Crud
                 if ($statement->fetchColumn() !== false) {
                     throw new InvalidArgumentException('این شماره کمد قبلاً ثبت شده است.');
                 }
+            }
+            if (!empty($data['team_id']) && empty($data['status']) && empty($current['status'] ?? null)) {
+                $data['status'] = 'تخصیص یافته';
             }
         }
         if ($resource === 'transactions') {
@@ -387,6 +458,15 @@ final class Crud
             if (isset($data['month_index'])) {
                 $data['month_name'] = self::monthName((int) $data['month_index']);
             }
+            $teamId = (int) ($data['team_id'] ?? 0);
+            if ($teamId > 0) {
+                $statement = $this->pdo->prepare('SELECT name FROM teams WHERE id = :id');
+                $statement->execute(['id' => $teamId]);
+                $teamName = $statement->fetchColumn();
+                if ($teamName !== false) {
+                    $data['team_name'] = (string) $teamName;
+                }
+            }
             $charge = (int) ($data['charge_amount'] ?? 0);
             $rent = (int) ($data['rent_amount'] ?? 0);
             if (empty($data['amount']) && ($charge > 0 || $rent > 0)) {
@@ -398,15 +478,13 @@ final class Crud
         }
         if ($resource === 'panel_users') {
             $role = (string) ($data['role'] ?? '');
-            if (!in_array($role, [Access::ROLE_ADMIN_EDITOR, Access::ROLE_ADMIN_VIEWER, Access::ROLE_TEAM], true)) {
+            if ($role === Access::ROLE_TEAM) {
+                throw new InvalidArgumentException('کاربر نهاد هنگام ثبت نهاد خودکار ساخته می‌شود.');
+            }
+            if (!in_array($role, [Access::ROLE_ADMIN_EDITOR, Access::ROLE_ADMIN_VIEWER], true)) {
                 throw new InvalidArgumentException('نقش کاربر معتبر نیست.');
             }
-            if ($role === Access::ROLE_TEAM && empty($data['team_id'])) {
-                throw new InvalidArgumentException('برای کاربر نهاد باید نهاد انتخاب شود.');
-            }
-            if ($role !== Access::ROLE_TEAM) {
-                $data['team_id'] = null;
-            }
+            $data['team_id'] = null;
             $plainPassword = trim((string) ($data['password'] ?? ''));
             unset($data['password']);
             if ($creating) {
@@ -414,8 +492,10 @@ final class Crud
                     throw new InvalidArgumentException('رمز عبور الزامی است.');
                 }
                 $data['password_hash'] = UserAccounts::hashPassword($plainPassword);
+                $data['password_plain'] = $plainPassword;
             } elseif ($plainPassword !== '') {
                 $data['password_hash'] = UserAccounts::hashPassword($plainPassword);
+                $data['password_plain'] = $plainPassword;
             }
             if (!isset($data['is_active'])) {
                 $data['is_active'] = 1;
@@ -427,9 +507,6 @@ final class Crud
             if ($formal + $informal > 2) {
                 throw new InvalidArgumentException('هر میز حداکثر ۲ صندلی دارد.');
             }
-        }
-        if ($resource === 'lockers' && !empty($data['team_id']) && empty($data['status'])) {
-            $data['status'] = 'تخصیص یافته';
         }
     }
 

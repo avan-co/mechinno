@@ -127,7 +127,19 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
             </section>
 
             <section id="desks" class="section">
-              <data-table title="میزهای نهاد" endpoint="api.php?resource=desks"></data-table>
+              <article class="panel">
+                <div class="panel-head">
+                  <h2>نقشه میزهای مرکز</h2>
+                  <div class="desk-legend">
+                    <span class="legend-item legend-free">آزاد</span>
+                    <span class="legend-item legend-occupied">میز نهاد شما</span>
+                    <span class="legend-item">سایر نهادها</span>
+                  </div>
+                </div>
+                <p class="hint">میزهای سبز متعلق به نهاد شماست. میزهای اشغال‌شده توسط دیگران فقط به‌صورت «نهاد دیگر» نمایش داده می‌شوند.</p>
+                <div id="deskGrid" class="desk-map"></div>
+              </article>
+              <data-table title="جزئیات میزهای نهاد" endpoint="api.php?resource=desks"></data-table>
             </section>
 
             <section id="lockers" class="section">

@@ -13,8 +13,8 @@ try {
     $resource = (string) ($_GET['resource'] ?? 'summary');
     $action = (string) ($_GET['action'] ?? '');
 
-    if ($resource === 'panel_users' && !Access::canWrite()) {
-        json_response(['error' => 'مدیریت کاربران فقط برای مدیر ویرایشگر مجاز است.'], 403);
+    if ($resource === 'panel_users' && Access::isTeam()) {
+        json_response(['error' => 'دسترسی به مدیریت کاربران مجاز نیست.'], 403);
     }
 
     if (!in_array($resource, ['crud-meta'], true)) {
@@ -52,6 +52,25 @@ try {
             $teamId = Access::scopedTeamId() ?? $teamId;
         }
         json_response($repository->teamProfile($teamId));
+    }
+
+    if ($resource === 'desks-map') {
+        json_response($repository->deskMap());
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && $resource === 'teams' && $action === 'reset-portal-password') {
+        require_csrf_json();
+        Access::requireWriteJson();
+        $payload = json_decode((string) file_get_contents('php://input'), true);
+        if (!is_array($payload)) {
+            $payload = $_POST;
+        }
+        $teamId = (int) ($payload['id'] ?? 0);
+        if ($teamId <= 0) {
+            json_response(['error' => 'نهاد معتبر نیست.'], 422);
+        }
+        $credentials = EntityAccounts::resetPassword($pdo, $teamId);
+        json_response(['ok' => true, 'credentials' => $credentials]);
     }
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($action, ['create', 'update', 'delete', 'status'], true)) {

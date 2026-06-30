@@ -291,9 +291,12 @@ final class Repository
 
         return match ($name) {
             'teams' => "SELECT t.id, t.entity_code, t.entity_type, t.name, t.leader, t.phone, t.joined_at, t.warning, t.notes,
+                        u.username AS portal_username,
+                        u.password_plain AS portal_password,
                         (SELECT COUNT(*) FROM desks d WHERE d.team_id = t.id) AS desk_count,
                         (SELECT COALESCE(SUM(d.informal_seats), 0) FROM desks d WHERE d.team_id = t.id) AS informal_seats
-                 FROM teams t"
+                 FROM teams t
+                 LEFT JOIN panel_users u ON u.team_id = t.id AND u.role = 'team'"
                 . ($teamId !== null ? " WHERE t.id = {$teamId}" : '')
                 . ' ORDER BY t.entity_type, t.name',
             'members' => "SELECT m.id, m.member_code, m.team_id, m.access_code, m.full_name, m.phone, m.national_id, m.notes,
@@ -325,7 +328,14 @@ final class Repository
                 . ' ORDER BY c.fiscal_year, t.name, c.month_index',
             'transactions' => "SELECT t.id, t.tx_date, t.description, t.amount, t.category, t.team_id,
                         t.fiscal_year, t.month_index, t.confirmed, t.notes,
-                        tm.name AS team_name
+                        tm.name AS team_name,
+                        CASE t.month_index
+                            WHEN 1 THEN 'فروردین' WHEN 2 THEN 'اردیبهشت' WHEN 3 THEN 'خرداد'
+                            WHEN 4 THEN 'تیر' WHEN 5 THEN 'مرداد' WHEN 6 THEN 'شهریور'
+                            WHEN 7 THEN 'مهر' WHEN 8 THEN 'آبان' WHEN 9 THEN 'آذر'
+                            WHEN 10 THEN 'دی' WHEN 11 THEN 'بهمن' WHEN 12 THEN 'اسفند'
+                            ELSE ''
+                        END AS month_name
                  FROM transactions t
                  LEFT JOIN teams tm ON tm.id = t.team_id
                  ORDER BY t.tx_date DESC, t.id DESC",
@@ -524,9 +534,21 @@ final class Repository
                  FROM lockers l WHERE l.team_id = :id ORDER BY l.locker_number',
                 ['id' => $teamId]
             ),
-            'charges' => $this->preparedRows('SELECT * FROM charges WHERE team_id = :id ORDER BY fiscal_year, month_index', ['id' => $teamId]),
+            'charges' => $this->preparedRows(
+                'SELECT id, fiscal_year, month_index, month_name, charge_amount, rent_amount, amount, note
+                 FROM charges WHERE team_id = :id ORDER BY fiscal_year, month_index',
+                ['id' => $teamId]
+            ),
             'payments' => $this->preparedRows(
-                "SELECT * FROM transactions
+                "SELECT id, tx_date, description, amount, category, fiscal_year, month_index, confirmed, notes,
+                        CASE month_index
+                            WHEN 1 THEN 'فروردین' WHEN 2 THEN 'اردیبهشت' WHEN 3 THEN 'خرداد'
+                            WHEN 4 THEN 'تیر' WHEN 5 THEN 'مرداد' WHEN 6 THEN 'شهریور'
+                            WHEN 7 THEN 'مهر' WHEN 8 THEN 'آبان' WHEN 9 THEN 'آذر'
+                            WHEN 10 THEN 'دی' WHEN 11 THEN 'بهمن' WHEN 12 THEN 'اسفند'
+                            ELSE ''
+                        END AS month_name
+                 FROM transactions
                  WHERE team_id = :id AND category = 'واریز تیم'
                  ORDER BY fiscal_year, month_index, tx_date",
                 ['id' => $teamId]
@@ -541,6 +563,40 @@ final class Repository
                 ),
             ],
         ];
+    }
+
+    /**
+     * @return array{rows:list<array<string,mixed>>}
+     */
+    public function deskMap(): array
+    {
+        $scope = Access::scopedTeamId();
+        $rows = $this->rows(
+            'SELECT d.id, d.number, d.team_id, d.usage_type, d.formal_seats, d.informal_seats,
+                    d.row_index, d.col_index, t.name AS team_name
+             FROM desks d
+             LEFT JOIN teams t ON t.id = d.team_id
+             ORDER BY d.number'
+        );
+
+        if ($scope !== null) {
+            $rows = array_map(static function (array $row) use ($scope): array {
+                $teamId = (int) ($row['team_id'] ?? 0);
+                $isOwn = $teamId === $scope;
+                $row['is_own'] = $isOwn;
+                if ($teamId > 0 && !$isOwn) {
+                    $row['team_name'] = 'نهاد دیگر';
+                    $row['team_id'] = null;
+                    $row['foreign_occupied'] = true;
+                } else {
+                    $row['foreign_occupied'] = false;
+                }
+
+                return $row;
+            }, $rows);
+        }
+
+        return ['rows' => array_map(fn (array $row): array => $this->stripLegacyRow($row), $rows)];
     }
 
     private function debtSql(): string

@@ -20,6 +20,13 @@ $assert = static function (bool $ok, string $message) use (&$errors): void {
 
 $pdo->exec("INSERT INTO teams (entity_type, entity_code, name, leader, phone, source_file, source_sheet)
             VALUES ('company', 'C-001', 'آوان', 'مهدی', '09398283658', 'manual', 'panel')");
+EntityAccounts::provisionForTeam($pdo, 1, 'C-001', 'مهدی');
+$teamsPage = $repo->paginatedResource('teams', 1, 25);
+$assert(($teamsPage['rows'][0]['portal_username'] ?? '') === 'c001', 'team portal username generated');
+$assert(EntityAccounts::usernameForCode('C-001') === 'c001', 'usernameForCode keeps letters');
+$assert(EntityAccounts::usernameForCode('T-012') === 't012', 'usernameForCode normalizes codes');
+$assert(($teamsPage['rows'][0]['portal_password'] ?? '') !== '', 'team portal password visible to admin');
+
 $pdo->exec('UPDATE desks SET team_id = 1, usage_type = "mixed", formal_seats = 1, informal_seats = 1 WHERE number = 1');
 
 $member = $crud->create('members', [
@@ -38,6 +45,16 @@ $locker = $crud->create('lockers', [
     'status' => 'تخصیص یافته',
 ]);
 $assert((int) $locker['team_id'] === 1, 'locker assigned to team');
+
+$emptyLocker = $crud->create('lockers', [
+    'locker_number' => '99',
+    'status' => 'خالی',
+]);
+$assert(!isset($emptyLocker['team_id']) || $emptyLocker['team_id'] === null, 'empty locker has no team');
+
+$crud->update('teams', 1, ['leader' => 'احمد جدید']);
+$portalName = (string) $pdo->query("SELECT full_name FROM panel_users WHERE team_id = 1 AND role = 'team'")->fetchColumn();
+$assert($portalName === 'احمد جدید', 'leader update syncs portal full_name');
 
 $crud->create('rate_settings', [
     'fiscal_year' => '1405',
@@ -73,6 +90,8 @@ $crud->create('charges', [
     'rent_amount' => '0',
     'amount' => '999',
 ]);
+$chargeRow = $repo->paginatedResource('charges', 1, 25)['rows'][0] ?? [];
+$assert(($chargeRow['team_name'] ?? '') === 'آوان', 'charge stores team_name from join');
 $beforeManual = count($repo->resource('charges'));
 (new Seeder($pdo))->recalculateCharges('1405');
 $afterManual = $repo->resource('charges');
@@ -125,9 +144,33 @@ $summary = $repo->summary();
 $assert(isset($summary['cards']['debt_total']), 'summary cards present');
 $assert(isset($summary['current_month']['debtor_count']), 'current month summary');
 
+Auth::start();
+$_SESSION['mechinno_authenticated'] = true;
+$_SESSION['mechinno_role'] = Access::ROLE_TEAM;
+$_SESSION['mechinno_team_id'] = 1;
+$deskMap = $repo->deskMap();
+$assert(count($deskMap['rows']) === 24, 'desk map has 24 desks');
+$ownDesks = array_values(array_filter($deskMap['rows'], static fn ($d) => !empty($d['is_own'])));
+$assert(count($ownDesks) >= 1, 'team desk map marks own desks');
+
+$teamMeta = $crud->meta();
+$assert(!isset($teamMeta['resources']['panel_users']), 'team crud meta excludes panel_users');
+$assert(!isset($teamMeta['resources']['transactions']), 'team crud meta excludes transactions');
+$teamSummary = $repo->summary();
+$assert(isset($teamSummary['team']['name']), 'team summary scoped');
+$assert(!isset($teamSummary['debt_by_team']), 'team summary has no admin debt chart');
+
+$_SESSION['mechinno_role'] = Access::ROLE_ADMIN_VIEWER;
+$viewerMeta = $crud->meta();
+$assert(isset($viewerMeta['resources']['panel_users']), 'viewer can read panel_users meta');
+$assert(!isset($viewerMeta['resources']['panel_users']['fields']['team_id']), 'panel_users form has no team_id');
+$assert(isset($viewerMeta['resources']['transactions']), 'viewer can read transactions meta');
+
+$_SESSION = [];
+
 if ($errors !== []) {
     fwrite(STDERR, implode("\n", $errors) . "\n");
     exit(1);
 }
 
-echo "All smoke tests passed (" . count($errors) . " errors)\n";
+echo "All smoke tests passed\n";

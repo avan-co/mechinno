@@ -8,6 +8,7 @@ require_once __DIR__ . '/Identifier.php';
 require_once __DIR__ . '/Auth.php';
 require_once __DIR__ . '/Access.php';
 require_once __DIR__ . '/UserAccounts.php';
+require_once __DIR__ . '/EntityAccounts.php';
 require_once __DIR__ . '/JalaliDate.php';
 require_once __DIR__ . '/Schema.php';
 require_once __DIR__ . '/Installer.php';
@@ -119,6 +120,7 @@ function require_database(): PDO
     Schema::migrate($pdo);
     if (app_configured()) {
         UserAccounts::ensureBootstrapUsers($pdo, app_config());
+        EntityAccounts::syncMissingTeams($pdo);
     }
 
     return $pdo;

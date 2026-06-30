@@ -42,6 +42,8 @@ const labels = {
   effective_from: "تاریخ اثر",
   joined_at: "عضویت",
   warning: "اخطار",
+  portal_username: "نام کاربری نهاد",
+  portal_password: "رمز ورود نهاد",
   role: "نقش",
   is_active: "فعال",
 };
@@ -58,6 +60,14 @@ const sectionMeta = {
   charges: { eyebrow: "شارژ", title: "نرخ و شارژ ماهانه", subtitle: "تعریف نرخ سالانه، محاسبه خودکار و پیگیری پرداخت" },
   transactions: { eyebrow: "مالی", title: "دریافت، درآمد و هزینه", subtitle: "نهادها به مرکز بدهکارند — دریافت شارژ، طلب مطالبات" },
   users: { eyebrow: "دسترسی", title: "کاربران پنل", subtitle: "مدیریت نقش‌ها و پنل اختصاصی نهادها" },
+};
+
+const teamSectionMeta = {
+  overview: { eyebrow: "داشبورد نهاد", title: "وضعیت نهاد", subtitle: "خلاصه اعضا، میزها، کمدها و شارژ" },
+  members: { eyebrow: "اعضا", title: "اعضای نهاد", subtitle: "لیست اعضای ثبت‌شده در نهاد شما" },
+  desks: { eyebrow: "میزها", title: "میزهای نهاد", subtitle: "میزهای تخصیص‌یافته به نهاد" },
+  lockers: { eyebrow: "کمدها", title: "کمدهای نهاد", subtitle: "کمدهای تخصیص‌یافته" },
+  charges: { eyebrow: "شارژ", title: "شارژ و پرداخت", subtitle: "وضعیت شارژ ماهانه و پرداخت‌ها" },
 };
 
 const cardNavMap = {
@@ -86,16 +96,38 @@ const cardConfig = [
 
 const moneyCards = new Set(["charge_total", "income_total", "expense_total", "debt_total", "paid_total"]);
 
+const monthNames = ["", "فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور", "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"];
+
 const resourceColumns = {
-  teams: ["entity_code", "entity_type", "name", "leader", "phone", "desk_count", "informal_seats", "joined_at", "warning"],
+  teams: ["entity_code", "entity_type", "name", "leader", "phone", "portal_username", "portal_password", "desk_count", "informal_seats", "joined_at", "warning", "notes"],
   members: ["member_code", "full_name", "team_label", "entity_type", "desk_numbers", "access_code", "phone", "national_id"],
   desks: ["number", "team_name", "usage_type", "formal_seats", "informal_seats"],
   lockers: ["locker_number", "status", "team_label", "delivered_at", "key_number", "spare_key"],
   rate_settings: ["fiscal_year", "title", "charge_rate", "informal_rent_rate", "effective_from", "notes"],
-  panel_users: ["username", "role", "team_label", "full_name", "is_active"],
+  panel_users: ["username", "role", "full_name", "is_active"],
   charges: ["fiscal_year", "team_name", "month_name", "charge_amount", "rent_amount", "amount", "note"],
-  transactions: ["tx_date", "description", "amount", "category", "team_name", "fiscal_year", "month_index", "confirmed"],
+  transactions: ["tx_date", "description", "amount", "category", "team_name", "fiscal_year", "month_name", "confirmed"],
 };
+
+const teamPanelHiddenColumns = {
+  members: ["team_label", "entity_type"],
+  desks: ["team_name"],
+  lockers: ["team_label"],
+  charges: ["team_name"],
+};
+
+const createDefaults = {
+  charges: () => ({ fiscal_year: window.MECHINNO?.fiscalYear || "" }),
+  rate_settings: () => ({ fiscal_year: window.MECHINNO?.fiscalYear || "" }),
+  transactions: () => ({
+    fiscal_year: window.MECHINNO?.fiscalYear || "",
+    tx_date: window.MECHINNO?.today || "",
+    confirmed: "1",
+  }),
+};
+const csrfToken = window.MECHINNO?.csrfToken || "";
+const canWrite = window.MECHINNO?.canWrite === true;
+const panelMode = window.MECHINNO?.panel || "admin";
 
 const editableResources = new Set(
   canWrite
@@ -110,7 +142,8 @@ const hiddenColumns = new Set([
 const plainColumns = new Set([
   "phone", "national_id", "access_code", "member_code", "entity_code",
   "fiscal_year", "tx_date", "effective_from", "joined_at", "delivered_at",
-  "key_number", "number", "locker_number", "desk_numbers", "month_index",
+  "key_number", "number", "locker_number", "desk_numbers", "month_index", "month_name",
+  "portal_username", "portal_password",
 ]);
 
 const linkColumns = {
@@ -119,9 +152,6 @@ const linkColumns = {
   name: "id",
 };
 
-const csrfToken = window.MECHINNO?.csrfToken || "";
-const canWrite = window.MECHINNO?.canWrite !== false;
-const panelMode = window.MECHINNO?.panel || "admin";
 let crudMetaPromise = null;
 let highlightDesk = null;
 let highlightLocker = null;
@@ -216,7 +246,8 @@ const syncMobileClass = () => {
 };
 
 const updatePageHeader = (sectionId) => {
-  const meta = sectionMeta[sectionId] || sectionMeta.overview;
+  const metaSource = panelMode === "team" ? teamSectionMeta : sectionMeta;
+  const meta = metaSource[sectionId] || metaSource.overview;
   const eyebrow = document.getElementById("pageEyebrow");
   const title = document.getElementById("pageTitle");
   const subtitle = document.getElementById("pageSubtitle");
@@ -459,7 +490,10 @@ const renderTeamDashboard = (data) => {
 };
 
 const loadDeskGrid = async () => {
-  const { rows: desks } = await fetchResource("api.php?resource=desks", { page: 1, perPage: 100 });
+  const isTeamMap = panelMode === "team";
+  const desks = isTeamMap
+    ? (await fetchJson("api.php?resource=desks-map")).rows || []
+    : (await fetchResource("api.php?resource=desks", { page: 1, perPage: 100 })).rows;
   const container = document.getElementById("deskGrid");
   if (!container) return;
   const rows = { 1: [], 2: [], 3: [] };
@@ -469,15 +503,28 @@ const loadDeskGrid = async () => {
       <div class="desk-row-label">ردیف ${rowIndex}</div>
       <div class="desk-row">
         ${(rows[rowIndex] || []).sort((a, b) => a.col_index - b.col_index).map((desk) => {
-          const occupied = Boolean(desk.team_id);
-          const highlighted = highlightDesk === Number(desk.number);
-          return `<button type="button" class="desk-tile ${occupied ? "occupied" : "free"} ${highlighted ? "highlighted" : ""}"
+          const foreign = Boolean(desk.foreign_occupied);
+          const occupied = Boolean(desk.team_id) || foreign;
+          const isOwn = Boolean(desk.is_own);
+          const highlighted = highlightDesk === Number(desk.number) || (isTeamMap && isOwn);
+          const tileClass = isTeamMap
+            ? (isOwn ? "occupied own-desk" : foreign ? "occupied foreign-desk" : "free")
+            : (occupied ? "occupied" : "free");
+          let meta = `<span class="desk-meta">بدون نهاد</span>`;
+          if (occupied) {
+            if (isTeamMap && foreign) {
+              meta = `<span class="desk-meta">نهاد دیگر</span>`;
+            } else if (isTeamMap && isOwn) {
+              meta = `<span class="desk-meta">${escapeHtml(desk.team_name || "نهاد شما")}</span>`;
+            } else if (!isTeamMap && desk.team_id) {
+              meta = `<span class="desk-meta"><span role="button" tabindex="0" class="text-link-inline" data-team-id="${escapeHtml(desk.team_id)}">${escapeHtml(desk.team_name || "نهاد")}</span></span>`;
+            }
+          }
+          return `<button type="button" class="desk-tile ${tileClass} ${highlighted ? "highlighted" : ""}"
             data-nav-section="desks" data-highlight-desk="${desk.number}">
             <span class="desk-num">${desk.number}</span>
             <span class="desk-status">${occupied ? "اشغال" : "آزاد"}</span>
-            ${occupied
-              ? `<span class="desk-meta"><span role="button" tabindex="0" class="text-link-inline" data-team-id="${escapeHtml(desk.team_id)}">${escapeHtml(desk.team_name || "نهاد")}</span></span>`
-              : `<span class="desk-meta">بدون نهاد</span>`}
+            ${meta}
             <span class="desk-badge">${escapeHtml(usageLabels[desk.usage_type] || desk.usage_type || "—")}</span>
             <span class="desk-meta">ر:${desk.formal_seats || 0} · غ:${desk.informal_seats || 0}</span>
           </button>`;
@@ -485,19 +532,21 @@ const loadDeskGrid = async () => {
       </div>
     </div>`).join("");
 
-  container.querySelectorAll("[data-team-id]").forEach((el) => {
-    const open = (event) => {
-      event.stopPropagation();
-      openTeamProfile(Number(el.dataset.teamId)).catch((error) => showToast(error.message, "error"));
-    };
-    el.addEventListener("click", open);
-    el.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        open(event);
-      }
+  if (!isTeamMap) {
+    container.querySelectorAll("[data-team-id]").forEach((el) => {
+      const open = (event) => {
+        event.stopPropagation();
+        openTeamProfile(Number(el.dataset.teamId)).catch((error) => showToast(error.message, "error"));
+      };
+      el.addEventListener("click", open);
+      el.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          open(event);
+        }
+      });
     });
-  });
+  }
 };
 
 const loadChargesCollage = async () => {
@@ -507,7 +556,15 @@ const loadChargesCollage = async () => {
     yearSelect.dataset.ready = "1";
     yearSelect.addEventListener("change", () => loadChargesCollage().catch((error) => showToast(error.message, "error")));
   }
-  const { rows: rateRows } = await fetchResource("api.php?resource=rate_settings", { page: 1, perPage: 100 });
+  let rateRows = [];
+  if (panelMode !== "team") {
+    try {
+      const rateData = await fetchResource("api.php?resource=rate_settings", { page: 1, perPage: 100 });
+      rateRows = rateData.rows;
+    } catch (error) {
+      rateRows = [];
+    }
+  }
   const { rows: chargeRows } = await fetchResource("api.php?resource=charges", { page: 1, perPage: 200 });
   const years = [...new Set([
     window.MECHINNO?.fiscalYear || "1404",
@@ -606,12 +663,15 @@ const openTeamProfile = async (teamId) => {
       <div><span>دریافت از نهاد</span><strong>${escapeHtml(formatMoney(data.summary.paid_total || 0))}</strong></div>
       <div><span>مانده طلب</span><strong class="debt-value">${escapeHtml(formatMoney(data.summary.debt_total || 0))}</strong></div>
     </div>
-    <div class="profile-actions">
+    ${canWrite ? `<div class="profile-actions">
       <button type="button" class="button" data-profile-action="add-member">افزودن عضو</button>
       <button type="button" class="button ghost" data-profile-action="deposit">ثبت دریافت شارژ</button>
       <button type="button" class="button ghost" data-profile-action="charges">مشاهده شارژ</button>
       <button type="button" class="button ghost" data-profile-action="desks">مدیریت میزها</button>
-    </div>
+    </div>` : `<div class="profile-actions">
+      <button type="button" class="button ghost" data-profile-action="charges">مشاهده شارژ</button>
+      <button type="button" class="button ghost" data-profile-action="desks">مشاهده میزها</button>
+    </div>`}
     ${profileSection("میزهای نهاد", data.desks, ["number", "usage_type", "formal_seats", "informal_seats"])}
     ${profileSection("اعضا", data.members, ["member_code", "full_name", "access_code", "phone", "national_id"])}
     ${profileSection("کمدها", data.lockers, ["locker_number", "status", "delivered_at", "key_number"], (column, row) => {
@@ -620,13 +680,15 @@ const openTeamProfile = async (teamId) => {
       return null;
     })}
     ${profileSection("شارژها", data.charges, ["fiscal_year", "month_name", "charge_amount", "rent_amount", "amount"])}
-    ${profileSection("دریافت شارژ از نهاد", data.payments, ["tx_date", "fiscal_year", "month_index", "amount"])}
+    ${profileSection("دریافت شارژ از نهاد", data.payments, ["tx_date", "fiscal_year", "month_name", "amount"])}
     <div class="modal-actions"><button class="button ghost" type="button" data-close-modal>بستن</button></div>`;
 
   form.querySelector("[data-close-modal]").addEventListener("click", closeModal);
   form.querySelectorAll("[data-profile-action]").forEach((button) => {
     button.addEventListener("click", async () => {
       const action = button.dataset.profileAction;
+      if (action === "add-member" && !canWrite) return;
+      if (action === "deposit" && !canWrite) return;
       if (action === "add-member") {
         closeModal();
         activateSection("members");
@@ -667,7 +729,6 @@ const openDepositModal = async ({ teamId, teamName, fiscalYear, monthIndex, mont
   const meta = await loadCrudMeta();
   const definition = meta.resources.transactions;
   const remaining = Math.max(0, Number(amountDue) - Number(amountPaid));
-  const monthNames = ["", "فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور", "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"];
   const resolvedMonthName = monthName || monthNames[monthIndex] || "";
   openRecordModal({
     resource: "transactions",
@@ -748,13 +809,17 @@ const openRecordModal = ({ resource, definition, record = null, onSaved, title =
   const modal = ensureModal();
   const form = modal.querySelector("#crudForm");
   const isEdit = Boolean(record?.id);
+  const formRecord = { ...(record || {}) };
+  if (!isEdit && createDefaults[resource]) {
+    Object.assign(formRecord, createDefaults[resource]());
+  }
   modal.querySelector("#crudModalTitle").textContent = title || `${isEdit ? "ویرایش" : "افزودن"} ${definition.title}`;
   form.innerHTML = `
     <div class="crud-grid">
       ${Object.entries(definition.fields).map(([name, meta]) => `
         <label class="${meta.type === "textarea" ? "wide" : ""}">
           <span>${escapeHtml(meta.label)}${meta.required ? " *" : ""}</span>
-          ${fieldInput(name, meta, record ? record[name] : "")}
+          ${fieldInput(name, meta, formRecord[name] ?? "")}
         </label>`).join("")}
     </div>
     <div class="modal-actions">
@@ -789,6 +854,12 @@ const formatCell = (column, value, row, resource) => {
     return escapeHtml(value || "—");
   }
   if (column === "confirmed") return Number(value) === 1 ? "بله" : "خیر";
+  if (column === "month_name" && !value && row.month_index) {
+    return formatPlain(monthNames[Number(row.month_index)] || row.month_index);
+  }
+  if (column === "month_index") {
+    return formatPlain(monthNames[Number(value)] || value);
+  }
   if (column === "role") {
     const map = { admin_editor: "مدیر — ویرایش", admin_viewer: "مدیر — مشاهده", team: "نهاد" };
     return escapeHtml(map[value] || value || "—");
@@ -818,7 +889,11 @@ const formatCell = (column, value, row, resource) => {
 };
 
 const resolveColumns = (rows, resource) => {
-  const preferred = resourceColumns[resource] ?? [];
+  let preferred = resourceColumns[resource] ?? [];
+  if (panelMode === "team" && teamPanelHiddenColumns[resource]) {
+    const hidden = new Set(teamPanelHiddenColumns[resource]);
+    preferred = preferred.filter((column) => !hidden.has(column));
+  }
   if (!rows.length) return preferred;
   const available = new Set(Object.keys(rows[0]));
   return preferred.filter((c) => available.has(c));
@@ -969,7 +1044,8 @@ class DataTable extends HTMLElement {
             <strong>${formatCell(column, row[column], row, this.resource)}</strong>
           </div>`).join("");
         const profileBtn = this.resource === "teams"
-          ? `<button class="mini-button primary" type="button" data-action="profile" data-id="${escapeHtml(row.id)}">پروفایل</button>` : "";
+          ? `<button class="mini-button primary" type="button" data-action="profile" data-id="${escapeHtml(row.id)}">پروفایل</button>
+             ${canWrite ? `<button class="mini-button" type="button" data-action="reset-portal" data-id="${escapeHtml(row.id)}">بازنشانی رمز</button>` : ""}` : "";
         const editBtns = editable
           ? `<button class="mini-button" type="button" data-action="edit" data-id="${escapeHtml(row.id)}">ویرایش</button>
              <button class="mini-button danger" type="button" data-action="delete" data-id="${escapeHtml(row.id)}">حذف</button>` : "";
@@ -1021,7 +1097,8 @@ class DataTable extends HTMLElement {
         return `<td class="${className}">${formatCell(column, value, row, this.resource)}</td>`;
       }).join("");
       const profileAction = this.resource === "teams"
-        ? `<button class="mini-button primary" type="button" data-action="profile" data-id="${escapeHtml(row.id)}">پروفایل</button>` : "";
+        ? `<button class="mini-button primary" type="button" data-action="profile" data-id="${escapeHtml(row.id)}">پروفایل</button>
+           ${canWrite ? `<button class="mini-button" type="button" data-action="reset-portal" data-id="${escapeHtml(row.id)}">بازنشانی رمز</button>` : ""}` : "";
       const actions = editable || profileAction
         ? `<td class="row-actions">${profileAction}${editable ? `
         <button class="mini-button" type="button" data-action="edit" data-id="${escapeHtml(row.id)}">ویرایش</button>
@@ -1040,6 +1117,18 @@ class DataTable extends HTMLElement {
     if (!record) return;
     if (button.dataset.action === "profile") {
       openTeamProfile(id).catch((error) => showToast(error.message, "error"));
+      return;
+    }
+    if (button.dataset.action === "reset-portal") {
+      if (!canWrite) return;
+      if (!window.confirm("رمز ورود این نهاد بازنشانی شود؟")) return;
+      try {
+        const result = await postJson("api.php?resource=teams&action=reset-portal-password", { id });
+        await this.load();
+        showToast(`رمز جدید: ${result.credentials?.password || "—"}`, "success");
+      } catch (error) {
+        showToast(error.message, "error");
+      }
       return;
     }
     if (!this.definition) return;

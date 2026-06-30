@@ -112,10 +112,10 @@ $assetVer = (string) max(
               <span class="nav-icon nav-icon--pink"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4Zm2 2v2h12V7Zm0 4v2h8v-2Z" fill="currentColor"/></svg></span>
               مالی
             </button>
-            <?php if (Access::canWrite()): ?>
+            <?php if (Access::isAdmin()): ?>
             <button class="nav-item" data-section="users" type="button">
               <span class="nav-icon nav-icon--purple"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm-8 9a8 8 0 0 1 16 0Z" fill="currentColor"/></svg></span>
-              کاربران پنل
+              کاربران مدیر
             </button>
             <?php endif; ?>
           </nav>
@@ -158,16 +158,18 @@ $assetVer = (string) max(
             <p class="page-subtitle" id="pageSubtitle">خلاصه وضعیت مرکز و اقدامات پیشنهادی</p>
 
             <section id="overview" class="section active">
-              <article class="panel panel--accent welcome-panel" id="welcomePanel">
-                <h2>شروع سریع</h2>
-                <div class="start-steps" id="startSteps">
-                  <button class="start-step" data-go="teams" type="button"><span>۱</span>ثبت نهادها</button>
-                  <button class="start-step" data-go="members" type="button"><span>۲</span>افزودن اعضا به نهاد</button>
-                  <button class="start-step" data-go="desks" type="button"><span>۳</span>تخصیص میز به نهاد</button>
-                  <button class="start-step" data-go="lockers" type="button"><span>۴</span>تعریف کمدها</button>
-                  <button class="start-step" data-go="charges" type="button"><span>۵</span>نرخ و شارژ</button>
-                </div>
-              </article>
+            <?php if (Access::canWrite()): ?>
+            <article class="panel panel--accent welcome-panel" id="welcomePanel">
+              <h2>شروع سریع</h2>
+              <div class="start-steps" id="startSteps">
+                <button class="start-step" data-go="teams" type="button"><span>۱</span>ثبت نهادها</button>
+                <button class="start-step" data-go="members" type="button"><span>۲</span>افزودن اعضا به نهاد</button>
+                <button class="start-step" data-go="desks" type="button"><span>۳</span>تخصیص میز به نهاد</button>
+                <button class="start-step" data-go="lockers" type="button"><span>۴</span>تعریف کمدها</button>
+                <button class="start-step" data-go="charges" type="button"><span>۵</span>نرخ و شارژ</button>
+              </div>
+            </article>
+            <?php endif; ?>
 
               <div id="cards" class="stat-cards"></div>
 
@@ -189,6 +191,7 @@ $assetVer = (string) max(
             </section>
 
             <section id="teams" class="section">
+              <p class="hint">با ثبت هر نهاد، یک نام کاربری و رمز عبور خودکار برای مسئول نهاد ساخته می‌شود (ستون‌های «ورود نهاد»).</p>
               <data-table title="نهادها" endpoint="api.php?resource=teams"></data-table>
             </section>
 
@@ -224,10 +227,12 @@ $assetVer = (string) max(
                   <h2>کلاژ شارژ و پرداخت</h2>
                   <div class="panel-head-actions">
                     <select id="chargesYear" class="year-select"></select>
+                    <?php if (Access::canWrite()): ?>
                     <button id="recalcChargesButton" class="button ghost" type="button">محاسبه خودکار از نرخ</button>
+                    <?php endif; ?>
                   </div>
                 </div>
-                <p class="hint">روی سلول «بدهکار به مرکز» کلیک کنید تا دریافت شارژ ثبت شود.</p>
+                <p class="hint"><?php if (Access::canWrite()): ?>روی سلول «بدهکار به مرکز» کلیک کنید تا دریافت شارژ ثبت شود.<?php else: ?>وضعیت پرداخت هر نهاد در هر ماه — فقط مشاهده.<?php endif; ?></p>
                 <div id="chargesCollage" class="charges-collage"></div>
               </article>
               <data-table title="ثبت و ویرایش شارژ" endpoint="api.php?resource=charges"></data-table>
@@ -247,10 +252,10 @@ $assetVer = (string) max(
               <data-table title="مالی — دریافت و هزینه" endpoint="api.php?resource=transactions"></data-table>
             </section>
 
-            <?php if (Access::canWrite()): ?>
+            <?php if (Access::isAdmin()): ?>
             <section id="users" class="section">
-              <p class="hint">برای هر نهاد یک کاربر با نقش «نهاد» بسازید و نهاد مربوطه را انتخاب کنید. آن‌ها پس از ورود به پنل اختصاصی هدایت می‌شوند.</p>
-              <data-table title="کاربران پنل" endpoint="api.php?resource=panel_users"></data-table>
+              <p class="hint">مدیران سیستم — کاربران نهاد هنگام ثبت نهاد خودکار ساخته می‌شوند و نام کاربری/رمز در جدول نهادها نمایش داده می‌شود.</p>
+              <data-table title="کاربران مدیر" endpoint="api.php?resource=panel_users"></data-table>
             </section>
             <?php endif; ?>
           </main>

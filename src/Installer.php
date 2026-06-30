@@ -17,9 +17,6 @@ final class Installer
         Schema::reset($this->pdo);
         Schema::seedDesks($this->pdo);
 
-        $this->pdo->prepare('INSERT INTO import_runs (source_files) VALUES (:source)')
-            ->execute(['source' => json_encode(['fresh_empty'], JSON_UNESCAPED_UNICODE)]);
-
         return [
             'teams' => 0,
             'members' => 0,
