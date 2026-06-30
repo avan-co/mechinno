@@ -18,8 +18,6 @@ final class Access
         'charges-matrix',
         'team-profile',
         'transactions',
-        'pending-members',
-        'pending-payments',
         'payment-history',
         'crud-meta',
     ];
@@ -30,6 +28,7 @@ final class Access
         'teams',
         'members',
         'desks',
+        'desks-map',
         'lockers',
         'charges',
         'transactions',

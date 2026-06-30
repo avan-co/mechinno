@@ -37,6 +37,7 @@ final class ExcelExporter
                     m.access_code, m.phone, m.national_id, m.notes
                     FROM members m
                     LEFT JOIN teams t ON t.id = m.team_id
+                    WHERE m.approval_status = 'approved' OR m.approval_status IS NULL
                     ORDER BY t.name, m.full_name",
                 'headers' => ['کد عضو', 'نام', 'نهاد', 'نوع نهاد', 'میزهای نهاد', 'کد تردد', 'تماس', 'کدملی', 'توضیحات'],
             ],

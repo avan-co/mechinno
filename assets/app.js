@@ -122,7 +122,7 @@ const monthNames = ["", "فروردین", "اردیبهشت", "خرداد", "ت�
 
 const resourceColumns = {
   teams: ["entity_code", "entity_type", "name", "leader", "phone", "portal_username", "portal_password", "desk_count", "informal_seats", "joined_at", "warning", "notes"],
-  members: ["member_code", "full_name", "team_label", "entity_type", "desk_numbers", "access_code", "phone", "national_id", "approval_status"],
+  members: ["member_code", "full_name", "team_label", "entity_type", "desk_numbers", "access_code", "phone", "national_id", "approval_status", "rejection_reason"],
   desks: ["number", "team_name", "usage_type", "formal_seats", "informal_seats"],
   lockers: ["locker_number", "status", "team_label", "delivered_at", "key_number", "spare_key"],
   rate_settings: ["fiscal_year", "title", "charge_rate", "informal_rent_rate", "effective_from", "notes"],
@@ -248,11 +248,12 @@ const fetchJson = async (url, options = {}) => {
   return data;
 };
 
-const fetchResource = async (endpoint, { page = 1, perPage = 25, category = "" } = {}) => {
+const fetchResource = async (endpoint, { page = 1, perPage = 25, category = "", paymentStatus = "" } = {}) => {
   const url = new URL(endpoint, window.location.href);
   url.searchParams.set("page", String(page));
   url.searchParams.set("per_page", String(perPage));
   if (category) url.searchParams.set("category", category);
+  if (paymentStatus) url.searchParams.set("payment_status", paymentStatus);
   const data = await fetchJson(url.toString());
   if (Array.isArray(data)) {
     return { rows: data, total: data.length, page: 1, per_page: data.length, pages: 1 };
@@ -406,6 +407,11 @@ document.addEventListener("click", (event) => {
   });
 });
 
+const resolveCardSection = (key) => {
+  if (panelMode === "team" && key === "pending_payments") return "payments";
+  return cardNavMap[key] || "members";
+};
+
 const renderCards = (cards, config = cardConfig) => {
   const container = document.getElementById("cards");
   if (!container) return;
@@ -415,7 +421,7 @@ const renderCards = (cards, config = cardConfig) => {
       if (key === "desks" && cards?.desk_numbers) value = cards.desk_numbers || "—";
       else if (moneyCards.has(key)) value = formatMoney(value);
       else value = formatNumber(value);
-      const section = cardNavMap[key] || cardNavMap.members;
+      const section = resolveCardSection(key);
       return `<article class="stat-card stat-card--${tone} card-clickable" data-nav-section="${section}" tabindex="0" role="button">
         <span class="stat-icon" aria-hidden="true">${icon}</span>
         <div><span class="stat-label">${escapeHtml(title)}</span><strong>${escapeHtml(value ?? "—")}</strong></div>
@@ -1034,6 +1040,7 @@ class DataTable extends HTMLElement {
     this.resource = new URL(this.endpoint, window.location.href).searchParams.get("resource");
     this.workflow = this.getAttribute("data-workflow") || "";
     this.txCategoryFilter = this.getAttribute("data-tx-filter") || "";
+    this.paymentStatusFilter = this.getAttribute("data-payment-filter") || "";
     this.definition = null;
     this.rows = [];
     this.page = 1;
@@ -1129,6 +1136,7 @@ class DataTable extends HTMLElement {
         page: this.page,
         perPage: this.perPage,
         category: this.txCategoryFilter,
+        paymentStatus: this.paymentStatusFilter,
       });
       this.rows = result.rows;
       this.total = result.total;

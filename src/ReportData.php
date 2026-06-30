@@ -43,7 +43,10 @@ final class ReportData
             'rate_settings' => $repo->resource('rate_settings'),
             'charges' => $repo->resource('charges'),
             'debts' => $repo->chargeDebtRows(),
-            'transactions' => $repo->resource('transactions'),
+            'transactions' => array_values(array_filter(
+                $repo->resource('transactions'),
+                static fn (array $row): bool => (int) ($row['confirmed'] ?? 0) === 1
+            )),
         ];
     }
 

@@ -281,15 +281,18 @@ final class Repository
                 'desks' => $this->preparedScalar('SELECT COUNT(*) FROM desks WHERE team_id = :id', ['id' => $teamId]),
                 'lockers' => $this->preparedScalar('SELECT COUNT(*) FROM lockers WHERE team_id = :id', ['id' => $teamId]),
                 'charges' => $this->preparedScalar('SELECT COUNT(*) FROM charges WHERE team_id = :id', ['id' => $teamId]),
-                'transactions' => $this->preparedScalar("SELECT COUNT(*) FROM transactions WHERE team_id = :id AND category = 'واریز تیم'", ['id' => $teamId]),
-                'payment-history' => $this->preparedScalar("SELECT COUNT(*) FROM transactions WHERE team_id = :id AND category = 'واریز تیم'", ['id' => $teamId]),
+                'transactions' => $this->teamTransactionCount($teamId, $filters),
+                'payment-history' => $this->preparedScalar(
+                    "SELECT COUNT(*) FROM transactions WHERE team_id = :id AND category = 'واریز تیم' AND confirmed = 1",
+                    ['id' => $teamId]
+                ),
                 default => 0,
             };
         }
 
         $sql = match ($name) {
             'teams' => 'SELECT COUNT(*) FROM teams',
-            'members' => "SELECT COUNT(*) FROM members WHERE approval_status = 'approved' OR approval_status IS NULL",
+            'members' => "SELECT COUNT(*) FROM members WHERE approval_status IN ('approved', 'rejected') OR approval_status IS NULL",
             'desks' => 'SELECT COUNT(*) FROM desks',
             'lockers' => 'SELECT COUNT(*) FROM lockers',
             'charges' => 'SELECT COUNT(*) FROM charges',
@@ -299,7 +302,7 @@ final class Repository
             'development_plans' => 'SELECT COUNT(*) FROM development_plans',
             'pending-members' => "SELECT COUNT(*) FROM members WHERE approval_status = 'pending'",
             'pending-payments' => "SELECT COUNT(*) FROM transactions WHERE category = 'واریز تیم' AND payment_status = 'pending'",
-            'payment-history' => "SELECT COUNT(*) FROM transactions WHERE category = 'واریز تیم'",
+            'payment-history' => "SELECT COUNT(*) FROM transactions WHERE category = 'واریز تیم' AND confirmed = 1",
             default => throw new InvalidArgumentException('Unknown resource.'),
         };
 
@@ -311,12 +314,40 @@ final class Repository
      */
     private function transactionCountSql(array $filters): string
     {
+        $clauses = [];
         $category = $filters['category'] ?? '';
         if ($category !== '') {
-            return "SELECT COUNT(*) FROM transactions WHERE category = " . $this->pdo->quote($category);
+            $clauses[] = 'category = ' . $this->pdo->quote($category);
+        }
+        $paymentStatus = $filters['payment_status'] ?? '';
+        if ($paymentStatus !== '') {
+            $clauses[] = 'payment_status = ' . $this->pdo->quote($paymentStatus);
         }
 
-        return 'SELECT COUNT(*) FROM transactions';
+        if ($clauses === []) {
+            return 'SELECT COUNT(*) FROM transactions';
+        }
+
+        return 'SELECT COUNT(*) FROM transactions WHERE ' . implode(' AND ', $clauses);
+    }
+
+    /**
+     * @param array<string, string> $filters
+     */
+    private function teamTransactionCount(int $teamId, array $filters): int
+    {
+        $clauses = ['team_id = :team_id', "category = 'واریز تیم'"];
+        $params = ['team_id' => $teamId];
+        $paymentStatus = $filters['payment_status'] ?? '';
+        if ($paymentStatus !== '') {
+            $clauses[] = 'payment_status = :payment_status';
+            $params['payment_status'] = $paymentStatus;
+        }
+
+        return $this->preparedScalar(
+            'SELECT COUNT(*) FROM transactions WHERE ' . implode(' AND ', $clauses),
+            $params
+        );
     }
 
     /**
@@ -356,7 +387,7 @@ final class Repository
                  LEFT JOIN teams t ON t.id = m.team_id"
                 . ($teamId !== null
                     ? " WHERE m.team_id = {$teamId}"
-                    : " WHERE m.approval_status = 'approved' OR m.approval_status IS NULL")
+                    : " WHERE m.approval_status IN ('approved', 'rejected') OR m.approval_status IS NULL")
                 . ' ORDER BY m.id',
             'desks' => "SELECT d.id, d.number, d.team_id, d.usage_type, d.formal_seats, d.informal_seats,
                         d.row_index, d.col_index, d.notes, t.name AS team_name, t.entity_type
@@ -422,7 +453,7 @@ final class Repository
                         END AS month_name
                  FROM transactions t
                  LEFT JOIN teams tm ON tm.id = t.team_id
-                 WHERE t.category = 'واریز تیم'"
+                 WHERE t.category = 'واریز تیم' AND t.confirmed = 1"
                 . ($teamId !== null ? " AND t.team_id = {$teamId}" : '')
                 . ' ORDER BY t.fiscal_year DESC, t.month_index DESC, t.tx_date DESC',
             'development_plans' => 'SELECT id, title, description, category, priority, status, due_date, notes, sort_order, created_at, updated_at
@@ -445,10 +476,15 @@ final class Repository
         $clauses = [];
         if ($teamId !== null) {
             $clauses[] = "t.team_id = {$teamId}";
+            $clauses[] = "t.category = 'واریز تیم'";
         }
         $category = $filters['category'] ?? '';
         if ($category !== '') {
             $clauses[] = 't.category = ' . $this->pdo->quote($category);
+        }
+        $paymentStatus = $filters['payment_status'] ?? '';
+        if ($paymentStatus !== '') {
+            $clauses[] = 't.payment_status = ' . $this->pdo->quote($paymentStatus);
         }
 
         return $clauses === [] ? '' : ' WHERE ' . implode(' AND ', $clauses);

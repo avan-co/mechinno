@@ -130,6 +130,9 @@ if (!is_file($root . '/config.php')) {
     $r = $request('GET', '/report.php');
     $assert($r['status'] === 200 && str_contains($r['body'], 'گزارش'), 'http: report page for admin');
 
+    $r = $request('GET', '/api.php?resource=desks-map');
+    $assert($r['status'] === 200 && count($r['json']['rows'] ?? []) === 24, 'http: admin desks-map API');
+
     $r = $request('GET', '/team.php');
     $assert(in_array($r['status'], [302, 303], true) || str_contains($r['body'], 'index.php'), 'http: admin redirected from team panel');
 
@@ -178,6 +181,12 @@ if (!is_file($root . '/config.php')) {
 
     $r = $request('GET', '/api.php?resource=payment-history');
     $assert($r['status'] === 200, 'http: entity can access payment history');
+
+    $r = $request('GET', '/api.php?resource=pending-members');
+    $assert($r['status'] === 403, 'http: entity blocked from pending-members');
+
+    $r = $request('GET', '/api.php?resource=pending-payments');
+    $assert($r['status'] === 403, 'http: entity blocked from pending-payments');
 
     $r = $request('GET', '/report.php');
     $assert(in_array($r['status'], [302, 303], true) || str_contains($r['body'], 'team.php'), 'http: entity blocked from report');

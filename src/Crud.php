@@ -258,8 +258,8 @@ final class Crud
         if (Access::isTeam() && $resource === 'transactions') {
             return [
                 'tx_date' => $fields['tx_date'],
-                'fiscal_year' => $fields['fiscal_year'],
-                'month_index' => $fields['month_index'],
+                'fiscal_year' => array_merge($fields['fiscal_year'], ['required' => true]),
+                'month_index' => array_merge($fields['month_index'], ['required' => true]),
                 'amount' => ['label' => 'مبلغ واریز (ریال)', 'type' => 'number', 'required' => true],
                 'payment_reference' => $fields['payment_reference'],
                 'description' => ['label' => 'توضیح واریز', 'type' => 'textarea', 'required' => true],

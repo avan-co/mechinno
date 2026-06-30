@@ -113,6 +113,8 @@ $assert(($member['approval_status'] ?? '') === 'pending', 'workflow: team member
 $allowed = Access::allowedResources();
 $assert(in_array('transactions', $allowed, true), 'access: team can access transactions');
 $assert(in_array('payment-history', $allowed, true), 'access: team can access payment-history');
+$assert(!in_array('pending-members', $allowed, true), 'access: team cannot access pending-members');
+$assert(!in_array('pending-payments', $allowed, true), 'access: team cannot access pending-payments');
 $assert(in_array('desks', $allowed, true), 'access: team can access desks');
 
 $payment = $crud->create('transactions', [
@@ -125,6 +127,10 @@ $payment = $crud->create('transactions', [
 ]);
 $assert(($payment['payment_status'] ?? '') === 'pending', 'workflow: team payment pending');
 $assert((int) ($payment['confirmed'] ?? 1) === 0, 'workflow: team payment not confirmed yet');
+
+$pendingTeamTx = $repo->paginatedResource('transactions', 1, 25, ['payment_status' => 'pending']);
+$pendingIds = array_map(static fn ($r) => (int) ($r['id'] ?? 0), $pendingTeamTx['rows']);
+$assert(in_array((int) $payment['id'], $pendingIds, true), 'transactions: pending filter works for team');
 
 $pdo->exec('UPDATE desks SET team_id = ' . $teamId . ', usage_type = "formal", formal_seats = 2 WHERE number = 1');
 $deskMap = $repo->paginatedResource('desks', 1, 100);
@@ -180,6 +186,13 @@ $devPlan = $crud->create('development_plans', [
 ]);
 $assert(($devPlan['title'] ?? '') === 'ایده تست', 'crud: development plan created');
 
+$history = $repo->paginatedResource('payment-history', 1, 25);
+$historyIds = array_map(static fn ($r) => (int) ($r['id'] ?? 0), $history['rows']);
+$assert(in_array((int) $approvedPayment['id'], $historyIds, true), 'payment-history: approved payment listed');
+$pendingAfterApprove = $repo->paginatedResource('transactions', 1, 25, ['payment_status' => 'pending']);
+$pendingAfterIds = array_map(static fn ($r) => (int) ($r['id'] ?? 0), $pendingAfterApprove['rows']);
+$assert(!in_array((int) $payment['id'], $pendingAfterIds, true), 'payment-history: pending payment excluded after approve');
+
 // --- Password reset ---
 $credentials = EntityAccounts::resetPassword($pdo, $teamId);
 $assert(strlen($credentials['password'] ?? '') === 8, 'entity: password reset generates 8 chars');
@@ -187,6 +200,8 @@ $assert(Auth::attempt($pdo, ['auth' => ['enabled' => true]], $credentials['usern
 
 // --- Report data ---
 $_SESSION['mechinno_role'] = Access::ROLE_ADMIN_EDITOR;
+$deskMapAdmin = $repo->deskMap();
+$assert(count($deskMapAdmin['rows']) === 24, 'api: admin desks-map has 24 desks');
 $report = (new ReportData($pdo))->build();
 $assert(isset($report['teams'], $report['members'], $report['desks']), 'report: build succeeds');
 $assert(count($report['teams']) >= 1, 'report: includes teams');

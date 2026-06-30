@@ -135,12 +135,15 @@ try {
         if ($resource === 'transactions' && isset($_GET['category']) && $_GET['category'] !== '') {
             $filters['category'] = (string) $_GET['category'];
         }
+        if ($resource === 'transactions' && isset($_GET['payment_status']) && $_GET['payment_status'] !== '') {
+            $filters['payment_status'] = (string) $_GET['payment_status'];
+        }
         json_response($repository->paginatedResource($resource, $page, $perPage, $filters));
     }
 
     json_response($repository->resource($resource));
 } catch (InvalidArgumentException $exception) {
-    json_response(['error' => $exception->getMessage()], 404);
+    json_response(['error' => $exception->getMessage()], 422);
 } catch (Throwable $exception) {
     json_response(['error' => safe_error_message($exception)], 500);
 }

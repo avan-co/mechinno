@@ -124,7 +124,7 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
             </section>
 
             <section id="members" class="section">
-              <p class="hint">می‌توانید عضو جدید ثبت کنید. پس از تأیید مدیر مرکز، در لیست اعضای فعال نمایش داده می‌شود.</p>
+              <p class="hint">می‌توانید عضو جدید ثبت کنید. تا زمان تأیید مدیر، وضعیت «در انتظار» نمایش داده می‌شود.</p>
               <data-table title="اعضای نهاد" endpoint="api.php?resource=members"></data-table>
             </section>
 
@@ -152,9 +152,9 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
             </section>
 
             <section id="payments" class="section">
-              <p class="hint">پس از واریز شارژ، اینجا اعلام کنید. پس از تأیید مدیر، در سوابق پرداخت و درآمد مرکز ثبت می‌شود.</p>
-              <data-table title="اعلام واریز جدید" endpoint="api.php?resource=transactions"></data-table>
-              <data-table title="سوابق پرداخت نهاد" endpoint="api.php?resource=payment-history"></data-table>
+              <p class="hint">پس از واریز شارژ، اعلام کنید. واریزهای در انتظار تأیید در جدول اول نمایش داده می‌شوند؛ پس از تأیید مدیر در سوابق ثبت می‌شوند.</p>
+              <data-table title="اعلام‌های در انتظار تأیید" endpoint="api.php?resource=transactions" data-payment-filter="pending"></data-table>
+              <data-table title="سوابق پرداخت تأییدشده" endpoint="api.php?resource=payment-history"></data-table>
             </section>
           </main>
         </div>
