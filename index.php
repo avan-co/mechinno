@@ -7,7 +7,9 @@ require_once __DIR__ . '/src/bootstrap.php';
 $isConfigured = is_file(__DIR__ . '/config.php');
 if ($isConfigured) {
     require_auth();
+    Access::requireAdminHtml();
 }
+$authContext = $isConfigured ? Access::clientContext() : ['role' => '', 'canWrite' => false, 'panel' => 'admin', 'teamId' => null, 'username' => ''];
 $today = JalaliDate::todayParts();
 $assetVer = (string) max(
     filemtime(__DIR__ . '/assets/styles.css'),
@@ -110,12 +112,20 @@ $assetVer = (string) max(
               <span class="nav-icon nav-icon--pink"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4Zm2 2v2h12V7Zm0 4v2h8v-2Z" fill="currentColor"/></svg></span>
               مالی
             </button>
+            <?php if (Access::canWrite()): ?>
+            <button class="nav-item" data-section="users" type="button">
+              <span class="nav-icon nav-icon--purple"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm-8 9a8 8 0 0 1 16 0Z" fill="currentColor"/></svg></span>
+              کاربران پنل
+            </button>
+            <?php endif; ?>
           </nav>
 
           <div class="sidebar-foot">
             <a class="foot-btn" href="export.php?report=all">خروجی Excel</a>
             <a class="foot-btn foot-btn--soft" href="report.php">گزارش PDF</a>
+            <?php if (Access::canWrite()): ?>
             <a class="foot-btn foot-btn--ghost" href="install.php">بازنشانی پنل</a>
+            <?php endif; ?>
             <a class="logout-link" href="logout.php">خروج</a>
           </div>
         </aside>
@@ -130,6 +140,11 @@ $assetVer = (string) max(
               <h1 id="pageTitle">مدیریت مرکز نوآوری</h1>
             </div>
             <div class="topbar-actions">
+              <span class="role-chip"><?= e(match ($authContext['role']) {
+                  'admin_editor' => 'مدیر — ویرایش',
+                  'admin_viewer' => 'مدیر — مشاهده',
+                  default => 'مدیر',
+              }) ?></span>
               <span class="date-chip" id="todayChip"><?= e($today['formatted']) ?></span>
               <button class="icon-btn" id="themeToggle" type="button" title="تغییر تم" aria-label="تغییر تم">
                 <svg class="icon-sun" viewBox="0 0 24 24"><path d="M12 18a6 6 0 1 1 6-6 6 6 0 0 1-6 6Zm0-16h2v3h-2V2Zm0 19h2v3h-2v-3ZM2 11h3v2H2v-2Zm19 0h3v2h-3v-2ZM4.2 4.2l2.1 2.1-1.4 1.4-2.1-2.1 1.4-1.4Zm13.1 13.1 2.1 2.1-1.4 1.4-2.1-2.1 1.4-1.4ZM4.2 19.8l1.4-1.4 2.1 2.1-1.4 1.4-2.1-2.1Zm13.1-13.1 1.4-1.4 2.1 2.1-1.4 1.4-2.1-2.1Z" fill="currentColor"/></svg>
@@ -231,6 +246,13 @@ $assetVer = (string) max(
               </div>
               <data-table title="مالی — دریافت و هزینه" endpoint="api.php?resource=transactions"></data-table>
             </section>
+
+            <?php if (Access::canWrite()): ?>
+            <section id="users" class="section">
+              <p class="hint">برای هر نهاد یک کاربر با نقش «نهاد» بسازید و نهاد مربوطه را انتخاب کنید. آن‌ها پس از ورود به پنل اختصاصی هدایت می‌شوند.</p>
+              <data-table title="کاربران پنل" endpoint="api.php?resource=panel_users"></data-table>
+            </section>
+            <?php endif; ?>
           </main>
         </div>
       </div>
@@ -243,6 +265,10 @@ $assetVer = (string) max(
           fiscalYear: "<?= e((string) $today['year']) ?>",
           monthIndex: <?= (int) $today['month'] ?>,
           assetVer: "<?= e($assetVer) ?>",
+          panel: "<?= e($authContext['panel']) ?>",
+          role: "<?= e($authContext['role']) ?>",
+          canWrite: <?= $authContext['canWrite'] ? 'true' : 'false' ?>,
+          username: "<?= e($authContext['username']) ?>",
         };
       </script>
       <script src="assets/app.js?v=<?= e($assetVer) ?>"></script>

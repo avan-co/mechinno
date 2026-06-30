@@ -13,8 +13,17 @@ try {
     $resource = (string) ($_GET['resource'] ?? 'summary');
     $action = (string) ($_GET['action'] ?? '');
 
+    if ($resource === 'panel_users' && !Access::canWrite()) {
+        json_response(['error' => 'مدیریت کاربران فقط برای مدیر ویرایشگر مجاز است.'], 403);
+    }
+
+    if (!in_array($resource, ['crud-meta'], true)) {
+        Access::assertResourceAllowed($resource === 'recalculate-charges' ? 'recalculate-charges' : $resource);
+    }
+
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && $resource === 'recalculate-charges') {
         require_csrf_json();
+        Access::requireWriteJson();
         $payload = json_decode((string) file_get_contents('php://input'), true);
         if (!is_array($payload)) {
             $payload = $_POST;
@@ -38,11 +47,19 @@ try {
     }
 
     if ($resource === 'team-profile') {
-        json_response($repository->teamProfile((int) ($_GET['id'] ?? 0)));
+        $teamId = (int) ($_GET['id'] ?? 0);
+        if (Access::isTeam()) {
+            $teamId = Access::scopedTeamId() ?? $teamId;
+        }
+        json_response($repository->teamProfile($teamId));
     }
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($action, ['create', 'update', 'delete', 'status'], true)) {
         require_csrf_json();
+        Access::requireWriteJson();
+        if ($resource === 'panel_users' && !Access::canWrite()) {
+            json_response(['error' => 'مدیریت کاربران فقط برای مدیر ویرایشگر مجاز است.'], 403);
+        }
         $payload = json_decode((string) file_get_contents('php://input'), true);
         if (!is_array($payload)) {
             $payload = $_POST;
@@ -62,7 +79,7 @@ try {
         json_response(['ok' => true, 'record' => $result]);
     }
 
-    $paginatedResources = ['teams', 'members', 'desks', 'lockers', 'charges', 'transactions', 'rate_settings'];
+    $paginatedResources = ['teams', 'members', 'desks', 'lockers', 'charges', 'transactions', 'rate_settings', 'panel_users'];
     if (in_array($resource, $paginatedResources, true)) {
         $page = (int) ($_GET['page'] ?? 1);
         $perPage = (int) ($_GET['per_page'] ?? 25);

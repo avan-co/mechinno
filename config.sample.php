@@ -16,6 +16,9 @@ return [
         'username' => 'admin',
         'password' => 'CHANGE_ME',
         'password_hash' => '',
+        'viewer_username' => 'viewer',
+        'viewer_password' => 'CHANGE_ME_VIEWER',
+        'viewer_password_hash' => '',
     ],
 
     /*

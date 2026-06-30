@@ -16,6 +16,11 @@ final class Repository
      */
     public function summary(): array
     {
+        $teamId = Access::scopedTeamId();
+        if ($teamId !== null) {
+            return $this->teamSummary($teamId);
+        }
+
         return [
             'cards' => [
                 'members' => $this->scalar('SELECT COUNT(*) FROM members'),
@@ -242,6 +247,18 @@ final class Repository
 
     private function resourceCount(string $name): int
     {
+        $teamId = Access::scopedTeamId();
+        if ($teamId !== null) {
+            return match ($name) {
+                'teams' => 1,
+                'members' => $this->preparedScalar('SELECT COUNT(*) FROM members WHERE team_id = :id', ['id' => $teamId]),
+                'desks' => $this->preparedScalar('SELECT COUNT(*) FROM desks WHERE team_id = :id', ['id' => $teamId]),
+                'lockers' => $this->preparedScalar('SELECT COUNT(*) FROM lockers WHERE team_id = :id', ['id' => $teamId]),
+                'charges' => $this->preparedScalar('SELECT COUNT(*) FROM charges WHERE team_id = :id', ['id' => $teamId]),
+                default => 0,
+            };
+        }
+
         $sql = match ($name) {
             'teams' => 'SELECT COUNT(*) FROM teams',
             'members' => 'SELECT COUNT(*) FROM members',
@@ -250,6 +267,7 @@ final class Repository
             'charges' => 'SELECT COUNT(*) FROM charges',
             'transactions' => 'SELECT COUNT(*) FROM transactions',
             'rate_settings' => 'SELECT COUNT(*) FROM rate_settings',
+            'panel_users' => 'SELECT COUNT(*) FROM panel_users',
             default => throw new InvalidArgumentException('Unknown resource.'),
         };
 
@@ -269,35 +287,42 @@ final class Repository
 
     private function resourceSql(string $name): string
     {
+        $teamId = Access::scopedTeamId();
+
         return match ($name) {
             'teams' => "SELECT t.id, t.entity_code, t.entity_type, t.name, t.leader, t.phone, t.joined_at, t.warning, t.notes,
                         (SELECT COUNT(*) FROM desks d WHERE d.team_id = t.id) AS desk_count,
                         (SELECT COALESCE(SUM(d.informal_seats), 0) FROM desks d WHERE d.team_id = t.id) AS informal_seats
-                 FROM teams t
-                 ORDER BY t.entity_type, t.name",
+                 FROM teams t"
+                . ($teamId !== null ? " WHERE t.id = {$teamId}" : '')
+                . ' ORDER BY t.entity_type, t.name',
             'members' => "SELECT m.id, m.member_code, m.team_id, m.access_code, m.full_name, m.phone, m.national_id, m.notes,
                         t.name AS team_label, t.entity_type,
                         (SELECT GROUP_CONCAT(d.number ORDER BY d.number)
                          FROM desks d WHERE d.team_id = m.team_id) AS desk_numbers
                  FROM members m
-                 LEFT JOIN teams t ON t.id = m.team_id
-                 ORDER BY m.id",
+                 LEFT JOIN teams t ON t.id = m.team_id"
+                . ($teamId !== null ? " WHERE m.team_id = {$teamId}" : '')
+                . ' ORDER BY m.id',
             'desks' => "SELECT d.id, d.number, d.team_id, d.usage_type, d.formal_seats, d.informal_seats,
                         d.row_index, d.col_index, d.notes, t.name AS team_name, t.entity_type
                  FROM desks d
-                 LEFT JOIN teams t ON t.id = d.team_id
-                 ORDER BY d.number",
+                 LEFT JOIN teams t ON t.id = d.team_id"
+                . ($teamId !== null ? " WHERE d.team_id = {$teamId}" : '')
+                . ' ORDER BY d.number',
             'lockers' => "SELECT l.id, l.locker_number, l.team_id, l.status, l.delivered_at, l.key_number, l.spare_key, l.notes,
                         t.name AS team_label
                  FROM lockers l
-                 LEFT JOIN teams t ON t.id = l.team_id
-                 ORDER BY l.locker_number",
+                 LEFT JOIN teams t ON t.id = l.team_id"
+                . ($teamId !== null ? " WHERE l.team_id = {$teamId}" : '')
+                . ' ORDER BY l.locker_number',
             'charges' => 'SELECT c.id, c.team_id, c.fiscal_year, c.month_index, c.month_name,
                         c.charge_amount, c.rent_amount, c.amount, c.note,
                         t.name AS team_name, t.entity_type
                  FROM charges c
-                 LEFT JOIN teams t ON t.id = c.team_id
-                 ORDER BY c.fiscal_year, t.name, c.month_index',
+                 LEFT JOIN teams t ON t.id = c.team_id'
+                . ($teamId !== null ? " WHERE c.team_id = {$teamId}" : '')
+                . ' ORDER BY c.fiscal_year, t.name, c.month_index',
             'transactions' => "SELECT t.id, t.tx_date, t.description, t.amount, t.category, t.team_id,
                         t.fiscal_year, t.month_index, t.confirmed, t.notes,
                         tm.name AS team_name
@@ -306,6 +331,10 @@ final class Repository
                  ORDER BY t.tx_date DESC, t.id DESC",
             'rate_settings' => 'SELECT id, fiscal_year, title, charge_rate, informal_rent_rate, effective_from, notes
                  FROM rate_settings ORDER BY fiscal_year, effective_from, id',
+            'panel_users' => 'SELECT u.id, u.username, u.role, u.team_id, u.full_name, u.is_active, t.name AS team_label
+                 FROM panel_users u
+                 LEFT JOIN teams t ON t.id = u.team_id
+                 ORDER BY u.username',
             default => throw new InvalidArgumentException('Unknown resource.'),
         };
     }
@@ -313,11 +342,76 @@ final class Repository
     /**
      * @return array<string, mixed>
      */
+    private function teamSummary(int $teamId): array
+    {
+        $profile = $this->teamProfile($teamId);
+
+        return [
+            'team' => $profile['team'],
+            'cards' => [
+                'members' => count($profile['members']),
+                'desks' => count($profile['desks']),
+                'lockers' => count($profile['lockers']),
+                'charge_total' => (int) ($profile['summary']['charge_total'] ?? 0),
+                'paid_total' => (int) ($profile['summary']['paid_total'] ?? 0),
+                'debt_total' => (int) ($profile['summary']['debt_total'] ?? 0),
+            ],
+            'current_month' => $this->currentMonthSummaryForTeam($teamId),
+            'monthly_charges' => $this->preparedRows(
+                'SELECT fiscal_year, month_index, month_name, amount
+                 FROM charges WHERE team_id = :team_id
+                 ORDER BY fiscal_year, month_index',
+                ['team_id' => $teamId]
+            ),
+            'action_items' => [],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function currentMonthSummaryForTeam(int $teamId): array
+    {
+        $today = JalaliDate::todayParts();
+        $year = (string) $today['year'];
+        $month = (int) $today['month'];
+        $chargeTotal = $this->preparedScalar(
+            'SELECT COALESCE(SUM(amount), 0) FROM charges WHERE team_id = :team_id AND fiscal_year = :year AND month_index = :month',
+            ['team_id' => $teamId, 'year' => $year, 'month' => $month]
+        );
+        $paidTotal = $this->preparedScalar(
+            "SELECT COALESCE(SUM(amount), 0) FROM transactions
+             WHERE team_id = :team_id AND category = 'واریز تیم' AND confirmed = 1 AND fiscal_year = :year AND month_index = :month",
+            ['team_id' => $teamId, 'year' => $year, 'month' => $month]
+        );
+
+        return [
+            'fiscal_year' => $year,
+            'month_index' => $month,
+            'month_name' => $today['month_name'],
+            'today' => $today['formatted'],
+            'charge_total' => $chargeTotal,
+            'paid_total' => $paidTotal,
+            'debt_total' => max(0, $chargeTotal - $paidTotal),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
     public function chargesMatrix(string $fiscalYear): array
     {
-        $teams = $this->preparedRows(
-            'SELECT id, entity_code, entity_type, name FROM teams ORDER BY entity_type, name'
-        );
+        $teamId = Access::scopedTeamId();
+        if ($teamId !== null) {
+            $teams = $this->preparedRows(
+                'SELECT id, entity_code, entity_type, name FROM teams WHERE id = :id',
+                ['id' => $teamId]
+            );
+        } else {
+            $teams = $this->preparedRows(
+                'SELECT id, entity_code, entity_type, name FROM teams ORDER BY entity_type, name'
+            );
+        }
         $months = [];
         for ($i = 1; $i <= 12; $i++) {
             $months[] = ['index' => $i, 'name' => $this->monthName($i)];
@@ -325,15 +419,16 @@ final class Repository
 
         $charges = $this->preparedRows(
             'SELECT team_id, month_index, charge_amount, rent_amount, amount
-             FROM charges WHERE fiscal_year = :year',
-            ['year' => $fiscalYear]
+             FROM charges WHERE fiscal_year = :year' . ($teamId !== null ? ' AND team_id = :team_id' : ''),
+            $teamId !== null ? ['year' => $fiscalYear, 'team_id' => $teamId] : ['year' => $fiscalYear]
         );
         $payments = $this->preparedRows(
             "SELECT team_id, month_index, SUM(amount) AS paid
              FROM transactions
-             WHERE category = 'واریز تیم' AND confirmed = 1 AND fiscal_year = :year
-             GROUP BY team_id, month_index",
-            ['year' => $fiscalYear]
+             WHERE category = 'واریز تیم' AND confirmed = 1 AND fiscal_year = :year"
+            . ($teamId !== null ? ' AND team_id = :team_id' : '')
+            . ' GROUP BY team_id, month_index',
+            $teamId !== null ? ['year' => $fiscalYear, 'team_id' => $teamId] : ['year' => $fiscalYear]
         );
 
         $chargeMap = [];
@@ -407,6 +502,7 @@ final class Repository
      */
     public function teamProfile(int $teamId): array
     {
+        Access::assertTeamAccess($teamId);
         $team = $this->preparedRow('SELECT * FROM teams WHERE id = :id', ['id' => $teamId]);
         if ($team === null) {
             throw new InvalidArgumentException('تیم پیدا نشد.');
