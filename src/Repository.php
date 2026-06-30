@@ -524,9 +524,14 @@ final class Repository
                  FROM lockers l WHERE l.team_id = :id ORDER BY l.locker_number',
                 ['id' => $teamId]
             ),
-            'charges' => $this->preparedRows('SELECT * FROM charges WHERE team_id = :id ORDER BY fiscal_year, month_index', ['id' => $teamId]),
+            'charges' => $this->preparedRows(
+                'SELECT id, fiscal_year, month_index, month_name, charge_amount, rent_amount, amount, note
+                 FROM charges WHERE team_id = :id ORDER BY fiscal_year, month_index',
+                ['id' => $teamId]
+            ),
             'payments' => $this->preparedRows(
-                "SELECT * FROM transactions
+                "SELECT id, tx_date, description, amount, category, fiscal_year, month_index, confirmed, notes
+                 FROM transactions
                  WHERE team_id = :id AND category = 'واریز تیم'
                  ORDER BY fiscal_year, month_index, tx_date",
                 ['id' => $teamId]

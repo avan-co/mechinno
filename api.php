@@ -13,8 +13,8 @@ try {
     $resource = (string) ($_GET['resource'] ?? 'summary');
     $action = (string) ($_GET['action'] ?? '');
 
-    if ($resource === 'panel_users' && !Access::canWrite()) {
-        json_response(['error' => 'مدیریت کاربران فقط برای مدیر ویرایشگر مجاز است.'], 403);
+    if ($resource === 'panel_users' && Access::isTeam()) {
+        json_response(['error' => 'دسترسی به مدیریت کاربران مجاز نیست.'], 403);
     }
 
     if (!in_array($resource, ['crud-meta'], true)) {

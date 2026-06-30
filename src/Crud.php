@@ -174,11 +174,24 @@ final class Crud
     {
         $resources = [];
         $teamOptions = $this->teamOptions();
+        $allowed = array_flip(Access::allowedCrudResources());
 
         foreach (self::definitions() as $name => $definition) {
+            if (!isset($allowed[$name])) {
+                continue;
+            }
             foreach ($definition['fields'] as $field => $meta) {
                 if ($field === 'team_id' || $field === 'owner_team_id') {
                     $definition['fields'][$field]['options'] = $teamOptions;
+                }
+                if ($field === 'team_id' && Access::isTeam()) {
+                    $scopedTeamId = Access::scopedTeamId();
+                    if ($scopedTeamId !== null) {
+                        $definition['fields'][$field]['options'] = array_intersect_key(
+                            $teamOptions,
+                            [(string) $scopedTeamId => true]
+                        );
+                    }
                 }
             }
             $resources[$name] = [
@@ -256,6 +269,9 @@ final class Crud
     {
         $definition = $this->definition($resource);
         $this->assertExists($definition, $id);
+        if ($resource === 'panel_users') {
+            $this->assertPanelUserDeletable($id);
+        }
         $this->pdo->prepare(sprintf('DELETE FROM %s WHERE id = :id', $definition['table']))->execute(['id' => $id]);
     }
 
@@ -290,6 +306,29 @@ final class Crud
         }
 
         return $row;
+    }
+
+    private function assertPanelUserDeletable(int $id): void
+    {
+        if (Access::userId() > 0 && $id === Access::userId()) {
+            throw new InvalidArgumentException('نمی‌توانید حساب کاربری خود را حذف کنید.');
+        }
+
+        $statement = $this->pdo->prepare('SELECT role FROM panel_users WHERE id = :id');
+        $statement->execute(['id' => $id]);
+        $role = (string) ($statement->fetchColumn() ?: '');
+        if ($role !== Access::ROLE_ADMIN_EDITOR) {
+            return;
+        }
+
+        $countStatement = $this->pdo->prepare(
+            'SELECT COUNT(*) FROM panel_users WHERE role = :role AND is_active = 1'
+        );
+        $countStatement->execute(['role' => Access::ROLE_ADMIN_EDITOR]);
+        $count = (int) $countStatement->fetchColumn();
+        if ($count <= 1) {
+            throw new InvalidArgumentException('حداقل یک مدیر ویرایشگر باید فعال بماند.');
+        }
     }
 
     private function definition(string $resource): array

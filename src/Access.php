@@ -40,7 +40,39 @@ final class Access
     public static function role(): string
     {
         Auth::start();
-        return (string) ($_SESSION['mechinno_role'] ?? self::ROLE_ADMIN_EDITOR);
+        if (isset($_SESSION['mechinno_role'])) {
+            return (string) $_SESSION['mechinno_role'];
+        }
+        if (Auth::check()) {
+            return self::ROLE_ADMIN_VIEWER;
+        }
+
+        return self::ROLE_ADMIN_EDITOR;
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function allowedResources(): array
+    {
+        return self::isTeam() ? self::TEAM_RESOURCES : self::ADMIN_RESOURCES;
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function allowedCrudResources(): array
+    {
+        if (self::isTeam()) {
+            return ['members', 'desks', 'lockers', 'charges'];
+        }
+
+        $resources = ['teams', 'members', 'desks', 'lockers', 'charges', 'transactions', 'rate_settings'];
+        if (self::isAdmin()) {
+            $resources[] = 'panel_users';
+        }
+
+        return $resources;
     }
 
     public static function userId(): int
@@ -117,7 +149,7 @@ final class Access
 
     public static function assertResourceAllowed(string $resource): void
     {
-        $allowed = self::isTeam() ? self::TEAM_RESOURCES : self::ADMIN_RESOURCES;
+        $allowed = self::allowedResources();
         if (!in_array($resource, $allowed, true)) {
             json_response(['error' => 'دسترسی به این بخش مجاز نیست.'], 403);
         }

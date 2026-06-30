@@ -125,9 +125,27 @@ $summary = $repo->summary();
 $assert(isset($summary['cards']['debt_total']), 'summary cards present');
 $assert(isset($summary['current_month']['debtor_count']), 'current month summary');
 
+Auth::start();
+$_SESSION['mechinno_authenticated'] = true;
+$_SESSION['mechinno_role'] = Access::ROLE_TEAM;
+$_SESSION['mechinno_team_id'] = 1;
+$teamMeta = $crud->meta();
+$assert(!isset($teamMeta['resources']['panel_users']), 'team crud meta excludes panel_users');
+$assert(!isset($teamMeta['resources']['transactions']), 'team crud meta excludes transactions');
+$teamSummary = $repo->summary();
+$assert(isset($teamSummary['team']['name']), 'team summary scoped');
+$assert(!isset($teamSummary['debt_by_team']), 'team summary has no admin debt chart');
+
+$_SESSION['mechinno_role'] = Access::ROLE_ADMIN_VIEWER;
+$viewerMeta = $crud->meta();
+$assert(isset($viewerMeta['resources']['panel_users']), 'viewer can read panel_users meta');
+$assert(isset($viewerMeta['resources']['transactions']), 'viewer can read transactions meta');
+
+$_SESSION = [];
+
 if ($errors !== []) {
     fwrite(STDERR, implode("\n", $errors) . "\n");
     exit(1);
 }
 
-echo "All smoke tests passed (" . count($errors) . " errors)\n";
+echo "All smoke tests passed\n";

@@ -60,6 +60,14 @@ const sectionMeta = {
   users: { eyebrow: "دسترسی", title: "کاربران پنل", subtitle: "مدیریت نقش‌ها و پنل اختصاصی نهادها" },
 };
 
+const teamSectionMeta = {
+  overview: { eyebrow: "داشبورد نهاد", title: "وضعیت نهاد", subtitle: "خلاصه اعضا، میزها، کمدها و شارژ" },
+  members: { eyebrow: "اعضا", title: "اعضای نهاد", subtitle: "لیست اعضای ثبت‌شده در نهاد شما" },
+  desks: { eyebrow: "میزها", title: "میزهای نهاد", subtitle: "میزهای تخصیص‌یافته به نهاد" },
+  lockers: { eyebrow: "کمدها", title: "کمدهای نهاد", subtitle: "کمدهای تخصیص‌یافته" },
+  charges: { eyebrow: "شارژ", title: "شارژ و پرداخت", subtitle: "وضعیت شارژ ماهانه و پرداخت‌ها" },
+};
+
 const cardNavMap = {
   members: "members",
   teams: "teams",
@@ -97,6 +105,10 @@ const resourceColumns = {
   transactions: ["tx_date", "description", "amount", "category", "team_name", "fiscal_year", "month_index", "confirmed"],
 };
 
+const csrfToken = window.MECHINNO?.csrfToken || "";
+const canWrite = window.MECHINNO?.canWrite === true;
+const panelMode = window.MECHINNO?.panel || "admin";
+
 const editableResources = new Set(
   canWrite
     ? ["members", "teams", "desks", "lockers", "charges", "transactions", "rate_settings", "panel_users"]
@@ -119,9 +131,6 @@ const linkColumns = {
   name: "id",
 };
 
-const csrfToken = window.MECHINNO?.csrfToken || "";
-const canWrite = window.MECHINNO?.canWrite !== false;
-const panelMode = window.MECHINNO?.panel || "admin";
 let crudMetaPromise = null;
 let highlightDesk = null;
 let highlightLocker = null;
@@ -216,7 +225,8 @@ const syncMobileClass = () => {
 };
 
 const updatePageHeader = (sectionId) => {
-  const meta = sectionMeta[sectionId] || sectionMeta.overview;
+  const metaSource = panelMode === "team" ? teamSectionMeta : sectionMeta;
+  const meta = metaSource[sectionId] || metaSource.overview;
   const eyebrow = document.getElementById("pageEyebrow");
   const title = document.getElementById("pageTitle");
   const subtitle = document.getElementById("pageSubtitle");
@@ -507,7 +517,15 @@ const loadChargesCollage = async () => {
     yearSelect.dataset.ready = "1";
     yearSelect.addEventListener("change", () => loadChargesCollage().catch((error) => showToast(error.message, "error")));
   }
-  const { rows: rateRows } = await fetchResource("api.php?resource=rate_settings", { page: 1, perPage: 100 });
+  let rateRows = [];
+  if (panelMode !== "team") {
+    try {
+      const rateData = await fetchResource("api.php?resource=rate_settings", { page: 1, perPage: 100 });
+      rateRows = rateData.rows;
+    } catch (error) {
+      rateRows = [];
+    }
+  }
   const { rows: chargeRows } = await fetchResource("api.php?resource=charges", { page: 1, perPage: 200 });
   const years = [...new Set([
     window.MECHINNO?.fiscalYear || "1404",
@@ -606,12 +624,15 @@ const openTeamProfile = async (teamId) => {
       <div><span>دریافت از نهاد</span><strong>${escapeHtml(formatMoney(data.summary.paid_total || 0))}</strong></div>
       <div><span>مانده طلب</span><strong class="debt-value">${escapeHtml(formatMoney(data.summary.debt_total || 0))}</strong></div>
     </div>
-    <div class="profile-actions">
+    ${canWrite ? `<div class="profile-actions">
       <button type="button" class="button" data-profile-action="add-member">افزودن عضو</button>
       <button type="button" class="button ghost" data-profile-action="deposit">ثبت دریافت شارژ</button>
       <button type="button" class="button ghost" data-profile-action="charges">مشاهده شارژ</button>
       <button type="button" class="button ghost" data-profile-action="desks">مدیریت میزها</button>
-    </div>
+    </div>` : `<div class="profile-actions">
+      <button type="button" class="button ghost" data-profile-action="charges">مشاهده شارژ</button>
+      <button type="button" class="button ghost" data-profile-action="desks">مشاهده میزها</button>
+    </div>`}
     ${profileSection("میزهای نهاد", data.desks, ["number", "usage_type", "formal_seats", "informal_seats"])}
     ${profileSection("اعضا", data.members, ["member_code", "full_name", "access_code", "phone", "national_id"])}
     ${profileSection("کمدها", data.lockers, ["locker_number", "status", "delivered_at", "key_number"], (column, row) => {
@@ -627,6 +648,8 @@ const openTeamProfile = async (teamId) => {
   form.querySelectorAll("[data-profile-action]").forEach((button) => {
     button.addEventListener("click", async () => {
       const action = button.dataset.profileAction;
+      if (action === "add-member" && !canWrite) return;
+      if (action === "deposit" && !canWrite) return;
       if (action === "add-member") {
         closeModal();
         activateSection("members");
