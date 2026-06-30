@@ -186,6 +186,27 @@ $devPlan = $crud->create('development_plans', [
 ]);
 $assert(($devPlan['title'] ?? '') === 'ایده تست', 'crud: development plan created');
 
+$settings = new CenterSettings($pdo);
+$updated = $settings->update([
+    'bank_name' => 'بانک تست',
+    'account_holder' => 'مرکز نوآوری',
+    'account_number' => '1234567890',
+    'card_number' => '6037-9912-3456-7890',
+    'sheba' => 'IR120123456789012345678901',
+    'payment_guide' => 'راهنمای تست',
+]);
+$assert(($updated['bank_name'] ?? '') === 'بانک تست', 'settings: payment info saved');
+
+$_SESSION = [
+    'mechinno_authenticated' => true,
+    'mechinno_role' => Access::ROLE_TEAM,
+    'mechinno_team_id' => $teamId,
+    'mechinno_user' => $row['portal_username'] ?? 'team',
+    'mechinno_user_id' => 1,
+];
+$teamSummarySettings = $repo->summary()['payment_settings'] ?? [];
+$assert(($teamSummarySettings['sheba'] ?? '') === 'IR120123456789012345678901', 'settings: team can read payment info');
+
 $history = $repo->paginatedResource('payment-history', 1, 25);
 $historyIds = array_map(static fn ($r) => (int) ($r['id'] ?? 0), $history['rows']);
 $assert(in_array((int) $approvedPayment['id'], $historyIds, true), 'payment-history: approved payment listed');

@@ -59,6 +59,20 @@ try {
         json_response($repository->deskMap());
     }
 
+    if ($resource === 'center-settings') {
+        $settings = new CenterSettings($pdo);
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            require_csrf_json();
+            Access::requireWriteJson();
+            $payload = json_decode((string) file_get_contents('php://input'), true);
+            if (!is_array($payload)) {
+                $payload = $_POST;
+            }
+            json_response(['ok' => true, 'settings' => $settings->update($payload)]);
+        }
+        json_response($settings->get());
+    }
+
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && $resource === 'teams' && $action === 'reset-portal-password') {
         require_csrf_json();
         Access::requireWriteJson();

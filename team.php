@@ -152,7 +152,11 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
             </section>
 
             <section id="payments" class="section">
-              <p class="hint">پس از واریز شارژ، اعلام کنید. واریزهای در انتظار تأیید در جدول اول نمایش داده می‌شوند؛ پس از تأیید مدیر در سوابق ثبت می‌شوند.</p>
+              <article class="panel" id="paymentGuidePanel">
+                <div class="panel-head"><h2>راهنمای پرداخت شارژ</h2></div>
+                <div id="paymentGuideContent" class="payment-guide">در حال بارگذاری…</div>
+              </article>
+              <p class="hint">پس از واریز، اعلام کنید. واریزهای در انتظار در جدول اول نمایش داده می‌شوند.</p>
               <data-table title="اعلام‌های در انتظار تأیید" endpoint="api.php?resource=transactions" data-payment-filter="pending"></data-table>
               <data-table title="سوابق پرداخت تأییدشده" endpoint="api.php?resource=payment-history"></data-table>
             </section>

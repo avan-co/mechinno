@@ -142,10 +142,46 @@ final class Repository
 
         if ($this->scalar('SELECT COUNT(*) FROM teams') === 0) {
             $items[] = [
+                'priority' => 5,
                 'type' => 'start',
                 'label' => 'اولین نهاد را ثبت کنید',
-                'detail' => 'تیم، شرکت یا دانشجوی مستقل',
+                'detail' => 'تیم، شرکت یا دانشجوی مستقر',
                 'section' => 'teams',
+            ];
+        }
+
+        $pendingPayments = $this->scalar("SELECT COUNT(*) FROM transactions WHERE category = 'واریز تیم' AND payment_status = 'pending'");
+        if ($pendingPayments > 0) {
+            $items[] = [
+                'priority' => 10,
+                'type' => 'payment',
+                'label' => number_format($pendingPayments) . ' واریز در انتظار تأیید',
+                'detail' => 'بررسی و تأیید اعلام پرداخت نهادها',
+                'section' => 'transactions',
+                'target' => 'pending-payments',
+            ];
+        }
+
+        $pendingMembers = $this->scalar("SELECT COUNT(*) FROM members WHERE approval_status = 'pending'");
+        if ($pendingMembers > 0) {
+            $items[] = [
+                'priority' => 20,
+                'type' => 'member',
+                'label' => number_format($pendingMembers) . ' عضو در انتظار تأیید',
+                'detail' => 'بررسی درخواست‌های ثبت عضو',
+                'section' => 'members',
+                'target' => 'pending-members',
+            ];
+        }
+
+        $totalDebt = $this->scalar($this->debtSql());
+        if ($totalDebt > 0) {
+            $items[] = [
+                'priority' => 25,
+                'type' => 'debt',
+                'label' => 'مجموع طلب از نهادها: ' . number_format($totalDebt) . ' ریال',
+                'detail' => 'مشاهده کلاژ شارژ و پیگیری دریافت',
+                'section' => 'charges',
             ];
         }
 
@@ -168,33 +204,14 @@ final class Repository
              LIMIT 5",
             ['year' => $year, 'year2' => $year, 'month' => $month, 'month2' => $month]
         );
-        foreach ($debtors as $row) {
+        foreach ($debtors as $index => $row) {
             $items[] = [
+                'priority' => 30 + $index,
                 'type' => 'debt',
                 'label' => (string) $row['team_name'],
-                'detail' => 'مانده طلب ' . $today['month_name'] . ' به مرکز: ' . number_format((int) $row['debt']) . ' ریال',
+                'detail' => 'مانده طلب ' . $today['month_name'] . ': ' . number_format((int) $row['debt']) . ' ریال',
                 'section' => 'charges',
                 'team_id' => (int) $row['team_id'],
-            ];
-        }
-
-        $emptyLockers = $this->scalar("SELECT COUNT(*) FROM lockers WHERE status = 'خالی'");
-        if ($emptyLockers > 0) {
-            $items[] = [
-                'type' => 'locker',
-                'label' => number_format($emptyLockers) . ' کمد خالی',
-                'detail' => 'آماده تخصیص',
-                'section' => 'lockers',
-            ];
-        }
-
-        $freeDesks = $this->scalar('SELECT COUNT(*) FROM desks WHERE team_id IS NULL');
-        if ($freeDesks > 0) {
-            $items[] = [
-                'type' => 'desk',
-                'label' => number_format($freeDesks) . ' میز آزاد',
-                'detail' => 'از ۲۴ میز',
-                'section' => 'desks',
             ];
         }
 
@@ -204,43 +221,53 @@ final class Repository
         ) > 0;
         if (!$hasRate) {
             $items[] = [
+                'priority' => 50,
                 'type' => 'rate',
                 'label' => 'نرخ سال ' . $year . ' تنظیم نشده',
-                'detail' => 'ابتدا نرخ شارژ را در بخش شارژ تعریف کنید',
+                'detail' => 'تعریف نرخ شارژ در بخش شارژ',
                 'section' => 'charges',
             ];
         }
 
         if ($this->scalar('SELECT COUNT(*) FROM lockers') === 0) {
             $items[] = [
+                'priority' => 55,
                 'type' => 'locker',
                 'label' => 'هنوز کمدی ثبت نشده',
-                'detail' => 'شماره کمدها را خودتان اضافه کنید',
+                'detail' => 'شماره کمدها را اضافه کنید',
                 'section' => 'lockers',
             ];
         }
 
-        $pendingMembers = $this->scalar("SELECT COUNT(*) FROM members WHERE approval_status = 'pending'");
-        if ($pendingMembers > 0) {
+        $emptyLockers = $this->scalar("SELECT COUNT(*) FROM lockers WHERE status = 'خالی'");
+        if ($emptyLockers > 0) {
             $items[] = [
-                'type' => 'member',
-                'label' => number_format($pendingMembers) . ' عضو در انتظار تأیید',
-                'detail' => 'درخواست‌های ثبت عضو از نهادها',
-                'section' => 'members',
+                'priority' => 60,
+                'type' => 'locker',
+                'label' => number_format($emptyLockers) . ' کمد خالی',
+                'detail' => 'آماده تخصیص به نهادها',
+                'section' => 'lockers',
             ];
         }
 
-        $pendingPayments = $this->scalar("SELECT COUNT(*) FROM transactions WHERE category = 'واریز تیم' AND payment_status = 'pending'");
-        if ($pendingPayments > 0) {
+        $freeDesks = $this->scalar('SELECT COUNT(*) FROM desks WHERE team_id IS NULL');
+        if ($freeDesks > 0) {
             $items[] = [
-                'type' => 'payment',
-                'label' => number_format($pendingPayments) . ' واریز در انتظار تأیید',
-                'detail' => 'اعلام پرداخت نهادها — قبل از ثبت در درآمد مرکز',
-                'section' => 'transactions',
+                'priority' => 70,
+                'type' => 'desk',
+                'label' => number_format($freeDesks) . ' میز آزاد',
+                'detail' => 'از ۲۴ میز قابل تخصیص',
+                'section' => 'desks',
             ];
         }
 
-        return $items;
+        usort($items, static fn (array $a, array $b): int => ($a['priority'] ?? 99) <=> ($b['priority'] ?? 99));
+
+        return array_map(static function (array $item): array {
+            unset($item['priority']);
+
+            return $item;
+        }, $items);
     }
 
     /**
@@ -428,7 +455,7 @@ final class Repository
                  INNER JOIN teams t ON t.id = m.team_id
                  WHERE m.approval_status = 'pending'
                  ORDER BY m.submitted_at DESC, m.id DESC",
-            'pending-payments' => "SELECT t.id, t.tx_date, t.amount, t.description, t.payment_reference, t.announced_at,
+            'pending-payments' => "SELECT t.id, t.tx_date, t.amount, t.description, t.payment_reference, t.announced_at, t.notes,
                         t.fiscal_year, t.month_index, tm.name AS team_name, tm.id AS team_id,
                         CASE t.month_index
                             WHEN 1 THEN 'فروردین' WHEN 2 THEN 'اردیبهشت' WHEN 3 THEN 'خرداد'
@@ -441,7 +468,7 @@ final class Repository
                  INNER JOIN teams tm ON tm.id = t.team_id
                  WHERE t.category = 'واریز تیم' AND t.payment_status = 'pending'
                  ORDER BY t.announced_at DESC, t.id DESC",
-            'payment-history' => "SELECT t.id, t.tx_date, t.amount, t.description, t.payment_reference, t.payment_status,
+            'payment-history' => "SELECT t.id, t.tx_date, t.amount, t.description, t.payment_reference, t.payment_status, t.notes,
                         t.fiscal_year, t.month_index, t.confirmed, t.announced_at, t.reviewed_at,
                         tm.name AS team_name,
                         CASE t.month_index
@@ -456,8 +483,12 @@ final class Repository
                  WHERE t.category = 'واریز تیم' AND t.confirmed = 1"
                 . ($teamId !== null ? " AND t.team_id = {$teamId}" : '')
                 . ' ORDER BY t.fiscal_year DESC, t.month_index DESC, t.tx_date DESC',
-            'development_plans' => 'SELECT id, title, description, category, priority, status, due_date, notes, sort_order, created_at, updated_at
-                 FROM development_plans ORDER BY sort_order, id DESC',
+            'development_plans' => 'SELECT p.id, p.title, p.description, p.category, p.priority, p.status, p.due_date, p.notes,
+                        p.sort_order, p.created_at, p.updated_at, p.depends_on_id, p.estimated_cost, p.estimated_revenue,
+                        p.related_section, d.title AS depends_on_title
+                 FROM development_plans p
+                 LEFT JOIN development_plans d ON d.id = p.depends_on_id
+                 ORDER BY p.sort_order, p.id DESC',
             'rate_settings' => 'SELECT id, fiscal_year, title, charge_rate, informal_rent_rate, effective_from, notes
                  FROM rate_settings ORDER BY fiscal_year, effective_from, id',
             'panel_users' => 'SELECT u.id, u.username, u.role, u.team_id, u.full_name, u.is_active, t.name AS team_label
@@ -536,6 +567,7 @@ final class Repository
                 ['team_id' => $teamId]
             ),
             'action_items' => [],
+            'payment_settings' => (new CenterSettings($this->pdo))->get(),
         ];
     }
 

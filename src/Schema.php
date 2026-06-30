@@ -210,6 +210,16 @@ final class Schema
                 INDEX idx_dev_plans_status (status),
                 INDEX idx_dev_plans_category (category)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+            "CREATE TABLE IF NOT EXISTS center_settings (
+                id INT PRIMARY KEY,
+                bank_name VARCHAR(255) NULL,
+                account_holder VARCHAR(255) NULL,
+                account_number VARCHAR(64) NULL,
+                card_number VARCHAR(32) NULL,
+                sheba VARCHAR(32) NULL,
+                payment_guide TEXT NULL,
+                updated_at VARCHAR(32) NULL
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
         ];
 
         foreach ($sql as $statement) {
@@ -231,7 +241,8 @@ final class Schema
             CREATE TABLE IF NOT EXISTS import_backups (id INTEGER PRIMARY KEY AUTOINCREMENT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, reason TEXT, summary TEXT);
             CREATE TABLE IF NOT EXISTS import_backup_items (id INTEGER PRIMARY KEY AUTOINCREMENT, backup_id INTEGER NOT NULL, table_name TEXT NOT NULL, row_id INTEGER, payload TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS panel_users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, password_plain TEXT, role TEXT NOT NULL, team_id INTEGER, full_name TEXT, is_active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(team_id, role));
-            CREATE TABLE IF NOT EXISTS development_plans (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, description TEXT, category TEXT NOT NULL DEFAULT 'idea', priority TEXT NOT NULL DEFAULT 'medium', status TEXT NOT NULL DEFAULT 'open', due_date TEXT, notes TEXT, sort_order INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, updated_at TEXT);"
+            CREATE TABLE IF NOT EXISTS development_plans (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, description TEXT, category TEXT NOT NULL DEFAULT 'idea', priority TEXT NOT NULL DEFAULT 'medium', status TEXT NOT NULL DEFAULT 'open', due_date TEXT, notes TEXT, sort_order INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, updated_at TEXT, depends_on_id INTEGER, estimated_cost INTEGER, estimated_revenue INTEGER, related_section TEXT);
+            CREATE TABLE IF NOT EXISTS center_settings (id INTEGER PRIMARY KEY, bank_name TEXT, account_holder TEXT, account_number TEXT, card_number TEXT, sheba TEXT, payment_guide TEXT, updated_at TEXT);"
         );
     }
 
@@ -282,6 +293,12 @@ final class Schema
             'panel_users' => [
                 'password_plain' => 'VARCHAR(64) NULL',
             ],
+            'development_plans' => [
+                'depends_on_id' => 'INT NULL',
+                'estimated_cost' => 'BIGINT NULL',
+                'estimated_revenue' => 'BIGINT NULL',
+                'related_section' => 'VARCHAR(32) NULL',
+            ],
         ];
 
         foreach ($columns as $table => $tableColumns) {
@@ -306,6 +323,44 @@ final class Schema
             $pdo->exec("UPDATE transactions SET payment_status = 'approved' WHERE payment_status IS NULL OR payment_status = ''");
             $pdo->exec("UPDATE transactions SET payment_status = 'pending', confirmed = 0 WHERE category = 'واریز تیم' AND confirmed = 0");
         }
+
+        self::seedCenterSettings($pdo);
+    }
+
+    private static function seedCenterSettings(PDO $pdo): void
+    {
+        if (!self::tableExists($pdo, 'center_settings')) {
+            return;
+        }
+        $exists = (int) $pdo->query('SELECT COUNT(*) FROM center_settings WHERE id = 1')->fetchColumn();
+        if ($exists > 0) {
+            return;
+        }
+        $today = JalaliDate::todayParts()['formatted'];
+        $pdo->prepare(
+            "INSERT INTO center_settings (id, bank_name, account_holder, account_number, card_number, sheba, payment_guide, updated_at)
+             VALUES (1, '', '', '', '', '', :guide, :updated_at)"
+        )->execute([
+            'guide' => 'پس از واریز شارژ، مبلغ، تاریخ، سال مالی و ماه را در بخش «اعلام واریز» ثبت کنید تا مدیر مرکز تأیید کند.',
+            'updated_at' => $today,
+        ]);
+    }
+
+    private static function tableExists(PDO $pdo, string $table): bool
+    {
+        if ($pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite') {
+            $statement = $pdo->prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = :name");
+            $statement->execute(['name' => $table]);
+
+            return $statement->fetchColumn() !== false;
+        }
+
+        $statement = $pdo->prepare(
+            'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = :name'
+        );
+        $statement->execute(['name' => $table]);
+
+        return (int) $statement->fetchColumn() > 0;
     }
 
     private static function dropLegacyColumns(PDO $pdo): void

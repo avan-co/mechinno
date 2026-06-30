@@ -182,6 +182,9 @@ if (!is_file($root . '/config.php')) {
     $r = $request('GET', '/api.php?resource=payment-history');
     $assert($r['status'] === 200, 'http: entity can access payment history');
 
+    $r = $request('GET', '/api.php?resource=center-settings');
+    $assert($r['status'] === 200 && isset($r['json']['bank_name']), 'http: entity can read payment settings');
+
     $r = $request('GET', '/api.php?resource=pending-members');
     $assert($r['status'] === 403, 'http: entity blocked from pending-members');
 

@@ -182,6 +182,22 @@ final class Crud
                         'required' => true,
                     ],
                     'due_date' => ['label' => 'موعد هدف', 'type' => 'date', 'placeholder' => '1405/06/01'],
+                    'depends_on_id' => ['label' => 'وابسته به برنامه', 'type' => 'select', 'options' => []],
+                    'estimated_cost' => ['label' => 'برآورد هزینه (ریال)', 'type' => 'number'],
+                    'estimated_revenue' => ['label' => 'برآورد درآمد (ریال)', 'type' => 'number'],
+                    'related_section' => [
+                        'label' => 'بخش مرتبط',
+                        'type' => 'select',
+                        'options' => [
+                            '' => '—',
+                            'teams' => 'نهادها',
+                            'members' => 'اعضا',
+                            'desks' => 'میزها',
+                            'lockers' => 'کمدها',
+                            'charges' => 'شارژ',
+                            'transactions' => 'مالی',
+                        ],
+                    ],
                     'notes' => ['label' => 'یادداشت', 'type' => 'textarea'],
                     'sort_order' => ['label' => 'ترتیب', 'type' => 'number'],
                 ],
@@ -224,6 +240,14 @@ final class Crud
             foreach ($definition['fields'] as $field => $meta) {
                 if ($field === 'team_id' || $field === 'owner_team_id') {
                     $definition['fields'][$field]['options'] = $teamOptions;
+                }
+                if ($name === 'development_plans' && $field === 'depends_on_id') {
+                    $planOptions = ['' => '—'];
+                    $statement = $this->pdo->query('SELECT id, title FROM development_plans ORDER BY title');
+                    foreach ($statement->fetchAll() as $planRow) {
+                        $planOptions[(string) $planRow['id']] = (string) $planRow['title'];
+                    }
+                    $definition['fields'][$field]['options'] = $planOptions;
                 }
                 if ($field === 'team_id' && Access::isTeam()) {
                     $scopedTeamId = Access::scopedTeamId();
@@ -558,6 +582,12 @@ final class Crud
             } else {
                 $data['payment_status'] = 'approved';
                 $data['confirmed'] = (int) ($data['confirmed'] ?? 1);
+                $description = trim((string) ($data['description'] ?? ''));
+                if ($description !== '' && !str_starts_with($description, 'ثبت مستقیم مدیر')) {
+                    $data['description'] = 'ثبت مستقیم مدیر — ' . $description;
+                } elseif ($description === '') {
+                    $data['description'] = 'ثبت مستقیم مدیر — دریافت شارژ';
+                }
             }
         }
         if ($resource === 'charges') {
@@ -618,6 +648,20 @@ final class Crud
                 $data['created_at'] = $today;
                 $data['status'] = $data['status'] ?? 'open';
                 $data['sort_order'] = (int) ($data['sort_order'] ?? 0);
+            }
+            if (isset($data['depends_on_id']) && $this->blank($data['depends_on_id'])) {
+                $data['depends_on_id'] = null;
+            } elseif (isset($data['depends_on_id'])) {
+                $data['depends_on_id'] = (int) $data['depends_on_id'];
+            }
+            if (isset($data['estimated_cost'])) {
+                $data['estimated_cost'] = $this->blank($data['estimated_cost']) ? null : (int) $data['estimated_cost'];
+            }
+            if (isset($data['estimated_revenue'])) {
+                $data['estimated_revenue'] = $this->blank($data['estimated_revenue']) ? null : (int) $data['estimated_revenue'];
+            }
+            if (isset($data['related_section']) && $this->blank($data['related_section'])) {
+                $data['related_section'] = null;
             }
             $data['updated_at'] = $today;
         }

@@ -19,6 +19,7 @@ final class Access
         'team-profile',
         'transactions',
         'payment-history',
+        'center-settings',
         'crud-meta',
     ];
 
@@ -40,6 +41,7 @@ final class Access
         'pending-members',
         'pending-payments',
         'payment-history',
+        'center-settings',
         'crud-meta',
         'recalculate-charges',
     ];

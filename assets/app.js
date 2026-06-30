@@ -58,6 +58,17 @@ const labels = {
   sort_order: "ترتیب",
   created_at: "ایجاد",
   updated_at: "به‌روزرسانی",
+  depends_on_id: "وابسته به",
+  depends_on_title: "پیش‌نیاز",
+  estimated_cost: "برآورد هزینه",
+  estimated_revenue: "برآورد درآمد",
+  related_section: "بخش مرتبط",
+  bank_name: "بانک",
+  account_holder: "صاحب حساب",
+  account_number: "شماره حساب",
+  card_number: "شماره کارت",
+  sheba: "شماره شبا",
+  payment_guide: "راهنمای پرداخت",
 };
 
 const entityTypeLabels = { team: "تیم", company: "شرکت", student: "دانشجو" };
@@ -130,9 +141,9 @@ const resourceColumns = {
   charges: ["fiscal_year", "team_name", "month_name", "charge_amount", "rent_amount", "amount", "note"],
   transactions: ["tx_date", "description", "amount", "category", "team_name", "fiscal_year", "month_name", "payment_status", "payment_reference", "confirmed"],
   "pending-members": ["member_code", "full_name", "team_label", "phone", "national_id", "submitted_at"],
-  "pending-payments": ["tx_date", "team_name", "fiscal_year", "month_name", "amount", "payment_reference", "announced_at", "description"],
-  "payment-history": ["tx_date", "team_name", "fiscal_year", "month_name", "amount", "payment_status", "payment_reference", "announced_at", "reviewed_at"],
-  development_plans: ["title", "category", "priority", "status", "due_date", "description", "notes", "sort_order"],
+  "pending-payments": ["tx_date", "team_name", "fiscal_year", "month_name", "amount", "payment_reference", "announced_at", "notes", "description"],
+  "payment-history": ["tx_date", "team_name", "fiscal_year", "month_name", "amount", "payment_status", "payment_reference", "announced_at", "reviewed_at", "notes"],
+  development_plans: ["title", "category", "priority", "status", "due_date", "depends_on_title", "estimated_cost", "estimated_revenue", "related_section", "description", "notes", "sort_order"],
 };
 
 const teamPanelHiddenColumns = {
@@ -334,7 +345,18 @@ const activateSection = (id, options = {}) => {
   if (id === "desks" && panelMode === "admin") loadDeskGrid().catch((error) => showToast(error.message, "error"));
   if (id === "desks" && panelMode === "team") loadTeamDeskNumbers().catch((error) => showToast(error.message, "error"));
   if (id === "charges") loadChargesCollage().catch((error) => showToast(error.message, "error"));
-  if (id === "development") loadDevProgramSummary().catch(() => {});
+  if (id === "development") {
+    loadDevProgramSummary().catch(() => {});
+    loadDevKanban().catch(() => {});
+  }
+  if (id === "transactions" && canWrite) loadPaymentSettings().catch(() => {});
+  if (id === "payments" && panelMode === "team") loadPaymentGuide().catch(() => {});
+  if (options.scrollTarget) {
+    setTimeout(() => {
+      document.querySelector(`data-table[data-table-key="${options.scrollTarget}"]`)
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 180);
+  }
   if (id === "teams" && options.teamId) {
     setTimeout(() => openTeamProfile(options.teamId).catch((error) => showToast(error.message, "error")), 120);
   }
@@ -404,6 +426,7 @@ document.addEventListener("click", (event) => {
     highlightDesk: link.dataset.highlightDesk ? Number(link.dataset.highlightDesk) : undefined,
     highlightLocker: link.dataset.highlightLocker ? Number(link.dataset.highlightLocker) : undefined,
     teamId: link.dataset.openTeam ? Number(link.dataset.openTeam) : undefined,
+    scrollTarget: link.dataset.scrollTarget || undefined,
   });
 });
 
@@ -452,6 +475,7 @@ const renderActionItems = (items) => {
   container.innerHTML = items.map((item) => `
     <button type="button" class="action-item action-${escapeHtml(item.type || "default")}"
       data-nav-section="${escapeHtml(item.section)}"
+      ${item.target ? `data-scroll-target="${escapeHtml(item.target)}"` : ""}
       ${item.team_id ? `data-open-team="${escapeHtml(item.team_id)}"` : ""}>
       <strong>${escapeHtml(item.label)}</strong>
       <span>${escapeHtml(item.detail || "")}</span>
@@ -539,6 +563,97 @@ const approvalStatusBadge = (status) => {
   const map = { approved: "badge-paid", pending: "badge-partial", rejected: "badge-debt" };
   const label = { approved: "تأیید‌شده", pending: "در انتظار", rejected: "رد‌شده" }[status] || status || "—";
   return `<span class="badge ${map[status] || ""}">${escapeHtml(label)}</span>`;
+};
+
+const loadDevKanban = async () => {
+  const host = document.getElementById("devKanban");
+  if (!host) return;
+  const data = await fetchResource("api.php?resource=development_plans", { page: 1, perPage: 100 });
+  const rows = data.rows || [];
+  const columns = [
+    { key: "open", label: "باز" },
+    { key: "in_progress", label: "در حال اجرا" },
+    { key: "done", label: "انجام‌شده" },
+    { key: "cancelled", label: "لغو‌شده" },
+  ];
+  host.innerHTML = columns.map((column) => {
+    const cards = rows.filter((row) => row.status === column.key);
+    return `<div class="kanban-column">
+      <div class="kanban-column-head"><strong>${escapeHtml(column.label)}</strong><span>${cards.length}</span></div>
+      <div class="kanban-column-body">
+        ${cards.length ? cards.map((row) => `
+          <article class="kanban-card">
+            <strong>${escapeHtml(row.title || "—")}</strong>
+            <div class="kanban-meta"><span class="badge">${escapeHtml(devCategoryLabels[row.category] || row.category || "—")}</span>
+              <span class="badge">${escapeHtml(devPriorityLabels[row.priority] || row.priority || "")}</span></div>
+            ${row.depends_on_title ? `<div class="kanban-meta">پیش‌نیاز: ${escapeHtml(row.depends_on_title)}</div>` : ""}
+            ${row.due_date ? `<div class="kanban-meta">موعد: ${escapeHtml(formatPlain(row.due_date))}</div>` : ""}
+            ${row.estimated_cost ? `<div class="kanban-meta">هزینه: ${escapeHtml(formatMoney(row.estimated_cost))}</div>` : ""}
+            ${row.estimated_revenue ? `<div class="kanban-meta">درآمد: ${escapeHtml(formatMoney(row.estimated_revenue))}</div>` : ""}
+            ${row.related_section ? `<button type="button" class="text-link" data-nav-section="${escapeHtml(row.related_section)}">${escapeHtml(relatedSectionLabels[row.related_section] || row.related_section)}</button>` : ""}
+          </article>`).join("") : `<div class="empty">خالی</div>`}
+      </div>
+    </div>`;
+  }).join("");
+};
+
+const loadPaymentSettings = async () => {
+  const form = document.getElementById("paymentSettingsForm");
+  if (!form || !canWrite) return;
+  const data = await fetchJson("api.php?resource=center-settings");
+  ["bank_name", "account_holder", "account_number", "card_number", "sheba", "payment_guide"].forEach((field) => {
+    const input = form.elements.namedItem(field);
+    if (input && "value" in input) input.value = data[field] ?? "";
+  });
+  if (!form.dataset.ready) {
+    form.dataset.ready = "1";
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const submitButton = form.querySelector('button[type="submit"]');
+      submitButton.disabled = true;
+      try {
+        const payload = Object.fromEntries(new FormData(form).entries());
+        await postJson("api.php?resource=center-settings", payload);
+        showToast("اطلاعات واریز ذخیره شد.", "success");
+      } catch (error) {
+        showToast(error.message, "error");
+      } finally {
+        submitButton.disabled = false;
+      }
+    });
+  }
+};
+
+const loadPaymentGuide = async () => {
+  const host = document.getElementById("paymentGuideContent");
+  if (!host) return;
+  const data = await fetchJson("api.php?resource=center-settings");
+  const rows = [
+    ["بانک", data.bank_name],
+    ["صاحب حساب", data.account_holder],
+    ["شماره حساب", data.account_number],
+    ["شماره کارت", data.card_number],
+    ["شماره شبا", data.sheba],
+  ].filter(([, value]) => value);
+  const accounts = rows.length
+    ? `<div class="payment-account-grid">${rows.map(([label, value]) => `
+        <div class="payment-account-item">
+          <span>${escapeHtml(label)}</span>
+          <strong dir="ltr">${escapeHtml(value)}</strong>
+        </div>`).join("")}</div>`
+    : `<div class="notice warn">اطلاعات حساب هنوز توسط مرکز ثبت نشده است.</div>`;
+  host.innerHTML = `
+    ${accounts}
+    <div class="payment-guide-steps">
+      <h3>مراحل پرداخت شارژ</h3>
+      <ol>
+        <li>مبلغ شارژ ماه را از بخش «شارژ و پرداخت» ببینید.</li>
+        <li>مبلغ را به حساب بالا واریز کنید.</li>
+        <li>در جدول «اعلام‌های در انتظار تأیید»، واریز را با مبلغ، تاریخ، سال و ماه ثبت کنید.</li>
+        <li>پس از تأیید مرکز، در سوابق پرداخت تأییدشده نمایش داده می‌شود.</li>
+      </ol>
+      ${data.payment_guide ? `<p class="payment-guide-note">${escapeHtml(data.payment_guide)}</p>` : ""}
+    </div>`;
 };
 
 const loadDevProgramSummary = async () => {
@@ -805,7 +920,7 @@ const openDepositModal = async ({ teamId, teamName, fiscalYear, monthIndex, mont
   openRecordModal({
     resource: "transactions",
     definition,
-    title: `ثبت دریافت شارژ — ${teamName}`,
+    title: `ثبت مستقیم دریافت — ${teamName}`,
     record: {
       category: "واریز تیم",
       team_id: String(teamId),
@@ -819,7 +934,7 @@ const openDepositModal = async ({ teamId, teamName, fiscalYear, monthIndex, mont
     onSaved: async () => {
       await refreshAfterMutation("transactions");
       await loadChargesCollage();
-      showToast("دریافت شارژ ثبت شد.", "success");
+      showToast("ثبت مستقیم مدیر انجام شد.", "success");
     },
   });
 };
@@ -921,6 +1036,9 @@ const openRecordModal = ({ resource, definition, record = null, onSaved, title =
 const devCategoryLabels = { idea: "ایده", action: "اقدام", planned: "برنامه‌ریزی‌شده" };
 const devStatusLabels = { open: "باز", in_progress: "در حال اجرا", done: "انجام‌شده", cancelled: "لغو‌شده" };
 const devPriorityLabels = { high: "بالا", medium: "متوسط", low: "پایین" };
+const relatedSectionLabels = {
+  teams: "نهادها", members: "اعضا", desks: "میزها", lockers: "کمدها", charges: "شارژ", transactions: "مالی",
+};
 
 const workflowApprove = async (resource, id) => {
   await postJson(`api.php?resource=${encodeURIComponent(resource)}&action=approve`, { id });
@@ -984,6 +1102,17 @@ const formatCell = (column, value, row, resource) => {
     return escapeHtml(devStatusLabels[value] || value || "—");
   }
   if (column === "priority") return escapeHtml(devPriorityLabels[value] || value || "—");
+  if (column === "related_section") {
+    const label = relatedSectionLabels[value] || value;
+    return value
+      ? `<button type="button" class="text-link" data-nav-section="${escapeHtml(value)}">${escapeHtml(label)}</button>`
+      : "—";
+  }
+  if (column === "depends_on_title") return escapeHtml(value || "—");
+  if (["estimated_cost", "estimated_revenue"].includes(column)) return formatMoney(value);
+  if (column === "notes" && (resource === "pending-payments" || resource === "payment-history") && value) {
+    return escapeHtml(String(value));
+  }
   if (column === "description" && resource === "development_plans" && value) {
     const text = String(value);
     return escapeHtml(text.length > 80 ? `${text.slice(0, 80)}…` : text);
@@ -1041,6 +1170,7 @@ class DataTable extends HTMLElement {
     this.workflow = this.getAttribute("data-workflow") || "";
     this.txCategoryFilter = this.getAttribute("data-tx-filter") || "";
     this.paymentStatusFilter = this.getAttribute("data-payment-filter") || "";
+    this.tableKey = this.getAttribute("data-table-key") || "";
     this.definition = null;
     this.rows = [];
     this.page = 1;
