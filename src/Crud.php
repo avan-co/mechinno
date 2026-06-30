@@ -143,6 +143,30 @@ final class Crud
                     'notes' => ['label' => 'توضیحات', 'type' => 'textarea'],
                 ],
             ],
+            'panel_users' => [
+                'table' => 'panel_users',
+                'title' => 'کاربر پنل',
+                'order' => 'username',
+                'status_field' => null,
+                'source' => false,
+                'fields' => [
+                    'username' => ['label' => 'نام کاربری', 'type' => 'text', 'required' => true],
+                    'password' => ['label' => 'رمز عبور', 'type' => 'password', 'required' => false],
+                    'role' => [
+                        'label' => 'نقش',
+                        'type' => 'select',
+                        'options' => [
+                            'admin_editor' => 'مدیر — ویرایشگر',
+                            'admin_viewer' => 'مدیر — مشاهده‌گر',
+                            'team' => 'نهاد (تیم / شرکت)',
+                        ],
+                        'required' => true,
+                    ],
+                    'team_id' => ['label' => 'نهاد (برای کاربر نهاد)', 'type' => 'select', 'options' => []],
+                    'full_name' => ['label' => 'نام نمایشی', 'type' => 'text'],
+                    'is_active' => ['label' => 'فعال', 'type' => 'select', 'options' => ['1' => 'بله', '0' => 'خیر'], 'required' => true],
+                ],
+            ],
         ];
     }
 
@@ -256,7 +280,16 @@ final class Crud
             throw new InvalidArgumentException('رکورد پیدا نشد.');
         }
 
-        return Repository::stripLegacyColumns($row);
+        return $this->stripSensitiveFields($resource, Repository::stripLegacyColumns($row));
+    }
+
+    private function stripSensitiveFields(string $resource, array $row): array
+    {
+        if ($resource === 'panel_users') {
+            unset($row['password_hash']);
+        }
+
+        return $row;
     }
 
     private function definition(string $resource): array
@@ -362,6 +395,31 @@ final class Crud
         }
         if ($resource === 'rate_settings' && isset($data['fiscal_year'])) {
             $data['fiscal_year'] = JalaliDate::normalizeDigits($data['fiscal_year']);
+        }
+        if ($resource === 'panel_users') {
+            $role = (string) ($data['role'] ?? '');
+            if (!in_array($role, [Access::ROLE_ADMIN_EDITOR, Access::ROLE_ADMIN_VIEWER, Access::ROLE_TEAM], true)) {
+                throw new InvalidArgumentException('نقش کاربر معتبر نیست.');
+            }
+            if ($role === Access::ROLE_TEAM && empty($data['team_id'])) {
+                throw new InvalidArgumentException('برای کاربر نهاد باید نهاد انتخاب شود.');
+            }
+            if ($role !== Access::ROLE_TEAM) {
+                $data['team_id'] = null;
+            }
+            $plainPassword = trim((string) ($data['password'] ?? ''));
+            unset($data['password']);
+            if ($creating) {
+                if ($plainPassword === '') {
+                    throw new InvalidArgumentException('رمز عبور الزامی است.');
+                }
+                $data['password_hash'] = UserAccounts::hashPassword($plainPassword);
+            } elseif ($plainPassword !== '') {
+                $data['password_hash'] = UserAccounts::hashPassword($plainPassword);
+            }
+            if (!isset($data['is_active'])) {
+                $data['is_active'] = 1;
+            }
         }
         if ($resource === 'desks') {
             $formal = (int) ($data['formal_seats'] ?? 0);

@@ -12,6 +12,9 @@ $hasExistingData = false;
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $configured) {
     try {
         require_auth();
+        if (!Access::canWrite()) {
+            throw new RuntimeException('فقط مدیر ویرایشگر می‌تواند پنل را بازنشانی کند.');
+        }
         $csrfError = require_csrf_html();
         if ($csrfError !== null) {
             throw new RuntimeException($csrfError);
@@ -26,6 +29,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $configured) {
     }
 } elseif ($configured) {
     require_auth();
+    if (!Access::canWrite()) {
+        redirect_to('index.php');
+    }
     try {
         $pdo = Database::connect();
         Schema::migrate($pdo);

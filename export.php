@@ -6,6 +6,9 @@ require_once __DIR__ . '/src/bootstrap.php';
 
 try {
     require_auth();
+    if (Access::isTeam()) {
+        redirect_to('team.php');
+    }
     $pdo = require_database();
     $report = (string) ($_GET['report'] ?? 'all');
     (new ExcelExporter($pdo))->output($report);

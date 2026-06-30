@@ -42,6 +42,8 @@ const labels = {
   effective_from: "تاریخ اثر",
   joined_at: "عضویت",
   warning: "اخطار",
+  role: "نقش",
+  is_active: "فعال",
 };
 
 const entityTypeLabels = { team: "تیم", company: "شرکت", student: "دانشجو" };
@@ -55,6 +57,7 @@ const sectionMeta = {
   lockers: { eyebrow: "کمدها", title: "مدیریت کمدها", subtitle: "شماره کمدها را خودتان تعریف و تخصیص دهید" },
   charges: { eyebrow: "شارژ", title: "نرخ و شارژ ماهانه", subtitle: "تعریف نرخ سالانه، محاسبه خودکار و پیگیری پرداخت" },
   transactions: { eyebrow: "مالی", title: "دریافت، درآمد و هزینه", subtitle: "نهادها به مرکز بدهکارند — دریافت شارژ، طلب مطالبات" },
+  users: { eyebrow: "دسترسی", title: "کاربران پنل", subtitle: "مدیریت نقش‌ها و پنل اختصاصی نهادها" },
 };
 
 const cardNavMap = {
@@ -89,11 +92,16 @@ const resourceColumns = {
   desks: ["number", "team_name", "usage_type", "formal_seats", "informal_seats"],
   lockers: ["locker_number", "status", "team_label", "delivered_at", "key_number", "spare_key"],
   rate_settings: ["fiscal_year", "title", "charge_rate", "informal_rent_rate", "effective_from", "notes"],
+  panel_users: ["username", "role", "team_label", "full_name", "is_active"],
   charges: ["fiscal_year", "team_name", "month_name", "charge_amount", "rent_amount", "amount", "note"],
   transactions: ["tx_date", "description", "amount", "category", "team_name", "fiscal_year", "month_index", "confirmed"],
 };
 
-const editableResources = new Set(["members", "teams", "desks", "lockers", "charges", "transactions", "rate_settings"]);
+const editableResources = new Set(
+  canWrite
+    ? ["members", "teams", "desks", "lockers", "charges", "transactions", "rate_settings", "panel_users"]
+    : []
+);
 const hiddenColumns = new Set([
   "id", "source_sheet", "source_file", "team_id", "locker_id", "member_id",
   "row_index", "col_index", "created_at", "entity_type",
@@ -112,6 +120,8 @@ const linkColumns = {
 };
 
 const csrfToken = window.MECHINNO?.csrfToken || "";
+const canWrite = window.MECHINNO?.canWrite !== false;
+const panelMode = window.MECHINNO?.panel || "admin";
 let crudMetaPromise = null;
 let highlightDesk = null;
 let highlightLocker = null;
@@ -408,6 +418,10 @@ const renderDebtChart = (rows) => {
 
 const loadDashboard = async () => {
   const data = await fetchJson("api.php?resource=summary");
+  if (panelMode === "team") {
+    renderTeamDashboard(data);
+    return;
+  }
   renderCurrentMonth(data.current_month || {});
   renderActionItems(data.action_items || []);
   renderCards(data.cards || {});
@@ -415,6 +429,33 @@ const loadDashboard = async () => {
   renderDebtChart(data.debt_by_team || []);
   const welcome = document.getElementById("welcomePanel");
   if (welcome) welcome.hidden = Number(data.cards?.teams || 0) > 0;
+};
+
+const renderTeamDashboard = (data) => {
+  const cards = document.getElementById("cards");
+  const team = data.team || {};
+  if (cards) {
+    const items = [
+      ["members", "اعضا", data.cards?.members || 0],
+      ["desks", "میز", data.cards?.desks || 0],
+      ["lockers", "کمد", data.cards?.lockers || 0],
+      ["debt_total", "مانده طلب", data.cards?.debt_total || 0, true],
+      ["paid_total", "پرداخت‌شده", data.cards?.paid_total || 0, true],
+      ["charge_total", "جمع شارژ", data.cards?.charge_total || 0, true],
+    ];
+    cards.innerHTML = items.map(([key, title, value, money]) => `
+      <article class="stat-card stat-card--members">
+        <div><span class="stat-label">${escapeHtml(title)}</span><strong>${escapeHtml(money ? formatMoney(value) : formatNumber(value))}</strong></div>
+      </article>`).join("");
+  }
+  renderCurrentMonth(data.current_month || {});
+  renderChargeChart((data.monthly_charges || []).map((row) => ({
+    fiscal_year: row.fiscal_year,
+    month_name: row.month_name,
+    amount: row.amount,
+  })));
+  const title = document.getElementById("pageTitle");
+  if (title && team.name) title.textContent = team.name;
 };
 
 const loadDeskGrid = async () => {
@@ -492,7 +533,7 @@ const loadChargesCollage = async () => {
       </td>
       ${row.cells.map((cell) => {
         const cls = cell.status === "پرداخت‌شده" ? "cell-paid" : cell.status === "ناقص" ? "cell-partial" : cell.status === "بدهکار به مرکز" ? "cell-debt" : "cell-empty";
-        const clickable = cell.status === "بدهکار به مرکز" || cell.status === "ناقص";
+        const clickable = canWrite && (cell.status === "بدهکار به مرکز" || cell.status === "ناقص");
         const attrs = clickable
           ? `class="${cls} cell-clickable" role="button" tabindex="0"
              data-team-id="${row.team.id}" data-team-name="${escapeHtml(row.team.name)}"
@@ -694,7 +735,13 @@ const fieldInput = (name, meta, value) => {
       }).join("")}
     </select>`;
   }
-  return `<input name="${escapeHtml(name)}" type="${type === "number" ? "number" : "text"}" value="${escapeHtml(safeValue)}" ${required} ${placeholder} />`;
+  if (type === "number") {
+    return `<input name="${escapeHtml(name)}" type="number" value="${escapeHtml(safeValue)}" ${required} ${placeholder} />`;
+  }
+  if (type === "password") {
+    return `<input name="${escapeHtml(name)}" type="password" value="" ${required} autocomplete="new-password" placeholder="برای تغییر وارد کنید" />`;
+  }
+  return `<input name="${escapeHtml(name)}" type="text" value="${escapeHtml(safeValue)}" ${required} ${placeholder} />`;
 };
 
 const openRecordModal = ({ resource, definition, record = null, onSaved, title = null }) => {
@@ -742,6 +789,12 @@ const formatCell = (column, value, row, resource) => {
     return escapeHtml(value || "—");
   }
   if (column === "confirmed") return Number(value) === 1 ? "بله" : "خیر";
+  if (column === "role") {
+    const map = { admin_editor: "مدیر — ویرایش", admin_viewer: "مدیر — مشاهده", team: "نهاد" };
+    return escapeHtml(map[value] || value || "—");
+  }
+  if (column === "is_active") return Number(value) === 1 ? "فعال" : "غیرفعال";
+  if (column === "password") return "—";
   if (column === "status" && resource === "lockers") return lockerStatusBadge(value);
   if (linkColumns[column] && row[linkColumns[column]] && value) {
     if (column === "name" && resource === "teams") {
@@ -863,7 +916,7 @@ class DataTable extends HTMLElement {
     try {
       const meta = await loadCrudMeta();
       this.definition = meta.resources[this.resource] || null;
-      this.querySelector(".add-button").hidden = !this.definition || !editableResources.has(this.resource);
+      this.querySelector(".add-button").hidden = !canWrite || !this.definition || !editableResources.has(this.resource);
       const result = await fetchResource(this.endpoint, { page: this.page, perPage: this.perPage });
       this.rows = result.rows;
       this.total = result.total;
@@ -906,7 +959,7 @@ class DataTable extends HTMLElement {
     const container = this.querySelector(".mobile-cards");
     if (!isMobile()) return false;
     const columns = rows.length ? resolveColumns(rows, this.resource).slice(0, 6) : [];
-    const editable = this.definition && editableResources.has(this.resource);
+    const editable = canWrite && this.definition && editableResources.has(this.resource);
     container.innerHTML = rows.length
       ? rows.map((row) => {
         const highlighted = this.resource === "lockers" && highlightLocker === Number(row.locker_number);
@@ -948,7 +1001,7 @@ class DataTable extends HTMLElement {
     }
 
     const columns = resolveColumns(rows, this.resource);
-    const editable = this.definition && editableResources.has(this.resource);
+    const editable = canWrite && this.definition && editableResources.has(this.resource);
     const statusField = this.definition?.status_field;
     const statusOptions = this.definition?.status_options || [];
     const head = columns.map((c) => `<th>${escapeHtml(labels[c] || c)}</th>`).join("");
@@ -1032,7 +1085,7 @@ class DataTable extends HTMLElement {
 customElements.define("data-table", DataTable);
 
 const recalcChargesButton = document.getElementById("recalcChargesButton");
-if (recalcChargesButton) {
+if (recalcChargesButton && canWrite) {
   recalcChargesButton.addEventListener("click", async () => {
     const year = document.getElementById("chargesYear")?.value || "1404";
     if (!window.confirm(`شارژهای محاسبه‌شده خودکار سال ${year} از نرخ‌ها بازمحاسبه شود؟`)) return;

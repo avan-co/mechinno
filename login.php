@@ -6,19 +6,19 @@ require_once __DIR__ . '/src/bootstrap.php';
 
 $configured = app_configured();
 $error = null;
-$next = (string) ($_GET['next'] ?? $_POST['next'] ?? 'index.php');
+$next = (string) ($_GET['next'] ?? $_POST['next'] ?? Access::homePath());
 if ($next === '' || str_starts_with($next, 'http://') || str_starts_with($next, 'https://') || str_starts_with($next, '//')) {
-    $next = 'index.php';
+    $next = Access::homePath();
 }
 
 if ($configured) {
     try {
         $config = app_config();
         if (!Auth::isEnabled($config)) {
-            redirect_to($next);
+            redirect_to(Access::sanitizeNext($next));
         }
         if (Auth::check()) {
-            redirect_to($next);
+            redirect_to(Access::sanitizeNext($next));
         }
         if (!Auth::configured($config)) {
             $error = 'لطفاً قبل از ورود، در config.php نام کاربری و رمز عبور امن تنظیم کنید. مقدار CHANGE_ME قابل قبول نیست.';
@@ -26,9 +26,11 @@ if ($configured) {
             $csrfError = require_csrf_html();
             if ($csrfError !== null) {
                 $error = $csrfError;
-            } elseif (Auth::attempt($config, (string) ($_POST['username'] ?? ''), (string) ($_POST['password'] ?? ''))) {
-                redirect_to($next);
             } else {
+                $pdo = require_database();
+                if (Auth::attempt($pdo, $config, (string) ($_POST['username'] ?? ''), (string) ($_POST['password'] ?? ''))) {
+                    redirect_to(Access::sanitizeNext($next));
+                }
                 $error = 'نام کاربری یا رمز عبور اشتباه است.';
             }
         }
@@ -43,15 +45,14 @@ if ($configured) {
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>ورود به پنل Mechinno</title>
-    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="assets/styles.css?v=<?= e((string) filemtime(__DIR__ . '/assets/styles.css')) ?>" />
+    <link rel="stylesheet" href="assets/styles.css" />
   </head>
   <body>
     <main class="setup-screen">
       <section class="setup-card">
         <span class="brand-mark">M</span>
         <h1>ورود به پنل</h1>
-        <p>برای مشاهده داده‌های مدیریتی، خروجی‌ها و عملیات import ابتدا وارد شوید.</p>
+        <p>ورود مشترک برای مدیران مرکز و نهادها (تیم / شرکت / دانشجو). پس از ورود، پنل متناسب با نقش شما باز می‌شود.</p>
 
         <?php if (!$configured): ?>
           <div class="notice danger">فایل <code>config.php</code> هنوز ساخته نشده است. ابتدا تنظیمات نصب را انجام دهید.</div>
@@ -73,6 +74,7 @@ if ($configured) {
             </label>
             <button class="button" type="submit">ورود</button>
           </form>
+          <p class="hint" style="margin-top:1rem">مدیر ویرایشگر · مدیر مشاهده‌گر · کاربر نهاد</p>
         <?php endif; ?>
       </section>
     </main>
