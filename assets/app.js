@@ -42,7 +42,8 @@ const labels = {
   effective_from: "تاریخ اثر",
   joined_at: "عضویت",
   warning: "اخطار",
-  role: "نقش",
+  portal_username: "نام کاربری نهاد",
+  portal_password: "رمز ورود نهاد",
   is_active: "فعال",
 };
 
@@ -95,7 +96,7 @@ const cardConfig = [
 const moneyCards = new Set(["charge_total", "income_total", "expense_total", "debt_total", "paid_total"]);
 
 const resourceColumns = {
-  teams: ["entity_code", "entity_type", "name", "leader", "phone", "desk_count", "informal_seats", "joined_at", "warning"],
+  teams: ["entity_code", "entity_type", "name", "leader", "phone", "portal_username", "portal_password", "desk_count", "informal_seats", "joined_at", "warning"],
   members: ["member_code", "full_name", "team_label", "entity_type", "desk_numbers", "access_code", "phone", "national_id"],
   desks: ["number", "team_name", "usage_type", "formal_seats", "informal_seats"],
   lockers: ["locker_number", "status", "team_label", "delivered_at", "key_number", "spare_key"],
@@ -123,6 +124,7 @@ const plainColumns = new Set([
   "phone", "national_id", "access_code", "member_code", "entity_code",
   "fiscal_year", "tx_date", "effective_from", "joined_at", "delivered_at",
   "key_number", "number", "locker_number", "desk_numbers", "month_index",
+  "portal_username", "portal_password",
 ]);
 
 const linkColumns = {
@@ -469,7 +471,10 @@ const renderTeamDashboard = (data) => {
 };
 
 const loadDeskGrid = async () => {
-  const { rows: desks } = await fetchResource("api.php?resource=desks", { page: 1, perPage: 100 });
+  const isTeamMap = panelMode === "team";
+  const desks = isTeamMap
+    ? (await fetchJson("api.php?resource=desks-map")).rows || []
+    : (await fetchResource("api.php?resource=desks", { page: 1, perPage: 100 })).rows;
   const container = document.getElementById("deskGrid");
   if (!container) return;
   const rows = { 1: [], 2: [], 3: [] };
@@ -479,15 +484,28 @@ const loadDeskGrid = async () => {
       <div class="desk-row-label">ردیف ${rowIndex}</div>
       <div class="desk-row">
         ${(rows[rowIndex] || []).sort((a, b) => a.col_index - b.col_index).map((desk) => {
-          const occupied = Boolean(desk.team_id);
-          const highlighted = highlightDesk === Number(desk.number);
-          return `<button type="button" class="desk-tile ${occupied ? "occupied" : "free"} ${highlighted ? "highlighted" : ""}"
+          const foreign = Boolean(desk.foreign_occupied);
+          const occupied = Boolean(desk.team_id) || foreign;
+          const isOwn = Boolean(desk.is_own);
+          const highlighted = highlightDesk === Number(desk.number) || (isTeamMap && isOwn);
+          const tileClass = isTeamMap
+            ? (isOwn ? "occupied own-desk" : foreign ? "occupied foreign-desk" : "free")
+            : (occupied ? "occupied" : "free");
+          let meta = `<span class="desk-meta">بدون نهاد</span>`;
+          if (occupied) {
+            if (isTeamMap && foreign) {
+              meta = `<span class="desk-meta">نهاد دیگر</span>`;
+            } else if (isTeamMap && isOwn) {
+              meta = `<span class="desk-meta">${escapeHtml(desk.team_name || "نهاد شما")}</span>`;
+            } else if (!isTeamMap && desk.team_id) {
+              meta = `<span class="desk-meta"><span role="button" tabindex="0" class="text-link-inline" data-team-id="${escapeHtml(desk.team_id)}">${escapeHtml(desk.team_name || "نهاد")}</span></span>`;
+            }
+          }
+          return `<button type="button" class="desk-tile ${tileClass} ${highlighted ? "highlighted" : ""}"
             data-nav-section="desks" data-highlight-desk="${desk.number}">
             <span class="desk-num">${desk.number}</span>
             <span class="desk-status">${occupied ? "اشغال" : "آزاد"}</span>
-            ${occupied
-              ? `<span class="desk-meta"><span role="button" tabindex="0" class="text-link-inline" data-team-id="${escapeHtml(desk.team_id)}">${escapeHtml(desk.team_name || "نهاد")}</span></span>`
-              : `<span class="desk-meta">بدون نهاد</span>`}
+            ${meta}
             <span class="desk-badge">${escapeHtml(usageLabels[desk.usage_type] || desk.usage_type || "—")}</span>
             <span class="desk-meta">ر:${desk.formal_seats || 0} · غ:${desk.informal_seats || 0}</span>
           </button>`;
@@ -495,19 +513,21 @@ const loadDeskGrid = async () => {
       </div>
     </div>`).join("");
 
-  container.querySelectorAll("[data-team-id]").forEach((el) => {
-    const open = (event) => {
-      event.stopPropagation();
-      openTeamProfile(Number(el.dataset.teamId)).catch((error) => showToast(error.message, "error"));
-    };
-    el.addEventListener("click", open);
-    el.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        open(event);
-      }
+  if (!isTeamMap) {
+    container.querySelectorAll("[data-team-id]").forEach((el) => {
+      const open = (event) => {
+        event.stopPropagation();
+        openTeamProfile(Number(el.dataset.teamId)).catch((error) => showToast(error.message, "error"));
+      };
+      el.addEventListener("click", open);
+      el.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          open(event);
+        }
+      });
     });
-  });
+  }
 };
 
 const loadChargesCollage = async () => {
@@ -992,7 +1012,8 @@ class DataTable extends HTMLElement {
             <strong>${formatCell(column, row[column], row, this.resource)}</strong>
           </div>`).join("");
         const profileBtn = this.resource === "teams"
-          ? `<button class="mini-button primary" type="button" data-action="profile" data-id="${escapeHtml(row.id)}">پروفایل</button>` : "";
+          ? `<button class="mini-button primary" type="button" data-action="profile" data-id="${escapeHtml(row.id)}">پروفایل</button>
+             ${canWrite ? `<button class="mini-button" type="button" data-action="reset-portal" data-id="${escapeHtml(row.id)}">بازنشانی رمز</button>` : ""}` : "";
         const editBtns = editable
           ? `<button class="mini-button" type="button" data-action="edit" data-id="${escapeHtml(row.id)}">ویرایش</button>
              <button class="mini-button danger" type="button" data-action="delete" data-id="${escapeHtml(row.id)}">حذف</button>` : "";
@@ -1044,7 +1065,8 @@ class DataTable extends HTMLElement {
         return `<td class="${className}">${formatCell(column, value, row, this.resource)}</td>`;
       }).join("");
       const profileAction = this.resource === "teams"
-        ? `<button class="mini-button primary" type="button" data-action="profile" data-id="${escapeHtml(row.id)}">پروفایل</button>` : "";
+        ? `<button class="mini-button primary" type="button" data-action="profile" data-id="${escapeHtml(row.id)}">پروفایل</button>
+           ${canWrite ? `<button class="mini-button" type="button" data-action="reset-portal" data-id="${escapeHtml(row.id)}">بازنشانی رمز</button>` : ""}` : "";
       const actions = editable || profileAction
         ? `<td class="row-actions">${profileAction}${editable ? `
         <button class="mini-button" type="button" data-action="edit" data-id="${escapeHtml(row.id)}">ویرایش</button>
@@ -1063,6 +1085,18 @@ class DataTable extends HTMLElement {
     if (!record) return;
     if (button.dataset.action === "profile") {
       openTeamProfile(id).catch((error) => showToast(error.message, "error"));
+      return;
+    }
+    if (button.dataset.action === "reset-portal") {
+      if (!canWrite) return;
+      if (!window.confirm("رمز ورود این نهاد بازنشانی شود؟")) return;
+      try {
+        const result = await postJson("api.php?resource=teams&action=reset-portal-password", { id });
+        await this.load();
+        showToast(`رمز جدید: ${result.credentials?.password || "—"}`, "success");
+      } catch (error) {
+        showToast(error.message, "error");
+      }
       return;
     }
     if (!this.definition) return;

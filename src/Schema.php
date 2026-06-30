@@ -13,26 +13,21 @@ final class Schema
         }
         self::ensureColumns($pdo);
         self::dropLegacyColumns($pdo);
+        self::dropUnusedTables($pdo);
         self::seedDesks($pdo);
     }
 
     public static function reset(PDO $pdo): void
     {
         $tables = [
-            'import_backup_items',
-            'import_backups',
-            'member_desks',
+            'panel_users',
             'transactions',
             'charges',
-            'team_rates',
             'rate_settings',
-            'plans',
             'lockers',
             'members',
             'desks',
             'teams',
-            'import_warnings',
-            'import_runs',
         ];
 
         $isSqlite = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite';
@@ -62,17 +57,30 @@ final class Schema
             }
         }
 
-        return (int) $pdo->query('SELECT COUNT(*) FROM import_runs')->fetchColumn() > 0;
+        return false;
+    }
+
+    private static function dropUnusedTables(PDO $pdo): void
+    {
+        foreach ([
+            'import_backup_items',
+            'import_backups',
+            'import_warnings',
+            'import_runs',
+            'member_desks',
+            'plans',
+            'team_rates',
+        ] as $table) {
+            try {
+                $pdo->exec('DROP TABLE IF EXISTS ' . $table);
+            } catch (PDOException) {
+            }
+        }
     }
 
     private static function migrateMysql(PDO $pdo): void
     {
         $sql = [
-            "CREATE TABLE IF NOT EXISTS import_runs (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                imported_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                source_files TEXT NOT NULL
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
             "CREATE TABLE IF NOT EXISTS teams (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 entity_code VARCHAR(32) NULL,
@@ -115,11 +123,6 @@ final class Schema
                 UNIQUE KEY uniq_members_member_code (member_code),
                 INDEX idx_members_team_id (team_id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
-            "CREATE TABLE IF NOT EXISTS member_desks (
-                member_id INT NOT NULL,
-                desk_id INT NOT NULL,
-                PRIMARY KEY (member_id, desk_id)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
             "CREATE TABLE IF NOT EXISTS lockers (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 locker_number INT NOT NULL,
@@ -135,22 +138,6 @@ final class Schema
                 UNIQUE KEY uniq_lockers_number (locker_number),
                 INDEX idx_lockers_team_id (team_id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
-            "CREATE TABLE IF NOT EXISTS plans (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                plan_code VARCHAR(32) NULL,
-                status VARCHAR(64) NULL,
-                priority VARCHAR(32) NULL,
-                title TEXT NULL,
-                owner_team_id INT NULL,
-                proposed_budget BIGINT NULL,
-                start_date VARCHAR(32) NULL,
-                end_date VARCHAR(32) NULL,
-                progress INT NULL,
-                notes TEXT NULL,
-                source_file VARCHAR(255) NULL,
-                source_sheet VARCHAR(255) NULL,
-                UNIQUE KEY uniq_plans_plan_code (plan_code)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
             "CREATE TABLE IF NOT EXISTS rate_settings (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 fiscal_year VARCHAR(32) NULL,
@@ -161,15 +148,6 @@ final class Schema
                 notes TEXT NULL,
                 created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 INDEX idx_rate_settings_year (fiscal_year)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
-            "CREATE TABLE IF NOT EXISTS team_rates (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                team_id INT NOT NULL,
-                fiscal_year VARCHAR(32) NOT NULL,
-                charge_rate BIGINT NULL,
-                informal_rent_rate BIGINT NULL,
-                notes TEXT NULL,
-                UNIQUE KEY uniq_team_rates (team_id, fiscal_year)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
             "CREATE TABLE IF NOT EXISTS charges (
                 id INT AUTO_INCREMENT PRIMARY KEY,
@@ -202,39 +180,18 @@ final class Schema
                 INDEX idx_transactions_team (team_id),
                 INDEX idx_transactions_category (category)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
-            "CREATE TABLE IF NOT EXISTS import_warnings (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                file_name VARCHAR(255) NULL,
-                sheet_name VARCHAR(255) NULL,
-                source_row INT NULL,
-                message TEXT NOT NULL,
-                payload TEXT NULL
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
-            "CREATE TABLE IF NOT EXISTS import_backups (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                reason VARCHAR(255) NULL,
-                summary TEXT NULL
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
-            "CREATE TABLE IF NOT EXISTS import_backup_items (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                backup_id INT NOT NULL,
-                table_name VARCHAR(64) NOT NULL,
-                row_id INT NULL,
-                payload LONGTEXT NOT NULL,
-                INDEX idx_backup_items_backup (backup_id),
-                INDEX idx_backup_items_table (table_name)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
             "CREATE TABLE IF NOT EXISTS panel_users (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 username VARCHAR(64) NOT NULL,
                 password_hash VARCHAR(255) NOT NULL,
+                password_plain VARCHAR(64) NULL,
                 role VARCHAR(32) NOT NULL,
                 team_id INT NULL,
                 full_name VARCHAR(255) NULL,
                 is_active TINYINT NOT NULL DEFAULT 1,
                 created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE KEY uniq_panel_users_username (username),
+                UNIQUE KEY uniq_panel_users_team (team_id, role),
                 INDEX idx_panel_users_team (team_id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
         ];
@@ -247,21 +204,14 @@ final class Schema
     private static function migrateSqlite(PDO $pdo): void
     {
         $pdo->exec(
-            "CREATE TABLE IF NOT EXISTS import_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, imported_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, source_files TEXT NOT NULL);
-            CREATE TABLE IF NOT EXISTS teams (id INTEGER PRIMARY KEY AUTOINCREMENT, entity_code TEXT, entity_type TEXT NOT NULL DEFAULT 'team', name TEXT, leader TEXT, phone TEXT, joined_at TEXT, warning TEXT, notes TEXT, source_file TEXT, source_sheet TEXT);
+            "CREATE TABLE IF NOT EXISTS teams (id INTEGER PRIMARY KEY AUTOINCREMENT, entity_code TEXT, entity_type TEXT NOT NULL DEFAULT 'team', name TEXT, leader TEXT, phone TEXT, joined_at TEXT, warning TEXT, notes TEXT, source_file TEXT, source_sheet TEXT);
             CREATE TABLE IF NOT EXISTS desks (id INTEGER PRIMARY KEY AUTOINCREMENT, number INTEGER NOT NULL UNIQUE, row_index INTEGER NOT NULL, col_index INTEGER NOT NULL, team_id INTEGER, usage_type TEXT NOT NULL DEFAULT 'informal', formal_seats INTEGER NOT NULL DEFAULT 0, informal_seats INTEGER NOT NULL DEFAULT 0, notes TEXT);
             CREATE TABLE IF NOT EXISTS members (id INTEGER PRIMARY KEY AUTOINCREMENT, member_code TEXT, team_id INTEGER, access_code TEXT, full_name TEXT NOT NULL, phone TEXT, national_id TEXT, locker_id INTEGER, notes TEXT, source_file TEXT, source_sheet TEXT);
-            CREATE TABLE IF NOT EXISTS member_desks (member_id INTEGER NOT NULL, desk_id INTEGER NOT NULL, PRIMARY KEY (member_id, desk_id));
             CREATE TABLE IF NOT EXISTS lockers (id INTEGER PRIMARY KEY AUTOINCREMENT, locker_number INTEGER NOT NULL UNIQUE, team_id INTEGER, member_id INTEGER, status TEXT, delivered_at TEXT, key_number TEXT, spare_key TEXT, notes TEXT, source_file TEXT, source_sheet TEXT);
-            CREATE TABLE IF NOT EXISTS plans (id INTEGER PRIMARY KEY AUTOINCREMENT, plan_code TEXT, status TEXT, priority TEXT, title TEXT, owner_team_id INTEGER, proposed_budget INTEGER, start_date TEXT, end_date TEXT, progress INTEGER, notes TEXT, source_file TEXT, source_sheet TEXT);
             CREATE TABLE IF NOT EXISTS rate_settings (id INTEGER PRIMARY KEY AUTOINCREMENT, fiscal_year TEXT, title TEXT, charge_rate INTEGER, informal_rent_rate INTEGER, effective_from TEXT, notes TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
-            CREATE TABLE IF NOT EXISTS team_rates (id INTEGER PRIMARY KEY AUTOINCREMENT, team_id INTEGER NOT NULL, fiscal_year TEXT NOT NULL, charge_rate INTEGER, informal_rent_rate INTEGER, notes TEXT, UNIQUE(team_id, fiscal_year));
             CREATE TABLE IF NOT EXISTS charges (id INTEGER PRIMARY KEY AUTOINCREMENT, team_id INTEGER, fiscal_year TEXT, team_name TEXT, month_index INTEGER, month_name TEXT, charge_amount INTEGER, rent_amount INTEGER, amount INTEGER, note TEXT, source_file TEXT, source_sheet TEXT);
             CREATE TABLE IF NOT EXISTS transactions (id INTEGER PRIMARY KEY AUTOINCREMENT, tx_date TEXT, description TEXT, amount INTEGER, category TEXT, team_id INTEGER, fiscal_year TEXT, month_index INTEGER, confirmed INTEGER NOT NULL DEFAULT 1, notes TEXT, source_file TEXT);
-            CREATE TABLE IF NOT EXISTS import_warnings (id INTEGER PRIMARY KEY AUTOINCREMENT, file_name TEXT, sheet_name TEXT, source_row INTEGER, message TEXT NOT NULL, payload TEXT);
-            CREATE TABLE IF NOT EXISTS import_backups (id INTEGER PRIMARY KEY AUTOINCREMENT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, reason TEXT, summary TEXT);
-            CREATE TABLE IF NOT EXISTS import_backup_items (id INTEGER PRIMARY KEY AUTOINCREMENT, backup_id INTEGER NOT NULL, table_name TEXT NOT NULL, row_id INTEGER, payload TEXT NOT NULL);
-            CREATE TABLE IF NOT EXISTS panel_users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, role TEXT NOT NULL, team_id INTEGER, full_name TEXT, is_active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);"
+            CREATE TABLE IF NOT EXISTS panel_users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, password_plain TEXT, role TEXT NOT NULL, team_id INTEGER, full_name TEXT, is_active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(team_id, role));"
         );
     }
 
@@ -286,14 +236,6 @@ final class Schema
                 'formal_seats' => 'INT NOT NULL DEFAULT 0',
                 'informal_seats' => 'INT NOT NULL DEFAULT 0',
             ],
-            'plans' => [
-                'plan_code' => 'VARCHAR(32) NULL',
-                'priority' => 'VARCHAR(32) NULL',
-                'owner_team_id' => 'INT NULL',
-                'start_date' => 'VARCHAR(32) NULL',
-                'end_date' => 'VARCHAR(32) NULL',
-                'progress' => 'INT NULL',
-            ],
             'rate_settings' => [
                 'informal_rent_rate' => 'BIGINT NULL',
             ],
@@ -309,8 +251,8 @@ final class Schema
                 'confirmed' => 'TINYINT NOT NULL DEFAULT 1',
                 'source_file' => 'VARCHAR(255) NULL',
             ],
-            'import_warnings' => [
-                'source_row' => 'INT NULL',
+            'panel_users' => [
+                'password_plain' => 'VARCHAR(64) NULL',
             ],
         ];
 

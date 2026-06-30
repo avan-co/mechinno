@@ -550,6 +550,15 @@ code { color: var(--primary); font-size: 0.9em; }
   border-color: color-mix(in srgb, var(--primary) 50%, var(--line));
   background: color-mix(in srgb, var(--primary) 12%, var(--surface));
 }
+.desk-tile.own-desk {
+  border-color: color-mix(in srgb, var(--green) 55%, var(--line));
+  background: color-mix(in srgb, var(--green) 16%, var(--surface));
+}
+.desk-tile.foreign-desk {
+  border-color: color-mix(in srgb, var(--muted) 45%, var(--line));
+  background: color-mix(in srgb, var(--muted) 10%, var(--surface));
+  opacity: 0.88;
+}
 .desk-tile.highlighted {
   border-color: var(--amber);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--amber) 30%, transparent);

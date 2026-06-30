@@ -20,6 +20,11 @@ $assert = static function (bool $ok, string $message) use (&$errors): void {
 
 $pdo->exec("INSERT INTO teams (entity_type, entity_code, name, leader, phone, source_file, source_sheet)
             VALUES ('company', 'C-001', 'آوان', 'مهدی', '09398283658', 'manual', 'panel')");
+EntityAccounts::provisionForTeam($pdo, 1, 'C-001', 'مهدی');
+$teamsPage = $repo->paginatedResource('teams', 1, 25);
+$assert(($teamsPage['rows'][0]['portal_username'] ?? '') === 'c001', 'team portal username generated');
+$assert(($teamsPage['rows'][0]['portal_password'] ?? '') !== '', 'team portal password visible to admin');
+
 $pdo->exec('UPDATE desks SET team_id = 1, usage_type = "mixed", formal_seats = 1, informal_seats = 1 WHERE number = 1');
 
 $member = $crud->create('members', [
@@ -129,6 +134,11 @@ Auth::start();
 $_SESSION['mechinno_authenticated'] = true;
 $_SESSION['mechinno_role'] = Access::ROLE_TEAM;
 $_SESSION['mechinno_team_id'] = 1;
+$deskMap = $repo->deskMap();
+$assert(count($deskMap['rows']) === 24, 'desk map has 24 desks');
+$ownDesks = array_values(array_filter($deskMap['rows'], static fn ($d) => !empty($d['is_own'])));
+$assert(count($ownDesks) >= 1, 'team desk map marks own desks');
+
 $teamMeta = $crud->meta();
 $assert(!isset($teamMeta['resources']['panel_users']), 'team crud meta excludes panel_users');
 $assert(!isset($teamMeta['resources']['transactions']), 'team crud meta excludes transactions');

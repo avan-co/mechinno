@@ -158,7 +158,6 @@ final class Crud
                         'options' => [
                             'admin_editor' => 'مدیر — ویرایشگر',
                             'admin_viewer' => 'مدیر — مشاهده‌گر',
-                            'team' => 'نهاد (تیم / شرکت)',
                         ],
                         'required' => true,
                     ],
@@ -227,6 +226,15 @@ final class Crud
         if ($resource === 'transactions') {
             $this->syncTeamDepositIncome($id);
         }
+        if ($resource === 'teams') {
+            $record = $this->find($resource, $id);
+            EntityAccounts::provisionForTeam(
+                $this->pdo,
+                $id,
+                (string) ($record['entity_code'] ?? ''),
+                (string) ($record['leader'] ?? '')
+            );
+        }
 
         return $this->find($resource, $id);
     }
@@ -272,6 +280,9 @@ final class Crud
         if ($resource === 'panel_users') {
             $this->assertPanelUserDeletable($id);
         }
+        if ($resource === 'teams') {
+            EntityAccounts::deleteForTeam($this->pdo, $id);
+        }
         $this->pdo->prepare(sprintf('DELETE FROM %s WHERE id = :id', $definition['table']))->execute(['id' => $id]);
     }
 
@@ -302,7 +313,7 @@ final class Crud
     private function stripSensitiveFields(string $resource, array $row): array
     {
         if ($resource === 'panel_users') {
-            unset($row['password_hash']);
+            unset($row['password_hash'], $row['password_plain']);
         }
 
         return $row;
@@ -437,15 +448,13 @@ final class Crud
         }
         if ($resource === 'panel_users') {
             $role = (string) ($data['role'] ?? '');
-            if (!in_array($role, [Access::ROLE_ADMIN_EDITOR, Access::ROLE_ADMIN_VIEWER, Access::ROLE_TEAM], true)) {
+            if ($role === Access::ROLE_TEAM) {
+                throw new InvalidArgumentException('کاربر نهاد هنگام ثبت نهاد خودکار ساخته می‌شود.');
+            }
+            if (!in_array($role, [Access::ROLE_ADMIN_EDITOR, Access::ROLE_ADMIN_VIEWER], true)) {
                 throw new InvalidArgumentException('نقش کاربر معتبر نیست.');
             }
-            if ($role === Access::ROLE_TEAM && empty($data['team_id'])) {
-                throw new InvalidArgumentException('برای کاربر نهاد باید نهاد انتخاب شود.');
-            }
-            if ($role !== Access::ROLE_TEAM) {
-                $data['team_id'] = null;
-            }
+            $data['team_id'] = null;
             $plainPassword = trim((string) ($data['password'] ?? ''));
             unset($data['password']);
             if ($creating) {
@@ -453,8 +462,10 @@ final class Crud
                     throw new InvalidArgumentException('رمز عبور الزامی است.');
                 }
                 $data['password_hash'] = UserAccounts::hashPassword($plainPassword);
+                $data['password_plain'] = $plainPassword;
             } elseif ($plainPassword !== '') {
                 $data['password_hash'] = UserAccounts::hashPassword($plainPassword);
+                $data['password_plain'] = $plainPassword;
             }
             if (!isset($data['is_active'])) {
                 $data['is_active'] = 1;

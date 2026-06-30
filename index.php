@@ -115,7 +115,7 @@ $assetVer = (string) max(
             <?php if (Access::isAdmin()): ?>
             <button class="nav-item" data-section="users" type="button">
               <span class="nav-icon nav-icon--purple"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm-8 9a8 8 0 0 1 16 0Z" fill="currentColor"/></svg></span>
-              کاربران پنل
+              کاربران مدیر
             </button>
             <?php endif; ?>
           </nav>
@@ -191,6 +191,7 @@ $assetVer = (string) max(
             </section>
 
             <section id="teams" class="section">
+              <p class="hint">با ثبت هر نهاد، یک نام کاربری و رمز عبور خودکار برای مسئول نهاد ساخته می‌شود (ستون‌های «ورود نهاد»).</p>
               <data-table title="نهادها" endpoint="api.php?resource=teams"></data-table>
             </section>
 
@@ -253,12 +254,8 @@ $assetVer = (string) max(
 
             <?php if (Access::isAdmin()): ?>
             <section id="users" class="section">
-              <?php if (Access::canWrite()): ?>
-              <p class="hint">برای هر نهاد یک کاربر با نقش «نهاد» بسازید و نهاد مربوطه را انتخاب کنید. آن‌ها پس از ورود به پنل اختصاصی هدایت می‌شوند.</p>
-              <?php else: ?>
-              <p class="hint">لیست کاربران پنل — فقط مشاهده.</p>
-              <?php endif; ?>
-              <data-table title="کاربران پنل" endpoint="api.php?resource=panel_users"></data-table>
+              <p class="hint">مدیران سیستم — کاربران نهاد هنگام ثبت نهاد خودکار ساخته می‌شوند و نام کاربری/رمز در جدول نهادها نمایش داده می‌شود.</p>
+              <data-table title="کاربران مدیر" endpoint="api.php?resource=panel_users"></data-table>
             </section>
             <?php endif; ?>
           </main>

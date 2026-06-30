@@ -17,6 +17,7 @@ final class Access
         'charges',
         'charges-matrix',
         'team-profile',
+        'desks-map',
         'crud-meta',
     ];
 

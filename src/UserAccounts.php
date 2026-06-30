@@ -25,21 +25,23 @@ final class UserAccounts
                 $adminHash !== '' ? $adminHash : password_hash($adminPassword, PASSWORD_DEFAULT),
                 Access::ROLE_ADMIN_EDITOR,
                 null,
-                'مدیر ویرایشگر'
+                'مدیر ویرایشگر',
+                $adminHash === '' ? $adminPassword : null
             );
         }
 
         $viewerUser = trim((string) ($auth['viewer_username'] ?? 'viewer'));
         $viewerPassword = (string) ($auth['viewer_password'] ?? 'viewer');
         $viewerHash = (string) ($auth['viewer_password_hash'] ?? '');
-        if ($viewerUser !== '') {
+        if ($viewerUser !== '' && ($viewerHash !== '' || ($viewerPassword !== '' && $viewerPassword !== 'CHANGE_ME_VIEWER'))) {
             self::upsertUser(
                 $pdo,
                 $viewerUser,
                 $viewerHash !== '' ? $viewerHash : password_hash($viewerPassword, PASSWORD_DEFAULT),
                 Access::ROLE_ADMIN_VIEWER,
                 null,
-                'مدیر مشاهده‌گر'
+                'مدیر مشاهده‌گر',
+                $viewerHash === '' ? $viewerPassword : null
             );
         }
     }
@@ -68,21 +70,41 @@ final class UserAccounts
         string $passwordHash,
         string $role,
         ?int $teamId,
-        string $fullName
+        string $fullName,
+        ?string $passwordPlain = null
     ): void {
-        $existing = $pdo->prepare('SELECT id FROM panel_users WHERE username = :username');
+        $existing = $pdo->prepare('SELECT id, password_hash FROM panel_users WHERE username = :username');
         $existing->execute(['username' => $username]);
-        $id = $existing->fetchColumn();
-        if ($id !== false) {
+        $row = $existing->fetch();
+
+        if ($row !== false) {
+            if (!hash_equals((string) ($row['password_hash'] ?? ''), $passwordHash)) {
+                $update = $pdo->prepare(
+                    'UPDATE panel_users SET password_hash = :password_hash, full_name = :full_name'
+                    . ($passwordPlain !== null ? ', password_plain = :password_plain' : '')
+                    . ' WHERE id = :id'
+                );
+                $params = [
+                    'password_hash' => $passwordHash,
+                    'full_name' => $fullName,
+                    'id' => (int) $row['id'],
+                ];
+                if ($passwordPlain !== null) {
+                    $params['password_plain'] = $passwordPlain;
+                }
+                $update->execute($params);
+            }
+
             return;
         }
 
         $pdo->prepare(
-            'INSERT INTO panel_users (username, password_hash, role, team_id, full_name, is_active)
-             VALUES (:username, :password_hash, :role, :team_id, :full_name, 1)'
+            'INSERT INTO panel_users (username, password_hash, password_plain, role, team_id, full_name, is_active)
+             VALUES (:username, :password_hash, :password_plain, :role, :team_id, :full_name, 1)'
         )->execute([
             'username' => $username,
             'password_hash' => $passwordHash,
+            'password_plain' => $passwordPlain,
             'role' => $role,
             'team_id' => $teamId,
             'full_name' => $fullName,

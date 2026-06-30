@@ -291,9 +291,12 @@ final class Repository
 
         return match ($name) {
             'teams' => "SELECT t.id, t.entity_code, t.entity_type, t.name, t.leader, t.phone, t.joined_at, t.warning, t.notes,
+                        u.username AS portal_username,
+                        u.password_plain AS portal_password,
                         (SELECT COUNT(*) FROM desks d WHERE d.team_id = t.id) AS desk_count,
                         (SELECT COALESCE(SUM(d.informal_seats), 0) FROM desks d WHERE d.team_id = t.id) AS informal_seats
-                 FROM teams t"
+                 FROM teams t
+                 LEFT JOIN panel_users u ON u.team_id = t.id AND u.role = 'team'"
                 . ($teamId !== null ? " WHERE t.id = {$teamId}" : '')
                 . ' ORDER BY t.entity_type, t.name',
             'members' => "SELECT m.id, m.member_code, m.team_id, m.access_code, m.full_name, m.phone, m.national_id, m.notes,
@@ -546,6 +549,40 @@ final class Repository
                 ),
             ],
         ];
+    }
+
+    /**
+     * @return array{rows:list<array<string,mixed>>}
+     */
+    public function deskMap(): array
+    {
+        $scope = Access::scopedTeamId();
+        $rows = $this->rows(
+            'SELECT d.id, d.number, d.team_id, d.usage_type, d.formal_seats, d.informal_seats,
+                    d.row_index, d.col_index, t.name AS team_name
+             FROM desks d
+             LEFT JOIN teams t ON t.id = d.team_id
+             ORDER BY d.number'
+        );
+
+        if ($scope !== null) {
+            $rows = array_map(static function (array $row) use ($scope): array {
+                $teamId = (int) ($row['team_id'] ?? 0);
+                $isOwn = $teamId === $scope;
+                $row['is_own'] = $isOwn;
+                if ($teamId > 0 && !$isOwn) {
+                    $row['team_name'] = 'نهاد دیگر';
+                    $row['team_id'] = null;
+                    $row['foreign_occupied'] = true;
+                } else {
+                    $row['foreign_occupied'] = false;
+                }
+
+                return $row;
+            }, $rows);
+        }
+
+        return ['rows' => array_map(fn (array $row): array => $this->stripLegacyRow($row), $rows)];
     }
 
     private function debtSql(): string

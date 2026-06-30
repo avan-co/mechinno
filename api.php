@@ -54,6 +54,25 @@ try {
         json_response($repository->teamProfile($teamId));
     }
 
+    if ($resource === 'desks-map') {
+        json_response($repository->deskMap());
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && $resource === 'teams' && $action === 'reset-portal-password') {
+        require_csrf_json();
+        Access::requireWriteJson();
+        $payload = json_decode((string) file_get_contents('php://input'), true);
+        if (!is_array($payload)) {
+            $payload = $_POST;
+        }
+        $teamId = (int) ($payload['id'] ?? 0);
+        if ($teamId <= 0) {
+            json_response(['error' => 'نهاد معتبر نیست.'], 422);
+        }
+        $credentials = EntityAccounts::resetPassword($pdo, $teamId);
+        json_response(['ok' => true, 'credentials' => $credentials]);
+    }
+
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($action, ['create', 'update', 'delete', 'status'], true)) {
         require_csrf_json();
         Access::requireWriteJson();

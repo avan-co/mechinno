@@ -5,9 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/src/bootstrap.php';
 
 require_auth();
-if (Access::isTeam()) {
-    redirect_to('team.php');
-}
+Access::requireAdminHtml();
 $pdo = require_database();
 $data = (new ReportData($pdo))->build();
 $meta = $data['meta'];
