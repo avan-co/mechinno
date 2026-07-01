@@ -194,6 +194,15 @@ const editableResources = new Set(
       ? ["members", "transactions", "locker-requests"]
       : []
 );
+const readOnlyTableResources = new Set([
+  "pending-members",
+  "pending-payments",
+  "pending-locker-requests",
+  "payment-history",
+  "lockers",
+  "charges",
+  "desk-assignments",
+]);
 const hiddenColumns = new Set([
   "id", "source_sheet", "source_file", "team_id", "locker_id", "member_id",
   "row_index", "col_index", "created_at", "entity_type",
@@ -640,27 +649,27 @@ const loadLedger = async () => {
     <table class="data-table ledger-table">
       <thead>
         <tr>
-          <th>تاریخ</th><th>نوع</th><th>دسته</th><th>شرح</th><th>نهاد</th><th>بدهکار</th><th>بستانکار</th><th>مانده</th>
+          <th class="num">ردیف</th><th>تاریخ</th><th>نوع</th><th>شرح</th><th class="num">بستانکار</th><th class="num">بدهکار</th><th class="num">مانده</th>
         </tr>
       </thead>
       <tbody>
-        ${rows.map((row) => {
+        ${[...rows].reverse().map((row) => {
           const signed = Number(row.signed_amount ?? row.amount ?? 0);
           const debit = signed < 0 ? formatMoney(Math.abs(signed)) : "—";
           const credit = signed > 0 ? formatMoney(signed) : "—";
           return `<tr>
+            <td class="num">${escapeHtml(String(row.line_no ?? "—"))}</td>
             <td>${escapeHtml(formatPlain(row.tx_date))}</td>
             <td>${escapeHtml(row.entry_type_label || entryTypeLabel(row.entry_type))}</td>
-            <td>${escapeHtml(row.category_label || row.category || "—")}</td>
-            <td>${escapeHtml(row.description || "—")}</td>
-            <td>${escapeHtml(row.team_name || "—")}</td>
-            <td class="num ledger-expense">${escapeHtml(debit)}</td>
+            <td class="ledger-desc">${escapeHtml(row.description || "—")}</td>
             <td class="num ledger-income">${escapeHtml(credit)}</td>
-            <td class="num">${escapeHtml(formatMoney(row.running_balance ?? 0))}</td>
+            <td class="num ledger-expense">${escapeHtml(debit)}</td>
+            <td class="num ledger-balance-cell">${escapeHtml(formatMoney(row.running_balance ?? 0))}</td>
           </tr>`;
         }).join("")}
       </tbody>
-    </table>`;
+    </table>
+    <p class="hint ledger-footnote">جدول از قدیم به جدید مرتب شده؛ جدیدترین ردیف‌ها در بالا نمایش داده می‌شوند. مانده پس از هر ثبت محاسبه می‌شود.</p>`;
 };
 
 const loadTeamDeskAssignments = async () => {
@@ -1513,10 +1522,12 @@ class DataTable extends HTMLElement {
         || meta.resources[this.resource.replace(/-/g, "_")]
         || null;
       const canAdd = !this.noAdd
+        && !this.workflow
+        && !readOnlyTableResources.has(this.resource)
         && (canWrite || (canTeamSubmit && ["members", "transactions", "locker-requests"].includes(this.resource)))
         && this.definition
         && editableResources.has(this.resource)
-        && !(panelMode === "team" && ["lockers", "payment-history"].includes(this.resource));
+        && !(panelMode === "team" && ["lockers", "charges", "payment-history"].includes(this.resource));
       this.querySelector(".add-button").hidden = !canAdd;
       const result = await fetchResource(this.endpoint, {
         page: this.page,

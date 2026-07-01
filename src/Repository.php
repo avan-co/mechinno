@@ -338,7 +338,7 @@ final class Repository
                 'charges' => $this->preparedScalar('SELECT COUNT(*) FROM charges WHERE team_id = :id', ['id' => $teamId]),
                 'transactions' => $this->teamTransactionCount($teamId, $filters),
                 'payment-history' => $this->preparedScalar(
-                    "SELECT COUNT(*) FROM transactions WHERE team_id = :id AND category = 'واریز تیم' AND confirmed = 1 AND payment_status = 'approved'",
+                    "SELECT COUNT(*) FROM transactions WHERE team_id = :id AND category = 'واریز تیم' AND payment_status IN ('approved', 'rejected')",
                     ['id' => $teamId]
                 ),
                 'locker-requests' => $this->preparedScalar('SELECT COUNT(*) FROM locker_requests WHERE team_id = :id', ['id' => $teamId]),
@@ -365,7 +365,7 @@ final class Repository
             'pending-locker-requests' => "SELECT COUNT(*) FROM locker_requests WHERE status = 'pending'",
             'locker-requests' => 'SELECT COUNT(*) FROM locker_requests',
             'desk-assignments' => 'SELECT COUNT(*) FROM desk_assignments',
-            'payment-history' => "SELECT COUNT(*) FROM transactions WHERE category = 'واریز تیم' AND confirmed = 1 AND payment_status = 'approved'",
+            'payment-history' => "SELECT COUNT(*) FROM transactions WHERE category = 'واریز تیم' AND payment_status IN ('approved', 'rejected')",
             default => throw new InvalidArgumentException('Unknown resource.'),
         };
 
@@ -539,9 +539,9 @@ final class Repository
                         END AS month_name
                  FROM transactions t
                  LEFT JOIN teams tm ON tm.id = t.team_id
-                 WHERE t.category = 'واریز تیم' AND t.confirmed = 1 AND t.payment_status = 'approved'"
+                 WHERE t.category = 'واریز تیم' AND t.payment_status IN ('approved', 'rejected')"
                 . ($teamId !== null ? " AND t.team_id = {$teamId}" : '')
-                . ' ORDER BY t.fiscal_year DESC, t.month_index DESC, t.tx_date DESC',
+                . ' ORDER BY COALESCE(t.reviewed_at, t.tx_date) DESC, t.id DESC',
             'development_plans' => 'SELECT p.id, p.title, p.description, p.category, p.priority, p.status, p.due_date, p.notes,
                         p.sort_order, p.created_at, p.updated_at, p.depends_on_id, p.estimated_cost, p.estimated_revenue,
                         p.related_section, d.title AS depends_on_title

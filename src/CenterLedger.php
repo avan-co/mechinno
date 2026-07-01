@@ -56,7 +56,6 @@ final class CenterLedger
              ORDER BY t.tx_date ASC, t.id ASC"
         );
 
-        $running = 0;
         $rows = [];
         foreach ($statement->fetchAll() as $row) {
             $category = (string) ($row['category'] ?? '');
@@ -68,7 +67,6 @@ final class CenterLedger
                 'هزینه' => 'expense',
                 default => 'other',
             };
-            $running += $signed;
 
             $rows[] = [
                 'id' => (int) ($row['id'] ?? 0),
@@ -83,12 +81,31 @@ final class CenterLedger
                 'fiscal_year' => $row['fiscal_year'] ?? '',
                 'month_index' => (int) ($row['month_index'] ?? 0),
                 'entry_type' => $entryType,
-                'entry_type_label' => self::entryTypeLabel($entryType),
-                'running_balance' => $running,
+                'entry_type_label' => self::entryTypeLabel($entryType, $category),
+                'running_balance' => 0,
             ];
         }
 
-        return array_reverse($rows);
+        return $this->annotateRunningBalance($rows);
+    }
+
+    /**
+     * @param list<array<string, mixed>> $rows
+     * @return list<array<string, mixed>>
+     */
+    private function annotateRunningBalance(array $rows): array
+    {
+        $running = 0;
+        $line = 0;
+        foreach ($rows as &$row) {
+            $line++;
+            $running += (int) ($row['signed_amount'] ?? 0);
+            $row['line_no'] = $line;
+            $row['running_balance'] = $running;
+        }
+        unset($row);
+
+        return $rows;
     }
 
     /**
@@ -147,16 +164,27 @@ final class CenterLedger
     private function normalizeDescription(array $row, string $category): string
     {
         $description = trim((string) ($row['description'] ?? ''));
-        if ($description !== '') {
-            return $description;
+        $teamName = trim((string) ($row['team_name'] ?? ''));
+        $month = JalaliDate::monthName((int) ($row['month_index'] ?? 0));
+        $year = (string) ($row['fiscal_year'] ?? '');
+
+        if ($category === 'واریز تیم') {
+            $parts = ['دریافت شارژ'];
+            if ($teamName !== '') {
+                $parts[] = $teamName;
+            }
+            if ($month !== '') {
+                $parts[] = "{$month} {$year}";
+            }
+            if ($description !== '' && !str_starts_with($description, 'ثبت مستقیم مدیر')) {
+                $parts[] = $description;
+            }
+
+            return implode(' — ', $parts);
         }
 
-        $teamName = trim((string) ($row['team_name'] ?? ''));
-        if ($category === 'واریز تیم') {
-            $month = JalaliDate::monthName((int) ($row['month_index'] ?? 0));
-            $year = (string) ($row['fiscal_year'] ?? '');
-
-            return trim(sprintf('دریافت شارژ%s%s', $teamName !== '' ? " — {$teamName}" : '', $month !== '' ? " — {$month} {$year}" : ''));
+        if ($description !== '') {
+            return $description;
         }
 
         return self::categoryLabel($category);
@@ -172,13 +200,13 @@ final class CenterLedger
         };
     }
 
-    public static function entryTypeLabel(string $entryType): string
+    public static function entryTypeLabel(string $entryType, string $category = ''): string
     {
         return match ($entryType) {
-            'deposit' => 'دریافت نقدی',
-            'income' => 'درآمد',
+            'deposit' => 'دریافت از نهاد',
+            'income' => 'درآمد دستی',
             'expense' => 'هزینه',
-            default => '—',
+            default => self::categoryLabel($category),
         };
     }
 }

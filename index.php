@@ -207,7 +207,7 @@ $assetVer = (string) max(
             <section id="members" class="section">
               <p class="hint">اعضای تأییدشده در لیست اصلی نمایش داده می‌شوند. درخواست‌های نهادها در جدول «در انتظار تأیید» بررسی می‌شود.</p>
               <?php if (Access::canWrite()): ?>
-              <data-table title="اعضا — در انتظار تأیید نهاد" endpoint="api.php?resource=pending-members" data-workflow="members" data-workflow-type="member-approve" data-table-key="pending-members"></data-table>
+              <data-table title="اعضا — در انتظار تأیید نهاد" endpoint="api.php?resource=pending-members" data-workflow="members" data-workflow-type="member-approve" data-table-key="pending-members" data-no-add></data-table>
               <?php endif; ?>
               <data-table title="اعضای تأییدشده و رد‌شده" endpoint="api.php?resource=members"></data-table>
             </section>
@@ -230,7 +230,7 @@ $assetVer = (string) max(
 
             <section id="lockers" class="section">
               <?php if (Access::canWrite()): ?>
-              <data-table title="درخواست کمد — در انتظار تأیید" endpoint="api.php?resource=pending-locker-requests" data-workflow="lockers" data-workflow-type="locker-request" data-table-key="pending-locker-requests"></data-table>
+              <data-table title="درخواست کمد — در انتظار تأیید" endpoint="api.php?resource=pending-locker-requests" data-workflow="lockers" data-workflow-type="locker-request" data-table-key="pending-locker-requests" data-no-add></data-table>
               <?php endif; ?>
               <data-table title="کمدها" endpoint="api.php?resource=lockers"></data-table>
             </section>
@@ -289,7 +289,7 @@ $assetVer = (string) max(
                   </div>
                 </form>
               </article>
-              <data-table title="اعلام واریز — در انتظار تأیید" endpoint="api.php?resource=pending-payments" data-workflow="payments" data-table-key="pending-payments"></data-table>
+              <data-table title="اعلام واریز — در انتظار تأیید" endpoint="api.php?resource=pending-payments" data-workflow="payments" data-table-key="pending-payments" data-no-add></data-table>
               <?php endif; ?>
               <div class="grid two finance-actions">
                 <article class="panel">
