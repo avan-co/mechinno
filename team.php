@@ -208,7 +208,7 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
             <section id="lockers" class="section">
               <p class="hint">برای درخواست کمد جدید، درخواست ثبت کنید. پس از تأیید مدیر، کمد به نهاد تخصیص می‌یابد.</p>
               <data-table title="درخواست‌های کمد" endpoint="api.php?resource=locker-requests"></data-table>
-              <data-table title="کمدهای تخصیص‌یافته" endpoint="api.php?resource=lockers" data-no-add></data-table>
+              <data-table title="کمدهای تخصیص‌یافته" endpoint="api.php?resource=lockers" data-readonly></data-table>
             </section>
 
             <section id="charges" class="section">
@@ -219,7 +219,7 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
                 </div>
                 <div id="chargesCollage" class="charges-collage"></div>
               </article>
-              <data-table title="جزئیات شارژ" endpoint="api.php?resource=charges" data-no-add></data-table>
+              <data-table title="جزئیات شارژ" endpoint="api.php?resource=charges" data-readonly></data-table>
             </section>
 
             <section id="payments" class="section">
@@ -229,7 +229,7 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
               </article>
               <p class="hint">پس از واریز، اعلام کنید. واریزهای در انتظار در جدول اول نمایش داده می‌شوند.</p>
               <data-table title="اعلام‌های در انتظار تأیید" endpoint="api.php?resource=transactions" data-payment-filter="pending"></data-table>
-              <data-table title="سوابق پرداخت" endpoint="api.php?resource=payment-history" data-no-add></data-table>
+              <data-table title="سوابق پرداخت" endpoint="api.php?resource=payment-history" data-readonly></data-table>
             </section>
           </main>
 

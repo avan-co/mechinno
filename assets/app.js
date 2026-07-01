@@ -203,6 +203,25 @@ const readOnlyTableResources = new Set([
   "charges",
   "desk-assignments",
 ]);
+
+const tableIsReadOnly = (table) => {
+  const resource = table.resource || "";
+  return table.hasAttribute("data-readonly")
+    || table.hasAttribute("data-no-add")
+    || Boolean(table.getAttribute("data-workflow"))
+    || readOnlyTableResources.has(resource);
+};
+
+const tableAllowsAdd = (table, definition = null) => {
+  const resource = table.resource || "";
+  if (tableIsReadOnly(table)) return false;
+  if (!(canWrite || (canTeamSubmit && ["members", "transactions", "locker-requests"].includes(resource)))) {
+    return false;
+  }
+  if (!definition || !editableResources.has(resource)) return false;
+  if (panelMode === "team" && ["lockers", "charges", "payment-history"].includes(resource)) return false;
+  return true;
+};
 const hiddenColumns = new Set([
   "id", "source_sheet", "source_file", "team_id", "locker_id", "member_id",
   "row_index", "col_index", "created_at", "entity_type",
@@ -614,62 +633,57 @@ const entryTypeLabel = (type) => ({
 }[type] || type || "—");
 
 const loadLedger = async () => {
-  const balanceEl = document.getElementById("ledgerBalanceValue");
-  const totalsEl = document.getElementById("ledgerTotals");
-  const billingEl = document.getElementById("ledgerBilling");
-  const tableEl = document.getElementById("ledgerTable");
-  if (!balanceEl || !totalsEl || !tableEl) return;
+  const summaryBody = document.getElementById("ledgerSummaryBody");
+  const tableBody = document.getElementById("ledgerTableBody");
+  const billingWrap = document.getElementById("ledgerBillingWrap");
+  const billingBody = document.getElementById("ledgerBillingBody");
+  if (!summaryBody || !tableBody) return;
 
   const data = await fetchJson("api.php?resource=ledger");
   const totals = data.totals || {};
   const billing = data.billing || {};
-  balanceEl.textContent = formatMoney(totals.balance ?? data.balance ?? 0);
-  balanceEl.classList.toggle("ledger-negative", Number(totals.balance ?? data.balance ?? 0) < 0);
-  totalsEl.innerHTML = `
-    <div><span>دریافت از نهادها</span><strong>${escapeHtml(formatMoney(totals.deposits || 0))}</strong></div>
-    <div><span>درآمد دستی</span><strong>${escapeHtml(formatMoney(totals.manual_income || 0))}</strong></div>
-    <div><span>هزینه‌ها</span><strong>${escapeHtml(formatMoney(totals.manual_expense || 0))}</strong></div>
-    <div><span>جمع دریافت‌ها</span><strong>${escapeHtml(formatMoney(totals.income_total || 0))}</strong></div>`;
-  if (billingEl) {
-    billingEl.innerHTML = `
-      <p class="hint">
-        مطالبات شارژ (بخش شارژ): <strong>${escapeHtml(formatMoney(billing.charge_total || 0))}</strong>
-        — دریافت‌شده از نهادها: <strong>${escapeHtml(formatMoney(billing.received_total || 0))}</strong>
-        — مانده طلب: <strong>${escapeHtml(formatMoney(billing.receivable || 0))}</strong>
-      </p>`;
+  const balance = Number(totals.balance ?? data.balance ?? 0);
+
+  summaryBody.innerHTML = `
+    <tr class="ledger-row-balance ${balance < 0 ? "ledger-negative-row" : ""}">
+      <th scope="row">موجودی نقدی فعلی</th>
+      <td class="num ledger-balance-cell">${escapeHtml(formatMoney(balance))}</td>
+    </tr>
+    <tr><th scope="row">دریافت از نهادها</th><td class="num">${escapeHtml(formatMoney(totals.deposits || 0))}</td></tr>
+    <tr><th scope="row">درآمد دستی</th><td class="num">${escapeHtml(formatMoney(totals.manual_income || 0))}</td></tr>
+    <tr><th scope="row">هزینه‌ها</th><td class="num ledger-expense">${escapeHtml(formatMoney(totals.manual_expense || 0))}</td></tr>
+    <tr><th scope="row">جمع دریافت‌ها</th><td class="num">${escapeHtml(formatMoney(totals.income_total || 0))}</td></tr>`;
+
+  if (billingWrap && billingBody) {
+    billingWrap.hidden = false;
+    billingBody.innerHTML = `
+      <tr>
+        <td class="num">${escapeHtml(formatMoney(billing.charge_total || 0))}</td>
+        <td class="num">${escapeHtml(formatMoney(billing.received_total || 0))}</td>
+        <td class="num">${escapeHtml(formatMoney(billing.receivable || 0))}</td>
+      </tr>`;
   }
 
   const rows = data.rows || [];
   if (!rows.length) {
-    tableEl.innerHTML = `<div class="empty">هنوز گردش نقدی ثبت نشده است. پس از تأیید واریز نهاد یا ثبت درآمد/هزینه دستی، ردیف‌ها اینجا نمایش داده می‌شوند.</div>`;
+    tableBody.innerHTML = `<tr><td colspan="7" class="empty">هنوز گردش نقدی ثبت نشده است.</td></tr>`;
     return;
   }
 
-  tableEl.innerHTML = `
-    <table class="data-table ledger-table">
-      <thead>
-        <tr>
-          <th class="num">ردیف</th><th>تاریخ</th><th>نوع</th><th>شرح</th><th class="num">بستانکار</th><th class="num">بدهکار</th><th class="num">مانده</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${[...rows].reverse().map((row) => {
-          const signed = Number(row.signed_amount ?? row.amount ?? 0);
-          const debit = signed < 0 ? formatMoney(Math.abs(signed)) : "—";
-          const credit = signed > 0 ? formatMoney(signed) : "—";
-          return `<tr>
-            <td class="num">${escapeHtml(String(row.line_no ?? "—"))}</td>
-            <td>${escapeHtml(formatPlain(row.tx_date))}</td>
-            <td>${escapeHtml(row.entry_type_label || entryTypeLabel(row.entry_type))}</td>
-            <td class="ledger-desc">${escapeHtml(row.description || "—")}</td>
-            <td class="num ledger-income">${escapeHtml(credit)}</td>
-            <td class="num ledger-expense">${escapeHtml(debit)}</td>
-            <td class="num ledger-balance-cell">${escapeHtml(formatMoney(row.running_balance ?? 0))}</td>
-          </tr>`;
-        }).join("")}
-      </tbody>
-    </table>
-    <p class="hint ledger-footnote">جدول از قدیم به جدید مرتب شده؛ جدیدترین ردیف‌ها در بالا نمایش داده می‌شوند. مانده پس از هر ثبت محاسبه می‌شود.</p>`;
+  tableBody.innerHTML = [...rows].reverse().map((row) => {
+    const signed = Number(row.signed_amount ?? row.amount ?? 0);
+    const debit = signed < 0 ? formatMoney(Math.abs(signed)) : "—";
+    const credit = signed > 0 ? formatMoney(signed) : "—";
+    return `<tr>
+      <td class="num">${escapeHtml(String(row.line_no ?? "—"))}</td>
+      <td>${escapeHtml(formatPlain(row.tx_date))}</td>
+      <td>${escapeHtml(row.entry_type_label || entryTypeLabel(row.entry_type))}</td>
+      <td class="ledger-desc">${escapeHtml(row.description || "—")}</td>
+      <td class="num ledger-income">${escapeHtml(credit)}</td>
+      <td class="num ledger-expense">${escapeHtml(debit)}</td>
+      <td class="num ledger-balance-cell">${escapeHtml(formatMoney(row.running_balance ?? 0))}</td>
+    </tr>`;
+  }).join("");
 };
 
 const loadTeamDeskAssignments = async () => {
@@ -1428,10 +1442,11 @@ class DataTable extends HTMLElement {
     this.resource = new URL(this.endpoint, window.location.href).searchParams.get("resource");
     this.workflow = this.getAttribute("data-workflow") || "";
     this.workflowType = this.getAttribute("data-workflow-type") || "";
-    this.noAdd = this.hasAttribute("data-no-add");
+    this.noAdd = this.hasAttribute("data-no-add") || this.hasAttribute("data-readonly");
     this.txCategoryFilter = this.getAttribute("data-tx-filter") || "";
     this.paymentStatusFilter = this.getAttribute("data-payment-filter") || "";
     this.tableKey = this.getAttribute("data-table-key") || "";
+    this.readOnly = tableIsReadOnly(this);
     this.definition = null;
     this.rows = [];
     this.page = 1;
@@ -1439,12 +1454,15 @@ class DataTable extends HTMLElement {
     this.total = 0;
     this.pages = 1;
     this.filter = "";
+    const addButtonHtml = this.readOnly
+      ? ""
+      : `<button class="button add-button" type="button">+ افزودن</button>`;
     this.innerHTML = `
       <article class="panel data-panel">
         <div class="table-toolbar">
           <h2>${escapeHtml(this.title)}</h2>
           <div class="table-actions">
-            <button class="button add-button" type="button" hidden>+ افزودن</button>
+            ${addButtonHtml}
             <input class="search" type="search" placeholder="جست‌وجو... ( / )" />
           </div>
         </div>
@@ -1487,7 +1505,7 @@ class DataTable extends HTMLElement {
       }
       this.render();
     });
-    this.querySelector(".add-button").addEventListener("click", () => {
+    this.querySelector(".add-button")?.addEventListener("click", () => {
       openRecordModal({
         resource: this.resource,
         definition: this.definition,
@@ -1521,14 +1539,9 @@ class DataTable extends HTMLElement {
       this.definition = meta.resources[this.resource]
         || meta.resources[this.resource.replace(/-/g, "_")]
         || null;
-      const canAdd = !this.noAdd
-        && !this.workflow
-        && !readOnlyTableResources.has(this.resource)
-        && (canWrite || (canTeamSubmit && ["members", "transactions", "locker-requests"].includes(this.resource)))
-        && this.definition
-        && editableResources.has(this.resource)
-        && !(panelMode === "team" && ["lockers", "charges", "payment-history"].includes(this.resource));
-      this.querySelector(".add-button").hidden = !canAdd;
+      const canAdd = tableAllowsAdd(this, this.definition);
+      const addBtn = this.querySelector(".add-button");
+      if (addBtn) addBtn.hidden = !canAdd;
       const result = await fetchResource(this.endpoint, {
         page: this.page,
         perPage: this.perPage,
@@ -1570,7 +1583,7 @@ class DataTable extends HTMLElement {
     const container = this.querySelector(".mobile-cards");
     if (!isMobile()) return false;
     const columns = rows.length ? resolveColumns(rows, this.resource).slice(0, 6) : [];
-    const editable = canWrite && this.definition && editableResources.has(this.resource);
+    const editable = tableAllowsAdd(this, this.definition);
     const workflow = this.workflow && canWrite;
     container.innerHTML = rows.length
       ? rows.map((row) => {
@@ -1608,7 +1621,7 @@ class DataTable extends HTMLElement {
     }
 
     if (!rows.length) {
-      const cta = this.definition && editableResources.has(this.resource)
+      const cta = tableAllowsAdd(this, this.definition)
         ? `<div class="empty-state-cta"><button class="button add-inline" type="button">+ افزودن اولین رکورد</button></div>` : "";
       wrap.innerHTML = `<div class="empty">رکوردی یافت نشد.${cta}</div>`;
       wrap.querySelector(".add-inline")?.addEventListener("click", () => this.querySelector(".add-button")?.click());
@@ -1617,7 +1630,7 @@ class DataTable extends HTMLElement {
     }
 
     const columns = resolveColumns(rows, this.resource);
-    const editable = canWrite && this.definition && editableResources.has(this.resource);
+    const editable = tableAllowsAdd(this, this.definition);
     const workflow = this.workflow && canWrite;
     const statusField = this.definition?.status_field;
     const statusOptions = this.definition?.status_options || [];
