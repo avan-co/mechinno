@@ -773,7 +773,7 @@ final class Crud
         if ($type === 'date') {
             return JalaliDate::normalize($value);
         }
-        if ($type === 'select' && in_array($value, ['0', '1'], true)) {
+        if ($type === 'select' && (in_array($value, ['0', '1'], true) || (is_numeric($value) && in_array((int) $value, [0, 1], true)))) {
             return (int) $value;
         }
 

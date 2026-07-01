@@ -216,6 +216,19 @@ final class Workflow
      */
     private function fetchLockerRequest(int $id): array
     {
-        return (new Crud($this->pdo))->find('locker_requests', $id);
+        $statement = $this->pdo->prepare(
+            'SELECT lr.*, l.locker_number, t.name AS team_label
+             FROM locker_requests lr
+             LEFT JOIN lockers l ON l.id = lr.locker_id
+             LEFT JOIN teams t ON t.id = lr.team_id
+             WHERE lr.id = :id'
+        );
+        $statement->execute(['id' => $id]);
+        $row = $statement->fetch();
+        if ($row === false) {
+            throw new InvalidArgumentException('درخواست کمد پیدا نشد.');
+        }
+
+        return Repository::stripLegacyColumns($row);
     }
 }

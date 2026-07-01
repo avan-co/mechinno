@@ -139,7 +139,6 @@ $assetVer = (string) max(
         <div class="main-wrap">
           <header class="topbar">
             <div class="topbar-start">
-              <a class="logout-top" href="logout.php" title="خروج از پنل">خروج</a>
               <button class="menu-toggle" id="menuToggle" type="button" aria-label="منو">
                 <svg viewBox="0 0 24 24"><path d="M4 7h16v2H4V7Zm0 5h16v2H4v-2Zm0 5h16v2H4v-2Z" fill="currentColor"/></svg>
               </button>
@@ -149,6 +148,7 @@ $assetVer = (string) max(
               <h1 id="pageTitle">مدیریت مرکز نوآوری</h1>
             </div>
             <div class="topbar-actions">
+              <a class="logout-top" href="logout.php" title="خروج از پنل">خروج</a>
               <span class="role-chip"><?= e(match ($authContext['role']) {
                   'admin_editor' => 'مدیر — ویرایش',
                   'admin_viewer' => 'مدیر — مشاهده',

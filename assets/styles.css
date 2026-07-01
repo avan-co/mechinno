@@ -331,7 +331,12 @@ code { color: var(--primary); font-size: 0.9em; }
   text-overflow: ellipsis;
 }
 
-.topbar-actions { display: flex; align-items: center; gap: 8px; }
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-inline-start: auto;
+}
 
 .date-chip {
   padding: 6px 10px;
