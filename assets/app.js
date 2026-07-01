@@ -194,32 +194,38 @@ const editableResources = new Set(
       ? ["members", "transactions", "locker-requests"]
       : []
 );
-const readOnlyTableResources = new Set([
+const workflowQueueResources = new Set([
   "pending-members",
   "pending-payments",
   "pending-locker-requests",
-  "payment-history",
-  "lockers",
-  "charges",
-  "desk-assignments",
 ]);
 
-const tableIsReadOnly = (table) => {
+const teamReadOnlyResources = new Set(["lockers", "charges", "payment-history"]);
+
+const tableSuppressesAdd = (table) => {
   const resource = table.resource || "";
-  return table.hasAttribute("data-readonly")
-    || table.hasAttribute("data-no-add")
-    || Boolean(table.getAttribute("data-workflow"))
-    || readOnlyTableResources.has(resource);
+  if (table.hasAttribute("data-readonly") || table.hasAttribute("data-no-add")) return true;
+  if (table.getAttribute("data-workflow") || workflowQueueResources.has(resource)) return true;
+  if (panelMode === "team" && teamReadOnlyResources.has(resource)) return true;
+  return false;
 };
 
 const tableAllowsAdd = (table, definition = null) => {
   const resource = table.resource || "";
-  if (tableIsReadOnly(table)) return false;
+  if (tableSuppressesAdd(table)) return false;
   if (!(canWrite || (canTeamSubmit && ["members", "transactions", "locker-requests"].includes(resource)))) {
     return false;
   }
   if (!definition || !editableResources.has(resource)) return false;
-  if (panelMode === "team" && ["lockers", "charges", "payment-history"].includes(resource)) return false;
+  return true;
+};
+
+const tableAllowsEdit = (table, definition = null) => {
+  const resource = table.resource || "";
+  if (table.getAttribute("data-workflow") || workflowQueueResources.has(resource)) return false;
+  if (table.hasAttribute("data-readonly")) return false;
+  if (panelMode === "team" && teamReadOnlyResources.has(resource)) return false;
+  if (!canWrite || !definition || !editableResources.has(resource)) return false;
   return true;
 };
 const hiddenColumns = new Set([
@@ -1310,6 +1316,56 @@ const workflowReject = async (resource, id, reason = "") => {
   await postJson(`api.php?resource=${encodeURIComponent(resource)}&action=reject`, { id, reason });
 };
 
+const askRejectReason = () => new Promise((resolve, reject) => {
+  let modal = document.getElementById("rejectModal");
+  if (!modal) {
+    document.body.insertAdjacentHTML("beforeend", `
+      <div id="rejectModal" class="modal-backdrop" hidden>
+        <div class="modal-card" role="dialog" aria-labelledby="rejectModalTitle">
+          <div class="modal-head">
+            <h2 id="rejectModalTitle">رد درخواست</h2>
+            <button class="modal-close" type="button" data-reject-cancel aria-label="بستن">×</button>
+          </div>
+          <label class="wide"><span>دلیل رد (اختیاری)</span><textarea id="rejectReasonInput" rows="3" placeholder="دلیل رد را بنویسید…"></textarea></label>
+          <div class="form-actions">
+            <button type="button" class="button ghost" data-reject-cancel>انصراف</button>
+            <button type="button" class="button danger" data-reject-confirm>رد کردن</button>
+          </div>
+        </div>
+      </div>`);
+    modal = document.getElementById("rejectModal");
+    modal.addEventListener("click", (event) => {
+      if (event.target === modal) {
+        modal.hidden = true;
+        reject(new Error("cancelled"));
+      }
+    });
+  }
+
+  const input = modal.querySelector("#rejectReasonInput");
+  input.value = "";
+  modal.hidden = false;
+  input.focus();
+
+  const cleanup = () => {
+    modal.hidden = true;
+    modal.querySelectorAll("[data-reject-cancel]").forEach((btn) => { btn.onclick = null; });
+    modal.querySelector("[data-reject-confirm]").onclick = null;
+  };
+
+  modal.querySelectorAll("[data-reject-cancel]").forEach((btn) => {
+    btn.onclick = () => {
+      cleanup();
+      reject(new Error("cancelled"));
+    };
+  });
+  modal.querySelector("[data-reject-confirm]").onclick = () => {
+    const reason = input.value.trim();
+    cleanup();
+    resolve(reason);
+  };
+});
+
 const openFinanceModal = async (category) => {
   const meta = await loadCrudMeta();
   const base = meta.resources.transactions;
@@ -1446,7 +1502,7 @@ class DataTable extends HTMLElement {
     this.txCategoryFilter = this.getAttribute("data-tx-filter") || "";
     this.paymentStatusFilter = this.getAttribute("data-payment-filter") || "";
     this.tableKey = this.getAttribute("data-table-key") || "";
-    this.readOnly = tableIsReadOnly(this);
+    this.readOnly = tableSuppressesAdd(this);
     this.definition = null;
     this.rows = [];
     this.page = 1;
@@ -1583,7 +1639,7 @@ class DataTable extends HTMLElement {
     const container = this.querySelector(".mobile-cards");
     if (!isMobile()) return false;
     const columns = rows.length ? resolveColumns(rows, this.resource).slice(0, 6) : [];
-    const editable = tableAllowsAdd(this, this.definition);
+    const editable = tableAllowsEdit(this, this.definition);
     const workflow = this.workflow && canWrite;
     container.innerHTML = rows.length
       ? rows.map((row) => {
@@ -1630,7 +1686,7 @@ class DataTable extends HTMLElement {
     }
 
     const columns = resolveColumns(rows, this.resource);
-    const editable = tableAllowsAdd(this, this.definition);
+    const editable = tableAllowsEdit(this, this.definition);
     const workflow = this.workflow && canWrite;
     const statusField = this.definition?.status_field;
     const statusOptions = this.definition?.status_options || [];
@@ -1696,16 +1752,15 @@ class DataTable extends HTMLElement {
     }
     if (button.dataset.action === "reject" && this.workflow) {
       if (button.disabled) return;
-      const reason = window.prompt("دلیل رد (اختیاری):") ?? "";
-      if (reason === null) return;
       button.disabled = true;
       try {
+        const reason = await askRejectReason();
         await workflowReject(this.resource, id, reason);
         await this.load();
         await refreshAfterMutation(this.closest(".section")?.id || null);
         showToast("رد شد.", "success");
       } catch (error) {
-        showToast(error.message, "error");
+        if (error.message !== "cancelled") showToast(error.message, "error");
       } finally {
         button.disabled = false;
       }
