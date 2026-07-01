@@ -332,6 +332,31 @@ final class Schema
         }
 
         self::seedCenterSettings($pdo);
+        self::backfillTeamContracts($pdo);
+    }
+
+    private static function backfillTeamContracts(PDO $pdo): void
+    {
+        if (!self::columnExists($pdo, 'teams', 'contract_start')) {
+            return;
+        }
+        $today = JalaliDate::todayParts();
+        $yearStart = sprintf('%04d/01/01', $today['year']);
+        $teams = $pdo->query('SELECT id, joined_at, contract_start, contract_end FROM teams')->fetchAll();
+        foreach ($teams as $team) {
+            $start = JalaliDate::tryNormalize((string) ($team['contract_start'] ?? ''));
+            if ($start === '') {
+                $joined = JalaliDate::tryNormalize((string) ($team['joined_at'] ?? ''));
+                $start = $joined !== '' ? $joined : $yearStart;
+            }
+            $end = JalaliDate::tryNormalize((string) ($team['contract_end'] ?? ''));
+            if ($end === '') {
+                $endYear = (int) substr($start, 0, 4);
+                $end = sprintf('%04d/12/29', $endYear);
+            }
+            $pdo->prepare('UPDATE teams SET contract_start = :start, contract_end = :end WHERE id = :id')
+                ->execute(['start' => $start, 'end' => $end, 'id' => (int) $team['id']]);
+        }
     }
 
     private static function ensureWorkflowTables(PDO $pdo): void
@@ -399,7 +424,8 @@ final class Schema
         if (!self::tableExists($pdo, 'desk_assignments')) {
             return;
         }
-        $today = JalaliDate::todayParts()['formatted'];
+        $today = JalaliDate::todayParts();
+        $fallbackFrom = sprintf('%04d/01/01', $today['year']);
         $desks = $pdo->query(
             'SELECT d.id, d.number, d.team_id, d.usage_type, d.notes, t.contract_end
              FROM desks d
@@ -424,7 +450,7 @@ final class Schema
                 'desk_number' => (int) $desk['number'],
                 'team_id' => (int) $desk['team_id'],
                 'usage_type' => (string) ($desk['usage_type'] ?? 'formal'),
-                'assigned_from' => $today,
+                'assigned_from' => $fallbackFrom,
                 'assigned_until' => $contractEnd !== '' ? $contractEnd : null,
                 'notes' => $desk['notes'] ?? null,
             ]);

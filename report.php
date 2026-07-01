@@ -82,12 +82,12 @@ $statusClass = static function (?string $status): string {
         <table class="data-table">
           <thead>
             <tr>
-              <th>کد</th><th>نوع</th><th>نام</th><th>مسئول</th><th>تماس</th><th>میز</th><th>صندلی غیررسمی</th><th>عضویت</th>
+              <th>کد</th><th>نوع</th><th>نام</th><th>مسئول</th><th>تماس</th><th>میز</th><th>شروع قرارداد</th><th>پایان قرارداد</th><th>عضویت</th>
             </tr>
           </thead>
           <tbody>
             <?php if ($data['teams'] === []): ?>
-              <tr class="empty-row"><td colspan="8">نهادی ثبت نشده است.</td></tr>
+              <tr class="empty-row"><td colspan="9">نهادی ثبت نشده است.</td></tr>
             <?php else: ?>
               <?php foreach ($data['teams'] as $row): ?>
                 <tr>
@@ -97,7 +97,8 @@ $statusClass = static function (?string $status): string {
                   <td><?= e(ReportData::cell($row['leader'] ?? null)) ?></td>
                   <td><?= e(ReportData::plain($row['phone'] ?? null)) ?></td>
                   <td class="num"><?= ReportData::money($row['desk_count'] ?? 0) ?></td>
-                  <td class="num"><?= ReportData::money($row['informal_seats'] ?? 0) ?></td>
+                  <td><?= e(ReportData::cell($row['contract_start'] ?? null)) ?></td>
+                  <td><?= e(ReportData::cell($row['contract_end'] ?? null)) ?></td>
                   <td><?= e(ReportData::cell($row['joined_at'] ?? null)) ?></td>
                 </tr>
               <?php endforeach; ?>
@@ -112,12 +113,12 @@ $statusClass = static function (?string $status): string {
         <table class="data-table">
           <thead>
             <tr>
-              <th>کد عضو</th><th>نام</th><th>نهاد</th><th>نوع نهاد</th><th>میزهای نهاد</th><th>کد تردد</th><th>تماس</th><th>کدملی</th>
+              <th>کد عضو</th><th>نام</th><th>نهاد</th><th>نوع نهاد</th><th>میزهای نهاد</th><th>درخواست تردد</th><th>کد تردد</th><th>تماس</th><th>کدملی</th>
             </tr>
           </thead>
           <tbody>
             <?php if ($data['members'] === []): ?>
-              <tr class="empty-row"><td colspan="8">عضوی ثبت نشده است.</td></tr>
+              <tr class="empty-row"><td colspan="9">عضوی ثبت نشده است.</td></tr>
             <?php else: ?>
               <?php foreach ($data['members'] as $row): ?>
                 <tr>
@@ -126,6 +127,7 @@ $statusClass = static function (?string $status): string {
                   <td><?= e(ReportData::cell($row['team_label'] ?? null)) ?></td>
                   <td><?= e(ReportData::entityLabel($row['entity_type'] ?? null)) ?></td>
                   <td><?= e(ReportData::cell($row['desk_numbers'] ?? null)) ?></td>
+                  <td><?= e(ReportData::wantsAccessLabel($row['wants_access'] ?? null)) ?></td>
                   <td><?= e(ReportData::plain($row['access_code'] ?? null)) ?></td>
                   <td><?= e(ReportData::plain($row['phone'] ?? null)) ?></td>
                   <td><?= e(ReportData::plain($row['national_id'] ?? null)) ?></td>
@@ -137,49 +139,71 @@ $statusClass = static function (?string $status): string {
       </section>
 
       <section class="report-section report-section--break">
-        <div class="two-col">
-          <div>
-            <h2 class="section-title">میزها (۲۴ میز)</h2>
-            <table class="data-table">
-              <thead>
-                <tr><th>شماره</th><th>نهاد</th><th>نوع</th><th>ر</th><th>غ</th></tr>
-              </thead>
-              <tbody>
-                <?php foreach ($data['desks'] as $row): ?>
-                  <tr>
-                    <td class="num"><?= ReportData::money($row['number'] ?? 0) ?></td>
-                    <td><?= e(ReportData::cell($row['team_name'] ?? 'آزاد')) ?></td>
-                    <td><?= e(ReportData::usageLabel($row['usage_type'] ?? null)) ?></td>
-                    <td class="num"><?= ReportData::money($row['formal_seats'] ?? 0) ?></td>
-                    <td class="num"><?= ReportData::money($row['informal_seats'] ?? 0) ?></td>
-                  </tr>
-                <?php endforeach; ?>
-              </tbody>
-            </table>
-          </div>
-          <div>
-            <h2 class="section-title">کمدها</h2>
-            <table class="data-table">
-              <thead>
-                <tr><th>شماره</th><th>وضعیت</th><th>نهاد</th><th>تحویل</th></tr>
-              </thead>
-              <tbody>
-                <?php if ($data['lockers'] === []): ?>
-                  <tr class="empty-row"><td colspan="4">کمدی ثبت نشده است.</td></tr>
-                <?php else: ?>
-                  <?php foreach ($data['lockers'] as $row): ?>
-                    <tr>
-                      <td class="num"><?= e(ReportData::cell($row['locker_number'] ?? null)) ?></td>
-                      <td><?= e(ReportData::cell($row['status'] ?? null)) ?></td>
-                      <td><?= e(ReportData::cell($row['team_label'] ?? null)) ?></td>
-                      <td><?= e(ReportData::cell($row['delivered_at'] ?? null)) ?></td>
-                    </tr>
-                  <?php endforeach; ?>
-                <?php endif; ?>
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <h2 class="section-title">میزها (۲۴ میز)</h2>
+        <table class="data-table">
+          <thead>
+            <tr><th>شماره</th><th>نهاد</th><th>نوع</th><th>توضیحات</th></tr>
+          </thead>
+          <tbody>
+            <?php foreach ($data['desks'] as $row): ?>
+              <tr>
+                <td class="num"><?= ReportData::money($row['number'] ?? 0) ?></td>
+                <td><?= e(ReportData::cell($row['team_name'] ?? 'آزاد')) ?></td>
+                <td><?= e(ReportData::usageLabel($row['usage_type'] ?? null)) ?></td>
+                <td><?= e(ReportData::cell($row['notes'] ?? null)) ?></td>
+              </tr>
+            <?php endforeach; ?>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="report-section report-section--break">
+        <h2 class="section-title">تاریخچه تخصیص میز</h2>
+        <p class="section-note">تعداد: <?= ReportData::money(count($data['desk_assignments'])) ?> ردیف</p>
+        <table class="data-table">
+          <thead>
+            <tr><th>میز</th><th>نهاد</th><th>نوع</th><th>شروع</th><th>پایان</th><th>توضیحات</th></tr>
+          </thead>
+          <tbody>
+            <?php if (($data['desk_assignments'] ?? []) === []): ?>
+              <tr class="empty-row"><td colspan="6">تخصیصی ثبت نشده است.</td></tr>
+            <?php else: ?>
+              <?php foreach ($data['desk_assignments'] as $row): ?>
+                <tr>
+                  <td class="num"><?= ReportData::money($row['desk_number'] ?? 0) ?></td>
+                  <td><?= e(ReportData::cell($row['team_name'] ?? null)) ?></td>
+                  <td><?= e(ReportData::usageLabel($row['usage_type'] ?? null)) ?></td>
+                  <td><?= e(ReportData::cell($row['assigned_from'] ?? null)) ?></td>
+                  <td><?= e(ReportData::cell($row['assigned_until'] ?? 'فعال')) ?></td>
+                  <td><?= e(ReportData::cell($row['notes'] ?? null)) ?></td>
+                </tr>
+              <?php endforeach; ?>
+            <?php endif; ?>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="report-section report-section--break">
+        <h2 class="section-title">کمدها</h2>
+        <table class="data-table">
+          <thead>
+            <tr><th>شماره</th><th>وضعیت</th><th>نهاد</th><th>تحویل</th></tr>
+          </thead>
+          <tbody>
+            <?php if ($data['lockers'] === []): ?>
+              <tr class="empty-row"><td colspan="4">کمدی ثبت نشده است.</td></tr>
+            <?php else: ?>
+              <?php foreach ($data['lockers'] as $row): ?>
+                <tr>
+                  <td class="num"><?= e(ReportData::cell($row['locker_number'] ?? null)) ?></td>
+                  <td><?= e(ReportData::cell($row['status'] ?? null)) ?></td>
+                  <td><?= e(ReportData::cell($row['team_label'] ?? null)) ?></td>
+                  <td><?= e(ReportData::cell($row['delivered_at'] ?? null)) ?></td>
+                </tr>
+              <?php endforeach; ?>
+            <?php endif; ?>
+          </tbody>
+        </table>
       </section>
 
       <section class="report-section report-section--break">

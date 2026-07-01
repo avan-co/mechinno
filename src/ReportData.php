@@ -43,6 +43,7 @@ final class ReportData
             'rate_settings' => $repo->resource('rate_settings'),
             'charges' => $repo->resource('charges'),
             'debts' => $repo->chargeDebtRows(),
+            'desk_assignments' => $repo->resource('desk-assignments'),
             'transactions' => array_values(array_filter(
                 $repo->resource('transactions'),
                 static fn (array $row): bool => (int) ($row['confirmed'] ?? 0) === 1
@@ -80,6 +81,18 @@ final class ReportData
         }
 
         return preg_replace('/[^\d]/', '', (string) $value) ?: (string) $value;
+    }
+
+    public static function wantsAccessLabel(mixed $value): string
+    {
+        if ($value === null || $value === '') {
+            return '—';
+        }
+        if ((int) $value === 1 || $value === '1' || $value === true) {
+            return 'بله';
+        }
+
+        return 'خیر';
     }
 
     public static function cell(mixed $value): string

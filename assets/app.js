@@ -543,6 +543,30 @@ const loadDashboard = async () => {
   if (welcome) welcome.hidden = Number(data.cards?.teams || 0) > 0;
 };
 
+const renderRecentApprovals = (items) => {
+  const container = document.getElementById("recentApprovals");
+  if (!container) return;
+  if (!items?.length) {
+    container.innerHTML = `<div class="empty">هنوز تأیید یا ردی از مرکز ثبت نشده است.</div>`;
+    return;
+  }
+  container.innerHTML = items.map((item) => {
+    const statusClass = item.status === "approved" ? "action-payment" : "action-debt";
+    const badge = item.status === "approved" ? "badge-paid" : "badge-debt";
+    const statusLabel = item.status === "approved" ? "تأیید‌شده" : "رد‌شده";
+    return `<button type="button" class="action-item ${statusClass}"
+      data-nav-section="${escapeHtml(item.section || "overview")}">
+      <div class="action-item-head">
+        <strong>${escapeHtml(item.label || "—")}</strong>
+        <span class="badge ${badge}">${escapeHtml(statusLabel)}</span>
+      </div>
+      <span>${escapeHtml(item.detail || "")}</span>
+      ${item.reason ? `<small class="hint">${escapeHtml(item.reason)}</small>` : ""}
+      ${item.date ? `<small class="hint">${escapeHtml(item.date)}</small>` : ""}
+    </button>`;
+  }).join("");
+};
+
 const renderTeamDashboard = (data) => {
   const cards = document.getElementById("cards");
   const team = data.team || {};
@@ -550,6 +574,7 @@ const renderTeamDashboard = (data) => {
     renderCards({ ...data.cards, desk_numbers: data.cards?.desk_numbers || "—" }, teamCardConfig);
   }
   renderCurrentMonth(data.current_month || {});
+  renderRecentApprovals(data.recent_approvals || []);
   renderChargeChart((data.monthly_charges || []).map((row) => ({
     fiscal_year: row.fiscal_year,
     month_name: row.month_name,

@@ -186,6 +186,30 @@ $approvedPayment = $workflow->approvePayment((int) $payment['id']);
 $assert(($approvedPayment['payment_status'] ?? '') === 'approved', 'workflow: payment approved');
 $assert((int) ($approvedPayment['confirmed'] ?? 0) === 1, 'workflow: payment confirmed in income');
 
+$_SESSION = [
+    'mechinno_authenticated' => true,
+    'mechinno_role' => Access::ROLE_TEAM,
+    'mechinno_team_id' => $teamId,
+    'mechinno_user' => $row['portal_username'] ?? 'team',
+    'mechinno_user_id' => 1,
+];
+$lockerRequest = $crud->create('locker_requests', ['notes' => 'درخواست کمد تست']);
+$assert(($lockerRequest['status'] ?? '') === 'pending', 'workflow: locker request pending');
+$_SESSION['mechinno_role'] = Access::ROLE_ADMIN_EDITOR;
+$approvedLocker = $workflow->approveLockerRequest((int) $lockerRequest['id'], 11);
+$assert(($approvedLocker['status'] ?? '') === 'approved', 'workflow: locker request approved');
+$assert((int) ($approvedLocker['locker_number'] ?? 0) === 11, 'workflow: locker number assigned');
+
+$_SESSION['mechinno_role'] = Access::ROLE_TEAM;
+$summaryAfterApprove = $repo->summary();
+$assert(is_array($summaryAfterApprove['recent_approvals'] ?? null), 'api: team summary has recent approvals');
+$approvalTypes = array_column($summaryAfterApprove['recent_approvals'], 'type');
+$assert(in_array('member', $approvalTypes, true), 'api: recent approvals include member');
+$assert(in_array('payment', $approvalTypes, true), 'api: recent approvals include payment');
+$assert(in_array('locker', $approvalTypes, true), 'api: recent approvals include locker');
+$assert((int) ($member['wants_access'] ?? 0) === 1, 'workflow: member wants_access stored');
+
+$_SESSION['mechinno_role'] = Access::ROLE_ADMIN_EDITOR;
 $devPlan = $crud->create('development_plans', [
     'title' => 'ایده تست',
     'category' => 'idea',

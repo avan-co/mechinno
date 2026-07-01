@@ -606,8 +606,101 @@ final class Repository
                 ['team_id' => $teamId]
             ),
             'action_items' => [],
+            'recent_approvals' => $this->recentApprovalsForTeam($teamId),
             'payment_settings' => (new CenterSettings($this->pdo))->get(),
         ];
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function recentApprovalsForTeam(int $teamId): array
+    {
+        $items = [];
+
+        foreach ($this->preparedRows(
+            "SELECT id, full_name, approval_status, reviewed_at, rejection_reason, access_code
+             FROM members
+             WHERE team_id = :team_id AND reviewed_at IS NOT NULL AND reviewed_at != ''
+             ORDER BY reviewed_at DESC
+             LIMIT 8",
+            ['team_id' => $teamId]
+        ) as $row) {
+            $status = (string) ($row['approval_status'] ?? '');
+            $detail = (string) ($row['full_name'] ?? '');
+            if ($status === 'approved' && ($row['access_code'] ?? '') !== '') {
+                $detail .= ' — کد تردد: ' . $row['access_code'];
+            }
+            $items[] = [
+                'type' => 'member',
+                'status' => $status,
+                'label' => $status === 'approved' ? 'تأیید عضو' : 'رد عضو',
+                'detail' => $detail,
+                'reason' => $row['rejection_reason'] ?? null,
+                'date' => (string) ($row['reviewed_at'] ?? ''),
+                'section' => 'members',
+            ];
+        }
+
+        foreach ($this->preparedRows(
+            "SELECT id, tx_date, amount, payment_status, reviewed_at, fiscal_year, month_index, notes
+             FROM transactions
+             WHERE team_id = :team_id AND category = 'واریز تیم'
+               AND payment_status IN ('approved', 'rejected')
+               AND reviewed_at IS NOT NULL AND reviewed_at != ''
+             ORDER BY reviewed_at DESC
+             LIMIT 8",
+            ['team_id' => $teamId]
+        ) as $row) {
+            $status = (string) ($row['payment_status'] ?? '');
+            $monthName = $this->monthName((int) ($row['month_index'] ?? 0));
+            $items[] = [
+                'type' => 'payment',
+                'status' => $status,
+                'label' => $status === 'approved' ? 'تأیید واریز' : 'رد واریز',
+                'detail' => trim(sprintf(
+                    '%s %s — %s ریال',
+                    $row['fiscal_year'] ?? '',
+                    $monthName,
+                    number_format((int) ($row['amount'] ?? 0))
+                )),
+                'reason' => $status === 'rejected' ? ($row['notes'] ?? null) : null,
+                'date' => (string) ($row['reviewed_at'] ?? ''),
+                'section' => 'payments',
+            ];
+        }
+
+        foreach ($this->preparedRows(
+            "SELECT lr.id, lr.status, lr.reviewed_at, lr.rejection_reason, l.locker_number
+             FROM locker_requests lr
+             LEFT JOIN lockers l ON l.id = lr.locker_id
+             WHERE lr.team_id = :team_id
+               AND lr.status IN ('approved', 'rejected')
+               AND lr.reviewed_at IS NOT NULL AND lr.reviewed_at != ''
+             ORDER BY lr.reviewed_at DESC
+             LIMIT 8",
+            ['team_id' => $teamId]
+        ) as $row) {
+            $status = (string) ($row['status'] ?? '');
+            $detail = $status === 'approved' && ($row['locker_number'] ?? '') !== ''
+                ? 'کمد شماره ' . $row['locker_number']
+                : 'درخواست کمد';
+            $items[] = [
+                'type' => 'locker',
+                'status' => $status,
+                'label' => $status === 'approved' ? 'تأیید کمد' : 'رد درخواست کمد',
+                'detail' => $detail,
+                'reason' => $row['rejection_reason'] ?? null,
+                'date' => (string) ($row['reviewed_at'] ?? ''),
+                'section' => 'lockers',
+            ];
+        }
+
+        usort($items, static function (array $a, array $b): int {
+            return strcmp((string) ($b['date'] ?? ''), (string) ($a['date'] ?? ''));
+        });
+
+        return array_slice($items, 0, 12);
     }
 
     /**

@@ -547,6 +547,7 @@ code { color: var(--primary); font-size: 0.9em; }
 .debt-value { color: var(--danger) !important; }
 
 .action-list { display: grid; gap: 8px; }
+.action-item-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .action-item {
   display: grid;
   gap: 2px;

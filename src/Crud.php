@@ -86,6 +86,8 @@ final class Crud
                         'required' => true,
                     ],
                     'notes' => ['label' => 'توضیحات', 'type' => 'textarea'],
+                    'assignment_from' => ['label' => 'تاریخ شروع تخصیص', 'type' => 'date', 'placeholder' => '1404/01/01'],
+                    'assignment_until' => ['label' => 'تاریخ پایان تخصیص', 'type' => 'date', 'placeholder' => '1404/12/29'],
                 ],
             ],
             'lockers' => [
@@ -320,6 +322,9 @@ final class Crud
                 'notes' => $fields['notes'],
             ];
         }
+        if (Access::isTeam() && $resource === 'desks') {
+            unset($fields['assignment_from'], $fields['assignment_until']);
+        }
 
         return $fields;
     }
@@ -335,7 +340,9 @@ final class Crud
         }
         $definition = $this->definition($resource);
         $fields = $this->fieldsForContext($resource, $definition['fields']);
+        $deskAssignmentDates = $this->extractDeskAssignmentDates($resource, $payload);
         $data = $this->sanitizePayload(['fields' => $fields], $payload, true);
+        $this->stripDeskAssignmentColumns($resource, $data);
         $this->applyResourceRules($resource, $data, true);
 
         $columns = array_keys($data);
@@ -351,7 +358,10 @@ final class Crud
             $this->syncTeamDepositIncome($id);
         }
         if ($resource === 'desks') {
-            (new DeskAssignments($this->pdo))->syncDeskAssignment($id, $this->find($resource, $id));
+            (new DeskAssignments($this->pdo))->syncDeskAssignment(
+                $id,
+                array_merge($this->find($resource, $id), $deskAssignmentDates)
+            );
         }
         if ($resource === 'teams') {
             $record = $this->find($resource, $id);
@@ -378,30 +388,37 @@ final class Crud
         $definition = $this->definition($resource);
         $this->assertExists($definition, $id);
         $fields = $this->fieldsForContext($resource, $definition['fields']);
+        $deskAssignmentDates = $this->extractDeskAssignmentDates($resource, $payload);
         $data = $this->sanitizePayload(['fields' => $fields], $payload, false);
+        $this->stripDeskAssignmentColumns($resource, $data);
         $this->applyResourceRules($resource, $data, false, $id);
 
-        if ($data === []) {
+        if ($data === [] && $deskAssignmentDates === [] && $resource !== 'desks') {
             return $this->find($resource, $id);
         }
 
-        $assignments = array_map(
-            static fn (string $column): string => Sql::quoteIdentifier($column) . " = :{$column}",
-            array_keys($data)
-        );
-        $data['id'] = $id;
-        $statement = $this->pdo->prepare(sprintf(
-            'UPDATE %s SET %s WHERE id = :id',
-            $definition['table'],
-            implode(', ', $assignments)
-        ));
-        $statement->execute($data);
+        if ($data !== []) {
+            $assignments = array_map(
+                static fn (string $column): string => Sql::quoteIdentifier($column) . " = :{$column}",
+                array_keys($data)
+            );
+            $data['id'] = $id;
+            $statement = $this->pdo->prepare(sprintf(
+                'UPDATE %s SET %s WHERE id = :id',
+                $definition['table'],
+                implode(', ', $assignments)
+            ));
+            $statement->execute($data);
+        }
 
         if ($resource === 'transactions') {
             $this->syncTeamDepositIncome($id);
         }
         if ($resource === 'desks') {
-            (new DeskAssignments($this->pdo))->syncDeskAssignment($id, $this->find($resource, $id));
+            (new DeskAssignments($this->pdo))->syncDeskAssignment(
+                $id,
+                array_merge($this->find($resource, $id), $deskAssignmentDates)
+            );
         }
         if ($resource === 'teams' && isset($data['leader'])) {
             EntityAccounts::syncLeaderName($this->pdo, $id, (string) $data['leader']);
@@ -447,7 +464,67 @@ final class Crud
             throw new InvalidArgumentException('رکورد پیدا نشد.');
         }
 
-        return $this->stripSensitiveFields($resource, Repository::stripLegacyColumns($row));
+        $row = $this->stripSensitiveFields($resource, Repository::stripLegacyColumns($row));
+        if ($resource === 'desks') {
+            $row = $this->enrichDeskAssignment($row);
+        }
+
+        return $row;
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @return array<string, mixed>
+     */
+    private function extractDeskAssignmentDates(string $resource, array $payload): array
+    {
+        if ($resource !== 'desks') {
+            return [];
+        }
+        $dates = [];
+        foreach (['assignment_from', 'assignment_until'] as $field) {
+            if (array_key_exists($field, $payload)) {
+                $dates[$field] = $payload[$field];
+            }
+        }
+
+        return $dates;
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    private function stripDeskAssignmentColumns(string $resource, array &$data): void
+    {
+        if ($resource !== 'desks') {
+            return;
+        }
+        unset($data['assignment_from'], $data['assignment_until']);
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     * @return array<string, mixed>
+     */
+    private function enrichDeskAssignment(array $row): array
+    {
+        $statement = $this->pdo->prepare(
+            'SELECT assigned_from, assigned_until FROM desk_assignments
+             WHERE desk_id = :desk_id
+             ORDER BY CASE WHEN assigned_until IS NULL THEN 0 ELSE 1 END, id DESC
+             LIMIT 1'
+        );
+        $statement->execute(['desk_id' => (int) ($row['id'] ?? 0)]);
+        $assignment = $statement->fetch();
+        if ($assignment !== false) {
+            $row['assignment_from'] = $assignment['assigned_from'] ?? '';
+            $row['assignment_until'] = $assignment['assigned_until'] ?? '';
+        } else {
+            $row['assignment_from'] = '';
+            $row['assignment_until'] = '';
+        }
+
+        return $row;
     }
 
     private function stripSensitiveFields(string $resource, array $row): array

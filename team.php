@@ -171,6 +171,10 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
                 <div class="panel-head"><h2>شارژ ماهانه نهاد</h2></div>
                 <div id="chargeChart" class="bar-chart"></div>
               </article>
+              <article class="panel">
+                <div class="panel-head"><h2>تأییدهای اخیر</h2><span class="hint">اعلام‌های بررسی‌شده توسط مرکز</span></div>
+                <div id="recentApprovals" class="action-list"></div>
+              </article>
             </section>
 
             <section id="profile" class="section">

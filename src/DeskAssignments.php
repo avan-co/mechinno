@@ -32,12 +32,27 @@ final class DeskAssignments
             return;
         }
 
+        $assignedFrom = JalaliDate::tryNormalize($desk['assignment_from'] ?? '');
+        $assignedUntil = JalaliDate::tryNormalize($desk['assignment_until'] ?? '');
+        $teamStatement = $this->pdo->prepare('SELECT contract_end FROM teams WHERE id = :id');
+        $teamStatement->execute(['id' => $teamId]);
+        $contractEnd = JalaliDate::tryNormalize((string) ($teamStatement->fetchColumn() ?: ''));
+        if ($assignedFrom === '') {
+            $assignedFrom = $today;
+        }
+        if ($assignedUntil === '' && $contractEnd !== '') {
+            $assignedUntil = $contractEnd;
+        }
+
         if ($current !== false && (int) ($current['team_id'] ?? 0) === $teamId) {
             $this->pdo->prepare(
-                'UPDATE desk_assignments SET usage_type = :usage_type, notes = :notes WHERE id = :id'
+                'UPDATE desk_assignments SET usage_type = :usage_type, notes = :notes,
+                 assigned_from = :assigned_from, assigned_until = :assigned_until WHERE id = :id'
             )->execute([
                 'usage_type' => (string) ($desk['usage_type'] ?? 'formal'),
                 'notes' => $desk['notes'] ?? null,
+                'assigned_from' => $assignedFrom,
+                'assigned_until' => $assignedUntil !== '' ? $assignedUntil : null,
                 'id' => (int) $current['id'],
             ]);
 
@@ -45,15 +60,11 @@ final class DeskAssignments
         }
 
         if ($current !== false && $current !== null) {
+            $closeUntil = $assignedFrom !== '' ? $assignedFrom : $today;
             $this->pdo->prepare(
                 'UPDATE desk_assignments SET assigned_until = :until WHERE id = :id'
-            )->execute(['until' => $today, 'id' => (int) $current['id']]);
+            )->execute(['until' => $closeUntil, 'id' => (int) $current['id']]);
         }
-
-        $contractEnd = null;
-        $teamStatement = $this->pdo->prepare('SELECT contract_end FROM teams WHERE id = :id');
-        $teamStatement->execute(['id' => $teamId]);
-        $contractEnd = JalaliDate::tryNormalize((string) ($teamStatement->fetchColumn() ?: ''));
 
         $this->pdo->prepare(
             'INSERT INTO desk_assignments (desk_id, desk_number, team_id, usage_type, assigned_from, assigned_until, notes)
@@ -63,8 +74,8 @@ final class DeskAssignments
             'desk_number' => (int) ($desk['number'] ?? 0),
             'team_id' => $teamId,
             'usage_type' => (string) ($desk['usage_type'] ?? 'formal'),
-            'assigned_from' => $today,
-            'assigned_until' => $contractEnd !== '' ? $contractEnd : null,
+            'assigned_from' => $assignedFrom,
+            'assigned_until' => $assignedUntil !== '' ? $assignedUntil : null,
             'notes' => $desk['notes'] ?? null,
         ]);
     }

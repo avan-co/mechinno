@@ -21,38 +21,48 @@ final class ExcelExporter
                     CASE t.entity_type WHEN 'team' THEN 'تیم' WHEN 'company' THEN 'شرکت' WHEN 'student' THEN 'دانشجو' ELSE t.entity_type END,
                     t.name, t.leader, t.phone,
                     (SELECT COUNT(*) FROM desks d WHERE d.team_id = t.id),
-                    (SELECT COALESCE(SUM(d.informal_seats), 0) FROM desks d WHERE d.team_id = t.id),
+                    t.contract_start, t.contract_end,
                     t.joined_at, t.warning, t.notes,
                     u.username, u.password_plain
                     FROM teams t
                     LEFT JOIN panel_users u ON u.team_id = t.id AND u.role = 'team'
                     ORDER BY t.entity_type, t.name",
-                'headers' => ['کد', 'نوع', 'نام', 'مسئول', 'تماس', 'تعداد میز', 'صندلی غیررسمی', 'عضویت', 'اخطار', 'توضیحات', 'نام کاربری نهاد', 'رمز ورود نهاد'],
+                'headers' => ['کد', 'نوع', 'نام', 'مسئول', 'تماس', 'تعداد میز', 'شروع قرارداد', 'پایان قرارداد', 'عضویت', 'اخطار', 'توضیحات', 'نام کاربری نهاد', 'رمز ورود نهاد'],
             ],
             'members' => [
                 'title' => 'اعضا',
                 'query' => "SELECT m.member_code, m.full_name, t.name AS team_label,
                     CASE t.entity_type WHEN 'team' THEN 'تیم' WHEN 'company' THEN 'شرکت' WHEN 'student' THEN 'دانشجو' ELSE t.entity_type END,
                     (SELECT GROUP_CONCAT(d.number ORDER BY d.number) FROM desks d WHERE d.team_id = m.team_id),
+                    CASE m.wants_access WHEN 1 THEN 'بله' ELSE 'خیر' END,
                     m.access_code, m.phone, m.national_id, m.notes
                     FROM members m
                     LEFT JOIN teams t ON t.id = m.team_id
                     WHERE m.approval_status = 'approved' OR m.approval_status IS NULL
                     ORDER BY t.name, m.full_name",
-                'headers' => ['کد عضو', 'نام', 'نهاد', 'نوع نهاد', 'میزهای نهاد', 'کد تردد', 'تماس', 'کدملی', 'توضیحات'],
+                'headers' => ['کد عضو', 'نام', 'نهاد', 'نوع نهاد', 'میزهای نهاد', 'درخواست تردد', 'کد تردد', 'تماس', 'کدملی', 'توضیحات'],
             ],
             'desks' => [
                 'title' => 'میزها',
                 'query' => "SELECT d.number,
                     CASE d.usage_type WHEN 'formal' THEN 'رسمی' WHEN 'informal' THEN 'غیررسمی' WHEN 'mixed' THEN 'ترکیبی' ELSE d.usage_type END,
-                    d.formal_seats, d.informal_seats,
                     COALESCE(t.name, 'آزاد'),
                     CASE t.entity_type WHEN 'team' THEN 'تیم' WHEN 'company' THEN 'شرکت' WHEN 'student' THEN 'دانشجو' ELSE COALESCE(t.entity_type, '') END,
-                    d.row_index, d.col_index
+                    d.notes, d.row_index, d.col_index
                     FROM desks d
                     LEFT JOIN teams t ON t.id = d.team_id
                     ORDER BY d.number",
-                'headers' => ['شماره میز', 'نوع استفاده', 'صندلی رسمی', 'صندلی غیررسمی', 'نهاد', 'نوع نهاد', 'ردیف', 'ستون'],
+                'headers' => ['شماره میز', 'نوع استفاده', 'نهاد', 'نوع نهاد', 'توضیحات', 'ردیف', 'ستون'],
+            ],
+            'desk_assignments' => [
+                'title' => 'تخصیص میز',
+                'query' => "SELECT da.desk_number, t.name AS team_name,
+                    CASE da.usage_type WHEN 'formal' THEN 'رسمی' WHEN 'informal' THEN 'غیررسمی' ELSE da.usage_type END,
+                    da.assigned_from, da.assigned_until, da.notes
+                    FROM desk_assignments da
+                    LEFT JOIN teams t ON t.id = da.team_id
+                    ORDER BY da.desk_number, da.assigned_from",
+                'headers' => ['شماره میز', 'نهاد', 'نوع استفاده', 'شروع تخصیص', 'پایان تخصیص', 'توضیحات'],
             ],
             'lockers' => [
                 'title' => 'کمدها',
@@ -120,7 +130,7 @@ final class ExcelExporter
 
     /** @var list<string> */
     private const EXPORT_ORDER = [
-        'summary', 'teams', 'members', 'desks', 'lockers', 'rate_settings', 'charges', 'debts', 'transactions',
+        'summary', 'teams', 'members', 'desks', 'desk_assignments', 'lockers', 'rate_settings', 'charges', 'debts', 'transactions',
     ];
 
     public function __construct(private readonly PDO $pdo)
