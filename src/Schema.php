@@ -334,6 +334,7 @@ final class Schema
 
         self::seedCenterSettings($pdo);
         self::backfillTeamContracts($pdo);
+        CenterLedger::purgeAccrualMirrorEntries($pdo);
     }
 
     private static function backfillTeamContracts(PDO $pdo): void
