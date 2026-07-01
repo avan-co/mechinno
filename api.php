@@ -42,6 +42,10 @@ try {
         json_response($repository->summary());
     }
 
+    if ($resource === 'ledger') {
+        json_response((new CenterLedger($pdo))->snapshot());
+    }
+
     if ($resource === 'charges-matrix') {
         $year = JalaliDate::normalizeDigits((string) ($_GET['fiscal_year'] ?? '1404'));
         json_response($repository->chargesMatrix($year));

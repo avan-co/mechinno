@@ -255,7 +255,21 @@ $assetVer = (string) max(
             </section>
 
             <section id="transactions" class="section">
-              <p class="hint">شارژ و اجاره از بخش شارژ محاسبه می‌شود. نهادها واریز را اعلام می‌کنند و پس از تأیید شما در درآمد مرکز ثبت می‌شود.</p>
+              <p class="hint">دفتر معین مرکز از صفر شروع می‌شود: شارژ و اجاره خودکار، درآمد و هزینه دستی — جمع و تفریق برای نمایش موجودی.</p>
+              <article class="panel" id="ledgerPanel">
+                <div class="panel-head">
+                  <h2>موجودی حساب مرکز</h2>
+                  <span class="hint">بدون موجودی اولیه — محاسبه از دفتر معین</span>
+                </div>
+                <div id="ledgerSummary" class="ledger-summary">
+                  <div class="ledger-balance-card">
+                    <span class="ledger-label">موجودی فعلی</span>
+                    <strong id="ledgerBalanceValue" class="ledger-balance-value">—</strong>
+                  </div>
+                  <div id="ledgerTotals" class="ledger-totals-grid"></div>
+                </div>
+                <div id="ledgerTable" class="ledger-table-wrap"></div>
+              </article>
               <?php if (Access::canWrite()): ?>
               <article class="panel" id="paymentSettingsPanel">
                 <div class="panel-head">

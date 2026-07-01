@@ -44,6 +44,7 @@ final class Repository
                     "SELECT COALESCE(SUM(amount), 0) FROM transactions
                      WHERE category = 'واریز تیم' AND payment_status = 'approved' AND confirmed = 1"
                 ),
+                'ledger_balance' => (new CenterLedger($this->pdo))->balance(),
                 'pending_members' => $this->scalar("SELECT COUNT(*) FROM members WHERE approval_status = 'pending'"),
                 'pending_payments' => $this->scalar("SELECT COUNT(*) FROM transactions WHERE category = 'واریز تیم' AND payment_status = 'pending'"),
                 'pending_locker_requests' => $this->scalar("SELECT COUNT(*) FROM locker_requests WHERE status = 'pending'"),
@@ -863,6 +864,32 @@ final class Repository
                 'amount_due' => $due,
                 'amount_paid' => $paid,
                 'status' => $due <= 0 ? '—' : ($paid >= $due ? 'پرداخت‌شده' : ($paid > 0 ? 'ناقص' : 'بدهکار به مرکز')),
+            ];
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    public function teamChargeSummaryForReport(?string $fiscalYear = null): array
+    {
+        $fiscalYear = JalaliDate::normalizeDigits($fiscalYear ?? $this->currentFiscalYear());
+        $rows = [];
+        foreach ($this->rows('SELECT id, name FROM teams ORDER BY name') as $team) {
+            $teamId = (int) ($team['id'] ?? 0);
+            $paidYear = $this->preparedScalar(
+                "SELECT COALESCE(SUM(amount), 0) FROM transactions
+                 WHERE team_id = :id AND category = 'واریز تیم'
+                   AND payment_status = 'approved' AND confirmed = 1
+                   AND fiscal_year = :year",
+                ['id' => $teamId, 'year' => $fiscalYear]
+            );
+            $rows[] = [
+                'team_name' => (string) ($team['name'] ?? ''),
+                'paid_year' => $paidYear,
+                'debt_total' => $this->contractDebtForTeam($teamId),
             ];
         }
 

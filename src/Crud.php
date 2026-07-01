@@ -338,6 +338,9 @@ final class Crud
         if (Access::isTeam() && !in_array($resource, ['members', 'transactions', 'locker_requests'], true)) {
             throw new InvalidArgumentException('نهاد فقط می‌تواند عضو، درخواست کمد یا اعلام واریز ثبت کند.');
         }
+        if ($resource === 'desks') {
+            throw new InvalidArgumentException('میز جدید قابل ثبت نیست. فقط تخصیص میزهای موجود مجاز است.');
+        }
         $definition = $this->definition($resource);
         $fields = $this->fieldsForContext($resource, $definition['fields']);
         $deskAssignmentDates = $this->extractDeskAssignmentDates($resource, $payload);
@@ -372,6 +375,9 @@ final class Crud
                 (string) ($record['leader'] ?? '')
             );
         }
+        if ($resource === 'charges') {
+            $this->syncLedgerFromCharges();
+        }
 
         return $this->find($resource, $id);
     }
@@ -384,6 +390,12 @@ final class Crud
     {
         if (Access::isTeam()) {
             throw new InvalidArgumentException('نهاد نمی‌تواند رکوردها را ویرایش کند.');
+        }
+        if ($resource === 'transactions') {
+            $existing = $this->find($resource, $id);
+            if (CenterLedger::isSystemSource($existing['source_file'] ?? null)) {
+                throw new InvalidArgumentException('ثبت‌های خودکار شارژ و اجاره فقط از بخش شارژ قابل تغییر هستند.');
+            }
         }
         $definition = $this->definition($resource);
         $this->assertExists($definition, $id);
@@ -423,6 +435,9 @@ final class Crud
         if ($resource === 'teams' && isset($data['leader'])) {
             EntityAccounts::syncLeaderName($this->pdo, $id, (string) $data['leader']);
         }
+        if ($resource === 'charges') {
+            $this->syncLedgerFromCharges();
+        }
 
         return $this->find($resource, $id);
     }
@@ -440,7 +455,19 @@ final class Crud
         if ($resource === 'teams') {
             EntityAccounts::deleteForTeam($this->pdo, $id);
         }
+        if ($resource === 'desks') {
+            throw new InvalidArgumentException('حذف میز مجاز نیست.');
+        }
+        if ($resource === 'transactions') {
+            $row = $this->find($resource, $id);
+            if (CenterLedger::isSystemSource($row['source_file'] ?? null)) {
+                throw new InvalidArgumentException('ثبت‌های خودکار شارژ و اجاره فقط از بخش شارژ قابل تغییر هستند.');
+            }
+        }
         $this->pdo->prepare(sprintf('DELETE FROM %s WHERE id = :id', $definition['table']))->execute(['id' => $id]);
+        if ($resource === 'charges') {
+            $this->syncLedgerFromCharges();
+        }
     }
 
     public function updateStatus(string $resource, int $id, string $status): array
@@ -829,6 +856,11 @@ final class Crud
                 $data['usage_type'] = 'formal';
             }
         }
+    }
+
+    private function syncLedgerFromCharges(): void
+    {
+        (new CenterLedger($this->pdo))->syncFromCharges();
     }
 
     private function syncTeamDepositIncome(int $transactionId): void

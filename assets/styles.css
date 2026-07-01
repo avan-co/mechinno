@@ -1207,6 +1207,67 @@ body.is-mobile .table-wrap { display: none; }
   .grid.two { grid-template-columns: 1fr; }
 }
 
+.ledger-summary {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.ledger-balance-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 18px 20px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.12), rgba(59, 130, 246, 0.08));
+  border: 1px solid rgba(34, 197, 94, 0.2);
+}
+
+.ledger-balance-value {
+  font-size: clamp(28px, 4vw, 36px);
+  font-weight: 800;
+  color: var(--success, #16a34a);
+}
+
+.ledger-balance-value.ledger-negative {
+  color: var(--danger, #dc2626);
+}
+
+.ledger-totals-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.ledger-totals-grid > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--surface-2, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+}
+
+.ledger-totals-grid span {
+  font-size: 12px;
+  color: var(--muted, #94a3b8);
+}
+
+.ledger-table-wrap {
+  overflow-x: auto;
+}
+
+.ledger-table .ledger-income {
+  color: var(--success, #16a34a);
+  font-weight: 700;
+}
+
+.ledger-table .ledger-expense {
+  color: var(--danger, #dc2626);
+  font-weight: 700;
+}
+
 @media (max-width: 768px) {
   .shell { display: block; }
   .sidebar {
