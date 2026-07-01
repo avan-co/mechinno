@@ -1268,6 +1268,24 @@ body.is-mobile .table-wrap { display: none; }
   font-weight: 700;
 }
 
+.ledger-table .ledger-balance-cell {
+  font-weight: 700;
+}
+
+.ledger-desc {
+  max-width: 360px;
+  white-space: normal;
+  line-height: 1.5;
+}
+
+.ledger-footnote {
+  margin: 10px 2px 0;
+}
+
+.ledger-table tbody tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.02);
+}
+
 .ledger-billing-note {
   padding: 10px 14px;
   border-radius: 12px;
