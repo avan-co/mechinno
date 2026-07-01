@@ -632,6 +632,11 @@ final class Crud
                 $data['wants_access'] = 0;
             }
         }
+        if ($resource === 'members' && !$creating) {
+            if (!empty($data['access_code'])) {
+                $data['wants_access'] = 1;
+            }
+        }
         if ($resource === 'locker_requests' && $creating) {
             $teamId = Access::scopedTeamId();
             if ($teamId === null) {

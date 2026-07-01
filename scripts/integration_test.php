@@ -210,6 +210,33 @@ $assert(in_array('locker', $approvalTypes, true), 'api: recent approvals include
 $assert((int) ($member['wants_access'] ?? 0) === 1, 'workflow: member wants_access stored');
 
 $_SESSION['mechinno_role'] = Access::ROLE_ADMIN_EDITOR;
+$memberWithCode = $crud->update('members', (int) $member['id'], ['access_code' => 'A-12345']);
+$assert(trim((string) ($memberWithCode['access_code'] ?? '')) === 'A-12345', 'members: admin can assign access code');
+$assert((int) ($memberWithCode['wants_access'] ?? 0) === 1, 'members: access code keeps wants_access');
+
+$_SESSION = [
+    'mechinno_authenticated' => true,
+    'mechinno_role' => Access::ROLE_TEAM,
+    'mechinno_team_id' => $teamId,
+    'mechinno_user' => $row['portal_username'] ?? 'team',
+    'mechinno_user_id' => 1,
+];
+$doublePayment = $crud->create('transactions', [
+    'tx_date' => '1405/03/15',
+    'description' => 'واریز دو ماه',
+    'amount' => '1200',
+    'fiscal_year' => '1405',
+    'month_index' => '3',
+    'payment_reference' => 'REF-002',
+]);
+$_SESSION['mechinno_role'] = Access::ROLE_ADMIN_EDITOR;
+$workflow->approvePayment((int) $doublePayment['id']);
+$_SESSION['mechinno_role'] = Access::ROLE_TEAM;
+$teamCards = $repo->summary()['cards'] ?? [];
+$assert((int) ($teamCards['paid_total'] ?? 0) >= 1200, 'payments: approved amount counts toward paid_total');
+$assert(isset($teamCards['charge_total']), 'dashboard: team cards include charge_total');
+
+$_SESSION['mechinno_role'] = Access::ROLE_ADMIN_EDITOR;
 $devPlan = $crud->create('development_plans', [
     'title' => 'ایده تست',
     'category' => 'idea',

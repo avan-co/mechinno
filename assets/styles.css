@@ -129,7 +129,7 @@ code { color: var(--primary); font-size: 0.9em; }
 .brand strong { display: block; font-size: 16px; }
 .brand small { color: var(--muted); font-size: 12px; }
 
-.nav { display: grid; gap: 4px; flex: 1; }
+.nav { display: grid; gap: 4px; flex: 1; min-height: 0; overflow-y: auto; padding-left: 2px; }
 
 .nav-item {
   display: flex;
@@ -566,6 +566,23 @@ code { color: var(--primary); font-size: 0.9em; }
 .action-rate, .action-start, .action-desk { border-right: 4px solid var(--amber); }
 
 .bar-chart { display: grid; gap: 10px; }
+.bar-chart--compact { gap: 6px; max-height: 220px; overflow-y: auto; }
+.bar-row--compact { font-size: 12px; }
+.bar-row--compact .bar-track { height: 8px; }
+.bar-row--compact strong { font-size: 12px; white-space: nowrap; }
+
+.payment-guide,
+.payment-guide-steps,
+.payment-guide-note { text-align: right; }
+.payment-account-grid { direction: rtl; }
+.payment-account-item { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+.payment-account-item .ltr-value {
+  direction: ltr;
+  unicode-bidi: isolate;
+  text-align: left;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: 0.03em;
+}
 .bar-row {
   display: grid;
   grid-template-columns: minmax(90px, 120px) 1fr auto;

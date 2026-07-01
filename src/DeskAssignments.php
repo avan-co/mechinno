@@ -17,7 +17,10 @@ final class DeskAssignments
         $today = JalaliDate::todayParts()['formatted'];
 
         $active = $this->pdo->prepare(
-            'SELECT id, team_id FROM desk_assignments WHERE desk_id = :desk_id AND assigned_until IS NULL ORDER BY id DESC LIMIT 1'
+            'SELECT id, team_id FROM desk_assignments
+             WHERE desk_id = :desk_id
+             ORDER BY CASE WHEN assigned_until IS NULL OR assigned_until = \'\' THEN 0 ELSE 1 END, id DESC
+             LIMIT 1'
         );
         $active->execute(['desk_id' => $deskId]);
         $current = $active->fetch() ?: null;
@@ -34,14 +37,8 @@ final class DeskAssignments
 
         $assignedFrom = JalaliDate::tryNormalize($desk['assignment_from'] ?? '');
         $assignedUntil = JalaliDate::tryNormalize($desk['assignment_until'] ?? '');
-        $teamStatement = $this->pdo->prepare('SELECT contract_end FROM teams WHERE id = :id');
-        $teamStatement->execute(['id' => $teamId]);
-        $contractEnd = JalaliDate::tryNormalize((string) ($teamStatement->fetchColumn() ?: ''));
         if ($assignedFrom === '') {
             $assignedFrom = $today;
-        }
-        if ($assignedUntil === '' && $contractEnd !== '') {
-            $assignedUntil = $contractEnd;
         }
 
         if ($current !== false && (int) ($current['team_id'] ?? 0) === $teamId) {

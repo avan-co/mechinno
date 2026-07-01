@@ -127,6 +127,7 @@ const adminCardConfig = [
 const teamCardConfig = [
   ["members", "اعضای فعال", "👤", "members"],
   ["desks", "میز", "▦", "desks"],
+  ["charge_total", "مبلغ کل قرارداد", "📋", "charges"],
   ["debt_total", "مانده بدهی قرارداد", "!", "debt"],
   ["paid_total", "پرداخت‌شده", "✓", "paid"],
   ["pending_payments", "واریزهای در انتظار تأیید", "⏳", "payments"],
@@ -505,9 +506,12 @@ const renderActionItems = (items) => {
 const renderChargeChart = (rows) => {
   const container = document.getElementById("chargeChart");
   if (!container) return;
-  const max = Math.max(...rows.map((r) => Number(r.amount || 0)), 1);
-  container.innerHTML = rows.slice(-10).map((row) => `
-    <div class="bar-row">
+  const compact = panelMode === "team";
+  const source = compact ? rows.slice(-6) : rows.slice(-10);
+  const max = Math.max(...source.map((r) => Number(r.amount || 0)), 1);
+  container.classList.toggle("bar-chart--compact", compact);
+  container.innerHTML = source.map((row) => `
+    <div class="bar-row ${compact ? "bar-row--compact" : ""}">
       <span>${escapeHtml(row.fiscal_year)} ${escapeHtml(row.month_name)}</span>
       <div class="bar-track"><div class="bar-fill" style="width:${(Number(row.amount || 0) / max) * 100}%"></div></div>
       <strong>${escapeHtml(formatMoney(row.amount))}</strong>
@@ -625,7 +629,7 @@ const loadTeamProfile = async () => {
     ${team.warning ? `<p class="hint warning-text">اخطار: ${escapeHtml(team.warning)}</p>` : ""}
     ${team.notes ? `<p class="hint">${escapeHtml(team.notes)}</p>` : ""}
     ${profileSection("میزها و تاریخ تخصیص", data.desk_assignments || [], ["desk_number", "usage_type", "assigned_from", "assigned_until", "notes"])}
-    ${profileSection("اعضا", data.members || [], ["full_name", "phone", "national_id", "approval_status"])}
+    ${profileSection("اعضا", data.members || [], ["full_name", "wants_access", "phone", "national_id", "approval_status"])}
     ${profileSection("کمدهای تخصیص‌یافته", data.lockers || [], ["locker_number", "status", "delivered_at"])}
     ${profileSection("درخواست‌های کمد", data.locker_requests || [], ["submitted_at", "status", "locker_number", "notes"])}`;
 };
@@ -720,12 +724,12 @@ const loadPaymentGuide = async () => {
     ? `<div class="payment-account-grid">${rows.map(([label, value]) => `
         <div class="payment-account-item">
           <span>${escapeHtml(label)}</span>
-          <strong dir="ltr">${escapeHtml(value)}</strong>
+          <strong class="ltr-value" dir="ltr">${escapeHtml(formatBankValue(label, value))}</strong>
         </div>`).join("")}</div>`
     : `<div class="notice warn">اطلاعات حساب هنوز توسط مرکز ثبت نشده است.</div>`;
   host.innerHTML = `
     ${accounts}
-    <div class="payment-guide-steps">
+    <div class="payment-guide-steps" dir="rtl">
       <h3>مراحل پرداخت شارژ</h3>
       <ol>
         <li>مبلغ شارژ ماه را از بخش «شارژ و پرداخت» ببینید.</li>
@@ -733,7 +737,7 @@ const loadPaymentGuide = async () => {
         <li>در جدول «اعلام‌های در انتظار تأیید»، واریز را با مبلغ، تاریخ، سال و ماه ثبت کنید.</li>
         <li>پس از تأیید مرکز، در سوابق پرداخت تأییدشده نمایش داده می‌شود.</li>
       </ol>
-      ${data.payment_guide ? `<p class="payment-guide-note">${escapeHtml(data.payment_guide)}</p>` : ""}
+      ${data.payment_guide ? `<p class="payment-guide-note" dir="rtl">${escapeHtml(data.payment_guide)}</p>` : ""}
     </div>`;
 };
 
@@ -759,6 +763,23 @@ const loadDevProgramSummary = async () => {
 
 const wantsAccessLabel = (value) =>
   value === 1 || value === "1" || value === true || value === "true" ? "بله — نیاز به تردد" : "خیر";
+
+const accessStatusLabel = (row = {}) => {
+  const code = String(row.access_code ?? "").trim();
+  if (code) return "دارد";
+  if (wantsAccessLabel(row.wants_access) === "بله — نیاز به تردد") return "در انتظار ثبت کد";
+  return "ندارد";
+};
+
+const formatBankValue = (label, value) => {
+  if (!value) return "";
+  if (label === "شماره کارت") {
+    const digits = String(value).replace(/\D/g, "");
+    const grouped = digits.replace(/(.{4})/g, "$1 ").trim();
+    return grouped || String(value);
+  }
+  return String(value);
+};
 
 const loadDeskGrid = async () => {
   const isTeamMap = panelMode === "team";
@@ -936,6 +957,8 @@ const profileSection = (title, rows, cols, cellRenderer = null) => `
           const value = row[c];
           if (["amount", "charge_amount", "rent_amount"].includes(c)) return `<td>${escapeHtml(formatMoney(value))}</td>`;
           if (c === "usage_type") return `<td>${usageLabels[value] || value || "—"}</td>`;
+          if (c === "wants_access") return `<td>${accessStatusLabel(row)}</td>`;
+          if (c === "approval_status") return `<td>${approvalStatusBadge(value)}</td>`;
           if (c === "number") return `<td>${deskLink(value)}</td>`;
           if (plainColumns.has(c)) return `<td>${escapeHtml(formatPlain(value))}</td>`;
           return `<td>${escapeHtml(formatNumber(value ?? "—"))}</td>`;
@@ -1153,12 +1176,7 @@ const relatedSectionLabels = {
 
 const workflowApprove = async (resource, id, row = {}, workflowType = "") => {
   if (resource === "pending-members" || workflowType === "member-approve") {
-    const wantsAccess = wantsAccessLabel(row.wants_access) === "بله — نیاز به تردد";
-    const accessCode = wantsAccess
-      ? window.prompt("در صورت نیاز کد دستگاه تردد را وارد کنید (اختیاری):", "") ?? ""
-      : "";
-    if (wantsAccess && accessCode === null) return;
-    await postJson(`api.php?resource=${encodeURIComponent(resource)}&action=approve`, { id, access_code: accessCode });
+    await postJson(`api.php?resource=${encodeURIComponent(resource)}&action=approve`, { id });
     return;
   }
 
@@ -1231,7 +1249,12 @@ const formatCell = (column, value, row, resource) => {
     return escapeHtml(value || "—");
   }
   if (column === "confirmed") return Number(value) === 1 ? "بله" : "خیر";
-  if (column === "wants_access") return wantsAccessLabel(value);
+  if (column === "wants_access") return accessStatusLabel(row);
+  if (column === "access_code") {
+    const code = String(value ?? "").trim();
+    if (!code) return "—";
+    return panelMode === "team" ? "—" : escapeHtml(code);
+  }
   if (column === "approval_status") return approvalStatusBadge(value);
   if (column === "payment_status") return paymentStatusBadge(value);
   if (column === "status" && resource === "development_plans") {
@@ -1406,7 +1429,8 @@ class DataTable extends HTMLElement {
       const canAdd = !this.noAdd
         && (canWrite || (canTeamSubmit && ["members", "transactions", "locker-requests"].includes(this.resource)))
         && this.definition
-        && editableResources.has(this.resource);
+        && editableResources.has(this.resource)
+        && !(panelMode === "team" && ["lockers", "payment-history"].includes(this.resource));
       this.querySelector(".add-button").hidden = !canAdd;
       const result = await fetchResource(this.endpoint, {
         page: this.page,

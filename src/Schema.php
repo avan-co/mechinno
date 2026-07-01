@@ -329,6 +329,7 @@ final class Schema
         if (self::columnExists($pdo, 'transactions', 'payment_status')) {
             $pdo->exec("UPDATE transactions SET payment_status = 'approved' WHERE payment_status IS NULL OR payment_status = ''");
             $pdo->exec("UPDATE transactions SET payment_status = 'pending', confirmed = 0 WHERE category = 'واریز تیم' AND confirmed = 0");
+            $pdo->exec("UPDATE transactions SET payment_status = 'approved' WHERE category = 'واریز تیم' AND confirmed = 1 AND payment_status = 'pending'");
         }
 
         self::seedCenterSettings($pdo);
@@ -441,7 +442,6 @@ final class Schema
             if ($exists->fetchColumn() !== false) {
                 continue;
             }
-            $contractEnd = JalaliDate::tryNormalize((string) ($desk['contract_end'] ?? ''));
             $pdo->prepare(
                 'INSERT INTO desk_assignments (desk_id, desk_number, team_id, usage_type, assigned_from, assigned_until, notes)
                  VALUES (:desk_id, :desk_number, :team_id, :usage_type, :assigned_from, :assigned_until, :notes)'
@@ -451,8 +451,39 @@ final class Schema
                 'team_id' => (int) $desk['team_id'],
                 'usage_type' => (string) ($desk['usage_type'] ?? 'formal'),
                 'assigned_from' => $fallbackFrom,
-                'assigned_until' => $contractEnd !== '' ? $contractEnd : null,
+                'assigned_until' => null,
                 'notes' => $desk['notes'] ?? null,
+            ]);
+        }
+        self::normalizeDeskAssignments($pdo);
+    }
+
+    private static function normalizeDeskAssignments(PDO $pdo): void
+    {
+        if (!self::tableExists($pdo, 'desk_assignments')) {
+            return;
+        }
+        $pdo->exec(
+            'UPDATE desk_assignments SET assigned_until = NULL
+             WHERE id IN (
+                SELECT da.id FROM desk_assignments da
+                INNER JOIN desks d ON d.id = da.desk_id AND d.team_id = da.team_id
+                WHERE da.assigned_until IS NOT NULL
+             )'
+        );
+        $duplicates = $pdo->query(
+            'SELECT desk_id, MAX(id) AS keep_id
+             FROM desk_assignments
+             GROUP BY desk_id
+             HAVING COUNT(*) > 1'
+        )->fetchAll();
+        foreach ($duplicates as $row) {
+            $statement = $pdo->prepare(
+                'DELETE FROM desk_assignments WHERE desk_id = :desk_id AND id <> :keep_id'
+            );
+            $statement->execute([
+                'desk_id' => (int) $row['desk_id'],
+                'keep_id' => (int) $row['keep_id'],
             ]);
         }
     }

@@ -327,7 +327,10 @@ final class Repository
                     ['id' => $teamId]
                 ),
                 'locker-requests' => $this->preparedScalar('SELECT COUNT(*) FROM locker_requests WHERE team_id = :id', ['id' => $teamId]),
-                'desk-assignments' => $this->preparedScalar('SELECT COUNT(*) FROM desk_assignments WHERE team_id = :id', ['id' => $teamId]),
+                'desk-assignments' => $this->preparedScalar(
+                    'SELECT COUNT(*) FROM desk_assignments WHERE team_id = :id AND (assigned_until IS NULL OR assigned_until = \'\')',
+                    ['id' => $teamId]
+                ),
                 default => 0,
             };
         }
@@ -505,7 +508,9 @@ final class Repository
                         da.assigned_from, da.assigned_until, da.notes, t.name AS team_name
                  FROM desk_assignments da
                  LEFT JOIN teams t ON t.id = da.team_id"
-                . ($teamId !== null ? " WHERE da.team_id = {$teamId}" : '')
+                . ($teamId !== null
+                    ? " WHERE da.team_id = {$teamId} AND (da.assigned_until IS NULL OR da.assigned_until = '')"
+                    : '')
                 . ' ORDER BY da.desk_number, da.assigned_from DESC',
             'payment-history' => "SELECT t.id, t.tx_date, t.amount, t.description, t.payment_reference, t.payment_status, t.notes,
                         t.fiscal_year, t.month_index, t.confirmed, t.announced_at, t.reviewed_at,
@@ -574,10 +579,13 @@ final class Repository
                 'desks' => count($profile['desks']),
                 'desk_numbers' => implode('، ', array_map(static fn ($d) => (string) ($d['number'] ?? ''), $profile['desks'])),
                 'lockers' => count($profile['lockers']),
+                'charge_total' => $this->contractChargeTotalForTeam($teamId),
                 'debt_total' => $this->contractDebtForTeam($teamId),
-                'paid_total' => (int) ($profile['summary']['paid_total'] ?? 0),
+                'paid_total' => $this->contractPaidTotalForTeam($teamId),
                 'pending_payments' => $this->preparedScalar(
-                    "SELECT COUNT(*) FROM transactions WHERE team_id = :id AND category = 'واریز تیم' AND payment_status = 'pending'",
+                    "SELECT COUNT(*) FROM transactions
+                     WHERE team_id = :id AND category = 'واریز تیم'
+                     AND payment_status = 'pending' AND confirmed = 0",
                     ['id' => $teamId]
                 ),
             ],
@@ -619,7 +627,7 @@ final class Repository
         $items = [];
 
         foreach ($this->preparedRows(
-            "SELECT id, full_name, approval_status, reviewed_at, rejection_reason, access_code
+            "SELECT id, full_name, approval_status, reviewed_at, rejection_reason, access_code, wants_access
              FROM members
              WHERE team_id = :team_id AND reviewed_at IS NOT NULL AND reviewed_at != ''
              ORDER BY reviewed_at DESC
@@ -629,7 +637,9 @@ final class Repository
             $status = (string) ($row['approval_status'] ?? '');
             $detail = (string) ($row['full_name'] ?? '');
             if ($status === 'approved' && ($row['access_code'] ?? '') !== '') {
-                $detail .= ' — کد تردد: ' . $row['access_code'];
+                $detail .= ' — دسترسی تردد فعال است';
+            } elseif ($status === 'approved' && (int) ($row['wants_access'] ?? 0) === 1) {
+                $detail .= ' — در انتظار ثبت کد تردد';
             }
             $items[] = [
                 'type' => 'member',
@@ -715,11 +725,8 @@ final class Repository
             'SELECT COALESCE(SUM(amount), 0) FROM charges WHERE team_id = :team_id AND fiscal_year = :year AND month_index = :month',
             ['team_id' => $teamId, 'year' => $year, 'month' => $month]
         );
-        $paidTotal = $this->preparedScalar(
-            "SELECT COALESCE(SUM(amount), 0) FROM transactions
-             WHERE team_id = :team_id AND category = 'واریز تیم' AND confirmed = 1 AND fiscal_year = :year AND month_index = :month",
-            ['team_id' => $teamId, 'year' => $year, 'month' => $month]
-        );
+        $allocation = $this->allocatedPaymentsForTeam($teamId);
+        $paidTotal = (int) ($allocation['by_month'][$year . '-' . $month] ?? 0);
 
         return [
             'fiscal_year' => $year,
@@ -864,7 +871,7 @@ final class Repository
                 $this->preparedRows('SELECT id, number, team_id, usage_type, formal_seats, informal_seats, row_index, col_index, notes FROM desks WHERE team_id = :id ORDER BY number', ['id' => $teamId])
             ),
             'members' => $this->preparedRows(
-                'SELECT m.id, m.member_code, m.full_name, m.access_code, m.phone, m.national_id, m.notes, m.approval_status
+                'SELECT m.id, m.member_code, m.full_name, m.access_code, m.wants_access, m.phone, m.national_id, m.notes, m.approval_status
                  FROM members m WHERE m.team_id = :id ORDER BY m.full_name',
                 ['id' => $teamId]
             ),
@@ -876,7 +883,7 @@ final class Repository
             'desk_assignments' => $this->preparedRows(
                 'SELECT da.id, da.desk_id, da.desk_number, da.usage_type, da.assigned_from, da.assigned_until, da.notes
                  FROM desk_assignments da
-                 WHERE da.team_id = :id
+                 WHERE da.team_id = :id AND (da.assigned_until IS NULL OR da.assigned_until = \'\')
                  ORDER BY da.desk_number, da.assigned_from DESC',
                 ['id' => $teamId]
             ),
@@ -987,27 +994,50 @@ final class Repository
 
     private function contractPaidTotalForTeam(int $teamId): int
     {
+        return $this->preparedScalar(
+            "SELECT COALESCE(SUM(amount), 0) FROM transactions
+             WHERE team_id = :id AND category = 'واریز تیم'
+             AND payment_status = 'approved' AND confirmed = 1",
+            ['id' => $teamId]
+        );
+    }
+
+    /**
+     * @return array{by_month: array<string, int>, remaining: int}
+     */
+    private function allocatedPaymentsForTeam(int $teamId): array
+    {
         $team = $this->preparedRow('SELECT contract_start, contract_end FROM teams WHERE id = :id', ['id' => $teamId]);
         if ($team === null) {
-            return 0;
+            return ['by_month' => [], 'remaining' => 0];
         }
-        $total = 0;
+
+        $charges = [];
         foreach ($this->preparedRows(
-            "SELECT fiscal_year, month_index, amount FROM transactions
-             WHERE team_id = :id AND category = 'واریز تیم' AND confirmed = 1",
+            'SELECT fiscal_year, month_index, amount FROM charges WHERE team_id = :id ORDER BY fiscal_year, month_index',
             ['id' => $teamId]
         ) as $row) {
-            if (JalaliDate::monthInContract(
+            if (!JalaliDate::monthInContract(
                 (string) ($row['fiscal_year'] ?? ''),
                 (int) ($row['month_index'] ?? 0),
                 (string) ($team['contract_start'] ?? ''),
                 (string) ($team['contract_end'] ?? '')
             )) {
-                $total += (int) ($row['amount'] ?? 0);
+                continue;
             }
+            $key = ($row['fiscal_year'] ?? '') . '-' . (int) ($row['month_index'] ?? 0);
+            $charges[$key] = (int) ($row['amount'] ?? 0);
         }
 
-        return $total;
+        $remaining = $this->contractPaidTotalForTeam($teamId);
+        $byMonth = [];
+        foreach ($charges as $key => $due) {
+            $allocated = min($remaining, $due);
+            $byMonth[$key] = $allocated;
+            $remaining -= $allocated;
+        }
+
+        return ['by_month' => $byMonth, 'remaining' => max(0, $remaining)];
     }
 
     private function currentFiscalYear(): string
