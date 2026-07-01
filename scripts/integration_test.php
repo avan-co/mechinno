@@ -274,6 +274,24 @@ $assert(($teamSummarySettings['sheba'] ?? '') === 'IR120123456789012345678901', 
 $history = $repo->paginatedResource('payment-history', 1, 25);
 $historyIds = array_map(static fn ($r) => (int) ($r['id'] ?? 0), $history['rows']);
 $assert(in_array((int) $approvedPayment['id'], $historyIds, true), 'payment-history: approved payment listed');
+$pendingReject = $crud->create('transactions', [
+    'tx_date' => '1405/06/01',
+    'description' => 'واریز برای رد',
+    'amount' => '777',
+    'fiscal_year' => '1405',
+    'month_index' => '6',
+    'payment_reference' => 'REJ-001',
+]);
+$assert(($pendingReject['payment_status'] ?? '') === 'pending', 'workflow: payment pending before reject');
+$_SESSION['mechinno_role'] = Access::ROLE_ADMIN_EDITOR;
+$rejectedPayment = $workflow->rejectPayment((int) $pendingReject['id'], 'مبلغ نادرست');
+$assert(($rejectedPayment['payment_status'] ?? '') === 'rejected', 'workflow: payment rejected');
+$pendingAfterReject = $repo->paginatedResource('pending-payments', 1, 25);
+$pendingRejectIds = array_map(static fn ($r) => (int) ($r['id'] ?? 0), $pendingAfterReject['rows']);
+$assert(!in_array((int) $pendingReject['id'], $pendingRejectIds, true), 'workflow: rejected payment removed from pending');
+$historyAfterReject = $repo->paginatedResource('payment-history', 1, 25);
+$historyRejectIds = array_map(static fn ($r) => (int) ($r['id'] ?? 0), $historyAfterReject['rows']);
+$assert(in_array((int) $pendingReject['id'], $historyRejectIds, true), 'payment-history: rejected payment listed');
 $pendingAfterApprove = $repo->paginatedResource('transactions', 1, 25, ['payment_status' => 'pending']);
 $pendingAfterIds = array_map(static fn ($r) => (int) ($r['id'] ?? 0), $pendingAfterApprove['rows']);
 $assert(!in_array((int) $payment['id'], $pendingAfterIds, true), 'payment-history: pending payment excluded after approve');
