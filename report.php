@@ -158,24 +158,21 @@ $statusClass = static function (?string $status): string {
       </section>
 
       <section class="report-section report-section--break">
-        <h2 class="section-title">تاریخچه تخصیص میز</h2>
-        <p class="section-note">تعداد: <?= ReportData::money(count($data['desk_assignments'])) ?> ردیف</p>
+        <h2 class="section-title">شارژ ماهانه — خلاصه نهادها</h2>
+        <p class="section-note">مجموع واریزی سال جاری و مانده بدهی هر نهاد</p>
         <table class="data-table">
           <thead>
-            <tr><th>میز</th><th>نهاد</th><th>نوع</th><th>شروع</th><th>پایان</th><th>توضیحات</th></tr>
+            <tr><th>نهاد</th><th>مجموع واریزی امسال (ریال)</th><th>مجموع بدهی (ریال)</th></tr>
           </thead>
           <tbody>
-            <?php if (($data['desk_assignments'] ?? []) === []): ?>
-              <tr class="empty-row"><td colspan="6">تخصیصی ثبت نشده است.</td></tr>
+            <?php if ($data['debts'] === []): ?>
+              <tr class="empty-row"><td colspan="3">نهادی با شارژ یا واریز ثبت نشده است.</td></tr>
             <?php else: ?>
-              <?php foreach ($data['desk_assignments'] as $row): ?>
+              <?php foreach ($data['debts'] as $row): ?>
                 <tr>
-                  <td class="num"><?= ReportData::money($row['desk_number'] ?? 0) ?></td>
                   <td><?= e(ReportData::cell($row['team_name'] ?? null)) ?></td>
-                  <td><?= e(ReportData::usageLabel($row['usage_type'] ?? null)) ?></td>
-                  <td><?= e(ReportData::cell($row['assigned_from'] ?? null)) ?></td>
-                  <td><?= e(ReportData::cell($row['assigned_until'] ?? 'فعال')) ?></td>
-                  <td><?= e(ReportData::cell($row['notes'] ?? null)) ?></td>
+                  <td class="num"><?= ReportData::money($row['paid_year'] ?? 0) ?></td>
+                  <td class="num"><?= ReportData::money($row['debt_total'] ?? 0) ?></td>
                 </tr>
               <?php endforeach; ?>
             <?php endif; ?>
@@ -224,33 +221,6 @@ $statusClass = static function (?string $status): string {
                   <td class="num"><?= ReportData::money($row['informal_rent_rate'] ?? 0) ?></td>
                   <td><?= e(ReportData::cell($row['effective_from'] ?? null)) ?></td>
                   <td><?= e(ReportData::cell($row['notes'] ?? null)) ?></td>
-                </tr>
-              <?php endforeach; ?>
-            <?php endif; ?>
-          </tbody>
-        </table>
-      </section>
-
-      <section class="report-section">
-        <h2 class="section-title">شارژ ماهانه — مطالبات مرکز از نهادها</h2>
-        <table class="data-table">
-          <thead>
-            <tr><th>نهاد</th><th>سال</th><th>ماه</th><th>شارژ</th><th>اجاره</th><th>مبلغ مستحق</th><th>دریافت‌شده</th><th>وضعیت</th></tr>
-          </thead>
-          <tbody>
-            <?php if ($data['debts'] === []): ?>
-              <tr class="empty-row"><td colspan="8">رکورد شارژی ثبت نشده است.</td></tr>
-            <?php else: ?>
-              <?php foreach ($data['debts'] as $row): ?>
-                <tr>
-                  <td><?= e(ReportData::cell($row['team_name'] ?? null)) ?></td>
-                  <td><?= e(ReportData::cell($row['fiscal_year'] ?? null)) ?></td>
-                  <td><?= e(ReportData::cell($row['month_name'] ?? null)) ?></td>
-                  <td class="num"><?= ReportData::money($row['charge_amount'] ?? 0) ?></td>
-                  <td class="num"><?= ReportData::money($row['rent_amount'] ?? 0) ?></td>
-                  <td class="num"><?= ReportData::money($row['amount_due'] ?? 0) ?></td>
-                  <td class="num"><?= ReportData::money($row['amount_paid'] ?? 0) ?></td>
-                  <td class="<?= e($statusClass($row['status'] ?? null)) ?>"><?= e(ReportData::cell($row['status'] ?? null)) ?></td>
                 </tr>
               <?php endforeach; ?>
             <?php endif; ?>

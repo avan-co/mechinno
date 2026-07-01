@@ -49,6 +49,7 @@ final class Access
         'center-settings',
         'crud-meta',
         'recalculate-charges',
+        'ledger',
     ];
 
     public static function role(): string

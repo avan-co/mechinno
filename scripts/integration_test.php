@@ -162,6 +162,10 @@ $crud->create('rate_settings', [
 $matrix = $repo->chargesMatrix('1405');
 $assert(count($matrix['rows']) >= 1, 'charges: matrix has teams');
 $assert(($matrix['rows'][0]['cells'][0]['amount_due'] ?? 0) > 0, 'charges: auto-calculated amount');
+$ledger = (new CenterLedger($pdo))->snapshot();
+$assert(array_key_exists('balance', $ledger), 'ledger: snapshot has balance');
+$systemRows = array_filter($ledger['rows'] ?? [], static fn (array $r): bool => ($r['entry_type'] ?? '') === 'system');
+$assert(count($systemRows) >= 1, 'ledger: auto charge/rent entries synced');
 
 $crud->create('lockers', ['locker_number' => '10', 'team_id' => (string) $teamId, 'status' => 'تخصیص یافته']);
 $lockers = $repo->paginatedResource('lockers', 1, 25);

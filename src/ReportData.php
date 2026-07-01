@@ -42,8 +42,7 @@ final class ReportData
             'lockers' => $repo->resource('lockers'),
             'rate_settings' => $repo->resource('rate_settings'),
             'charges' => $repo->resource('charges'),
-            'debts' => $repo->chargeDebtRows(),
-            'desk_assignments' => $repo->resource('desk-assignments'),
+            'debts' => $repo->teamChargeSummaryForReport(),
             'transactions' => array_values(array_filter(
                 $repo->resource('transactions'),
                 static fn (array $row): bool => (int) ($row['confirmed'] ?? 0) === 1
