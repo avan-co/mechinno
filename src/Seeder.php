@@ -53,7 +53,6 @@ final class Seeder
                 ]);
             }
         }
-        (new CenterLedger($this->pdo))->syncFromCharges();
     }
 
     /**

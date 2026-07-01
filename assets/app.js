@@ -87,7 +87,7 @@ const sectionMeta = {
   desks: { eyebrow: "میزها", title: "نقشه و تخصیص ۲۴ میز", subtitle: "میزها را به نهادها اختصاص دهید" },
   lockers: { eyebrow: "کمدها", title: "مدیریت کمدها", subtitle: "شماره کمدها را خودتان تعریف و تخصیص دهید" },
   charges: { eyebrow: "شارژ", title: "نرخ و شارژ ماهانه", subtitle: "تعریف نرخ سالانه، محاسبه خودکار و پیگیری پرداخت" },
-  transactions: { eyebrow: "مالی", title: "دفتر معین و موجودی مرکز", subtitle: "شارژ خودکار، درآمد و هزینه دستی، تأیید واریز نهادها" },
+  transactions: { eyebrow: "مالی", title: "دفتر معین و موجودی نقدی", subtitle: "گردش واقعی حساب مرکز — بدون تکرار شارژ سیستمی" },
   development: { eyebrow: "برنامه‌ریزی", title: "برنامه توسعه", subtitle: "ایده‌ها، اقدامات و برنامه اجرایی مرکز" },
   users: { eyebrow: "دسترسی", title: "کاربران پنل", subtitle: "مدیریت نقش‌ها و پنل اختصاصی نهادها" },
 };
@@ -599,32 +599,40 @@ const renderTeamDashboard = (data) => {
 };
 
 const entryTypeLabel = (type) => ({
-  system: "سیستمی",
-  income: "درآمد دستی",
+  deposit: "دریافت نقدی",
+  income: "درآمد",
   expense: "هزینه",
-  deposit: "واریز نهاد",
-  manual: "دستی",
 }[type] || type || "—");
 
 const loadLedger = async () => {
   const balanceEl = document.getElementById("ledgerBalanceValue");
   const totalsEl = document.getElementById("ledgerTotals");
+  const billingEl = document.getElementById("ledgerBilling");
   const tableEl = document.getElementById("ledgerTable");
   if (!balanceEl || !totalsEl || !tableEl) return;
 
   const data = await fetchJson("api.php?resource=ledger");
   const totals = data.totals || {};
-  balanceEl.textContent = formatMoney(data.balance ?? 0);
-  balanceEl.classList.toggle("ledger-negative", Number(data.balance ?? 0) < 0);
+  const billing = data.billing || {};
+  balanceEl.textContent = formatMoney(totals.balance ?? data.balance ?? 0);
+  balanceEl.classList.toggle("ledger-negative", Number(totals.balance ?? data.balance ?? 0) < 0);
   totalsEl.innerHTML = `
-    <div><span>شارژ و اجاره (سیستمی)</span><strong>${escapeHtml(formatMoney(totals.system_income || 0))}</strong></div>
+    <div><span>دریافت از نهادها</span><strong>${escapeHtml(formatMoney(totals.deposits || 0))}</strong></div>
     <div><span>درآمد دستی</span><strong>${escapeHtml(formatMoney(totals.manual_income || 0))}</strong></div>
     <div><span>هزینه‌ها</span><strong>${escapeHtml(formatMoney(totals.manual_expense || 0))}</strong></div>
-    <div><span>واریز نهادها (نمایشی)</span><strong>${escapeHtml(formatMoney(totals.deposits || 0))}</strong></div>`;
+    <div><span>جمع دریافت‌ها</span><strong>${escapeHtml(formatMoney(totals.income_total || 0))}</strong></div>`;
+  if (billingEl) {
+    billingEl.innerHTML = `
+      <p class="hint">
+        مطالبات شارژ (بخش شارژ): <strong>${escapeHtml(formatMoney(billing.charge_total || 0))}</strong>
+        — دریافت‌شده از نهادها: <strong>${escapeHtml(formatMoney(billing.received_total || 0))}</strong>
+        — مانده طلب: <strong>${escapeHtml(formatMoney(billing.receivable || 0))}</strong>
+      </p>`;
+  }
 
   const rows = data.rows || [];
   if (!rows.length) {
-    tableEl.innerHTML = `<div class="empty">هنوز ثبتی در دفتر معین نیست. پس از محاسبه شارژ یا ثبت درآمد/هزینه، ردیف‌ها اینجا نمایش داده می‌شوند.</div>`;
+    tableEl.innerHTML = `<div class="empty">هنوز گردش نقدی ثبت نشده است. پس از تأیید واریز نهاد یا ثبت درآمد/هزینه دستی، ردیف‌ها اینجا نمایش داده می‌شوند.</div>`;
     return;
   }
 
@@ -632,20 +640,23 @@ const loadLedger = async () => {
     <table class="data-table ledger-table">
       <thead>
         <tr>
-          <th>تاریخ</th><th>نوع</th><th>دسته</th><th>شرح</th><th>نهاد</th><th>مبلغ (ریال)</th>
+          <th>تاریخ</th><th>نوع</th><th>دسته</th><th>شرح</th><th>نهاد</th><th>بدهکار</th><th>بستانکار</th><th>مانده</th>
         </tr>
       </thead>
       <tbody>
         ${rows.map((row) => {
           const signed = Number(row.signed_amount ?? row.amount ?? 0);
-          const amountClass = signed < 0 ? "ledger-expense" : "ledger-income";
+          const debit = signed < 0 ? formatMoney(Math.abs(signed)) : "—";
+          const credit = signed > 0 ? formatMoney(signed) : "—";
           return `<tr>
             <td>${escapeHtml(formatPlain(row.tx_date))}</td>
-            <td>${escapeHtml(entryTypeLabel(row.entry_type))}</td>
-            <td>${escapeHtml(row.category || "—")}</td>
+            <td>${escapeHtml(row.entry_type_label || entryTypeLabel(row.entry_type))}</td>
+            <td>${escapeHtml(row.category_label || row.category || "—")}</td>
             <td>${escapeHtml(row.description || "—")}</td>
             <td>${escapeHtml(row.team_name || "—")}</td>
-            <td class="num ${amountClass}">${escapeHtml(formatMoney(Math.abs(signed)))}${signed < 0 ? " −" : ""}</td>
+            <td class="num ledger-expense">${escapeHtml(debit)}</td>
+            <td class="num ledger-income">${escapeHtml(credit)}</td>
+            <td class="num">${escapeHtml(formatMoney(row.running_balance ?? 0))}</td>
           </tr>`;
         }).join("")}
       </tbody>
@@ -1749,7 +1760,6 @@ if (recalcChargesButton && canWrite) {
       await postJson("api.php?resource=recalculate-charges", { fiscal_year: year });
       await loadChargesCollage();
       await refreshAfterMutation("charges");
-      if (document.getElementById("ledgerPanel")) await loadLedger();
       showToast("محاسبه خودکار انجام شد.", "success");
     } catch (error) {
       showToast(error.message, "error");

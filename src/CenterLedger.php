@@ -4,78 +4,8 @@ declare(strict_types=1);
 
 final class CenterLedger
 {
-    public const CAT_CHARGE = 'شارژ ماهانه';
-    public const CAT_RENT = 'اجاره غیررسمی';
-
     public function __construct(private readonly PDO $pdo)
     {
-    }
-
-    public function syncFromCharges(): void
-    {
-        $charges = $this->pdo->query(
-            'SELECT c.id, c.team_id, c.fiscal_year, c.month_index, c.month_name,
-                    c.charge_amount, c.rent_amount, t.name AS team_name
-             FROM charges c
-             JOIN teams t ON t.id = c.team_id
-             ORDER BY c.id'
-        )->fetchAll();
-
-        $activeKeys = [];
-        foreach ($charges as $charge) {
-            $chargeId = (int) ($charge['id'] ?? 0);
-            $teamName = (string) ($charge['team_name'] ?? '—');
-            $fiscalYear = (string) ($charge['fiscal_year'] ?? '');
-            $monthName = (string) ($charge['month_name'] ?? '');
-            $monthIndex = (int) ($charge['month_index'] ?? 0);
-            $txDate = sprintf('%s/%02d/01', JalaliDate::normalizeDigits($fiscalYear), max(1, $monthIndex));
-
-            $chargeAmount = (int) ($charge['charge_amount'] ?? 0);
-            if ($chargeAmount > 0) {
-                $key = $this->sourceKey($chargeId, 'charge');
-                $activeKeys[] = $key;
-                $this->upsertSystemEntry(
-                    $key,
-                    $txDate,
-                    sprintf(
-                        'شارژ ماهانه — نهاد «%s» — %s %s — %s ریال',
-                        $teamName,
-                        $monthName,
-                        $fiscalYear,
-                        number_format($chargeAmount)
-                    ),
-                    $chargeAmount,
-                    self::CAT_CHARGE,
-                    (int) ($charge['team_id'] ?? 0),
-                    $fiscalYear,
-                    $monthIndex
-                );
-            }
-
-            $rentAmount = (int) ($charge['rent_amount'] ?? 0);
-            if ($rentAmount > 0) {
-                $key = $this->sourceKey($chargeId, 'rent');
-                $activeKeys[] = $key;
-                $this->upsertSystemEntry(
-                    $key,
-                    $txDate,
-                    sprintf(
-                        'اجاره غیررسمی میز — نهاد «%s» — %s %s — %s ریال',
-                        $teamName,
-                        $monthName,
-                        $fiscalYear,
-                        number_format($rentAmount)
-                    ),
-                    $rentAmount,
-                    self::CAT_RENT,
-                    (int) ($charge['team_id'] ?? 0),
-                    $fiscalYear,
-                    $monthIndex
-                );
-            }
-        }
-
-        $this->purgeStaleSystemEntries($activeKeys);
     }
 
     /**
@@ -83,27 +13,36 @@ final class CenterLedger
      */
     public function snapshot(): array
     {
-        $this->syncFromCharges();
-        $rows = $this->entries();
+        $rows = $this->cashEntries();
         $totals = $this->totals($rows);
-        $balance = $totals['income_total'] - $totals['expense_total'];
 
         return [
-            'balance' => $balance,
+            'balance' => $totals['balance'],
             'totals' => $totals,
+            'billing' => $this->billingSummary(),
             'rows' => $rows,
         ];
     }
 
     public function balance(): int
     {
-        return (int) ($this->snapshot()['balance'] ?? 0);
+        return $this->totals($this->cashEntries())['balance'];
+    }
+
+    public static function purgeAccrualMirrorEntries(PDO $pdo): void
+    {
+        $pdo->exec("DELETE FROM transactions WHERE source_file LIKE 'system:charge:%'");
+    }
+
+    public static function isSystemSource(?string $sourceFile): bool
+    {
+        return is_string($sourceFile) && str_starts_with($sourceFile, 'system:charge:');
     }
 
     /**
      * @return list<array<string, mixed>>
      */
-    private function entries(): array
+    private function cashEntries(): array
     {
         $statement = $this->pdo->query(
             "SELECT t.id, t.tx_date, t.description, t.amount, t.category, t.team_id,
@@ -111,44 +50,45 @@ final class CenterLedger
                     tm.name AS team_name
              FROM transactions t
              LEFT JOIN teams tm ON tm.id = t.team_id
-             WHERE (t.source_file LIKE 'system:charge:%')
-                OR (t.category IN ('درآمد', 'هزینه') AND t.confirmed = 1)
-                OR (t.category = 'واریز تیم' AND t.payment_status = 'approved' AND t.confirmed = 1)
-             ORDER BY t.tx_date DESC, t.id DESC"
+             WHERE (t.category = 'واریز تیم' AND t.payment_status = 'approved' AND t.confirmed = 1)
+                OR (t.category = 'درآمد' AND t.confirmed = 1)
+                OR (t.category = 'هزینه' AND t.confirmed = 1)
+             ORDER BY t.tx_date ASC, t.id ASC"
         );
 
-        return array_map(function (array $row): array {
-            $source = (string) ($row['source_file'] ?? '');
+        $running = 0;
+        $rows = [];
+        foreach ($statement->fetchAll() as $row) {
             $category = (string) ($row['category'] ?? '');
-            $amount = (int) ($row['amount'] ?? 0);
-            $entryType = 'manual';
-            $countsInBalance = true;
-            if (str_starts_with($source, 'system:charge:')) {
-                $entryType = 'system';
-            } elseif ($category === 'واریز تیم') {
-                $entryType = 'deposit';
-                $countsInBalance = false;
-            } elseif ($category === 'هزینه') {
-                $entryType = 'expense';
-            } elseif ($category === 'درآمد') {
-                $entryType = 'income';
-            }
+            $amount = abs((int) ($row['amount'] ?? 0));
+            $signed = $category === 'هزینه' ? -$amount : $amount;
+            $entryType = match ($category) {
+                'واریز تیم' => 'deposit',
+                'درآمد' => 'income',
+                'هزینه' => 'expense',
+                default => 'other',
+            };
+            $running += $signed;
 
-            return [
+            $rows[] = [
                 'id' => (int) ($row['id'] ?? 0),
                 'tx_date' => $row['tx_date'] ?? '',
-                'description' => $row['description'] ?? '',
+                'description' => $this->normalizeDescription($row, $category),
                 'amount' => $amount,
+                'signed_amount' => $signed,
                 'category' => $category,
+                'category_label' => self::categoryLabel($category),
                 'team_id' => $row['team_id'] ?? null,
                 'team_name' => $row['team_name'] ?? '',
                 'fiscal_year' => $row['fiscal_year'] ?? '',
                 'month_index' => (int) ($row['month_index'] ?? 0),
                 'entry_type' => $entryType,
-                'counts_in_balance' => $countsInBalance,
-                'signed_amount' => $category === 'هزینه' ? -abs($amount) : abs($amount),
+                'entry_type_label' => self::entryTypeLabel($entryType),
+                'running_balance' => $running,
             ];
-        }, $statement->fetchAll());
+        }
+
+        return array_reverse($rows);
     }
 
     /**
@@ -157,124 +97,88 @@ final class CenterLedger
      */
     private function totals(array $rows): array
     {
-        $systemIncome = 0;
+        $deposits = 0;
         $manualIncome = 0;
         $manualExpense = 0;
-        $deposits = 0;
 
         foreach ($rows as $row) {
             $amount = abs((int) ($row['amount'] ?? 0));
             $type = (string) ($row['entry_type'] ?? '');
-            if ($type === 'system' || $type === 'income') {
-                if ($type === 'system') {
-                    $systemIncome += $amount;
-                } else {
-                    $manualIncome += $amount;
-                }
+            if ($type === 'deposit') {
+                $deposits += $amount;
+            } elseif ($type === 'income') {
+                $manualIncome += $amount;
             } elseif ($type === 'expense') {
                 $manualExpense += $amount;
-            } elseif ($type === 'deposit') {
-                $deposits += $amount;
             }
         }
 
-        $incomeTotal = $systemIncome + $manualIncome;
-
         return [
-            'system_income' => $systemIncome,
+            'deposits' => $deposits,
             'manual_income' => $manualIncome,
             'manual_expense' => $manualExpense,
-            'deposits' => $deposits,
-            'income_total' => $incomeTotal,
+            'income_total' => $deposits + $manualIncome,
             'expense_total' => $manualExpense,
+            'balance' => $deposits + $manualIncome - $manualExpense,
         ];
-    }
-
-    private function sourceKey(int $chargeId, string $kind): string
-    {
-        return sprintf('system:charge:%d:%s', $chargeId, $kind);
-    }
-
-    private function upsertSystemEntry(
-        string $sourceFile,
-        string $txDate,
-        string $description,
-        int $amount,
-        string $category,
-        int $teamId,
-        string $fiscalYear,
-        int $monthIndex
-    ): void {
-        $existing = $this->pdo->prepare('SELECT id FROM transactions WHERE source_file = :source_file LIMIT 1');
-        $existing->execute(['source_file' => $sourceFile]);
-        $id = $existing->fetchColumn();
-
-        $payload = [
-            'tx_date' => $txDate,
-            'description' => $description,
-            'amount' => $amount,
-            'category' => $category,
-            'team_id' => $teamId > 0 ? $teamId : null,
-            'fiscal_year' => JalaliDate::normalizeDigits($fiscalYear),
-            'month_index' => $monthIndex,
-            'confirmed' => 1,
-            'payment_status' => 'approved',
-            'source_file' => $sourceFile,
-        ];
-
-        if ($id !== false) {
-            $statement = $this->pdo->prepare(
-                'UPDATE transactions
-                 SET tx_date = :tx_date, description = :description, amount = :amount,
-                     category = :category, team_id = :team_id, fiscal_year = :fiscal_year,
-                     month_index = :month_index, confirmed = :confirmed, payment_status = :payment_status
-                 WHERE id = :id'
-            );
-            $statement->execute([
-                'tx_date' => $payload['tx_date'],
-                'description' => $payload['description'],
-                'amount' => $payload['amount'],
-                'category' => $payload['category'],
-                'team_id' => $payload['team_id'],
-                'fiscal_year' => $payload['fiscal_year'],
-                'month_index' => $payload['month_index'],
-                'confirmed' => $payload['confirmed'],
-                'payment_status' => $payload['payment_status'],
-                'id' => (int) $id,
-            ]);
-
-            return;
-        }
-
-        $statement = $this->pdo->prepare(
-            'INSERT INTO transactions
-             (tx_date, description, amount, category, team_id, fiscal_year, month_index, confirmed, payment_status, source_file)
-             VALUES
-             (:tx_date, :description, :amount, :category, :team_id, :fiscal_year, :month_index, :confirmed, :payment_status, :source_file)'
-        );
-        $statement->execute($payload);
     }
 
     /**
-     * @param list<string> $activeKeys
+     * @return array<string, int>
      */
-    private function purgeStaleSystemEntries(array $activeKeys): void
+    private function billingSummary(): array
     {
-        $statement = $this->pdo->query(
-            "SELECT id, source_file FROM transactions WHERE source_file LIKE 'system:charge:%'"
-        );
-        $activeLookup = array_fill_keys($activeKeys, true);
-        $delete = $this->pdo->prepare('DELETE FROM transactions WHERE id = :id');
-        foreach ($statement->fetchAll() as $row) {
-            $source = (string) ($row['source_file'] ?? '');
-            if (!isset($activeLookup[$source])) {
-                $delete->execute(['id' => (int) ($row['id'] ?? 0)]);
-            }
-        }
+        $chargeTotal = (int) $this->pdo->query('SELECT COALESCE(SUM(amount), 0) FROM charges')->fetchColumn();
+        $receivedTotal = (int) $this->pdo->query(
+            "SELECT COALESCE(SUM(amount), 0) FROM transactions
+             WHERE category = 'واریز تیم' AND payment_status = 'approved' AND confirmed = 1"
+        )->fetchColumn();
+
+        return [
+            'charge_total' => $chargeTotal,
+            'received_total' => $receivedTotal,
+            'receivable' => max(0, $chargeTotal - $receivedTotal),
+        ];
     }
 
-    public static function isSystemSource(?string $sourceFile): bool
+    /**
+     * @param array<string, mixed> $row
+     */
+    private function normalizeDescription(array $row, string $category): string
     {
-        return is_string($sourceFile) && str_starts_with($sourceFile, 'system:charge:');
+        $description = trim((string) ($row['description'] ?? ''));
+        if ($description !== '') {
+            return $description;
+        }
+
+        $teamName = trim((string) ($row['team_name'] ?? ''));
+        if ($category === 'واریز تیم') {
+            $month = JalaliDate::monthName((int) ($row['month_index'] ?? 0));
+            $year = (string) ($row['fiscal_year'] ?? '');
+
+            return trim(sprintf('دریافت شارژ%s%s', $teamName !== '' ? " — {$teamName}" : '', $month !== '' ? " — {$month} {$year}" : ''));
+        }
+
+        return self::categoryLabel($category);
+    }
+
+    public static function categoryLabel(string $category): string
+    {
+        return match ($category) {
+            'واریز تیم' => 'دریافت از نهاد',
+            'درآمد' => 'درآمد دستی',
+            'هزینه' => 'هزینه',
+            default => $category !== '' ? $category : '—',
+        };
+    }
+
+    public static function entryTypeLabel(string $entryType): string
+    {
+        return match ($entryType) {
+            'deposit' => 'دریافت نقدی',
+            'income' => 'درآمد',
+            'expense' => 'هزینه',
+            default => '—',
+        };
     }
 }

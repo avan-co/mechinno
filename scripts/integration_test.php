@@ -164,8 +164,9 @@ $assert(count($matrix['rows']) >= 1, 'charges: matrix has teams');
 $assert(($matrix['rows'][0]['cells'][0]['amount_due'] ?? 0) > 0, 'charges: auto-calculated amount');
 $ledger = (new CenterLedger($pdo))->snapshot();
 $assert(array_key_exists('balance', $ledger), 'ledger: snapshot has balance');
-$systemRows = array_filter($ledger['rows'] ?? [], static fn (array $r): bool => ($r['entry_type'] ?? '') === 'system');
-$assert(count($systemRows) >= 1, 'ledger: auto charge/rent entries synced');
+$systemRows = array_filter($ledger['rows'] ?? [], static fn (array $r): bool => str_starts_with((string) ($r['source_file'] ?? ''), 'system:'));
+$assert(count($systemRows) === 0, 'ledger: no duplicate accrual rows');
+$assert(($ledger['totals']['balance'] ?? -1) === ($ledger['totals']['income_total'] ?? 0) - ($ledger['totals']['expense_total'] ?? 0), 'ledger: balance equals income minus expense');
 
 $crud->create('lockers', ['locker_number' => '10', 'team_id' => (string) $teamId, 'status' => 'تخصیص یافته']);
 $lockers = $repo->paginatedResource('lockers', 1, 25);

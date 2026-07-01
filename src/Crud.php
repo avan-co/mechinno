@@ -375,9 +375,6 @@ final class Crud
                 (string) ($record['leader'] ?? '')
             );
         }
-        if ($resource === 'charges') {
-            $this->syncLedgerFromCharges();
-        }
 
         return $this->find($resource, $id);
     }
@@ -394,7 +391,7 @@ final class Crud
         if ($resource === 'transactions') {
             $existing = $this->find($resource, $id);
             if (CenterLedger::isSystemSource($existing['source_file'] ?? null)) {
-                throw new InvalidArgumentException('ثبت‌های خودکار شارژ و اجاره فقط از بخش شارژ قابل تغییر هستند.');
+                throw new InvalidArgumentException('این ردیف سیستمی منسوخ است و قابل ویرایش نیست.');
             }
         }
         $definition = $this->definition($resource);
@@ -435,9 +432,6 @@ final class Crud
         if ($resource === 'teams' && isset($data['leader'])) {
             EntityAccounts::syncLeaderName($this->pdo, $id, (string) $data['leader']);
         }
-        if ($resource === 'charges') {
-            $this->syncLedgerFromCharges();
-        }
 
         return $this->find($resource, $id);
     }
@@ -461,13 +455,10 @@ final class Crud
         if ($resource === 'transactions') {
             $row = $this->find($resource, $id);
             if (CenterLedger::isSystemSource($row['source_file'] ?? null)) {
-                throw new InvalidArgumentException('ثبت‌های خودکار شارژ و اجاره فقط از بخش شارژ قابل تغییر هستند.');
+                throw new InvalidArgumentException('این ردیف سیستمی منسوخ است و قابل حذف نیست.');
             }
         }
         $this->pdo->prepare(sprintf('DELETE FROM %s WHERE id = :id', $definition['table']))->execute(['id' => $id]);
-        if ($resource === 'charges') {
-            $this->syncLedgerFromCharges();
-        }
     }
 
     public function updateStatus(string $resource, int $id, string $status): array
@@ -856,11 +847,6 @@ final class Crud
                 $data['usage_type'] = 'formal';
             }
         }
-    }
-
-    private function syncLedgerFromCharges(): void
-    {
-        (new CenterLedger($this->pdo))->syncFromCharges();
     }
 
     private function syncTeamDepositIncome(int $transactionId): void

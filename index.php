@@ -255,18 +255,19 @@ $assetVer = (string) max(
             </section>
 
             <section id="transactions" class="section">
-              <p class="hint">دفتر معین مرکز از صفر شروع می‌شود: شارژ و اجاره خودکار، درآمد و هزینه دستی — جمع و تفریق برای نمایش موجودی.</p>
+              <p class="hint">دفتر معین فقط <strong>گردش نقدی واقعی</strong> را نشان می‌دهد: واریز تأییدشده نهادها، درآمد و هزینه دستی. شارژ و مطالبات در بخش شارژ محاسبه می‌شود و اینجا تکرار نمی‌شود.</p>
               <article class="panel" id="ledgerPanel">
                 <div class="panel-head">
                   <h2>موجودی حساب مرکز</h2>
-                  <span class="hint">بدون موجودی اولیه — محاسبه از دفتر معین</span>
+                  <span class="hint">از صفر — فقط پول واقعی وارد/خارج‌شده</span>
                 </div>
                 <div id="ledgerSummary" class="ledger-summary">
                   <div class="ledger-balance-card">
-                    <span class="ledger-label">موجودی فعلی</span>
+                    <span class="ledger-label">موجودی نقدی فعلی</span>
                     <strong id="ledgerBalanceValue" class="ledger-balance-value">—</strong>
                   </div>
                   <div id="ledgerTotals" class="ledger-totals-grid"></div>
+                  <div id="ledgerBilling" class="ledger-billing-note"></div>
                 </div>
                 <div id="ledgerTable" class="ledger-table-wrap"></div>
               </article>
@@ -312,7 +313,6 @@ $assetVer = (string) max(
                   <data-table title="" endpoint="api.php?resource=transactions" data-tx-filter="هزینه"></data-table>
                 </article>
               </div>
-              <data-table title="دریافت‌های تأییدشده از نهادها" endpoint="api.php?resource=payment-history"></data-table>
             </section>
 
             <?php if (Access::canWrite()): ?>

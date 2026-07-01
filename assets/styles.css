@@ -1268,6 +1268,17 @@ body.is-mobile .table-wrap { display: none; }
   font-weight: 700;
 }
 
+.ledger-billing-note {
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.15);
+}
+
+.ledger-billing-note .hint {
+  margin: 0;
+}
+
 @media (max-width: 768px) {
   .shell { display: block; }
   .sidebar {
