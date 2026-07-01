@@ -207,7 +207,7 @@ $assetVer = (string) max(
             <section id="members" class="section">
               <p class="hint">اعضای تأییدشده در لیست اصلی نمایش داده می‌شوند. درخواست‌های نهادها در جدول «در انتظار تأیید» بررسی می‌شود.</p>
               <?php if (Access::canWrite()): ?>
-              <data-table title="اعضا — در انتظار تأیید نهاد" endpoint="api.php?resource=pending-members" data-workflow="members" data-workflow-type="member-approve" data-table-key="pending-members" data-no-add></data-table>
+              <data-table title="اعضا — در انتظار تأیید نهاد" endpoint="api.php?resource=pending-members" data-workflow="members" data-workflow-type="member-approve" data-table-key="pending-members" data-readonly></data-table>
               <?php endif; ?>
               <data-table title="اعضای تأییدشده و رد‌شده" endpoint="api.php?resource=members"></data-table>
             </section>
@@ -230,7 +230,7 @@ $assetVer = (string) max(
 
             <section id="lockers" class="section">
               <?php if (Access::canWrite()): ?>
-              <data-table title="درخواست کمد — در انتظار تأیید" endpoint="api.php?resource=pending-locker-requests" data-workflow="lockers" data-workflow-type="locker-request" data-table-key="pending-locker-requests" data-no-add></data-table>
+              <data-table title="درخواست کمد — در انتظار تأیید" endpoint="api.php?resource=pending-locker-requests" data-workflow="lockers" data-workflow-type="locker-request" data-table-key="pending-locker-requests" data-readonly></data-table>
               <?php endif; ?>
               <data-table title="کمدها" endpoint="api.php?resource=lockers"></data-table>
             </section>
@@ -258,18 +258,52 @@ $assetVer = (string) max(
               <p class="hint">دفتر معین فقط <strong>گردش نقدی واقعی</strong> را نشان می‌دهد: واریز تأییدشده نهادها، درآمد و هزینه دستی. شارژ و مطالبات در بخش شارژ محاسبه می‌شود و اینجا تکرار نمی‌شود.</p>
               <article class="panel" id="ledgerPanel">
                 <div class="panel-head">
-                  <h2>موجودی حساب مرکز</h2>
-                  <span class="hint">از صفر — فقط پول واقعی وارد/خارج‌شده</span>
+                  <h2>دفتر معین — موجودی حساب مرکز</h2>
+                  <span class="hint">از صفر — فقط گردش نقدی واقعی</span>
                 </div>
-                <div id="ledgerSummary" class="ledger-summary">
-                  <div class="ledger-balance-card">
-                    <span class="ledger-label">موجودی نقدی فعلی</span>
-                    <strong id="ledgerBalanceValue" class="ledger-balance-value">—</strong>
-                  </div>
-                  <div id="ledgerTotals" class="ledger-totals-grid"></div>
-                  <div id="ledgerBilling" class="ledger-billing-note"></div>
+                <div class="table-wrap ledger-block">
+                  <table class="data-table ledger-summary-table">
+                    <caption class="ledger-caption">خلاصه موجودی</caption>
+                    <thead>
+                      <tr><th>شرح</th><th class="num">مبلغ (ریال)</th></tr>
+                    </thead>
+                    <tbody id="ledgerSummaryBody">
+                      <tr><td colspan="2" class="empty">در حال بارگذاری…</td></tr>
+                    </tbody>
+                  </table>
                 </div>
-                <div id="ledgerTable" class="ledger-table-wrap"></div>
+                <div class="table-wrap ledger-block">
+                  <table class="data-table ledger-table">
+                    <caption class="ledger-caption">گردش حساب (دفتر معین)</caption>
+                    <thead>
+                      <tr>
+                        <th class="num">ردیف</th>
+                        <th>تاریخ</th>
+                        <th>نوع</th>
+                        <th>شرح</th>
+                        <th class="num">بستانکار</th>
+                        <th class="num">بدهکار</th>
+                        <th class="num">مانده</th>
+                      </tr>
+                    </thead>
+                    <tbody id="ledgerTableBody">
+                      <tr><td colspan="7" class="empty">در حال بارگذاری…</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div class="table-wrap ledger-block" id="ledgerBillingWrap" hidden>
+                  <table class="data-table ledger-billing-table">
+                    <caption class="ledger-caption">مطالبات شارژ — مرجع بخش شارژ (در موجودی نقدی لحاظ نمی‌شود)</caption>
+                    <thead>
+                      <tr>
+                        <th class="num">مطالبات شارژ</th>
+                        <th class="num">دریافت‌شده از نهادها</th>
+                        <th class="num">مانده طلب</th>
+                      </tr>
+                    </thead>
+                    <tbody id="ledgerBillingBody"></tbody>
+                  </table>
+                </div>
               </article>
               <?php if (Access::canWrite()): ?>
               <article class="panel" id="paymentSettingsPanel">
@@ -289,7 +323,7 @@ $assetVer = (string) max(
                   </div>
                 </form>
               </article>
-              <data-table title="اعلام واریز — در انتظار تأیید" endpoint="api.php?resource=pending-payments" data-workflow="payments" data-table-key="pending-payments" data-no-add></data-table>
+              <data-table title="اعلام واریز — در انتظار تأیید" endpoint="api.php?resource=pending-payments" data-workflow="payments" data-table-key="pending-payments" data-readonly></data-table>
               <?php endif; ?>
               <div class="grid two finance-actions">
                 <article class="panel">
