@@ -64,8 +64,8 @@ final class Crud
                 'table' => 'locker_requests',
                 'title' => 'درخواست کمد',
                 'order' => 'submitted_at DESC, id DESC',
-                'status_field' => 'status',
-                'status_options' => ['pending', 'approved', 'rejected'],
+                'status_field' => null,
+                'status_options' => [],
                 'source' => false,
                 'fields' => [
                     'notes' => ['label' => 'توضیحات درخواست', 'type' => 'textarea'],
@@ -111,8 +111,8 @@ final class Crud
                 'table' => 'transactions',
                 'title' => 'تراکنش مالی',
                 'order' => 'tx_date DESC, id DESC',
-                'status_field' => 'category',
-                'status_options' => ['درآمد', 'هزینه', 'واریز تیم'],
+                'status_field' => null,
+                'status_options' => [],
                 'source' => false,
                 'fields' => [
                     'tx_date' => ['label' => 'تاریخ', 'type' => 'date', 'placeholder' => '1404/01/01', 'required' => true],
@@ -306,7 +306,7 @@ final class Crud
         if (!Access::isTeam() && $resource === 'members') {
             $optional = [];
             foreach ($fields as $key => $meta) {
-                $optional[$key] = array_merge($meta, ['required' => false]);
+                $optional[$key] = array_merge($meta, ['required' => $key === 'team_id' ? true : false]);
             }
 
             return $optional;
@@ -445,6 +445,9 @@ final class Crud
 
     public function updateStatus(string $resource, int $id, string $status): array
     {
+        if (in_array($resource, ['locker_requests', 'locker-requests'], true)) {
+            throw new InvalidArgumentException('وضعیت درخواست کمد فقط از طریق تأیید/رد مدیر تغییر می‌کند.');
+        }
         $definition = $this->definition($resource);
         $statusField = $definition['status_field'] ?? null;
         if (!is_string($statusField) || $statusField === '') {
@@ -705,6 +708,13 @@ final class Crud
             if (($data['category'] ?? '') === 'واریز تیم' && (int) ($data['amount'] ?? 0) < 0) {
                 $data['amount'] = abs((int) $data['amount']);
             }
+            $existingCategory = '';
+            if (!$creating && $recordId > 0) {
+                $statement = $this->pdo->prepare('SELECT category FROM transactions WHERE id = :id');
+                $statement->execute(['id' => $recordId]);
+                $existingCategory = (string) ($statement->fetchColumn() ?: '');
+            }
+            $category = (string) ($data['category'] ?? $existingCategory);
             if (Access::isTeam()) {
                 $teamId = Access::scopedTeamId();
                 if ($teamId === null) {
@@ -716,7 +726,7 @@ final class Crud
                 $data['payment_status'] = 'pending';
                 $data['announced_at'] = JalaliDate::todayParts()['formatted'];
                 $data['amount'] = abs((int) ($data['amount'] ?? 0));
-            } elseif (($data['category'] ?? '') !== 'واریز تیم') {
+            } elseif ($category !== 'واریز تیم') {
                 $data['team_id'] = null;
                 $data['fiscal_year'] = null;
                 $data['month_index'] = null;

@@ -82,6 +82,14 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 4 6v6c0 5 3.4 9.7 8 11 4.6-1.3 8-6 8-11V6l-8-4Zm0 6.5A2.5 2.5 0 1 1 9.5 6 2.5 2.5 0 0 1 12 8.5Z" fill="currentColor"/></svg>
           <span>شارژ</span>
         </button>
+        <button class="bottom-nav-item" data-section="lockers" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm0 4v12h12V7H6Zm3 2h2v2H9V9Zm4 0h2v2h-2V9Z" fill="currentColor"/></svg>
+          <span>کمدها</span>
+        </button>
+        <button class="bottom-nav-item" data-section="payments" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4Zm2 2v2h12V7Zm0 4v2h8v-2Z" fill="currentColor"/></svg>
+          <span>واریز</span>
+        </button>
       </nav>
 
       <div class="shell">
@@ -192,7 +200,7 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
             <section id="desks" class="section">
               <article class="panel">
                 <div class="panel-head"><h2>میزهای اختصاص‌یافته</h2></div>
-                <p class="hint">تاریخ شروع و پایان تخصیص هر میز — در صورت تغییر میز در طول قرارداد، سابقه نمایش داده می‌شود.</p>
+                <p class="hint">میزهای فعال نهاد — برای سابقه کامل به پروفایل نهاد مراجعه کنید.</p>
                 <div id="teamDeskAssignments" class="desk-assignment-list">در حال بارگذاری…</div>
               </article>
             </section>
@@ -221,6 +229,7 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
               </article>
               <p class="hint">پس از واریز، اعلام کنید. واریزهای در انتظار در جدول اول نمایش داده می‌شوند.</p>
               <data-table title="اعلام‌های در انتظار تأیید" endpoint="api.php?resource=transactions" data-payment-filter="pending"></data-table>
+              <data-table title="اعلام‌های رد‌شده" endpoint="api.php?resource=transactions" data-payment-filter="rejected" data-no-add></data-table>
               <data-table title="سوابق پرداخت تأییدشده" endpoint="api.php?resource=payment-history" data-no-add></data-table>
             </section>
           </main>

@@ -66,7 +66,8 @@ final class Seeder
     ): array {
         $assignments = $this->pdo->prepare(
             'SELECT desk_number, usage_type, assigned_from, assigned_until
-             FROM desk_assignments WHERE team_id = :team_id'
+             FROM desk_assignments
+             WHERE team_id = :team_id AND (assigned_until IS NULL OR assigned_until = \'\')'
         );
         $assignments->execute(['team_id' => $teamId]);
         $rows = $assignments->fetchAll();

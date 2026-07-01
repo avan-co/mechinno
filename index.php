@@ -209,7 +209,7 @@ $assetVer = (string) max(
               <?php if (Access::canWrite()): ?>
               <data-table title="اعضا — در انتظار تأیید نهاد" endpoint="api.php?resource=pending-members" data-workflow="members" data-workflow-type="member-approve" data-table-key="pending-members"></data-table>
               <?php endif; ?>
-              <data-table title="اعضای تأییدشده" endpoint="api.php?resource=members"></data-table>
+              <data-table title="اعضای تأییدشده و رد‌شده" endpoint="api.php?resource=members"></data-table>
             </section>
 
             <section id="desks" class="section">
@@ -225,7 +225,7 @@ $assetVer = (string) max(
                 <p class="hint">۳ ردیف × ۸ میز — میزها به <strong>نهاد</strong> تخصیص می‌یابند، نه به هر عضو جداگانه.</p>
                 <div id="deskGrid" class="desk-map"></div>
               </article>
-              <data-table title="جزئیات میزها" endpoint="api.php?resource=desks"></data-table>
+              <data-table title="جزئیات میزها" endpoint="api.php?resource=desks" data-no-add></data-table>
             </section>
 
             <section id="lockers" class="section">

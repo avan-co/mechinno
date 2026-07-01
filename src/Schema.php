@@ -463,14 +463,6 @@ final class Schema
         if (!self::tableExists($pdo, 'desk_assignments')) {
             return;
         }
-        $pdo->exec(
-            'UPDATE desk_assignments SET assigned_until = NULL
-             WHERE id IN (
-                SELECT da.id FROM desk_assignments da
-                INNER JOIN desks d ON d.id = da.desk_id AND d.team_id = da.team_id
-                WHERE da.assigned_until IS NOT NULL
-             )'
-        );
         $duplicates = $pdo->query(
             'SELECT desk_id, MAX(id) AS keep_id
              FROM desk_assignments

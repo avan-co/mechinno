@@ -7,6 +7,9 @@ final class Repository
     /** @var list<string> Legacy DB columns that must never appear in API/UI. */
     private const LEGACY_COLUMNS = ['row_number', 'lockers', 'power_strips', 'rent_rate'];
 
+    /** @var array<int, array<string, int>>|null */
+    private ?array $paymentAllocationCache = null;
+
     public function __construct(private readonly PDO $pdo)
     {
     }
@@ -34,6 +37,13 @@ final class Repository
                 'expense_year' => $this->expenseForPeriod($this->currentFiscalYear()),
                 'expense_month' => $this->expenseForPeriod($this->currentFiscalYear(), $this->currentMonthIndex()),
                 'debt_total' => $this->scalar($this->debtSql()),
+                'charge_total' => $this->scalar('SELECT COALESCE(SUM(amount), 0) FROM charges'),
+                'income_total' => $this->incomeForPeriod($this->currentFiscalYear()),
+                'expense_total' => abs($this->expenseForPeriod($this->currentFiscalYear())),
+                'paid_total' => $this->scalar(
+                    "SELECT COALESCE(SUM(amount), 0) FROM transactions
+                     WHERE category = 'واریز تیم' AND payment_status = 'approved' AND confirmed = 1"
+                ),
                 'pending_members' => $this->scalar("SELECT COUNT(*) FROM members WHERE approval_status = 'pending'"),
                 'pending_payments' => $this->scalar("SELECT COUNT(*) FROM transactions WHERE category = 'واریز تیم' AND payment_status = 'pending'"),
                 'pending_locker_requests' => $this->scalar("SELECT COUNT(*) FROM locker_requests WHERE status = 'pending'"),
@@ -45,8 +55,11 @@ final class Repository
                  ORDER BY fiscal_year, month_index'
             ),
             'finance_by_category' => $this->rows(
-                'SELECT category, COUNT(*) AS count, COALESCE(SUM(amount), 0) AS amount
-                 FROM transactions GROUP BY category ORDER BY amount DESC'
+                "SELECT category, COUNT(*) AS count, COALESCE(SUM(amount), 0) AS amount
+                 FROM transactions
+                 WHERE confirmed = 1
+                   AND (category <> 'واریز تیم' OR payment_status = 'approved')
+                 GROUP BY category ORDER BY amount DESC"
             ),
             'debt_by_team' => $this->rows(
                 "SELECT t.id AS team_id, t.name AS team_name, COALESCE(SUM(c.amount), 0) - COALESCE(p.paid, 0) AS debt
@@ -55,7 +68,7 @@ final class Repository
                  LEFT JOIN (
                     SELECT team_id, COALESCE(SUM(amount), 0) AS paid
                     FROM transactions
-                    WHERE category = 'واریز تیم' AND confirmed = 1
+                    WHERE category = 'واریز تیم' AND confirmed = 1 AND payment_status = 'approved'
                     GROUP BY team_id
                  ) p ON p.team_id = t.id
                  GROUP BY t.id, t.name, p.paid
@@ -68,7 +81,8 @@ final class Repository
                         SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END) AS income,
                         SUM(CASE WHEN amount < 0 THEN ABS(amount) ELSE 0 END) AS expense
                  FROM transactions
-                 WHERE tx_date IS NOT NULL AND tx_date <> ''
+                 WHERE tx_date IS NOT NULL AND tx_date <> '' AND confirmed = 1
+                   AND (category <> 'واریز تیم' OR payment_status = 'approved')
                  GROUP BY substr(tx_date, 1, 7)
                  ORDER BY period"
             ),
@@ -96,11 +110,11 @@ final class Repository
             'SELECT COALESCE(SUM(amount), 0) FROM charges WHERE fiscal_year = :year AND month_index = :month',
             ['year' => $year, 'month' => $month]
         );
-        $paidTotal = $this->preparedScalar(
-            "SELECT COALESCE(SUM(amount), 0) FROM transactions
-             WHERE category = 'واریز تیم' AND confirmed = 1 AND fiscal_year = :year AND month_index = :month",
-            ['year' => $year, 'month' => $month]
-        );
+        $allocationMap = $this->paymentAllocationByTeamMonth();
+        $paidTotal = 0;
+        foreach ($allocationMap as $teamAllocations) {
+            $paidTotal += (int) ($teamAllocations[$year . '-' . $month] ?? 0);
+        }
 
         return [
             'fiscal_year' => $year,
@@ -118,7 +132,7 @@ final class Repository
                     LEFT JOIN (
                         SELECT team_id, SUM(amount) AS paid
                         FROM transactions
-                        WHERE category = 'واریز تیم' AND confirmed = 1
+                        WHERE category = 'واریز تیم' AND confirmed = 1 AND payment_status = 'approved'
                           AND fiscal_year = :year AND month_index = :month
                         GROUP BY team_id
                     ) p ON p.team_id = c.team_id
@@ -323,7 +337,7 @@ final class Repository
                 'charges' => $this->preparedScalar('SELECT COUNT(*) FROM charges WHERE team_id = :id', ['id' => $teamId]),
                 'transactions' => $this->teamTransactionCount($teamId, $filters),
                 'payment-history' => $this->preparedScalar(
-                    "SELECT COUNT(*) FROM transactions WHERE team_id = :id AND category = 'واریز تیم' AND confirmed = 1",
+                    "SELECT COUNT(*) FROM transactions WHERE team_id = :id AND category = 'واریز تیم' AND confirmed = 1 AND payment_status = 'approved'",
                     ['id' => $teamId]
                 ),
                 'locker-requests' => $this->preparedScalar('SELECT COUNT(*) FROM locker_requests WHERE team_id = :id', ['id' => $teamId]),
@@ -343,14 +357,14 @@ final class Repository
             'charges' => 'SELECT COUNT(*) FROM charges',
             'transactions' => $this->transactionCountSql($filters),
             'rate_settings' => 'SELECT COUNT(*) FROM rate_settings',
-            'panel_users' => 'SELECT COUNT(*) FROM panel_users',
+            'panel_users' => "SELECT COUNT(*) FROM panel_users WHERE role IN ('admin_editor', 'admin_viewer')",
             'development_plans' => 'SELECT COUNT(*) FROM development_plans',
             'pending-members' => "SELECT COUNT(*) FROM members WHERE approval_status = 'pending'",
             'pending-payments' => "SELECT COUNT(*) FROM transactions WHERE category = 'واریز تیم' AND payment_status = 'pending'",
             'pending-locker-requests' => "SELECT COUNT(*) FROM locker_requests WHERE status = 'pending'",
             'locker-requests' => 'SELECT COUNT(*) FROM locker_requests',
             'desk-assignments' => 'SELECT COUNT(*) FROM desk_assignments',
-            'payment-history' => "SELECT COUNT(*) FROM transactions WHERE category = 'واریز تیم' AND confirmed = 1",
+            'payment-history' => "SELECT COUNT(*) FROM transactions WHERE category = 'واریز تیم' AND confirmed = 1 AND payment_status = 'approved'",
             default => throw new InvalidArgumentException('Unknown resource.'),
         };
 
@@ -524,7 +538,7 @@ final class Repository
                         END AS month_name
                  FROM transactions t
                  LEFT JOIN teams tm ON tm.id = t.team_id
-                 WHERE t.category = 'واریز تیم' AND t.confirmed = 1"
+                 WHERE t.category = 'واریز تیم' AND t.confirmed = 1 AND t.payment_status = 'approved'"
                 . ($teamId !== null ? " AND t.team_id = {$teamId}" : '')
                 . ' ORDER BY t.fiscal_year DESC, t.month_index DESC, t.tx_date DESC',
             'development_plans' => 'SELECT p.id, p.title, p.description, p.category, p.priority, p.status, p.due_date, p.notes,
@@ -535,10 +549,11 @@ final class Repository
                  ORDER BY p.sort_order, p.id DESC',
             'rate_settings' => 'SELECT id, fiscal_year, title, charge_rate, informal_rent_rate, effective_from, notes
                  FROM rate_settings ORDER BY fiscal_year, effective_from, id',
-            'panel_users' => 'SELECT u.id, u.username, u.role, u.team_id, u.full_name, u.is_active, t.name AS team_label
+            'panel_users' => "SELECT u.id, u.username, u.role, u.team_id, u.full_name, u.is_active, t.name AS team_label
                  FROM panel_users u
                  LEFT JOIN teams t ON t.id = u.team_id
-                 ORDER BY u.username',
+                 WHERE u.role IN ('admin_editor', 'admin_viewer')
+                 ORDER BY u.username",
             default => throw new InvalidArgumentException('Unknown resource.'),
         };
     }
@@ -602,6 +617,7 @@ final class Repository
                            END AS month_name
                     FROM transactions t
                     WHERE t.team_id = :team_id AND t.category = 'واریز تیم'
+                      AND t.payment_status IN ('approved', 'rejected')
                  ) q
                  ORDER BY fiscal_year DESC, month_index DESC, tx_date DESC",
                 ['team_id' => $teamId]
@@ -765,14 +781,7 @@ final class Repository
              FROM charges WHERE fiscal_year = :year' . ($teamId !== null ? ' AND team_id = :team_id' : ''),
             $teamId !== null ? ['year' => $fiscalYear, 'team_id' => $teamId] : ['year' => $fiscalYear]
         );
-        $payments = $this->preparedRows(
-            "SELECT team_id, month_index, SUM(amount) AS paid
-             FROM transactions
-             WHERE category = 'واریز تیم' AND confirmed = 1 AND fiscal_year = :year"
-            . ($teamId !== null ? ' AND team_id = :team_id' : '')
-            . ' GROUP BY team_id, month_index',
-            $teamId !== null ? ['year' => $fiscalYear, 'team_id' => $teamId] : ['year' => $fiscalYear]
-        );
+        $allocationMap = $this->paymentAllocationByTeamMonth();
 
         $chargeMap = [];
         foreach ($charges as $row) {
@@ -790,16 +799,12 @@ final class Repository
             $chargeMap[$teamKey][$monthKey]['rent_amount'] += (int) ($row['rent_amount'] ?? 0);
             $chargeMap[$teamKey][$monthKey]['amount'] += (int) ($row['amount'] ?? 0);
         }
-        $paymentMap = [];
-        foreach ($payments as $row) {
-            $paymentMap[$row['team_id']][$row['month_index']] = (int) $row['paid'];
-        }
-
         $rows = [];
         foreach ($teams as $team) {
             $cells = [];
             $contractStart = (string) ($team['contract_start'] ?? '');
             $contractEnd = (string) ($team['contract_end'] ?? '');
+            $teamAllocations = $allocationMap[(int) $team['id']] ?? [];
             foreach ($months as $month) {
                 $idx = (int) $month['index'];
                 if (!JalaliDate::monthInContract($fiscalYear, $idx, $contractStart, $contractEnd)) {
@@ -814,7 +819,7 @@ final class Repository
                     continue;
                 }
                 $due = $chargeMap[$team['id']][$idx] ?? null;
-                $paid = $paymentMap[$team['id']][$idx] ?? 0;
+                $paid = (int) ($teamAllocations[$fiscalYear . '-' . $idx] ?? 0);
                 $amountDue = (int) ($due['amount'] ?? 0);
                 $cells[] = [
                     'month_index' => $idx,
@@ -836,21 +841,32 @@ final class Repository
      */
     public function chargeDebtRows(): array
     {
-        return $this->rows(
-            "SELECT t.name AS team_name, c.fiscal_year, c.month_name,
-                    c.charge_amount, c.rent_amount, c.amount AS amount_due,
-                    COALESCE(p.paid, 0) AS amount_paid,
-                    CASE WHEN COALESCE(p.paid, 0) >= c.amount THEN 'پرداخت‌شده'
-                         WHEN COALESCE(p.paid, 0) > 0 THEN 'ناقص' ELSE 'بدهکار به مرکز' END AS status
+        $allocationMap = $this->paymentAllocationByTeamMonth();
+        $rows = [];
+        foreach ($this->rows(
+            'SELECT c.team_id, t.name AS team_name, c.fiscal_year, c.month_index, c.month_name,
+                    c.charge_amount, c.rent_amount, c.amount AS amount_due
              FROM charges c
              JOIN teams t ON t.id = c.team_id
-             LEFT JOIN (
-                SELECT team_id, fiscal_year, month_index, SUM(amount) AS paid
-                FROM transactions WHERE category = 'واریز تیم' AND confirmed = 1
-                GROUP BY team_id, fiscal_year, month_index
-             ) p ON p.team_id = c.team_id AND p.fiscal_year = c.fiscal_year AND p.month_index = c.month_index
-             ORDER BY c.fiscal_year, t.name, c.month_index"
-        );
+             ORDER BY c.fiscal_year, t.name, c.month_index'
+        ) as $row) {
+            $teamId = (int) ($row['team_id'] ?? 0);
+            $key = ($row['fiscal_year'] ?? '') . '-' . (int) ($row['month_index'] ?? 0);
+            $paid = (int) ($allocationMap[$teamId][$key] ?? 0);
+            $due = (int) ($row['amount_due'] ?? 0);
+            $rows[] = [
+                'team_name' => $row['team_name'] ?? '',
+                'fiscal_year' => $row['fiscal_year'] ?? '',
+                'month_name' => $row['month_name'] ?? '',
+                'charge_amount' => (int) ($row['charge_amount'] ?? 0),
+                'rent_amount' => (int) ($row['rent_amount'] ?? 0),
+                'amount_due' => $due,
+                'amount_paid' => $paid,
+                'status' => $due <= 0 ? '—' : ($paid >= $due ? 'پرداخت‌شده' : ($paid > 0 ? 'ناقص' : 'بدهکار به مرکز')),
+            ];
+        }
+
+        return $rows;
     }
 
     /**
@@ -960,7 +976,7 @@ final class Repository
     private function debtSql(): string
     {
         return 'SELECT COALESCE((SELECT SUM(amount) FROM charges), 0)
-                     - COALESCE((SELECT SUM(amount) FROM transactions WHERE category = \'واریز تیم\' AND confirmed = 1), 0)';
+                     - COALESCE((SELECT SUM(amount) FROM transactions WHERE category = \'واریز تیم\' AND confirmed = 1 AND payment_status = \'approved\'), 0)';
     }
 
     private function contractDebtForTeam(int $teamId): int
@@ -1026,7 +1042,7 @@ final class Repository
                 continue;
             }
             $key = ($row['fiscal_year'] ?? '') . '-' . (int) ($row['month_index'] ?? 0);
-            $charges[$key] = (int) ($row['amount'] ?? 0);
+            $charges[$key] = ($charges[$key] ?? 0) + (int) ($row['amount'] ?? 0);
         }
 
         $remaining = $this->contractPaidTotalForTeam($teamId);
@@ -1038,6 +1054,27 @@ final class Repository
         }
 
         return ['by_month' => $byMonth, 'remaining' => max(0, $remaining)];
+    }
+
+    /**
+     * @return array<int, array<string, int>>
+     */
+    private function paymentAllocationByTeamMonth(): array
+    {
+        if ($this->paymentAllocationCache !== null) {
+            return $this->paymentAllocationCache;
+        }
+
+        $map = [];
+        foreach ($this->pdo->query('SELECT id, contract_start, contract_end FROM teams')->fetchAll() as $team) {
+            $teamId = (int) $team['id'];
+            $allocation = $this->allocatedPaymentsForTeam($teamId);
+            $map[$teamId] = $allocation['by_month'];
+        }
+
+        $this->paymentAllocationCache = $map;
+
+        return $map;
     }
 
     private function currentFiscalYear(): string
@@ -1057,7 +1094,7 @@ final class Repository
                 "SELECT COALESCE(SUM(amount), 0) FROM transactions
                  WHERE confirmed = 1 AND amount > 0
                  AND (
-                    (category = 'واریز تیم' AND fiscal_year = :year AND month_index = :month)
+                    (category = 'واریز تیم' AND payment_status = 'approved' AND fiscal_year = :year AND month_index = :month)
                     OR (category = 'درآمد' AND tx_date LIKE :date_prefix)
                  )",
                 ['year' => $year, 'month' => $month, 'date_prefix' => sprintf('%s/%02d', $year, $month) . '%']

@@ -41,7 +41,7 @@ final class DeskAssignments
             $assignedFrom = $today;
         }
 
-        if ($current !== false && (int) ($current['team_id'] ?? 0) === $teamId) {
+        if ($current !== null && (int) ($current['team_id'] ?? 0) === $teamId) {
             $this->pdo->prepare(
                 'UPDATE desk_assignments SET usage_type = :usage_type, notes = :notes,
                  assigned_from = :assigned_from, assigned_until = :assigned_until WHERE id = :id'
@@ -56,7 +56,7 @@ final class DeskAssignments
             return;
         }
 
-        if ($current !== false && $current !== null) {
+        if ($current !== null) {
             $closeUntil = $assignedFrom !== '' ? $assignedFrom : $today;
             $this->pdo->prepare(
                 'UPDATE desk_assignments SET assigned_until = :until WHERE id = :id'

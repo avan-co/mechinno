@@ -114,6 +114,9 @@ final class Workflow
         }
         $lockerId = (int) $locker['id'];
         $status = (string) ($locker['status'] ?? 'خالی');
+        if ($status === 'خراب') {
+            throw new InvalidArgumentException('این کمد خراب است و قابل تخصیص نیست.');
+        }
         $assignedTeam = (int) ($locker['team_id'] ?? 0);
         if (in_array($status, ['تخصیص یافته', 'رزرو'], true) && $assignedTeam > 0 && $assignedTeam !== $teamId) {
             throw new InvalidArgumentException('این کمد قبلاً به نهاد دیگری تخصیص یافته است.');

@@ -122,6 +122,8 @@ final class ExcelExporter
                             t.confirmed, t.notes
                             FROM transactions t
                             LEFT JOIN teams tm ON tm.id = t.team_id
+                            WHERE t.confirmed = 1
+                              AND (t.category <> 'واریز تیم' OR t.payment_status = 'approved')
                             ORDER BY t.tx_date DESC, t.id DESC",
                 'headers' => ['تاریخ', 'شرح', 'مبلغ', 'دسته', 'نهاد', 'سال مالی', 'ماه', 'تأیید', 'توضیحات'],
             ],

@@ -576,6 +576,13 @@ code { color: var(--primary); font-size: 0.9em; }
 .payment-guide-note { text-align: right; }
 .payment-account-grid { direction: rtl; }
 .payment-account-item { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+.ltr-input,
+input[dir="ltr"],
+textarea[dir="ltr"] {
+  direction: ltr;
+  text-align: left;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
 .payment-account-item .ltr-value {
   direction: ltr;
   unicode-bidi: isolate;

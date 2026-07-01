@@ -113,6 +113,7 @@ const cardNavMap = {
   members: "members",
   desks: "desks",
   debt_total_team: "charges",
+  charge_total: "charges",
   paid_total: "payments",
 };
 
@@ -188,7 +189,7 @@ const panelMode = window.MECHINNO?.panel || "admin";
 
 const editableResources = new Set(
   canWrite
-    ? ["members", "teams", "desks", "lockers", "charges", "transactions", "rate_settings", "panel_users", "development_plans"]
+    ? ["members", "teams", "lockers", "charges", "transactions", "rate_settings", "panel_users", "development_plans"]
     : canTeamSubmit
       ? ["members", "transactions", "locker-requests"]
       : []
@@ -461,7 +462,8 @@ const renderCards = (cards, config = cardConfig) => {
   container.innerHTML = config
     .map(([key, title, icon, tone]) => {
       let value = cards?.[key];
-      if (key === "desks" && cards?.desk_numbers) value = cards.desk_numbers || "—";
+      if (key === "desks" && panelMode === "team" && cards?.desk_numbers) value = cards.desk_numbers || "—";
+      else if (key === "desks" && panelMode === "team") value = formatNumber(cards?.desks ?? value);
       else if (moneyCards.has(key)) value = formatMoney(value);
       else value = formatNumber(value);
       const section = resolveCardSection(key);
@@ -585,7 +587,9 @@ const renderTeamDashboard = (data) => {
     amount: row.amount,
   })));
   const title = document.getElementById("pageTitle");
-  if (title && team.name) title.textContent = team.name;
+  if (title && team.name && document.querySelector(".section.active")?.id === "overview") {
+    title.textContent = team.name;
+  }
 };
 
 const loadTeamDeskAssignments = async () => {
@@ -892,16 +896,21 @@ const loadChargesCollage = async () => {
   const data = await fetchJson(`api.php?resource=charges-matrix&fiscal_year=${encodeURIComponent(year)}`);
   const container = document.getElementById("chargesCollage");
   if (!data.rows?.length) {
-    container.innerHTML = `<div class="empty">داده شارژی برای این سال نیست — ابتدا نهاد و نرخ تعریف کنید.</div>`;
+    const emptyMessage = panelMode === "team"
+      ? "برای این سال شارژی ثبت نشده است."
+      : "داده شارژی برای این سال نیست — ابتدا نهاد و نرخ تعریف کنید.";
+    container.innerHTML = `<div class="empty">${escapeHtml(emptyMessage)}</div>`;
     return;
   }
-  const head = `<tr><th class="team-col">نهاد</th>${data.months.map((m) => `<th>${escapeHtml(m.name)}</th>`).join("")}</tr>`;
+  const head = panelMode === "team"
+    ? `<tr>${data.months.map((m) => `<th>${escapeHtml(m.name)}</th>`).join("")}</tr>`
+    : `<tr><th class="team-col">نهاد</th>${data.months.map((m) => `<th>${escapeHtml(m.name)}</th>`).join("")}</tr>`;
   const body = data.rows.map((row) => `
     <tr>
-      <td class="team-col">
+      ${panelMode === "team" ? "" : `<td class="team-col">
         <button type="button" class="text-link" data-team-id="${escapeHtml(row.team.id)}">${escapeHtml(row.team.name)}</button>
         <br>${entityBadge(row.team.entity_type)}
-      </td>
+      </td>`}
       ${row.cells.map((cell) => {
         const cls = cell.status === "پرداخت‌شده" ? "cell-paid"
           : cell.status === "ناقص" ? "cell-partial"
@@ -1097,11 +1106,17 @@ const closeModal = () => {
   if (modal) modal.hidden = true;
 };
 
+const ltrFields = new Set([
+  "access_code", "phone", "national_id", "portal_username", "portal_password",
+  "account_number", "card_number", "sheba", "payment_reference", "entity_code", "member_code",
+]);
+
 const fieldInput = (name, meta, value) => {
   const type = meta.type || "text";
   const required = meta.required ? "required" : "";
   const placeholder = meta.placeholder ? `placeholder="${escapeHtml(meta.placeholder)}"` : "";
   const safeValue = value ?? "";
+  const ltr = ltrFields.has(name) ? 'dir="ltr" class="ltr-input"' : "";
 
   if (type === "textarea") {
     return `<textarea name="${escapeHtml(name)}" ${required} ${placeholder}>${escapeHtml(safeValue)}</textarea>`;
@@ -1118,12 +1133,12 @@ const fieldInput = (name, meta, value) => {
     </select>`;
   }
   if (type === "number") {
-    return `<input name="${escapeHtml(name)}" type="number" value="${escapeHtml(safeValue)}" ${required} ${placeholder} />`;
+    return `<input name="${escapeHtml(name)}" type="number" value="${escapeHtml(safeValue)}" ${required} ${placeholder} ${ltr} />`;
   }
   if (type === "password") {
-    return `<input name="${escapeHtml(name)}" type="password" value="" ${required} autocomplete="new-password" placeholder="برای تغییر وارد کنید" />`;
+    return `<input name="${escapeHtml(name)}" type="password" value="" ${required} autocomplete="new-password" placeholder="برای تغییر وارد کنید" ${ltr} />`;
   }
-  return `<input name="${escapeHtml(name)}" type="text" value="${escapeHtml(safeValue)}" ${required} ${placeholder} />`;
+  return `<input name="${escapeHtml(name)}" type="text" value="${escapeHtml(safeValue)}" ${required} ${placeholder} ${ltr} />`;
 };
 
 const openRecordModal = ({ resource, definition, record = null, onSaved, title = null }) => {
@@ -1300,7 +1315,7 @@ const formatCell = (column, value, row, resource) => {
     }
     return teamLink(row[linkColumns[column]], value);
   }
-  if (column === "full_name" && resource === "members" && row.team_id) {
+  if (column === "full_name" && resource === "members" && row.team_id && panelMode === "admin") {
     return `${escapeHtml(value || "—")} <small>${teamLink(row.team_id, "پروفایل نهاد")}</small>`;
   }
   if (column === "desk_numbers" && value) {
