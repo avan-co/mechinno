@@ -128,7 +128,6 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
         <div class="main-wrap">
           <header class="topbar">
             <div class="topbar-start">
-              <a class="logout-top" href="logout.php" title="خروج از پنل">خروج</a>
               <button class="menu-toggle" id="menuToggle" type="button" aria-label="منو">
                 <svg viewBox="0 0 24 24"><path d="M4 7h16v2H4V7Zm0 5h16v2H4v-2Zm0 5h16v2H4v-2Z" fill="currentColor"/></svg>
               </button>
@@ -138,6 +137,7 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
               <h1 id="pageTitle"><?= e($team['name']) ?></h1>
             </div>
             <div class="topbar-actions">
+              <a class="logout-top" href="logout.php" title="خروج از پنل">خروج</a>
               <span class="role-chip entity-name-chip"><?= e($team['name']) ?></span>
               <span class="date-chip"><?= e($today['formatted']) ?></span>
               <button class="icon-btn" id="themeToggle" type="button" title="تغییر تم" aria-label="تغییر تم">

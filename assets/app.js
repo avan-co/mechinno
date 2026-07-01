@@ -16,6 +16,9 @@ const labels = {
   phone: "تماس",
   desk_count: "تعداد میز",
   informal_seats: "صندلی غیررسمی",
+  assigned_from: "تاریخ شروع تخصیص",
+  assigned_until: "تاریخ پایان تخصیص",
+  desk_number: "شماره میز",
   desk_numbers: "میزهای نهاد",
   number: "شماره میز",
   usage_type: "نوع استفاده",
@@ -197,7 +200,8 @@ const hiddenColumns = new Set([
 const plainColumns = new Set([
   "phone", "national_id", "access_code", "member_code", "entity_code",
   "fiscal_year", "tx_date", "effective_from", "joined_at", "delivered_at",
-  "key_number", "number", "locker_number", "desk_numbers", "month_index", "month_name",
+  "key_number", "number", "locker_number", "desk_numbers", "desk_number", "month_index", "month_name",
+  "assigned_from", "assigned_until",
   "portal_username", "portal_password",
 ]);
 
@@ -322,7 +326,11 @@ const reloadSectionTables = (sectionId, resetPage = false) => {
 const refreshAfterMutation = async (sectionId = null) => {
   invalidateCrudMeta();
   if (sectionId) reloadSectionTables(sectionId, true);
-  await loadDashboard();
+  try {
+    await loadDashboard();
+  } catch (error) {
+    showToast(error.message, "error");
+  }
   document.querySelectorAll("data-table").forEach((table) => {
     if (!sectionId || table.closest(`#${sectionId}`)) return;
     table.load?.();
@@ -724,15 +732,29 @@ const loadDevProgramSummary = async () => {
     </div>`;
 };
 
+const wantsAccessLabel = (value) =>
+  value === 1 || value === "1" || value === true || value === "true" ? "بله — نیاز به تردد" : "خیر";
+
 const loadDeskGrid = async () => {
   const isTeamMap = panelMode === "team";
-  const desks = isTeamMap
-    ? (await fetchJson("api.php?resource=desks-map")).rows || []
-    : (await fetchResource("api.php?resource=desks", { page: 1, perPage: 100 })).rows;
+  let desks = [];
+  try {
+    desks = (await fetchJson("api.php?resource=desks-map")).rows || [];
+  } catch (error) {
+    desks = (await fetchResource("api.php?resource=desks", { page: 1, perPage: 100 })).rows;
+  }
   const container = document.getElementById("deskGrid");
   if (!container) return;
+  if (!desks.length) {
+    container.innerHTML = `<div class="empty">نقشه میزها بارگذاری نشد.</div>`;
+    return;
+  }
   const rows = { 1: [], 2: [], 3: [] };
-  desks.forEach((desk) => rows[desk.row_index]?.push(desk));
+  desks.forEach((desk) => {
+    const rowIndex = Number(desk.row_index) || 1;
+    if (!rows[rowIndex]) rows[rowIndex] = [];
+    rows[rowIndex].push(desk);
+  });
   container.innerHTML = [1, 2, 3].map((rowIndex) => `
     <div class="desk-row-block">
       <div class="desk-row-label">ردیف ${rowIndex}</div>
@@ -1104,28 +1126,27 @@ const relatedSectionLabels = {
   teams: "نهادها", members: "اعضا", desks: "میزها", lockers: "کمدها", charges: "شارژ", transactions: "مالی",
 };
 
-const workflowApprove = async (resource, id, row = {}) => {
-  const workflowType = document.querySelector(`data-table[data-table-key="${resource}"]`)?.getAttribute("data-workflow-type")
-    || document.querySelector(`data-table[data-workflow="${resource.replace("pending-", "")}"]`)?.getAttribute("data-workflow-type")
-    || "";
-
+const workflowApprove = async (resource, id, row = {}, workflowType = "") => {
   if (resource === "pending-members" || workflowType === "member-approve") {
-    const wantsAccess = Number(row.wants_access) === 1;
+    const wantsAccess = wantsAccessLabel(row.wants_access) === "بله — نیاز به تردد";
     const accessCode = wantsAccess
       ? window.prompt("در صورت نیاز کد دستگاه تردد را وارد کنید (اختیاری):", "") ?? ""
       : "";
+    if (wantsAccess && accessCode === null) return;
     await postJson(`api.php?resource=${encodeURIComponent(resource)}&action=approve`, { id, access_code: accessCode });
     return;
   }
 
   if (resource === "pending-locker-requests" || workflowType === "locker-request") {
     const lockerNumber = window.prompt("شماره کمد برای تخصیص:", "");
-    if (lockerNumber === null || lockerNumber.trim() === "") {
-      throw new Error("شماره کمد الزامی است.");
+    if (lockerNumber === null) return;
+    const parsed = Number(String(lockerNumber).replace(/[^\d]/g, ""));
+    if (!parsed) {
+      throw new Error("شماره کمد معتبر نیست.");
     }
     await postJson(`api.php?resource=${encodeURIComponent(resource)}&action=approve`, {
       id,
-      locker_number: Number(lockerNumber.replace(/[^\d]/g, "")),
+      locker_number: parsed,
     });
     return;
   }
@@ -1185,7 +1206,7 @@ const formatCell = (column, value, row, resource) => {
     return escapeHtml(value || "—");
   }
   if (column === "confirmed") return Number(value) === 1 ? "بله" : "خیر";
-  if (column === "wants_access") return Number(value) === 1 ? "بله — نیاز به تردد" : "خیر";
+  if (column === "wants_access") return wantsAccessLabel(value);
   if (column === "approval_status") return approvalStatusBadge(value);
   if (column === "payment_status") return paymentStatusBadge(value);
   if (column === "status" && resource === "development_plans") {
@@ -1220,6 +1241,11 @@ const formatCell = (column, value, row, resource) => {
   if (column === "is_active") return Number(value) === 1 ? "فعال" : "غیرفعال";
   if (column === "password") return "—";
   if (column === "status" && resource === "lockers") return lockerStatusBadge(value);
+  if (column === "status" && (resource === "locker-requests" || resource === "pending-locker-requests")) {
+    const map = { pending: "در انتظار", approved: "تأیید‌شده", rejected: "رد‌شده" };
+    const label = map[value] || value || "—";
+    return `<span class="badge">${escapeHtml(label)}</span>`;
+  }
   if (linkColumns[column] && row[linkColumns[column]] && value) {
     if (column === "name" && resource === "teams") {
       return `<button type="button" class="text-link" data-team-id="${escapeHtml(row.id)}">${escapeHtml(value)}</button>`;
@@ -1491,6 +1517,42 @@ class DataTable extends HTMLElement {
     const button = event.target.closest("button[data-action]");
     if (!button || !this.contains(button)) return;
     const id = Number(button.dataset.id);
+    if (!id) return;
+
+    if (button.dataset.action === "approve" && this.workflow) {
+      if (button.disabled) return;
+      button.disabled = true;
+      const row = this.rows.find((item) => String(item.id) === String(id)) || {};
+      try {
+        await workflowApprove(this.resource, id, row, this.workflowType);
+        await this.load();
+        await refreshAfterMutation(this.closest(".section")?.id || null);
+        showToast("تأیید شد.", "success");
+      } catch (error) {
+        showToast(error.message, "error");
+      } finally {
+        button.disabled = false;
+      }
+      return;
+    }
+    if (button.dataset.action === "reject" && this.workflow) {
+      if (button.disabled) return;
+      const reason = window.prompt("دلیل رد (اختیاری):") ?? "";
+      if (reason === null) return;
+      button.disabled = true;
+      try {
+        await workflowReject(this.resource, id, reason);
+        await this.load();
+        await refreshAfterMutation(this.closest(".section")?.id || null);
+        showToast("رد شد.", "success");
+      } catch (error) {
+        showToast(error.message, "error");
+      } finally {
+        button.disabled = false;
+      }
+      return;
+    }
+
     const record = this.rows.find((row) => Number(row.id) === id);
     if (!record) return;
     if (button.dataset.action === "profile") {
@@ -1504,31 +1566,6 @@ class DataTable extends HTMLElement {
         const result = await postJson("api.php?resource=teams&action=reset-portal-password", { id });
         await this.load();
         showToast(`رمز جدید: ${result.credentials?.password || "—"}`, "success");
-      } catch (error) {
-        showToast(error.message, "error");
-      }
-      return;
-    }
-    if (button.dataset.action === "approve" && this.workflow) {
-      const row = this.rows.find((item) => String(item.id) === String(id)) || {};
-      try {
-        await workflowApprove(this.resource, id, row);
-        await this.load();
-        await refreshAfterMutation(this.closest(".section")?.id || null);
-        showToast("تأیید شد.", "success");
-      } catch (error) {
-        showToast(error.message, "error");
-      }
-      return;
-    }
-    if (button.dataset.action === "reject" && this.workflow) {
-      const reason = window.prompt("دلیل رد (اختیاری):") ?? "";
-      if (reason === null) return;
-      try {
-        await workflowReject(this.resource, id, reason);
-        await this.load();
-        await refreshAfterMutation(this.closest(".section")?.id || null);
-        showToast("رد شد.", "success");
       } catch (error) {
         showToast(error.message, "error");
       }
