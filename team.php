@@ -74,21 +74,21 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm-7 8a7 7 0 0 1 14 0Z" fill="currentColor"/></svg>
           <span>اعضا</span>
         </button>
-        <button class="bottom-nav-item" data-section="desks" type="button">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16a1 1 0 0 1 1 1v3H3V6a1 1 0 0 1 1-1Zm17 6v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-8h18ZM8 17h2v-3H8v3Zm6 0h2v-3h-2v3Z" fill="currentColor"/></svg>
-          <span>میزها</span>
-        </button>
         <button class="bottom-nav-item" data-section="charges" type="button">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 4 6v6c0 5 3.4 9.7 8 11 4.6-1.3 8-6 8-11V6l-8-4Zm0 6.5A2.5 2.5 0 1 1 9.5 6 2.5 2.5 0 0 1 12 8.5Z" fill="currentColor"/></svg>
           <span>شارژ</span>
         </button>
-        <button class="bottom-nav-item" data-section="lockers" type="button">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm0 4v12h12V7H6Zm3 2h2v2H9V9Zm4 0h2v2h-2V9Z" fill="currentColor"/></svg>
-          <span>کمدها</span>
+        <button class="bottom-nav-item" data-section="profile" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm-8 9a8 8 0 0 1 16 0Z" fill="currentColor"/></svg>
+          <span>پروفایل</span>
         </button>
         <button class="bottom-nav-item" data-section="payments" type="button">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4Zm2 2v2h12V7Zm0 4v2h8v-2Z" fill="currentColor"/></svg>
           <span>واریز</span>
+        </button>
+        <button class="bottom-nav-item" type="button" id="bottomNavMenu" aria-label="باز کردن منو">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16v2H4V7Zm0 5h16v2H4v-2Zm0 5h16v2H4v-2Z" fill="currentColor"/></svg>
+          <span>منو</span>
         </button>
       </nav>
 
@@ -131,6 +131,10 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
               اعلام واریز
             </button>
           </nav>
+
+          <div class="sidebar-foot">
+            <a class="logout-link" href="logout.php">خروج</a>
+          </div>
         </aside>
 
         <div class="main-wrap">

@@ -125,13 +125,22 @@ const adminCardConfig = [
   ["debt_total", "طلب از نهادها", "!", "debt"],
 ];
 
+const statIconSvg = {
+  members: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm-7 8a7 7 0 0 1 14 0Z" fill="currentColor"/></svg>',
+  desks: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16a1 1 0 0 1 1 1v3H3V6a1 1 0 0 1 1-1Zm17 6v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-8h18ZM8 17h2v-3H8v3Zm6 0h2v-3h-2v3Z" fill="currentColor"/></svg>',
+  charges: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 4 6v6c0 5 3.4 9.7 8 11 4.6-1.3 8-6 8-11V6l-8-4Zm0 6.5A2.5 2.5 0 1 1 9.5 6 2.5 2.5 0 0 1 12 8.5Z" fill="currentColor"/></svg>',
+  debt: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm1 5v4h4v2h-6V7Z" fill="currentColor"/></svg>',
+  paid: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4Z" fill="currentColor"/></svg>',
+  payments: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4Zm2 2v2h12V7Zm0 4v2h8v-2Z" fill="currentColor"/></svg>',
+};
+
 const teamCardConfig = [
-  ["members", "اعضای فعال", "👤", "members"],
-  ["desks", "میز", "▦", "desks"],
-  ["charge_total", "مبلغ کل قرارداد", "📋", "charges"],
-  ["debt_total", "مانده بدهی قرارداد", "!", "debt"],
-  ["paid_total", "پرداخت‌شده", "✓", "paid"],
-  ["pending_payments", "واریزهای در انتظار تأیید", "⏳", "payments"],
+  ["members", "اعضای فعال", statIconSvg.members, "members"],
+  ["desks", "میز", statIconSvg.desks, "desks"],
+  ["charge_total", "مبلغ کل قرارداد", statIconSvg.charges, "charge"],
+  ["debt_total", "مانده بدهی قرارداد", statIconSvg.debt, "debt"],
+  ["paid_total", "پرداخت‌شده", statIconSvg.paid, "paid"],
+  ["pending_payments", "واریزهای در انتظار تأیید", statIconSvg.payments, "payments"],
 ];
 
 const cardConfig = adminCardConfig;
@@ -392,11 +401,12 @@ const openDrawer = () => {
 };
 
 const activateSection = (id, options = {}) => {
+  if (!id) return;
   if (options.highlightDesk !== undefined) highlightDesk = options.highlightDesk;
   if (options.highlightLocker !== undefined) highlightLocker = options.highlightLocker;
 
   document.querySelectorAll(".section").forEach((s) => s.classList.toggle("active", s.id === id));
-  document.querySelectorAll(".nav-item, .bottom-nav-item").forEach((i) => {
+  document.querySelectorAll(".nav-item, .bottom-nav-item[data-section]").forEach((i) => {
     i.classList.toggle("active", i.dataset.section === id);
   });
 
@@ -426,7 +436,7 @@ const activateSection = (id, options = {}) => {
   }
 };
 
-document.querySelectorAll(".nav-item, .bottom-nav-item").forEach((item) => {
+document.querySelectorAll(".nav-item, .bottom-nav-item[data-section]").forEach((item) => {
   item.addEventListener("click", () => activateSection(item.dataset.section));
 });
 
@@ -711,9 +721,11 @@ const loadTeamDeskAssignments = async () => {
   if (!host) return;
   const { rows } = await fetchResource("api.php?resource=desk-assignments", { page: 1, perPage: 100 });
   if (!rows.length) {
+    host.classList.add("is-ready");
     host.innerHTML = `<div class="empty">هنوز میزی به نهاد شما تخصیص داده نشده است.</div>`;
     return;
   }
+  host.classList.add("is-ready");
   host.innerHTML = `<div class="desk-assignment-grid">${rows.map((row) => `
     <article class="desk-assignment-card">
       <strong>میز ${escapeHtml(row.desk_number)}</strong>
@@ -750,6 +762,7 @@ const loadTeamProfile = async () => {
     ${profileSection("اعضا", data.members || [], ["full_name", "wants_access", "phone", "national_id", "approval_status"])}
     ${profileSection("کمدهای تخصیص‌یافته", data.lockers || [], ["locker_number", "status", "delivered_at"])}
     ${profileSection("درخواست‌های کمد", data.locker_requests || [], ["submitted_at", "status", "locker_number", "notes"])}`;
+  host.classList.add("is-ready");
 };
 
 const paymentStatusBadge = (status) => {
@@ -794,10 +807,17 @@ const loadDevKanban = async () => {
             ${row.estimated_cost ? `<div class="kanban-meta">هزینه: ${escapeHtml(formatMoney(row.estimated_cost))}</div>` : ""}
             ${row.estimated_revenue ? `<div class="kanban-meta">درآمد: ${escapeHtml(formatMoney(row.estimated_revenue))}</div>` : ""}
             ${row.related_section ? `<button type="button" class="text-link" data-nav-section="${escapeHtml(row.related_section)}">${escapeHtml(relatedSectionLabels[row.related_section] || row.related_section)}</button>` : ""}
-          </article>`).join("") : `<div class="empty">خالی</div>`}
+          </article>`).join("") : column.key === "open"
+          ? `<div class="empty">خالی</div><button class="button ghost kanban-add" type="button">+ افزودن برنامه</button>`
+          : `<div class="empty">خالی</div>`}
       </div>
     </div>`;
   }).join("");
+  host.querySelectorAll(".kanban-add").forEach((button) => {
+    button.addEventListener("click", () => {
+      document.querySelector('#development data-table[endpoint*="development_plans"] .add-button')?.click();
+    });
+  });
 };
 
 const loadPaymentSettings = async () => {
@@ -969,6 +989,57 @@ const loadDeskGrid = async () => {
   }
 };
 
+const collageCellClass = (status) => {
+  if (status === "پرداخت‌شده") return "cell-paid";
+  if (status === "ناقص") return "cell-partial";
+  if (status === "بدهکار به مرکز") return "cell-debt";
+  if (status === "خارج از قرارداد") return "cell-outside";
+  return "cell-empty";
+};
+
+const collageCellMeta = (cell, row, year, months) => {
+  const cls = collageCellClass(cell.status);
+  const clickable = canWrite && (cell.status === "بدهکار به مرکز" || cell.status === "ناقص");
+  const monthName = months.find((m) => m.index === cell.month_index)?.name || "";
+  return {
+    cls,
+    clickable,
+    monthName,
+    dataAttrs: clickable
+      ? `data-team-id="${row.team.id}" data-team-name="${escapeHtml(row.team.name)}"
+         data-fiscal-year="${escapeHtml(year)}" data-month-index="${cell.month_index}"
+         data-month-name="${escapeHtml(monthName)}"
+         data-amount-due="${cell.amount_due}" data-amount-paid="${cell.amount_paid}"`
+      : "",
+  };
+};
+
+const collageCellMarkup = (tag, meta, innerHtml, extraClass = "") => {
+  const interactive = meta.clickable ? ' role="button" tabindex="0"' : "";
+  return `<${tag} class="${extraClass}${meta.cls}${meta.clickable ? " cell-clickable" : ""}"${interactive} ${meta.dataAttrs}>${innerHtml}</${tag}>`;
+};
+
+const bindCollageCells = (container) => {
+  container.querySelectorAll(".cell-clickable").forEach((cell) => {
+    const handler = () => openDepositModal({
+      teamId: Number(cell.dataset.teamId),
+      teamName: cell.dataset.teamName,
+      fiscalYear: cell.dataset.fiscalYear,
+      monthIndex: Number(cell.dataset.monthIndex),
+      monthName: cell.dataset.monthName,
+      amountDue: Number(cell.dataset.amountDue),
+      amountPaid: Number(cell.dataset.amountPaid),
+    });
+    cell.addEventListener("click", handler);
+    cell.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        handler();
+      }
+    });
+  });
+};
+
 const loadChargesCollage = async () => {
   const yearSelect = document.getElementById("chargesYear");
   if (!yearSelect) return;
@@ -1008,6 +1079,28 @@ const loadChargesCollage = async () => {
     container.innerHTML = `<div class="empty">${escapeHtml(emptyMessage)}</div>`;
     return;
   }
+
+  if (isMobile() && panelMode === "team") {
+    const row = data.rows[0];
+    container.innerHTML = `<div class="collage-mobile-list">${row.cells.map((cell) => {
+      const month = data.months.find((m) => m.index === cell.month_index);
+      const meta = collageCellMeta(cell, row, year, data.months);
+      const amountHtml = cell.amount_due > 0
+        ? `<div class="collage-mobile-meta">${escapeHtml(formatMoney(cell.amount_paid))} از ${escapeHtml(formatMoney(cell.amount_due))}</div>`
+        : `<div class="collage-mobile-meta">—</div>`;
+      const inner = `
+        <div class="collage-mobile-head">
+          <strong>${escapeHtml(month?.name || "—")}</strong>
+          <span class="badge">${escapeHtml(cell.status || "—")}</span>
+        </div>
+        ${amountHtml}
+        <small class="hint">شارژ: ${escapeHtml(formatMoney(cell.charge_amount))} · اجاره: ${escapeHtml(formatMoney(cell.rent_amount))}</small>`;
+      return collageCellMarkup("article", meta, inner, "collage-mobile-card ");
+    }).join("")}</div>`;
+    bindCollageCells(container);
+    return;
+  }
+
   const head = panelMode === "team"
     ? `<tr>${data.months.map((m) => `<th>${escapeHtml(m.name)}</th>`).join("")}</tr>`
     : `<tr><th class="team-col">نهاد</th>${data.months.map((m) => `<th>${escapeHtml(m.name)}</th>`).join("")}</tr>`;
@@ -1018,44 +1111,19 @@ const loadChargesCollage = async () => {
         <br>${entityBadge(row.team.entity_type)}
       </td>`}
       ${row.cells.map((cell) => {
-        const cls = cell.status === "پرداخت‌شده" ? "cell-paid"
-          : cell.status === "ناقص" ? "cell-partial"
-            : cell.status === "بدهکار به مرکز" ? "cell-debt"
-              : cell.status === "خارج از قرارداد" ? "cell-outside"
-                : "cell-empty";
-        const clickable = canWrite && (cell.status === "بدهکار به مرکز" || cell.status === "ناقص");
-        const attrs = clickable
-          ? `class="${cls} cell-clickable" role="button" tabindex="0"
-             data-team-id="${row.team.id}" data-team-name="${escapeHtml(row.team.name)}"
-             data-fiscal-year="${escapeHtml(year)}" data-month-index="${cell.month_index}"
-             data-month-name="${escapeHtml(data.months.find((m) => m.index === cell.month_index)?.name || "")}"
-             data-amount-due="${cell.amount_due}" data-amount-paid="${cell.amount_paid}"`
-          : `class="${cls}"`;
-        return `<td ${attrs} title="شارژ: ${formatMoney(cell.charge_amount)} | اجاره: ${formatMoney(cell.rent_amount)}">
-          ${cell.amount_due > 0 ? `<div>${escapeHtml(formatMoney(cell.amount_paid))}</div><small>از ${escapeHtml(formatMoney(cell.amount_due))}</small>` : "—"}
-        </td>`;
+        const meta = collageCellMeta(cell, row, year, data.months);
+        const inner = cell.amount_due > 0
+          ? `<div>${escapeHtml(formatMoney(cell.amount_paid))}</div><small>از ${escapeHtml(formatMoney(cell.amount_due))}</small>`
+          : "—";
+        const title = `title="شارژ: ${formatMoney(cell.charge_amount)} | اجاره: ${formatMoney(cell.rent_amount)}"`;
+        return collageCellMarkup("td", meta, inner, "").replace("<td ", `<td ${title} `);
       }).join("")}
     </tr>`).join("");
-  container.innerHTML = `<table class="collage-table"><thead>${head}</thead><tbody>${body}</tbody></table>`;
-
-  container.querySelectorAll(".cell-clickable").forEach((cell) => {
-    const handler = () => openDepositModal({
-      teamId: Number(cell.dataset.teamId),
-      teamName: cell.dataset.teamName,
-      fiscalYear: cell.dataset.fiscalYear,
-      monthIndex: Number(cell.dataset.monthIndex),
-      monthName: cell.dataset.monthName,
-      amountDue: Number(cell.dataset.amountDue),
-      amountPaid: Number(cell.dataset.amountPaid),
-    });
-    cell.addEventListener("click", handler);
-    cell.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        handler();
-      }
-    });
-  });
+  const scrollHint = isMobile() && panelMode === "admin"
+    ? `<p class="collage-scroll-hint">برای دیدن همه ماه‌ها، جدول را به چپ و راست بکشید.</p>`
+    : "";
+  container.innerHTML = `${scrollHint}<table class="collage-table"><thead>${head}</thead><tbody>${body}</tbody></table>`;
+  bindCollageCells(container);
 };
 
 const profileSection = (title, rows, cols, cellRenderer = null) => `
@@ -1634,7 +1702,7 @@ class DataTable extends HTMLElement {
       : `<button class="button add-button" type="button">+ افزودن</button>`;
     this.innerHTML = `
       <article class="panel data-panel">
-        <div class="table-toolbar">
+        <div class="table-toolbar${this.title?.trim() ? "" : " is-empty-title"}">
           <h2>${escapeHtml(this.title)}</h2>
           <div class="table-actions">
             ${addButtonHtml}
@@ -1980,6 +2048,7 @@ window.addEventListener("resize", () => {
 });
 
 syncMobileClass();
+document.body.classList.add(panelMode === "team" ? "panel-team" : "panel-admin");
 updatePageHeader("overview");
 loadDashboard().catch((error) => {
   const cards = document.getElementById("cards");

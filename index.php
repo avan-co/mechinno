@@ -39,7 +39,13 @@ $assetVer = (string) max(
     <?php if (!$isConfigured): ?>
       <main class="setup-screen">
         <section class="setup-card">
-          <span class="brand-mark">M</span>
+          <div class="brand">
+            <span class="brand-mark">M</span>
+            <div>
+              <strong>Mechinno</strong>
+              <small>مرکز نوآوری مکانیک</small>
+            </div>
+          </div>
           <h1>راه‌اندازی پنل</h1>
           <p>فایل <code>config.sample.php</code> را به <code>config.php</code> کپی کنید.</p>
           <a class="button" href="install.php">شروع نصب</a>
