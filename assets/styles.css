@@ -551,6 +551,37 @@ code { color: var(--primary); font-size: 0.9em; }
   border: 1px solid color-mix(in srgb, var(--amber) 30%, var(--line));
 }
 
+.portal-creds label {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.payment-wizard { display: grid; gap: 14px; }
+.payment-month-picker { display: grid; gap: 8px; }
+.payment-month-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  cursor: pointer;
+}
+.payment-month-option input { flex-shrink: 0; }
+.payment-month-option span { flex: 1; }
+.payment-wizard-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--primary) 8%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--primary) 25%, var(--line));
+  font-weight: 800;
+}
+
 .stat-card {
   display: flex;
   align-items: flex-start;

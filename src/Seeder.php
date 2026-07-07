@@ -20,12 +20,14 @@ final class Seeder
                AND source_file = :source LIMIT 1'
         );
 
-        $teams = $this->pdo->query('SELECT id, contract_start, contract_end FROM teams')->fetchAll();
-        foreach ($teams as $team) {
-            $teamId = (int) $team['id'];
-            $contractStart = (string) ($team['contract_start'] ?? '');
-            $contractEnd = (string) ($team['contract_end'] ?? '');
-            $amounts = $this->monthlyAmountsForTeam($teamId, $fiscalYear, $contractStart, $contractEnd);
+        $contracts = new TeamContracts($this->pdo);
+        $teams = $contracts->teamIdsWithContractInYear($fiscalYear);
+        foreach ($teams as $teamId) {
+            $dates = $contracts->contractDatesForYear($teamId, $fiscalYear);
+            if (!$contracts->hasDeskInFiscalYear($teamId, $fiscalYear)) {
+                continue;
+            }
+            $amounts = $this->monthlyAmountsForTeam($teamId, $fiscalYear, $dates['start'], $dates['end']);
             foreach ($amounts as $monthIndex => $parts) {
                 if (($parts['amount'] ?? 0) <= 0) {
                     continue;

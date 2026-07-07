@@ -13,6 +13,7 @@ final class Schema
         }
         self::ensureColumns($pdo);
         self::ensureWorkflowTables($pdo);
+        self::ensureTeamContractsTable($pdo);
         self::dropLegacyColumns($pdo);
         self::dropUnusedTables($pdo);
         self::seedDesks($pdo);
@@ -296,6 +297,7 @@ final class Schema
                 'payment_reference' => 'VARCHAR(128) NULL',
                 'announced_at' => 'VARCHAR(32) NULL',
                 'reviewed_at' => 'VARCHAR(32) NULL',
+                'payment_plan' => 'TEXT NULL',
             ],
             'panel_users' => [
                 'password_plain' => 'VARCHAR(64) NULL',
@@ -334,6 +336,7 @@ final class Schema
 
         self::seedCenterSettings($pdo);
         self::backfillTeamContracts($pdo);
+        (new TeamContracts($pdo))->migrateFromLegacyTeamDates();
         CenterLedger::purgeAccrualMirrorEntries($pdo);
     }
 
@@ -358,6 +361,39 @@ final class Schema
             }
             $pdo->prepare('UPDATE teams SET contract_start = :start, contract_end = :end WHERE id = :id')
                 ->execute(['start' => $start, 'end' => $end, 'id' => (int) $team['id']]);
+        }
+    }
+
+    private static function ensureTeamContractsTable(PDO $pdo): void
+    {
+        $isSqlite = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite';
+        if ($isSqlite) {
+            $pdo->exec(
+                'CREATE TABLE IF NOT EXISTS team_contracts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    team_id INTEGER NOT NULL,
+                    fiscal_year TEXT NOT NULL,
+                    contract_start TEXT NOT NULL,
+                    contract_end TEXT NOT NULL,
+                    notes TEXT,
+                    created_at TEXT,
+                    UNIQUE(team_id, fiscal_year)
+                )'
+            );
+        } else {
+            $pdo->exec(
+                "CREATE TABLE IF NOT EXISTS team_contracts (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    team_id INT NOT NULL,
+                    fiscal_year VARCHAR(8) NOT NULL,
+                    contract_start VARCHAR(32) NOT NULL,
+                    contract_end VARCHAR(32) NOT NULL,
+                    notes TEXT NULL,
+                    created_at VARCHAR(32) NULL,
+                    UNIQUE KEY uniq_team_contract_year (team_id, fiscal_year),
+                    INDEX idx_team_contracts_year (fiscal_year)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+            );
         }
     }
 

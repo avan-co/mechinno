@@ -7,6 +7,7 @@ const labels = {
   wants_access: "دسترسی تردد",
   contract_start: "شروع قرارداد",
   contract_end: "پایان قرارداد",
+  fiscal_year: "سال مالی",
   full_name: "نام",
   team_id: "نهاد",
   team_label: "نهاد",
@@ -164,7 +165,8 @@ const moneyCards = new Set(["income_year", "income_month", "expense_year", "expe
 const monthNames = ["", "فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور", "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"];
 
 const resourceColumns = {
-  teams: ["entity_code", "entity_type", "name", "leader", "phone", "contract_start", "contract_end", "portal_username", "portal_has_password", "desk_count", "joined_at", "warning", "notes"],
+  teams: ["entity_code", "entity_type", "name", "leader", "phone", "joined_at", "portal_username", "portal_has_password", "desk_count", "warning", "notes"],
+  team_contracts: ["team_name", "fiscal_year", "contract_start", "contract_end", "notes"],
   members: ["member_code", "full_name", "team_label", "entity_type", "desk_numbers", "wants_access", "access_code", "phone", "national_id", "approval_status", "rejection_reason"],
   desks: ["number", "team_name", "usage_type", "assignment_from", "assignment_until", "notes"],
   "desk-assignments": ["desk_number", "team_name", "usage_type", "assigned_from", "assigned_until", "notes"],
@@ -212,7 +214,7 @@ const panelMode = window.MECHINNO?.panel || "admin";
 
 const editableResources = new Set(
   canWrite
-    ? ["members", "teams", "desks", "lockers", "charges", "transactions", "rate_settings", "panel_users", "development_plans"]
+    ? ["members", "teams", "team_contracts", "desks", "lockers", "charges", "transactions", "rate_settings", "panel_users", "development_plans"]
     : canTeamSubmit
       ? ["members", "transactions", "locker-requests"]
       : []
@@ -471,7 +473,10 @@ const activateSection = (id, options = {}) => {
   }
   if (id === "transactions" && canWrite) loadPaymentSettings().catch(() => {});
   if (id === "transactions" && panelMode === "admin") loadLedger().catch((error) => showToast(error.message, "error"));
-  if (id === "payments" && panelMode === "team") loadPaymentGuide().catch(() => {});
+  if (id === "payments" && panelMode === "team") {
+    loadPaymentGuide().catch(() => {});
+    loadTeamPaymentWizard().catch((error) => showToast(error.message, "error"));
+  }
   if (options.scrollTarget) {
     setTimeout(() => {
       document.querySelector(`data-table[data-table-key="${options.scrollTarget}"]`)
@@ -1052,37 +1057,62 @@ const collageCellClass = (status) => {
 
 const collageCellMeta = (cell, row, year, months) => {
   const cls = collageCellClass(cell.status);
-  const clickable = canWrite && (cell.status === "بدهکار به مرکز" || cell.status === "ناقص");
+  const depositClickable = canWrite && (cell.status === "بدهکار به مرکز" || cell.status === "ناقص");
+  const chargeEditable = canWrite && cell.status !== "خارج از قرارداد" && cell.status !== "—";
   const monthName = months.find((m) => m.index === cell.month_index)?.name || "";
+  const showRent = row.team?.has_informal_desk && Number(cell.rent_amount || 0) > 0;
   return {
     cls,
-    clickable,
+    depositClickable,
+    chargeEditable,
+    showRent,
     monthName,
-    dataAttrs: clickable
+    dataAttrs: (depositClickable || chargeEditable)
       ? `data-team-id="${row.team.id}" data-team-name="${escapeHtml(row.team.name)}"
          data-fiscal-year="${escapeHtml(year)}" data-month-index="${cell.month_index}"
          data-month-name="${escapeHtml(monthName)}"
-         data-amount-due="${cell.amount_due}" data-amount-paid="${cell.amount_paid}"`
+         data-amount-due="${cell.amount_due}" data-amount-paid="${cell.amount_paid}"
+         data-charge-amount="${cell.charge_amount}" data-rent-amount="${cell.rent_amount}"
+         data-deposit="${depositClickable ? "1" : "0"}" data-charge-edit="${chargeEditable ? "1" : "0"}"
+         data-informal-desk="${row.team?.has_informal_desk ? "1" : "0"}"`
       : "",
   };
 };
 
 const collageCellMarkup = (tag, meta, innerHtml, extraClass = "") => {
-  const interactive = meta.clickable ? ' role="button" tabindex="0"' : "";
-  return `<${tag} class="${extraClass}${meta.cls}${meta.clickable ? " cell-clickable" : ""}"${interactive} ${meta.dataAttrs}>${innerHtml}</${tag}>`;
+  const interactive = meta.depositClickable || meta.chargeEditable;
+  return `<${tag} class="${extraClass}${meta.cls}${interactive ? " cell-clickable" : ""}"${interactive ? ' role="button" tabindex="0"' : ""} ${meta.dataAttrs}>${innerHtml}</${tag}>`;
 };
 
 const bindCollageCells = (container) => {
   container.querySelectorAll(".cell-clickable").forEach((cell) => {
-    const handler = () => openDepositModal({
-      teamId: Number(cell.dataset.teamId),
-      teamName: cell.dataset.teamName,
-      fiscalYear: cell.dataset.fiscalYear,
-      monthIndex: Number(cell.dataset.monthIndex),
-      monthName: cell.dataset.monthName,
-      amountDue: Number(cell.dataset.amountDue),
-      amountPaid: Number(cell.dataset.amountPaid),
-    });
+    const handler = () => {
+      if (cell.dataset.deposit === "1") {
+        openDepositModal({
+          teamId: Number(cell.dataset.teamId),
+          teamName: cell.dataset.teamName,
+          fiscalYear: cell.dataset.fiscalYear,
+          monthIndex: Number(cell.dataset.monthIndex),
+          monthName: cell.dataset.monthName,
+          amountDue: Number(cell.dataset.amountDue),
+          amountPaid: Number(cell.dataset.amountPaid),
+        });
+        return;
+      }
+      if (cell.dataset.chargeEdit === "1") {
+        openChargeModal({
+          teamId: Number(cell.dataset.teamId),
+          teamName: cell.dataset.teamName,
+          fiscalYear: cell.dataset.fiscalYear,
+          monthIndex: Number(cell.dataset.monthIndex),
+          monthName: cell.dataset.monthName,
+          chargeAmount: Number(cell.dataset.chargeAmount),
+          rentAmount: Number(cell.dataset.rentAmount),
+          amount: Number(cell.dataset.amountDue),
+          hasInformalDesk: cell.dataset.informalDesk === "1",
+        });
+      }
+    };
     cell.addEventListener("click", handler);
     cell.addEventListener("keydown", (event) => {
       if (event.key === "Enter" || event.key === " ") {
@@ -1111,9 +1141,7 @@ const loadChargesCollage = async () => {
     try {
       const profile = await fetchJson(`api.php?resource=team-profile&id=${encodeURIComponent(window.MECHINNO.teamId)}`);
       const team = profile.team || {};
-      if (team.contract_start) years.push(String(team.contract_start).slice(0, 4));
-      if (team.contract_end) years.push(String(team.contract_end).slice(0, 4));
-      (profile.charges || []).forEach((row) => years.push(String(row.fiscal_year || "")));
+      (profile.contracts || []).forEach((c) => years.push(String(c.fiscal_year || "")));
     } catch (error) {
       // ignore profile year enrichment errors
     }
@@ -1127,8 +1155,8 @@ const loadChargesCollage = async () => {
   const container = document.getElementById("chargesCollage");
   if (!data.rows?.length) {
     const emptyMessage = panelMode === "team"
-      ? "برای این سال شارژی ثبت نشده است."
-      : "داده شارژی برای این سال نیست — ابتدا نهاد و نرخ تعریف کنید.";
+      ? "برای این سال قرارداد، میز یا شارژ ثبت‌شده‌ای ندارید."
+      : "برای این سال نهادی با قرارداد و میز فعال نیست — قرارداد سالانه و میز را بررسی کنید.";
     container.innerHTML = `<div class="empty">${escapeHtml(emptyMessage)}</div>`;
     return;
   }
@@ -1147,7 +1175,7 @@ const loadChargesCollage = async () => {
           <span class="badge">${escapeHtml(chargeStatusLabel(cell.status))}</span>
         </div>
         ${amountHtml}
-        <small class="hint">شارژ: ${escapeHtml(formatMoney(cell.charge_amount))} · اجاره: ${escapeHtml(formatMoney(cell.rent_amount))}</small>`;
+        ${meta.showRent ? `<small class="hint">شارژ: ${escapeHtml(formatMoney(cell.charge_amount))} · اجاره: ${escapeHtml(formatMoney(cell.rent_amount))}</small>` : `<small class="hint">شارژ: ${escapeHtml(formatMoney(cell.charge_amount))}</small>`}`;
       return collageCellMarkup("article", meta, inner, "collage-mobile-card ");
     }).join("")}</div>`;
     bindCollageCells(container);
@@ -1158,7 +1186,7 @@ const loadChargesCollage = async () => {
     ? `<tr>${data.months.map((m) => `<th>${escapeHtml(m.name)}</th>`).join("")}</tr>`
     : `<tr><th class="team-col">نهاد</th>${data.months.map((m) => `<th>${escapeHtml(m.name)}</th>`).join("")}</tr>`;
   const body = data.rows.map((row) => `
-    <tr>
+    <tr${row.team?.has_informal_desk ? ' data-informal="1"' : ""}>
       ${panelMode === "team" ? "" : `<td class="team-col">
         <button type="button" class="text-link" data-team-id="${escapeHtml(row.team.id)}">${escapeHtml(row.team.name)}</button>
         <br>${entityBadge(row.team.entity_type)}
@@ -1168,7 +1196,9 @@ const loadChargesCollage = async () => {
         const inner = cell.amount_due > 0
           ? `<div>${escapeHtml(formatMoney(cell.amount_paid))}</div><small>از ${escapeHtml(formatMoney(cell.amount_due))}</small>`
           : "—";
-        const title = `title="شارژ: ${formatMoney(cell.charge_amount)} | اجاره: ${formatMoney(cell.rent_amount)}"`;
+        const title = meta.showRent
+          ? `title="شارژ: ${formatMoney(cell.charge_amount)} | اجاره: ${formatMoney(cell.rent_amount)}"`
+          : `title="شارژ: ${formatMoney(cell.charge_amount)}"`;
         return collageCellMarkup("td", meta, inner, "").replace("<td ", `<td ${title} `);
       }).join("")}
     </tr>`).join("");
@@ -1282,6 +1312,144 @@ const openTeamProfile = async (teamId) => {
   });
   modal.hidden = false;
   trapFocus(modal);
+};
+
+const openChargeModal = async ({ teamId, teamName, fiscalYear, monthIndex, monthName, chargeAmount, rentAmount, amount, hasInformalDesk }) => {
+  const meta = await loadCrudMeta();
+  const definition = meta.resources.charges;
+  const resolvedMonthName = monthName || monthNames[monthIndex] || "";
+  const fields = { ...definition.fields };
+  if (!hasInformalDesk) {
+    delete fields.rent_amount;
+  }
+  openRecordModal({
+    resource: "charges",
+    definition: { ...definition, fields },
+    title: `ثبت/ویرایش شارژ — ${teamName} — ${resolvedMonthName} ${fiscalYear}`,
+    record: {
+      team_id: String(teamId),
+      fiscal_year: fiscalYear,
+      month_index: String(monthIndex),
+      charge_amount: chargeAmount || "",
+      rent_amount: hasInformalDesk ? (rentAmount || "") : "0",
+      amount: amount || "",
+      note: "",
+    },
+    onSaved: async () => {
+      await refreshAfterMutation("charges");
+      await loadChargesCollage();
+      showToast("شارژ ماه به‌روز شد.", "success");
+    },
+  });
+};
+
+const openPortalCredentialsModal = ({ username, password }) => {
+  const modal = ensureModal();
+  const form = modal.querySelector("#crudForm");
+  modal.querySelector("#crudModalTitle").textContent = "اطلاعات ورود نهاد";
+  form.innerHTML = `
+    <div class="portal-creds">
+      <label><span>نام کاربری</span><strong class="ltr-value" dir="ltr">${escapeHtml(username || "—")}</strong></label>
+      <label><span>رمز عبور</span><strong class="ltr-value" dir="ltr">${escapeHtml(password || "—")}</strong></label>
+    </div>
+    <p class="hint warning-text">این اطلاعات محرمانه است — فقط در اختیار مسئول نهاد قرار دهید.</p>
+    <div class="modal-actions"><button class="button ghost" type="button" data-close-modal>بستن</button></div>`;
+  form.querySelector("[data-close-modal]").addEventListener("click", closeModal);
+  modal.hidden = false;
+  trapFocus(modal);
+};
+
+const loadTeamPaymentWizard = async () => {
+  const host = document.getElementById("teamPaymentWizard");
+  if (!host) return;
+  const [monthsData, settings] = await Promise.all([
+    fetchJson("api.php?resource=team-payable-months"),
+    fetchJson("api.php?resource=center-settings").catch(() => ({})),
+  ]);
+  const months = monthsData.months || [];
+  if (!months.length) {
+    host.innerHTML = `<div class="empty">ماه بدهی باز ندارید.</div>`;
+    return;
+  }
+  const accountRows = [
+    ["بانک", settings.bank_name],
+    ["صاحب حساب", settings.account_holder],
+    ["شماره حساب", settings.account_number],
+    ["شماره کارت", settings.card_number],
+    ["شماره شبا", settings.sheba],
+  ].filter(([, v]) => v);
+  host.innerHTML = `
+    <div class="payment-wizard">
+      <p class="hint warning-text">مبلغ را دقیقاً مطابق عدد زیر واریز کنید. واریز بیشتر قابل ثبت نیست و مازاد از دست می‌رود.</p>
+      ${accountRows.length ? `<div class="payment-account-grid">${accountRows.map(([label, value]) => `
+        <div class="payment-account-item"><span>${escapeHtml(label)}</span><strong class="ltr-value" dir="ltr">${escapeHtml(formatBankValue(label, value))}</strong></div>`).join("")}</div>` : `<div class="notice warn">اطلاعات حساب هنوز ثبت نشده است.</div>`}
+      <div class="payment-month-picker" id="paymentMonthPicker">
+        ${months.map((m) => `
+          <label class="payment-month-option">
+            <input type="checkbox" name="pay_month" value="${escapeHtml(m.fiscal_year)}-${m.month_index}"
+              data-year="${escapeHtml(m.fiscal_year)}" data-month="${m.month_index}" data-amount="${m.amount_remaining}" />
+            <span>${escapeHtml(m.month_name)} ${escapeHtml(m.fiscal_year)}</span>
+            <strong>${escapeHtml(formatMoney(m.amount_remaining))}</strong>
+          </label>`).join("")}
+      </div>
+      <div class="payment-wizard-total">
+        <span>مبلغ دقیق واریز</span>
+        <strong id="paymentWizardTotal">۰</strong>
+      </div>
+      <form id="teamPaymentForm" class="crud-grid">
+        <label><span>تاریخ واریز</span><input name="tx_date" type="text" required value="${escapeHtml(window.MECHINNO?.today || "")}" /></label>
+        <label><span>شماره پیگیری</span><input name="payment_reference" type="text" dir="ltr" /></label>
+        <label class="wide"><span>توضیح</span><textarea name="description" rows="2" required placeholder="واریز انجام شد"></textarea></label>
+        <div class="wide form-actions">
+          <button class="button" type="submit" id="teamPaymentSubmit" disabled>اعلام واریز انجام‌شده</button>
+        </div>
+      </form>
+    </div>`;
+  const totalEl = host.querySelector("#paymentWizardTotal");
+  const submitBtn = host.querySelector("#teamPaymentSubmit");
+  const updateTotal = () => {
+    let total = 0;
+    host.querySelectorAll('input[name="pay_month"]:checked').forEach((input) => {
+      total += Number(input.dataset.amount || 0);
+    });
+    totalEl.textContent = formatMoney(total);
+    submitBtn.disabled = total <= 0;
+    submitBtn.dataset.amount = String(total);
+  };
+  host.querySelectorAll('input[name="pay_month"]').forEach((input) => input.addEventListener("change", updateTotal));
+  updateTotal();
+  host.querySelector("#teamPaymentForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const plan = [];
+    host.querySelectorAll('input[name="pay_month"]:checked').forEach((input) => {
+      plan.push({
+        fiscal_year: input.dataset.year,
+        month_index: Number(input.dataset.month),
+        amount: Number(input.dataset.amount),
+      });
+    });
+    if (!plan.length) {
+      showToast("حداقل یک ماه را انتخاب کنید.", "error");
+      return;
+    }
+    submitBtn.disabled = true;
+    try {
+      const formData = Object.fromEntries(new FormData(event.target).entries());
+      await postJson("api.php?resource=transactions&action=create", {
+        ...formData,
+        payment_plan: plan,
+        amount: plan.reduce((sum, item) => sum + item.amount, 0),
+      });
+      showToast("اعلام واریز ثبت شد.", "success");
+      await loadTeamPaymentWizard();
+      document.querySelector('data-table[endpoint*="transactions"]')?.load?.();
+    } catch (error) {
+      showToast(error.message, "error");
+    } finally {
+      submitBtn.disabled = false;
+      updateTotal();
+    }
+  });
 };
 
 const openDepositModal = async ({ teamId, teamName, fiscalYear, monthIndex, monthName, amountDue, amountPaid }) => {
@@ -1883,7 +2051,8 @@ class DataTable extends HTMLElement {
           </div>`).join("");
         const profileBtn = this.resource === "teams"
           ? `<button class="mini-button primary" type="button" data-action="profile" data-id="${escapeHtml(row.id)}">پروفایل</button>
-             ${canWrite ? `<button class="mini-button" type="button" data-action="reset-portal" data-id="${escapeHtml(row.id)}">بازنشانی رمز</button>` : ""}` : "";
+             ${canWrite ? `<button class="mini-button" type="button" data-action="show-portal" data-id="${escapeHtml(row.id)}">نمایش رمز</button>
+           <button class="mini-button" type="button" data-action="reset-portal" data-id="${escapeHtml(row.id)}">بازنشانی رمز</button>` : ""}` : "";
         const workflowBtns = workflow
           ? `<button class="mini-button primary" type="button" data-action="approve" data-id="${escapeHtml(row.id)}">تأیید</button>
              <button class="mini-button danger" type="button" data-action="reject" data-id="${escapeHtml(row.id)}">رد</button>` : "";
@@ -1946,7 +2115,8 @@ class DataTable extends HTMLElement {
       }).join("");
       const profileAction = this.resource === "teams"
         ? `<button class="mini-button primary" type="button" data-action="profile" data-id="${escapeHtml(row.id)}">پروفایل</button>
-           ${canWrite ? `<button class="mini-button" type="button" data-action="reset-portal" data-id="${escapeHtml(row.id)}">بازنشانی رمز</button>` : ""}` : "";
+           ${canWrite ? `<button class="mini-button" type="button" data-action="show-portal" data-id="${escapeHtml(row.id)}">نمایش رمز</button>
+           <button class="mini-button" type="button" data-action="reset-portal" data-id="${escapeHtml(row.id)}">بازنشانی رمز</button>` : ""}` : "";
       const workflowAction = workflow
         ? `<button class="mini-button primary" type="button" data-action="approve" data-id="${escapeHtml(row.id)}">تأیید</button>
            <button class="mini-button danger" type="button" data-action="reject" data-id="${escapeHtml(row.id)}">رد</button>`
@@ -2011,6 +2181,16 @@ class DataTable extends HTMLElement {
       openTeamProfile(id).catch((error) => showToast(error.message, "error"));
       return;
     }
+    if (button.dataset.action === "show-portal") {
+      try {
+        const creds = await fetchJson(`api.php?resource=teams&action=portal-credentials&id=${encodeURIComponent(id)}`);
+        openPortalCredentialsModal(creds);
+      } catch (error) {
+        showToast(error.message, "error");
+      }
+      return;
+    }
+
     if (button.dataset.action === "reset-portal") {
       if (!canWrite) return;
       if (!window.confirm("رمز ورود این نهاد بازنشانی شود؟")) return;

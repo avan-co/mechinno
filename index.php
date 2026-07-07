@@ -215,8 +215,9 @@ $assetVer = (string) max(
             </section>
 
             <section id="teams" class="section">
-              <p class="hint">با ثبت هر نهاد، یک نام کاربری و رمز عبور خودکار برای مسئول نهاد ساخته می‌شود (ستون‌های «ورود نهاد»).</p>
+              <p class="hint">با ثبت هر نهاد، حساب ورود خودکار ساخته می‌شود. <strong>قرارداد هر سال</strong> را جداگانه در جدول «قراردادهای سالانه» ثبت کنید — بدون قرارداد سال جاری، تخصیص میز ممکن نیست.</p>
               <data-table title="نهادها" endpoint="api.php?resource=teams"></data-table>
+              <data-table title="قراردادهای سالانه نهادها" endpoint="api.php?resource=team_contracts"></data-table>
             </section>
 
             <section id="members" class="section">
@@ -257,7 +258,7 @@ $assetVer = (string) max(
             </section>
 
             <section id="charges" class="section">
-              <p class="hint">نرخ شارژ و اجاره <strong>به ازای هر میز</strong> است (هر میز ۲ صندلی دارد). میزهای ترکیبی ممکن است شارژ رسمی و اجاره غیررسمی همزمان داشته باشند. با «تاریخ اثر» مشخص کنید از چه ماهی اعمال می‌شود.</p>
+              <p class="hint">نرخ شارژ و اجاره <strong>به ازای هر میز</strong> است. فقط نهادهایی که در آن سال <strong>قرارداد</strong> و <strong>میز فعال</strong> دارند در کلاژ می‌آیند. اجاره غیررسمی فقط برای میزهای غیررسمی/ترکیبی محاسبه می‌شود.</p>
               <data-table title="نرخ‌های سالانه" endpoint="api.php?resource=rate_settings"></data-table>
               <article class="panel">
                 <div class="panel-head">

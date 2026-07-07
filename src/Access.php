@@ -22,6 +22,8 @@ final class Access
         'team-profile',
         'transactions',
         'payment-history',
+        'team_contracts',
+        'team-payable-months',
         'center-settings',
         'crud-meta',
     ];
@@ -48,6 +50,8 @@ final class Access
         'pending-payments',
         'pending-locker-requests',
         'payment-history',
+        'team_contracts',
+        'team-payable-months',
         'center-settings',
         'crud-meta',
         'recalculate-charges',
@@ -84,7 +88,7 @@ final class Access
             return ['members', 'transactions', 'locker_requests'];
         }
 
-        $resources = ['teams', 'members', 'desks', 'lockers', 'locker_requests', 'charges', 'transactions', 'rate_settings', 'development_plans'];
+        $resources = ['teams', 'members', 'desks', 'lockers', 'locker_requests', 'charges', 'transactions', 'rate_settings', 'development_plans', 'team_contracts'];
         if (self::isAdmin()) {
             $resources[] = 'panel_users';
         }
