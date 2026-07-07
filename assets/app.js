@@ -110,19 +110,24 @@ const cardNavMap = {
   debt_total: "charges",
   pending_members: "members",
   pending_payments: "transactions",
+  pending_locker_requests: "lockers",
   members: "members",
+  teams: "teams",
   desks: "desks",
-  debt_total_team: "charges",
-  charge_total: "charges",
-  paid_total: "payments",
+  lockers: "lockers",
+  ledger_balance: "transactions",
+  paid_total_year: "transactions",
+  available_lockers: "lockers",
+  desks_occupied: "desks",
 };
 
 const adminCardConfig = [
-  ["income_year", "درآمد سال جاری", "↓", "income"],
-  ["income_month", "درآمد ماه جاری", "↓", "income"],
-  ["expense_year", "هزینه سال جاری", "↑", "expense"],
-  ["expense_month", "هزینه ماه جاری", "↑", "expense"],
-  ["debt_total", "طلب از نهادها", "!", "debt"],
+  ["income_year", "درآمد سال (واریز+دستی)", "↓", "income"],
+  ["income_month", "درآمد ماه (واریز+دستی)", "↓", "income"],
+  ["expense_year", "هزینه سال", "↑", "expense"],
+  ["expense_month", "هزینه ماه", "↑", "expense"],
+  ["ledger_balance", "موجودی نقد مرکز", "₡", "income"],
+  ["debt_total", "مطالبات نهادها", "!", "debt"],
 ];
 
 const statIconSvg = {
@@ -133,6 +138,15 @@ const statIconSvg = {
   paid: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4Z" fill="currentColor"/></svg>',
   payments: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4Zm2 2v2h12V7Zm0 4v2h8v-2Z" fill="currentColor"/></svg>',
 };
+
+const adminOpsCardConfig = [
+  ["teams", "نهادها", statIconSvg.members, "teams"],
+  ["members", "اعضای فعال", statIconSvg.members, "members"],
+  ["desks_occupied", "میز اشغال", statIconSvg.desks, "desks"],
+  ["available_lockers", "کمد خالی", statIconSvg.desks, "lockers"],
+  ["pending_payments", "واریز معلق", statIconSvg.payments, "transactions"],
+  ["pending_members", "عضو معلق", statIconSvg.members, "members"],
+];
 
 const teamCardConfig = [
   ["members", "اعضای فعال", statIconSvg.members, "members"],
@@ -145,7 +159,7 @@ const teamCardConfig = [
 
 const cardConfig = adminCardConfig;
 
-const moneyCards = new Set(["income_year", "income_month", "expense_year", "expense_month", "debt_total", "paid_total", "charge_total"]);
+const moneyCards = new Set(["income_year", "income_month", "expense_year", "expense_month", "debt_total", "paid_total", "charge_total", "ledger_balance"]);
 
 const monthNames = ["", "فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور", "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"];
 
@@ -233,9 +247,41 @@ const tableAllowsEdit = (table, definition = null) => {
   const resource = table.resource || "";
   if (table.getAttribute("data-workflow") || workflowQueueResources.has(resource)) return false;
   if (table.hasAttribute("data-readonly")) return false;
-  if (panelMode === "team" && teamReadOnlyResources.has(resource)) return false;
+  if (panelMode === "team") {
+    if (teamReadOnlyResources.has(resource)) return false;
+    if (canTeamSubmit && ["transactions", "locker-requests"].includes(resource)) {
+      return !!definition && editableResources.has(resource);
+    }
+    return false;
+  }
   if (!canWrite || !definition || !editableResources.has(resource)) return false;
   return true;
+};
+
+const rowAllowsTeamDelete = (resource, row) => {
+  if (!canTeamSubmit || panelMode !== "team") return false;
+  if (resource === "transactions") return row.payment_status === "pending";
+  if (resource === "locker-requests") return row.status === "pending";
+  if (resource === "members") return row.approval_status === "pending";
+  return false;
+};
+
+const rowAllowsTeamEdit = (resource, row) => {
+  if (!canTeamSubmit || panelMode !== "team") return false;
+  if (resource === "transactions") return row.payment_status === "pending";
+  if (resource === "locker-requests") return row.status === "pending";
+  return false;
+};
+
+const chargeStatusLabel = (status) => {
+  if (panelMode !== "team") return status || "—";
+  const map = {
+    "بدهکار به مرکز": "مانده پرداخت",
+    "پرداخت‌شده": "پرداخت‌شده",
+    "ناقص": "پرداخت ناقص",
+    "خارج از قرارداد": "خارج از قرارداد",
+  };
+  return map[status] || status || "—";
 };
 const hiddenColumns = new Set([
   "id", "source_sheet", "source_file", "team_id", "locker_id", "member_id",
@@ -320,12 +366,13 @@ const fetchJson = async (url, options = {}) => {
   return data;
 };
 
-const fetchResource = async (endpoint, { page = 1, perPage = 25, category = "", paymentStatus = "", q = "" } = {}) => {
+const fetchResource = async (endpoint, { page = 1, perPage = 25, category = "", paymentStatus = "", approvalStatus = "", q = "" } = {}) => {
   const url = new URL(endpoint, window.location.href);
   url.searchParams.set("page", String(page));
   url.searchParams.set("per_page", String(perPage));
   if (category) url.searchParams.set("category", category);
   if (paymentStatus) url.searchParams.set("payment_status", paymentStatus);
+  if (approvalStatus) url.searchParams.set("approval_status", approvalStatus);
   if (q) url.searchParams.set("q", q);
   const data = await fetchJson(url.toString());
   if (Array.isArray(data)) {
@@ -510,14 +557,15 @@ const resolveCardSection = (key) => {
   return cardNavMap[key] || "members";
 };
 
-const renderCards = (cards, config = cardConfig) => {
-  const container = document.getElementById("cards");
+const renderCards = (cards, config = cardConfig, containerId = "cards") => {
+  const container = document.getElementById(containerId);
   if (!container) return;
   container.innerHTML = config
     .map(([key, title, icon, tone]) => {
       let value = cards?.[key];
       if (key === "desks" && panelMode === "team" && cards?.desk_numbers) value = cards.desk_numbers || "—";
       else if (key === "desks" && panelMode === "team") value = formatNumber(cards?.desks ?? value);
+      else if (key === "desks_occupied") value = `${formatNumber(cards?.desks_occupied ?? 0)} / ${formatNumber(cards?.desks_total ?? 24)}`;
       else if (moneyCards.has(key)) value = formatMoney(value);
       else value = formatNumber(value);
       const section = resolveCardSection(key);
@@ -534,12 +582,14 @@ const renderCurrentMonth = (month) => {
   const container = document.getElementById("currentMonthSummary");
   if (!month || !container) return;
   if (label) label.textContent = `${month.month_name} ${month.fiscal_year}`;
-  const debtLabel = panelMode === "team" ? "مانده ماه" : "مانده طلب ماه";
+  const paidLabel = panelMode === "team" ? "تخصیص به این ماه" : "تخصیص واریز به ماه";
+  const debtLabel = panelMode === "team" ? "مانده این ماه" : "مانده مطالبه ماه";
+  const chargeLabel = "شارژ این ماه";
   container.innerHTML = `
-    <div class="month-stat"><span>شارژ ماه</span><strong>${escapeHtml(formatMoney(month.charge_total))}</strong></div>
-    <div class="month-stat"><span>واریز ماه</span><strong>${escapeHtml(formatMoney(month.paid_total))}</strong></div>
+    <div class="month-stat"><span>${escapeHtml(chargeLabel)}</span><strong>${escapeHtml(formatMoney(month.charge_total))}</strong></div>
+    <div class="month-stat"><span>${escapeHtml(paidLabel)}</span><strong>${escapeHtml(formatMoney(month.paid_total))}</strong></div>
     <div class="month-stat"><span>${escapeHtml(debtLabel)}</span><strong class="debt-value">${escapeHtml(formatMoney(month.debt_total))}</strong></div>
-    ${panelMode === "admin" ? `<div class="month-stat"><span>نهاد بدهکار به مرکز</span><strong>${escapeHtml(formatNumber(month.debtor_count))}</strong></div>` : ""}`;
+    ${panelMode === "admin" ? `<div class="month-stat"><span>نهاد دارای مانده</span><strong>${escapeHtml(formatNumber(month.debtor_count))}</strong></div>` : ""}`;
 };
 
 const renderActionItems = (items) => {
@@ -596,7 +646,8 @@ const loadDashboard = async () => {
   }
   renderCurrentMonth(data.current_month || {});
   renderActionItems(data.action_items || []);
-  renderCards(data.cards || {});
+  renderCards(data.cards || {}, adminCardConfig, "cards");
+  renderCards(data.cards || {}, adminOpsCardConfig, "opsCards");
   renderChargeChart(data.monthly_charges || []);
   renderDebtChart(data.debt_by_team || []);
   const welcome = document.getElementById("welcomePanel");
@@ -755,6 +806,8 @@ const loadTeamProfile = async () => {
       <div><span>تاریخ عضویت</span><strong>${escapeHtml(team.joined_at || "—")}</strong></div>
       <div><span>مانده بدهی قرارداد</span><strong class="debt-value">${escapeHtml(formatMoney(data.summary?.debt_total || 0))}</strong></div>
       <div><span>پرداخت‌شده</span><strong>${escapeHtml(formatMoney(data.summary?.paid_total || 0))}</strong></div>
+      ${Number(data.summary?.overpayment_total || 0) > 0
+        ? `<div><span>پیش‌پرداخت (مازاد FIFO)</span><strong>${escapeHtml(formatMoney(data.summary.overpayment_total))}</strong></div>` : ""}
     </div>
     ${team.warning ? `<p class="hint warning-text">اخطار: ${escapeHtml(team.warning)}</p>` : ""}
     ${team.notes ? `<p class="hint">${escapeHtml(team.notes)}</p>` : ""}
@@ -872,8 +925,8 @@ const loadPaymentGuide = async () => {
       <ol>
         <li>مبلغ شارژ ماه را از بخش «شارژ و پرداخت» ببینید.</li>
         <li>مبلغ را به حساب بالا واریز کنید.</li>
-        <li>در جدول «اعلام‌های در انتظار تأیید»، واریز را با مبلغ، تاریخ، سال و ماه ثبت کنید.</li>
-        <li>پس از تأیید مرکز، در سوابق پرداخت تأییدشده نمایش داده می‌شود.</li>
+        <li>در جدول «اعلام‌های در انتظار تأیید»، واریز را با مبلغ، تاریخ، سال و ماه ثبت کنید (ماه اعلام‌شده فقط برای پیگیری شماست).</li>
+        <li>پس از تأیید مرکز، مبلغ به‌ترتیب <strong>FIFO</strong> به قدیمی‌ترین ماه‌های دارای مانده تخصیص می‌یابد و در سوابق پرداخت نمایش داده می‌شود.</li>
       </ol>
       ${data.payment_guide ? `<p class="payment-guide-note" dir="rtl">${escapeHtml(data.payment_guide)}</p>` : ""}
     </div>`;
@@ -1091,7 +1144,7 @@ const loadChargesCollage = async () => {
       const inner = `
         <div class="collage-mobile-head">
           <strong>${escapeHtml(month?.name || "—")}</strong>
-          <span class="badge">${escapeHtml(cell.status || "—")}</span>
+          <span class="badge">${escapeHtml(chargeStatusLabel(cell.status))}</span>
         </div>
         ${amountHtml}
         <small class="hint">شارژ: ${escapeHtml(formatMoney(cell.charge_amount))} · اجاره: ${escapeHtml(formatMoney(cell.rent_amount))}</small>`;
@@ -1360,6 +1413,9 @@ const openRecordModal = ({ resource, definition, record = null, onSaved, title =
     Object.assign(formRecord, createDefaults[resource]());
   }
   modal.querySelector("#crudModalTitle").textContent = title || `${isEdit ? "ویرایش" : "افزودن"} ${definition.title}`;
+  const fifoHint = resource === "transactions" && panelMode === "team"
+    ? `<p class="hint fifo-hint">ماه اعلام‌شده برای پیگیری شماست. پس از تأیید مدیر، مبلغ به‌ترتیب <strong>FIFO</strong> به قدیمی‌ترین ماه‌های دارای مانده تخصیص می‌یابد (ممکن است با ماه اعلام‌شده متفاوت باشد).</p>`
+    : "";
   form.innerHTML = `
     <div class="crud-grid">
       ${Object.entries(definition.fields).map(([name, meta]) => `
@@ -1368,6 +1424,7 @@ const openRecordModal = ({ resource, definition, record = null, onSaved, title =
           ${fieldInput(name, meta, formRecord[name] ?? "")}
         </label>`).join("")}
     </div>
+    ${fifoHint}
     <div class="modal-actions">
       <button class="button" type="submit">${isEdit ? "ذخیره" : "ثبت"}</button>
       <button class="button ghost" type="button" data-close-modal>انصراف</button>
@@ -1687,6 +1744,7 @@ class DataTable extends HTMLElement {
     this.noAdd = this.hasAttribute("data-no-add") || this.hasAttribute("data-readonly");
     this.txCategoryFilter = this.getAttribute("data-tx-filter") || "";
     this.paymentStatusFilter = this.getAttribute("data-payment-filter") || "";
+    this.approvalStatusFilter = this.getAttribute("data-approval-filter") || "";
     this.tableKey = this.getAttribute("data-table-key") || "";
     this.readOnly = tableSuppressesAdd(this);
     this.definition = null;
@@ -1777,6 +1835,7 @@ class DataTable extends HTMLElement {
         perPage: this.perPage,
         category: this.txCategoryFilter,
         paymentStatus: this.paymentStatusFilter,
+        approvalStatus: this.approvalStatusFilter,
         q: this.filter.trim(),
       });
       this.rows = result.rows;
@@ -1828,11 +1887,13 @@ class DataTable extends HTMLElement {
         const workflowBtns = workflow
           ? `<button class="mini-button primary" type="button" data-action="approve" data-id="${escapeHtml(row.id)}">تأیید</button>
              <button class="mini-button danger" type="button" data-action="reject" data-id="${escapeHtml(row.id)}">رد</button>` : "";
-        const editBtns = editable
-          ? `<button class="mini-button" type="button" data-action="edit" data-id="${escapeHtml(row.id)}">ویرایش</button>
-             <button class="mini-button danger" type="button" data-action="delete" data-id="${escapeHtml(row.id)}">حذف</button>` : "";
+        const editBtns = ((editable && canWrite) || rowAllowsTeamEdit(this.resource, row))
+          ? `<button class="mini-button" type="button" data-action="edit" data-id="${escapeHtml(row.id)}">ویرایش</button>` : "";
+        const deleteBtns = ((editable && canWrite) || rowAllowsTeamDelete(this.resource, row))
+          ? `<button class="mini-button danger" type="button" data-action="delete" data-id="${escapeHtml(row.id)}">حذف</button>` : "";
+        const rowEditBtns = `${editBtns}${deleteBtns}`;
         return `<article class="mobile-card ${highlighted ? "highlighted" : ""}">${fields}
-          <div class="row-actions">${profileBtn}${workflowBtns}${editBtns}</div></article>`;
+          <div class="row-actions">${profileBtn}${workflowBtns}${rowEditBtns}</div></article>`;
       }).join("")
       : `<div class="empty">رکوردی یافت نشد.</div>`;
     return true;
@@ -1890,13 +1951,17 @@ class DataTable extends HTMLElement {
         ? `<button class="mini-button primary" type="button" data-action="approve" data-id="${escapeHtml(row.id)}">تأیید</button>
            <button class="mini-button danger" type="button" data-action="reject" data-id="${escapeHtml(row.id)}">رد</button>`
         : "";
-      const actions = editable || profileAction || workflowAction
-        ? `<td class="row-actions">${profileAction}${workflowAction}${editable ? `
-        <button class="mini-button" type="button" data-action="edit" data-id="${escapeHtml(row.id)}">ویرایش</button>
-        <button class="mini-button danger" type="button" data-action="delete" data-id="${escapeHtml(row.id)}">حذف</button>` : ""}</td>` : "";
+      const canEditRow = (editable && canWrite) || rowAllowsTeamEdit(this.resource, row);
+      const canDeleteRow = (editable && canWrite) || rowAllowsTeamDelete(this.resource, row);
+      const actions = canEditRow || canDeleteRow || profileAction || workflowAction
+        ? `<td class="row-actions">${profileAction}${workflowAction}
+        ${canEditRow ? `<button class="mini-button" type="button" data-action="edit" data-id="${escapeHtml(row.id)}">ویرایش</button>` : ""}
+        ${canDeleteRow ? `<button class="mini-button danger" type="button" data-action="delete" data-id="${escapeHtml(row.id)}">حذف</button>` : ""}</td>` : "";
       return `<tr class="${rowHighlight ? "highlighted" : ""}">${cells}${actions}</tr>`;
     }).join("");
-    const hasActions = editable || this.resource === "teams" || workflow;
+    const hasActions = rows.some((row) =>
+      (editable && canWrite) || rowAllowsTeamEdit(this.resource, row) || rowAllowsTeamDelete(this.resource, row)
+    ) || this.resource === "teams" || workflow;
     wrap.innerHTML = `<table><thead><tr>${head}${hasActions ? "<th>عملیات</th>" : ""}</tr></thead><tbody>${body}</tbody></table>`;
     if (mobile) mobile.innerHTML = "";
   }
@@ -2050,6 +2115,26 @@ window.addEventListener("resize", () => {
 syncMobileClass();
 document.body.classList.add(panelMode === "team" ? "panel-team" : "panel-admin");
 updatePageHeader("overview");
+
+const memberApprovalTabs = document.getElementById("memberApprovalTabs");
+const membersTable = document.getElementById("membersTable");
+if (memberApprovalTabs && membersTable) {
+  memberApprovalTabs.addEventListener("click", (event) => {
+    const tab = event.target.closest(".filter-tab[data-approval-filter]");
+    if (!tab) return;
+    memberApprovalTabs.querySelectorAll(".filter-tab").forEach((button) => {
+      const active = button === tab;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-selected", active ? "true" : "false");
+    });
+    const filter = tab.dataset.approvalFilter || "";
+    membersTable.setAttribute("data-approval-filter", filter);
+    membersTable.approvalStatusFilter = filter;
+    membersTable.page = 1;
+    membersTable.load?.();
+  });
+}
+
 loadDashboard().catch((error) => {
   const cards = document.getElementById("cards");
   if (cards) cards.innerHTML = `<article class="stat-card"><span class="stat-label">خطا</span><strong>${escapeHtml(error.message)}</strong></article>`;

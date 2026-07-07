@@ -203,6 +203,13 @@ code { color: var(--primary); font-size: 0.9em; }
   border: 1px dashed var(--line);
   box-shadow: none;
 }
+.foot-btn--danger {
+  color: #fff;
+  background: linear-gradient(135deg, var(--danger), #b91c1c);
+  border: 1px solid color-mix(in srgb, var(--danger) 60%, #000);
+  box-shadow: var(--shadow-sm);
+}
+.foot-btn--danger:hover { filter: brightness(1.05); }
 
 .logout-link {
   display: block;
@@ -503,6 +510,45 @@ code { color: var(--primary); font-size: 0.9em; }
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 12px;
   margin-bottom: 14px;
+}
+.stat-cards--ops {
+  margin-bottom: 18px;
+}
+.stat-cards--ops .stat-card {
+  background: var(--surface-2);
+  border-style: dashed;
+}
+
+.filter-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.filter-tab {
+  padding: 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.filter-tab:hover { border-color: var(--primary); color: var(--text); }
+.filter-tab.active {
+  background: color-mix(in srgb, var(--primary) 12%, var(--surface));
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.fifo-hint {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--amber) 10%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--amber) 30%, var(--line));
 }
 
 .stat-card {

@@ -65,13 +65,13 @@ $statusClass = static function (?string $status): string {
           <div class="kpi"><span class="kpi-label">اعضا</span><span class="kpi-value"><?= ReportData::money($cards['members']) ?></span></div>
           <div class="kpi"><span class="kpi-label">میز اشغال</span><span class="kpi-value"><?= ReportData::money($cards['desks_occupied']) ?> / 24</span></div>
           <div class="kpi"><span class="kpi-label">کمدها</span><span class="kpi-value"><?= ReportData::money($cards['lockers']) ?></span></div>
-          <div class="kpi kpi--success"><span class="kpi-label">دریافتی (ریال)</span><span class="kpi-value"><?= ReportData::money($cards['income_total']) ?></span></div>
-          <div class="kpi"><span class="kpi-label">هزینه (ریال)</span><span class="kpi-value"><?= ReportData::money($cards['expense_total']) ?></span></div>
-          <div class="kpi"><span class="kpi-label">جمع شارژ (ریال)</span><span class="kpi-value"><?= ReportData::money($cards['charge_total']) ?></span></div>
-          <div class="kpi"><span class="kpi-label">دریافت از نهادها (ریال)</span><span class="kpi-value"><?= ReportData::money($cards['paid_total']) ?></span></div>
+          <div class="kpi kpi--success"><span class="kpi-label">درآمد سال (واریز+دستی)</span><span class="kpi-value"><?= ReportData::money($cards['income_total']) ?></span></div>
+          <div class="kpi"><span class="kpi-label">هزینه سال (ریال)</span><span class="kpi-value"><?= ReportData::money($cards['expense_total']) ?></span></div>
+          <div class="kpi"><span class="kpi-label">جمع شارژ قراردادها (ریال)</span><span class="kpi-value"><?= ReportData::money($cards['charge_total']) ?></span></div>
+          <div class="kpi"><span class="kpi-label">واریز تأییدشده نهادها (ریال)</span><span class="kpi-value"><?= ReportData::money($cards['paid_total']) ?></span></div>
           <div class="kpi kpi--danger"><span class="kpi-label">طلب کل از نهادها (ریال)</span><span class="kpi-value"><?= ReportData::money($cards['debt_total']) ?></span></div>
           <div class="kpi"><span class="kpi-label">شارژ ماه جاری</span><span class="kpi-value"><?= ReportData::money($month['charge_total'] ?? 0) ?></span></div>
-          <div class="kpi"><span class="kpi-label">واریز ماه جاری</span><span class="kpi-value"><?= ReportData::money($month['paid_total'] ?? 0) ?></span></div>
+          <div class="kpi"><span class="kpi-label">تخصیص FIFO ماه جاری</span><span class="kpi-value"><?= ReportData::money($month['paid_total'] ?? 0) ?></span></div>
           <div class="kpi kpi--danger"><span class="kpi-label">مانده طلب ماه جاری</span><span class="kpi-value"><?= ReportData::money($month['debt_total'] ?? 0) ?></span></div>
         </div>
       </section>
@@ -165,11 +165,11 @@ $statusClass = static function (?string $status): string {
 
       <section class="report-section report-section--break">
         <h2 class="section-title">شارژ ماهانه — خلاصه نهادها</h2>
-        <p class="section-note">مجموع واریزی سال جاری، مانده بدهی سال و مانده کل قرارداد هر نهاد</p>
+        <p class="section-note">تخصیص FIFO سال جاری، مانده بدهی سال و مانده کل قرارداد هر نهاد</p>
         <div class="table-scroll">
         <table class="data-table data-table--wide">
           <thead>
-            <tr><th>نهاد</th><th>مجموع واریزی امسال (ریال)</th><th>مانده بدهی سال (ریال)</th><th>مانده کل قرارداد (ریال)</th></tr>
+            <tr><th>نهاد</th><th>تخصیص FIFO سال جاری (ریال)</th><th>مانده بدهی سال (ریال)</th><th>مانده کل قرارداد (ریال)</th></tr>
           </thead>
           <tbody>
             <?php if ($data['debts'] === []): ?>
@@ -261,7 +261,7 @@ $statusClass = static function (?string $status): string {
                   <td><?= e(ReportData::cell($row['category'] ?? null)) ?></td>
                   <td><?= e(ReportData::cell($row['team_name'] ?? null)) ?></td>
                   <td><?= e(ReportData::cell($row['fiscal_year'] ?? null)) ?></td>
-                  <td class="num"><?= e(ReportData::cell($row['month_index'] ?? null)) ?></td>
+                  <td><?= e(ReportData::cell($row['month_name'] ?? $row['month_index'] ?? null)) ?></td>
                 </tr>
               <?php endforeach; ?>
             <?php endif; ?>

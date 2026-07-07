@@ -267,13 +267,13 @@ final class ExcelExporter
             ['میز اشغال', (int) $cards['desks_occupied'] . ' از 24'],
             ['کمدها', (int) $cards['lockers']],
             ['کمد آزاد', (int) $cards['available_lockers']],
-            ['جمع شارژ (ریال)', (int) $cards['charge_total']],
-            ['دریافتی (ریال)', (int) $cards['income_total']],
-            ['هزینه (ریال)', (int) $cards['expense_total']],
-            ['دریافت از نهادها (ریال)', (int) $cards['paid_total']],
+            ['جمع شارژ قراردادها (ریال)', (int) $cards['charge_total']],
+            ['درآمد سال — واریز+دستی (ریال)', (int) $cards['income_total']],
+            ['هزینه سال (ریال)', (int) $cards['expense_total']],
+            ['واریز تأییدشده نهادها (ریال)', (int) $cards['paid_total']],
             ['طلب کل از نهادها (ریال)', (int) $cards['debt_total']],
             ['شارژ ماه ' . ($month['month_name'] ?? ''), (int) ($month['charge_total'] ?? 0)],
-            ['واریز ماه ' . ($month['month_name'] ?? ''), (int) ($month['paid_total'] ?? 0)],
+            ['تخصیص FIFO ماه ' . ($month['month_name'] ?? ''), (int) ($month['paid_total'] ?? 0)],
             ['مانده طلب ماه ' . ($month['month_name'] ?? ''), (int) ($month['debt_total'] ?? 0)],
         ];
 

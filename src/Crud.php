@@ -78,7 +78,7 @@ final class Crud
                 'status_field' => null,
                 'source' => false,
                 'fields' => [
-                    'team_id' => ['label' => 'تیم / شرکت', 'type' => 'select', 'options' => []],
+                    'team_id' => ['label' => 'نهاد (تیم / شرکت / دانشجو)', 'type' => 'select', 'options' => []],
                     'usage_type' => [
                         'label' => 'نوع استفاده',
                         'type' => 'select',
@@ -156,7 +156,7 @@ final class Crud
                 'fields' => [
                     'fiscal_year' => ['label' => 'سال مالی', 'type' => 'text', 'required' => true],
                     'title' => ['label' => 'عنوان', 'type' => 'text', 'required' => true],
-                    'charge_rate' => ['label' => 'نرخ شارژ ماهانه هر میز (۲ صندلی)', 'type' => 'number', 'required' => true],
+                    'charge_rate' => ['label' => 'نرخ شارژ ماهانه هر میز', 'type' => 'number', 'required' => true],
                     'informal_rent_rate' => ['label' => 'نرخ اجاره غیررسمی هر میز', 'type' => 'number', 'required' => true],
                     'effective_from' => ['label' => 'تاریخ اثر (شروع ماه)', 'type' => 'date', 'placeholder' => '1405/01/01'],
                     'notes' => ['label' => 'توضیحات', 'type' => 'textarea'],
@@ -386,7 +386,7 @@ final class Crud
     public function update(string $resource, int $id, array $payload): array
     {
         if (Access::isTeam()) {
-            throw new InvalidArgumentException('نهاد نمی‌تواند رکوردها را ویرایش کند.');
+            $this->assertTeamCanMutate($resource, $id, 'update');
         }
         if ($resource === 'transactions') {
             $existing = $this->find($resource, $id);
@@ -439,7 +439,7 @@ final class Crud
     public function delete(string $resource, int $id): void
     {
         if (Access::isTeam()) {
-            throw new InvalidArgumentException('نهاد نمی‌تواند رکوردها را حذف کند.');
+            $this->assertTeamCanMutate($resource, $id, 'delete');
         }
         $definition = $this->definition($resource);
         $this->assertExists($definition, $id);
@@ -744,6 +744,17 @@ final class Crud
                 $data['payment_status'] = 'pending';
                 $data['announced_at'] = JalaliDate::todayParts()['formatted'];
                 $data['amount'] = abs((int) ($data['amount'] ?? 0));
+                if ($creating) {
+                    $dup = $this->countPendingTeamPayment(
+                        $teamId,
+                        (int) $data['amount'],
+                        (string) ($data['fiscal_year'] ?? ''),
+                        (int) ($data['month_index'] ?? 0)
+                    );
+                    if ($dup > 0) {
+                        throw new InvalidArgumentException('اعلام واریز مشابهی در انتظار تأیید است. ابتدا وضعیت قبلی را بررسی کنید یا آن را حذف کنید.');
+                    }
+                }
             } elseif ($category !== 'واریز تیم') {
                 $data['team_id'] = null;
                 $data['fiscal_year'] = null;
@@ -1000,5 +1011,68 @@ final class Crud
     private static function monthName(int $index): string
     {
         return self::months()[$index] ?? '';
+    }
+
+    private function assertTeamCanMutate(string $resource, int $id, string $action): void
+    {
+        $teamId = Access::scopedTeamId();
+        if ($teamId === null) {
+            throw new InvalidArgumentException('حساب نهاد معتبر نیست.');
+        }
+
+        if ($resource === 'transactions') {
+            $row = $this->find($resource, $id);
+            if ((int) ($row['team_id'] ?? 0) !== $teamId) {
+                throw new InvalidArgumentException('دسترسی به این رکورد مجاز نیست.');
+            }
+            if (($row['payment_status'] ?? '') !== 'pending') {
+                throw new InvalidArgumentException('فقط اعلام‌های در انتظار تأیید قابل تغییر هستند.');
+            }
+
+            return;
+        }
+
+        if ($resource === 'locker_requests') {
+            $row = $this->find($resource, $id);
+            if ((int) ($row['team_id'] ?? 0) !== $teamId) {
+                throw new InvalidArgumentException('دسترسی به این رکورد مجاز نیست.');
+            }
+            if (($row['status'] ?? '') !== 'pending') {
+                throw new InvalidArgumentException('فقط درخواست‌های در انتظار قابل تغییر هستند.');
+            }
+
+            return;
+        }
+
+        if ($resource === 'members' && $action === 'delete') {
+            $row = $this->find($resource, $id);
+            if ((int) ($row['team_id'] ?? 0) !== $teamId) {
+                throw new InvalidArgumentException('دسترسی به این رکورد مجاز نیست.');
+            }
+            if (($row['approval_status'] ?? '') !== 'pending') {
+                throw new InvalidArgumentException('فقط اعضای در انتظار تأیید قابل حذف هستند.');
+            }
+
+            return;
+        }
+
+        throw new InvalidArgumentException('نهاد نمی‌تواند این رکورد را تغییر دهد.');
+    }
+
+    private function countPendingTeamPayment(int $teamId, int $amount, string $fiscalYear, int $monthIndex): int
+    {
+        $statement = $this->pdo->prepare(
+            "SELECT COUNT(*) FROM transactions
+             WHERE team_id = :team_id AND category = 'واریز تیم' AND payment_status = 'pending'
+             AND amount = :amount AND fiscal_year = :year AND month_index = :month"
+        );
+        $statement->execute([
+            'team_id' => $teamId,
+            'amount' => $amount,
+            'year' => JalaliDate::normalizeDigits($fiscalYear),
+            'month' => $monthIndex,
+        ]);
+
+        return (int) $statement->fetchColumn();
     }
 }

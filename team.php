@@ -197,7 +197,7 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
             </section>
 
             <section id="members" class="section">
-              <p class="hint">نام، موبایل و کد ملی اجباری است. در صورت نیاز به دسترسی تردد اعلام کنید — کد دستگاه پس از تأیید مدیر ثبت می‌شود.</p>
+              <p class="hint">نام، موبایل و کد ملی اجباری است. در صورت نیاز به دسترسی تردد اعلام کنید — کد دستگاه پس از تأیید، به‌صورت حضوری و با تأخیر ثبت می‌شود. اعضای «در انتظار تأیید» را می‌توانید حذف کنید.</p>
               <data-table title="اعضای نهاد" endpoint="api.php?resource=members"></data-table>
             </section>
 
@@ -231,7 +231,7 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
                 <div class="panel-head"><h2>راهنمای پرداخت شارژ</h2></div>
                 <div id="paymentGuideContent" class="payment-guide">در حال بارگذاری…</div>
               </article>
-              <p class="hint">پس از واریز، اعلام کنید. واریزهای در انتظار در جدول اول نمایش داده می‌شوند.</p>
+              <p class="hint">پس از واریز، اعلام کنید. ماه اعلام‌شده فقط برای پیگیری شماست — پس از تأیید، تخصیص واقعی به‌صورت FIFO (قدیمی‌ترین مانده قرارداد) انجام می‌شود. واریزهای در انتظار در جدول اول نمایش داده می‌شوند.</p>
               <data-table title="اعلام‌های در انتظار تأیید" endpoint="api.php?resource=transactions" data-payment-filter="pending"></data-table>
               <data-table title="سوابق پرداخت" endpoint="api.php?resource=payment-history" data-readonly></data-table>
             </section>

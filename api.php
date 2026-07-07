@@ -125,6 +125,12 @@ try {
         require_csrf_json();
         if (in_array($resource, ['members', 'transactions', 'locker-requests'], true) && $action === 'create') {
             Access::requireWriteOrTeamSubmitJson();
+        } elseif (
+            Access::isTeam()
+            && in_array($action, ['update', 'delete'], true)
+            && in_array($resource, ['transactions', 'locker-requests', 'members'], true)
+        ) {
+            Access::requireWriteOrTeamSubmitJson();
         } else {
             Access::requireWriteJson();
         }
@@ -168,6 +174,12 @@ try {
         }
         if (isset($_GET['q']) && trim((string) $_GET['q']) !== '') {
             $filters['q'] = trim((string) $_GET['q']);
+        }
+        if ($resource === 'payment-history' && isset($_GET['payment_status']) && $_GET['payment_status'] !== '') {
+            $filters['payment_status'] = (string) $_GET['payment_status'];
+        }
+        if ($resource === 'members' && isset($_GET['approval_status']) && $_GET['approval_status'] !== '') {
+            $filters['approval_status'] = (string) $_GET['approval_status'];
         }
         json_response($repository->paginatedResource($resource, $page, $perPage, $filters));
     }

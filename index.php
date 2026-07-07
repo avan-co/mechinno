@@ -144,7 +144,7 @@ $assetVer = (string) max(
             <a class="foot-btn" href="export.php?report=all">خروجی Excel</a>
             <a class="foot-btn foot-btn--soft" href="report.php">گزارش PDF</a>
             <?php if (Access::canWrite()): ?>
-            <a class="foot-btn foot-btn--ghost" href="install.php">بازنشانی پنل</a>
+            <a class="foot-btn foot-btn--danger" href="install.php">بازنشانی پنل (خطرناک)</a>
             <?php endif; ?>
             <a class="logout-link" href="logout.php">خروج</a>
           </div>
@@ -195,6 +195,7 @@ $assetVer = (string) max(
             <?php endif; ?>
 
               <div id="cards" class="stat-cards"></div>
+              <div id="opsCards" class="stat-cards stat-cards--ops"></div>
 
               <div class="grid two">
                 <article class="panel">
@@ -219,11 +220,16 @@ $assetVer = (string) max(
             </section>
 
             <section id="members" class="section">
-              <p class="hint">اعضای تأییدشده در لیست اصلی نمایش داده می‌شوند. درخواست‌های نهادها در جدول «در انتظار تأیید» بررسی می‌شود.</p>
-              <?php if (Access::canWrite()): ?>
+              <p class="hint">اعضای تأییدشده در لیست اصلی نمایش داده می‌شوند. درخواست‌های نهادها در جدول «در انتظار تأیید» بررسی می‌شود. کد تردد پس از تأیید، به‌صورت حضوری و با تأخیر ثبت می‌شود.</p>
+              <?php if (Access::isAdmin()): ?>
               <data-table title="اعضا — در انتظار تأیید نهاد" endpoint="api.php?resource=pending-members" data-workflow="members" data-workflow-type="member-approve" data-table-key="pending-members" data-readonly></data-table>
               <?php endif; ?>
-              <data-table title="اعضای تأییدشده و رد‌شده" endpoint="api.php?resource=members"></data-table>
+              <div class="filter-tabs" id="memberApprovalTabs" role="tablist" aria-label="فیلتر وضعیت عضو">
+                <button type="button" class="filter-tab active" data-approval-filter="" role="tab" aria-selected="true">همه</button>
+                <button type="button" class="filter-tab" data-approval-filter="approved" role="tab" aria-selected="false">تأیید‌شده</button>
+                <button type="button" class="filter-tab" data-approval-filter="rejected" role="tab" aria-selected="false">رد‌شده</button>
+              </div>
+              <data-table id="membersTable" title="فهرست اعضا" endpoint="api.php?resource=members" data-approval-filter=""></data-table>
             </section>
 
             <section id="desks" class="section">
@@ -240,17 +246,18 @@ $assetVer = (string) max(
                 <div id="deskGrid" class="desk-map"></div>
               </article>
               <data-table title="جزئیات میزها" endpoint="api.php?resource=desks" data-no-add></data-table>
+              <data-table title="تاریخچه تخصیص میزها" endpoint="api.php?resource=desk-assignments" data-readonly></data-table>
             </section>
 
             <section id="lockers" class="section">
-              <?php if (Access::canWrite()): ?>
+              <?php if (Access::isAdmin()): ?>
               <data-table title="درخواست کمد — در انتظار تأیید" endpoint="api.php?resource=pending-locker-requests" data-workflow="lockers" data-workflow-type="locker-request" data-table-key="pending-locker-requests" data-readonly></data-table>
               <?php endif; ?>
               <data-table title="کمدها" endpoint="api.php?resource=lockers"></data-table>
             </section>
 
             <section id="charges" class="section">
-              <p class="hint">نرخ شارژ و اجاره <strong>به ازای هر میز (۲ صندلی)</strong> است. با «تاریخ اثر» مشخص کنید از چه ماهی اعمال می‌شود — مثلاً نرخ فروردین ۲۰۰/۴۰۰ و نرخ جدید از تیر ۴۰۰/۶۰۰.</p>
+              <p class="hint">نرخ شارژ و اجاره <strong>به ازای هر میز</strong> است (هر میز ۲ صندلی دارد). میزهای ترکیبی ممکن است شارژ رسمی و اجاره غیررسمی همزمان داشته باشند. با «تاریخ اثر» مشخص کنید از چه ماهی اعمال می‌شود.</p>
               <data-table title="نرخ‌های سالانه" endpoint="api.php?resource=rate_settings"></data-table>
               <article class="panel">
                 <div class="panel-head">
@@ -262,7 +269,7 @@ $assetVer = (string) max(
                     <?php endif; ?>
                   </div>
                 </div>
-                <p class="hint"><?php if (Access::canWrite()): ?>روی سلول «بدهکار به مرکز» کلیک کنید تا <strong>ثبت مستقیم مدیر</strong> انجام شود (بدون صف تأیید). اعلام واریز نهادها جداگانه در بخش مالی بررسی می‌شود.<?php else: ?>وضعیت پرداخت هر نهاد در هر ماه — فقط مشاهده.<?php endif; ?></p>
+                <p class="hint"><?php if (Access::canWrite()): ?>روی سلول «بدهکار به مرکز» کلیک کنید تا <strong>ثبت مستقیم مدیر</strong> انجام شود (بدون صف تأیید). واریز نهادها با روش <strong>FIFO</strong> به قدیمی‌ترین ماه‌های دارای مانده تخصیص می‌یابد.<?php else: ?>وضعیت پرداخت هر نهاد در هر ماه — فقط مشاهده. تخصیص واریزها FIFO است.<?php endif; ?></p>
                 <div id="chargesCollage" class="charges-collage"></div>
               </article>
               <data-table title="ثبت و ویرایش شارژ" endpoint="api.php?resource=charges"></data-table>
@@ -319,6 +326,10 @@ $assetVer = (string) max(
                   </table>
                 </div>
               </article>
+              <?php if (Access::isAdmin()): ?>
+              <data-table title="اعلام واریز — در انتظار تأیید" endpoint="api.php?resource=pending-payments" data-workflow="payments" data-table-key="pending-payments" data-readonly></data-table>
+              <data-table title="واریزهای رد‌شده" endpoint="api.php?resource=payment-history" data-payment-filter="rejected" data-table-key="rejected-payments" data-readonly></data-table>
+              <?php endif; ?>
               <?php if (Access::canWrite()): ?>
               <article class="panel" id="paymentSettingsPanel">
                 <div class="panel-head">
@@ -337,7 +348,6 @@ $assetVer = (string) max(
                   </div>
                 </form>
               </article>
-              <data-table title="اعلام واریز — در انتظار تأیید" endpoint="api.php?resource=pending-payments" data-workflow="payments" data-table-key="pending-payments" data-readonly></data-table>
               <?php endif; ?>
               <div class="grid two finance-actions">
                 <article class="panel">
