@@ -215,7 +215,7 @@ $assetVer = (string) max(
             </section>
 
             <section id="teams" class="section">
-              <p class="hint">با ثبت هر نهاد، حساب ورود خودکار ساخته می‌شود. <strong>قرارداد هر سال</strong> را جداگانه در جدول «قراردادهای سالانه» ثبت کنید — بدون قرارداد سال جاری، تخصیص میز ممکن نیست.</p>
+              <p class="hint">با ثبت هر نهاد، حساب ورود خودکار ساخته می‌شود. <strong>وضعیت فعال/غیرفعال</strong> بر اساس قرارداد سال جاری به‌روز می‌شود. قرارداد هر سال را جداگانه ثبت کنید.</p>
               <data-table title="نهادها" endpoint="api.php?resource=teams"></data-table>
               <data-table title="قراردادهای سالانه نهادها" endpoint="api.php?resource=team_contracts"></data-table>
             </section>
@@ -224,6 +224,7 @@ $assetVer = (string) max(
               <p class="hint">اعضای تأییدشده در لیست اصلی نمایش داده می‌شوند. درخواست‌های نهادها در جدول «در انتظار تأیید» بررسی می‌شود. کد تردد پس از تأیید، به‌صورت حضوری و با تأخیر ثبت می‌شود.</p>
               <?php if (Access::isAdmin()): ?>
               <data-table title="اعضا — در انتظار تأیید نهاد" endpoint="api.php?resource=pending-members" data-workflow="members" data-workflow-type="member-approve" data-table-key="pending-members" data-readonly></data-table>
+              <data-table title="درخواست ویرایش/حذف عضو" endpoint="api.php?resource=pending-member-requests" data-workflow="members" data-workflow-type="member-request" data-table-key="pending-member-requests" data-readonly></data-table>
               <?php endif; ?>
               <div class="filter-tabs" id="memberApprovalTabs" role="tablist" aria-label="فیلتر وضعیت عضو">
                 <button type="button" class="filter-tab active" data-approval-filter="" role="tab" aria-selected="true">همه</button>

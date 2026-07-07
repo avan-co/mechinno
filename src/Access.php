@@ -16,6 +16,7 @@ final class Access
         'desk-assignments',
         'lockers',
         'locker-requests',
+        'member-requests',
         'charges',
         'charges-matrix',
         'charge-fiscal-years',
@@ -38,6 +39,7 @@ final class Access
         'desk-assignments',
         'lockers',
         'locker-requests',
+        'member-requests',
         'charges',
         'transactions',
         'rate_settings',
@@ -47,6 +49,7 @@ final class Access
         'panel_users',
         'development_plans',
         'pending-members',
+        'pending-member-requests',
         'pending-payments',
         'pending-locker-requests',
         'payment-history',
@@ -85,10 +88,10 @@ final class Access
     public static function allowedCrudResources(): array
     {
         if (self::isTeam()) {
-            return ['members', 'transactions', 'locker_requests'];
+            return ['members', 'transactions', 'locker_requests', 'member_requests'];
         }
 
-        $resources = ['teams', 'members', 'desks', 'desk_assignments', 'lockers', 'locker_requests', 'charges', 'transactions', 'rate_settings', 'development_plans', 'team_contracts'];
+        $resources = ['teams', 'members', 'desks', 'desk_assignments', 'lockers', 'locker_requests', 'member_requests', 'charges', 'transactions', 'rate_settings', 'development_plans', 'team_contracts'];
         if (self::isAdmin()) {
             $resources[] = 'panel_users';
         }

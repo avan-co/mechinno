@@ -324,11 +324,32 @@ $inactiveTeam = $crud->create('teams', [
     'entity_type' => 'team',
     'name' => 'نهاد غیرفعال تست',
     'leader' => 'تست',
-    'is_active' => '0',
 ]);
-$assert((int) ($inactiveTeam['is_active'] ?? 1) === 0, 'teams: inactive flag stored');
+$contracts = new TeamContracts($pdo);
+$contracts->syncTeamActiveStatus((int) $inactiveTeam['id']);
+$inactiveTeam = $crud->find('teams', (int) $inactiveTeam['id']);
+$assert((int) ($inactiveTeam['is_active'] ?? 1) === 0, 'teams: inactive when no current-year contract');
 $teamsSorted = $repo->paginatedResource('teams', 1, 50);
 $assert((int) ($teamsSorted['rows'][0]['is_active'] ?? 0) === 1, 'teams: active entities listed first');
+
+$_SESSION = [
+    'mechinno_authenticated' => true,
+    'mechinno_role' => Access::ROLE_TEAM,
+    'mechinno_team_id' => $teamId,
+    'mechinno_user' => $row['portal_username'] ?? 'team',
+    'mechinno_user_id' => 1,
+];
+$memberRequest = $crud->create('member_requests', [
+    'member_id' => (string) ($member['id'] ?? 0),
+    'request_type' => 'update',
+    'full_name' => 'عضو یک ویرایش‌شده',
+    'phone' => '09121111111',
+    'national_id' => '1234567890',
+    'wants_access' => '1',
+    'notes' => 'درخواست تست',
+]);
+$assert(($memberRequest['status'] ?? '') === 'pending', 'member_requests: team update request pending');
+$_SESSION['mechinno_role'] = Access::ROLE_ADMIN_EDITOR;
 
 $settings = new CenterSettings($pdo);
 $updated = $settings->update([

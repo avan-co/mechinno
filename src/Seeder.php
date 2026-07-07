@@ -66,31 +66,10 @@ final class Seeder
         ?string $contractStart = null,
         ?string $contractEnd = null
     ): array {
-        $assignments = $this->pdo->prepare(
-            'SELECT desk_number, usage_type, assigned_from, assigned_until
-             FROM desk_assignments
-             WHERE team_id = :team_id AND (assigned_until IS NULL OR assigned_until = \'\')'
-        );
-        $assignments->execute(['team_id' => $teamId]);
-        $rows = $assignments->fetchAll();
-        if ($rows === []) {
-            $deskRows = $this->pdo->prepare('SELECT number, usage_type FROM desks WHERE team_id = :team_id');
-            $deskRows->execute(['team_id' => $teamId]);
-            $deskList = $deskRows->fetchAll();
-            if ($deskList === []) {
-                return [];
-            }
-            $today = JalaliDate::todayParts()['formatted'];
-            $fallbackFrom = JalaliDate::tryNormalize($contractStart ?? '');
-            if ($fallbackFrom === '') {
-                $fallbackFrom = sprintf('%s/01/01', JalaliDate::normalizeDigits($fiscalYear));
-            }
-            $rows = array_map(static fn (array $desk): array => [
-                'desk_number' => (int) $desk['number'],
-                'usage_type' => (string) ($desk['usage_type'] ?? 'formal'),
-                'assigned_from' => $fallbackFrom,
-                'assigned_until' => $contractEnd,
-            ], $deskList);
+        $contracts = new TeamContracts($this->pdo);
+        $rows = $contracts->deskAssignmentsForTeamInYear($teamId, $fiscalYear);
+        if ($rows === [] && $contractStart === null && $contractEnd === null) {
+            return [];
         }
 
         $months = [];

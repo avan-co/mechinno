@@ -153,6 +153,58 @@ final class Workflow
         return $this->fetchLockerRequest($id);
     }
 
+    public function approveMemberRequest(int $id): array
+    {
+        $row = $this->memberRequestRow($id);
+        if (($row['status'] ?? '') !== 'pending') {
+            throw new InvalidArgumentException('این درخواست عضو در انتظار تأیید نیست.');
+        }
+
+        $memberId = (int) ($row['member_id'] ?? 0);
+        $type = (string) ($row['request_type'] ?? '');
+        $crud = new Crud($this->pdo);
+        if ($type === 'delete') {
+            $crud->delete('members', $memberId);
+        } elseif ($type === 'update') {
+            $payload = [
+                'full_name' => (string) ($row['full_name'] ?? ''),
+                'phone' => (string) ($row['phone'] ?? ''),
+                'national_id' => (string) ($row['national_id'] ?? ''),
+                'wants_access' => (string) ($row['wants_access'] ?? '0'),
+                'notes' => (string) ($row['notes'] ?? ''),
+            ];
+            $crud->update('members', $memberId, $payload);
+        } else {
+            throw new InvalidArgumentException('نوع درخواست عضو معتبر نیست.');
+        }
+
+        $today = JalaliDate::todayParts()['formatted'];
+        $this->pdo->prepare(
+            "UPDATE member_requests SET status = 'approved', reviewed_at = :reviewed_at, rejection_reason = NULL WHERE id = :id"
+        )->execute(['reviewed_at' => $today, 'id' => $id]);
+
+        return $this->fetchMemberRequest($id);
+    }
+
+    public function rejectMemberRequest(int $id, string $reason = ''): array
+    {
+        $row = $this->memberRequestRow($id);
+        if (($row['status'] ?? '') !== 'pending') {
+            throw new InvalidArgumentException('این درخواست عضو در انتظار تأیید نیست.');
+        }
+
+        $today = JalaliDate::todayParts()['formatted'];
+        $this->pdo->prepare(
+            "UPDATE member_requests SET status = 'rejected', reviewed_at = :reviewed_at, rejection_reason = :reason WHERE id = :id"
+        )->execute([
+            'reviewed_at' => $today,
+            'reason' => $reason !== '' ? $reason : null,
+            'id' => $id,
+        ]);
+
+        return $this->fetchMemberRequest($id);
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -230,6 +282,42 @@ final class Workflow
         $row = $statement->fetch();
         if ($row === false) {
             throw new InvalidArgumentException('درخواست کمد پیدا نشد.');
+        }
+
+        return Repository::stripLegacyColumns($row);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function memberRequestRow(int $id): array
+    {
+        $statement = $this->pdo->prepare('SELECT * FROM member_requests WHERE id = :id');
+        $statement->execute(['id' => $id]);
+        $row = $statement->fetch();
+        if ($row === false) {
+            throw new InvalidArgumentException('درخواست عضو پیدا نشد.');
+        }
+
+        return $row;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function fetchMemberRequest(int $id): array
+    {
+        $statement = $this->pdo->prepare(
+            'SELECT mr.*, m.full_name AS current_full_name, m.member_code, t.name AS team_label
+             FROM member_requests mr
+             LEFT JOIN members m ON m.id = mr.member_id
+             LEFT JOIN teams t ON t.id = mr.team_id
+             WHERE mr.id = :id'
+        );
+        $statement->execute(['id' => $id]);
+        $row = $statement->fetch();
+        if ($row === false) {
+            throw new InvalidArgumentException('درخواست عضو پیدا نشد.');
         }
 
         return Repository::stripLegacyColumns($row);

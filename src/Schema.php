@@ -13,6 +13,7 @@ final class Schema
         }
         self::ensureColumns($pdo);
         self::ensureWorkflowTables($pdo);
+        self::ensureMemberRequestsTable($pdo);
         self::ensureTeamContractsTable($pdo);
         self::dropLegacyColumns($pdo);
         self::dropUnusedTables($pdo);
@@ -342,6 +343,7 @@ final class Schema
         self::seedCenterSettings($pdo);
         self::backfillTeamContracts($pdo);
         (new TeamContracts($pdo))->migrateFromLegacyTeamDates();
+        (new TeamContracts($pdo))->syncAllTeamActiveStatuses();
         CenterLedger::purgeAccrualMirrorEntries($pdo);
     }
 
@@ -427,6 +429,21 @@ final class Schema
                     assigned_from TEXT NOT NULL,
                     assigned_until TEXT,
                     notes TEXT
+                );
+                CREATE TABLE IF NOT EXISTS member_requests (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    team_id INTEGER NOT NULL,
+                    member_id INTEGER NOT NULL,
+                    request_type TEXT NOT NULL,
+                    full_name TEXT,
+                    phone TEXT,
+                    national_id TEXT,
+                    wants_access INTEGER,
+                    notes TEXT,
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    submitted_at TEXT,
+                    reviewed_at TEXT,
+                    rejection_reason TEXT
                 );"
             );
         } else {
@@ -459,7 +476,74 @@ final class Schema
                     INDEX idx_desk_assignments_team (team_id)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
             );
+            $pdo->exec(
+                "CREATE TABLE IF NOT EXISTS member_requests (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    team_id INT NOT NULL,
+                    member_id INT NOT NULL,
+                    request_type VARCHAR(16) NOT NULL,
+                    full_name VARCHAR(255) NULL,
+                    phone VARCHAR(64) NULL,
+                    national_id VARCHAR(32) NULL,
+                    wants_access TINYINT NULL,
+                    notes TEXT NULL,
+                    status VARCHAR(32) NOT NULL DEFAULT 'pending',
+                    submitted_at VARCHAR(32) NULL,
+                    reviewed_at VARCHAR(32) NULL,
+                    rejection_reason TEXT NULL,
+                    INDEX idx_member_requests_team (team_id),
+                    INDEX idx_member_requests_status (status)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+            );
         }
+    }
+
+    private static function ensureMemberRequestsTable(PDO $pdo): void
+    {
+        if (self::tableExists($pdo, 'member_requests')) {
+            return;
+        }
+        $isSqlite = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite';
+        if ($isSqlite) {
+            $pdo->exec(
+                "CREATE TABLE IF NOT EXISTS member_requests (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    team_id INTEGER NOT NULL,
+                    member_id INTEGER NOT NULL,
+                    request_type TEXT NOT NULL,
+                    full_name TEXT,
+                    phone TEXT,
+                    national_id TEXT,
+                    wants_access INTEGER,
+                    notes TEXT,
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    submitted_at TEXT,
+                    reviewed_at TEXT,
+                    rejection_reason TEXT
+                )"
+            );
+
+            return;
+        }
+        $pdo->exec(
+            "CREATE TABLE IF NOT EXISTS member_requests (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                team_id INT NOT NULL,
+                member_id INT NOT NULL,
+                request_type VARCHAR(16) NOT NULL,
+                full_name VARCHAR(255) NULL,
+                phone VARCHAR(64) NULL,
+                national_id VARCHAR(32) NULL,
+                wants_access TINYINT NULL,
+                notes TEXT NULL,
+                status VARCHAR(32) NOT NULL DEFAULT 'pending',
+                submitted_at VARCHAR(32) NULL,
+                reviewed_at VARCHAR(32) NULL,
+                rejection_reason TEXT NULL,
+                INDEX idx_member_requests_team (team_id),
+                INDEX idx_member_requests_status (status)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+        );
     }
 
     private static function seedDeskAssignments(PDO $pdo): void

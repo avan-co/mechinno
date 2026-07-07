@@ -10,8 +10,11 @@ const labels = {
   fiscal_year: "سال مالی",
   full_name: "نام",
   team_id: "نهاد",
-  team_label: "نهاد",
   team_name: "نهاد",
+  team_is_active: "وضعیت نهاد",
+  team_label: "نهاد",
+  current_full_name: "نام فعلی",
+  request_type: "نوع درخواست",
   name: "نام",
   leader: "مسئول",
   phone: "تماس",
@@ -79,7 +82,14 @@ const labels = {
   payment_guide: "راهنمای پرداخت",
 };
 
-const entityTypeLabels = { team: "تیم", company: "شرکت", student: "دانشجو" };
+const teamActiveBadge = (isActive) => Number(isActive) === 1
+  ? '<span class="badge badge-paid">فعال</span>'
+  : '<span class="badge badge-debt">غیرفعال</span>';
+
+const requestTypeLabel = (type) => ({
+  update: "ویرایش",
+  delete: "حذف",
+}[type] || type || "—");
 const usageLabels = { formal: "رسمی", informal: "غیررسمی", mixed: "ترکیبی" };
 
 const sectionMeta = {
@@ -173,6 +183,8 @@ const resourceColumns = {
   "desk-assignments": ["desk_number", "team_name", "usage_type", "assigned_from", "assigned_until", "notes"],
   lockers: ["locker_number", "status", "team_label", "delivered_at", "key_number", "spare_key"],
   "locker-requests": ["submitted_at", "status", "locker_number", "notes", "reviewed_at", "rejection_reason"],
+  "member-requests": ["submitted_at", "request_type", "current_full_name", "full_name", "phone", "national_id", "status", "reviewed_at", "rejection_reason"],
+  "pending-member-requests": ["team_label", "submitted_at", "request_type", "current_full_name", "full_name", "phone", "national_id", "wants_access", "notes"],
   "pending-locker-requests": ["team_label", "submitted_at", "notes"],
   rate_settings: ["fiscal_year", "title", "charge_rate", "informal_rent_rate", "effective_from", "notes"],
   panel_users: ["username", "role", "full_name", "is_active"],
@@ -189,6 +201,7 @@ const teamPanelHiddenColumns = {
   desks: ["team_name"],
   lockers: ["team_label"],
   "locker-requests": ["team_label"],
+  "member-requests": ["team_label"],
   charges: ["team_name"],
   transactions: ["category", "team_name", "confirmed"],
   "payment-history": ["team_name"],
@@ -221,12 +234,13 @@ const panelMode = window.MECHINNO?.panel || "admin";
 const editableResources = new Set(
   canWrite
     ? ["members", "teams", "team_contracts", "desks", "desk_assignments", "lockers", "charges", "transactions", "rate_settings", "panel_users", "development_plans"]
-    : canTeamSubmit
-      ? ["members", "transactions", "locker-requests"]
+      : canTeamSubmit
+      ? ["members", "transactions", "locker-requests", "member-requests"]
       : []
 );
 const workflowQueueResources = new Set([
   "pending-members",
+  "pending-member-requests",
   "pending-payments",
   "pending-locker-requests",
 ]);
@@ -270,6 +284,7 @@ const rowAllowsTeamDelete = (resource, row) => {
   if (!canTeamSubmit || panelMode !== "team") return false;
   if (resource === "transactions") return row.payment_status === "pending";
   if (resource === "locker-requests") return row.status === "pending";
+  if (resource === "member-requests") return row.status === "pending";
   if (resource === "members") return row.approval_status === "pending";
   return false;
 };
@@ -1040,7 +1055,9 @@ const loadDeskGrid = async () => {
             } else if (isTeamMap && isOwn) {
               meta = `<span class="desk-meta">${escapeHtml(desk.team_name || "نهاد شما")}</span>`;
             } else if (!isTeamMap && desk.team_id) {
-              meta = `<span class="desk-meta"><span role="button" tabindex="0" class="text-link-inline" data-team-id="${escapeHtml(desk.team_id)}">${escapeHtml(desk.team_name || "نهاد")}</span></span>`;
+              const statusBadge = desk.team_is_active !== undefined && desk.team_is_active !== null
+                ? ` ${teamActiveBadge(desk.team_is_active)}` : "";
+              meta = `<span class="desk-meta"><span role="button" tabindex="0" class="text-link-inline" data-team-id="${escapeHtml(desk.team_id)}">${escapeHtml(desk.team_name || "نهاد")}</span>${statusBadge}</span>`;
             }
           }
           return `<button type="button" class="desk-tile ${tileClass} ${highlighted ? "highlighted" : ""}"
@@ -1213,7 +1230,7 @@ const loadChargesCollage = async () => {
     <tr${row.team?.has_informal_desk ? ' data-informal="1"' : ""}>
       ${panelMode === "team" ? "" : `<td class="team-col">
         <button type="button" class="text-link" data-team-id="${escapeHtml(row.team.id)}">${escapeHtml(row.team.name)}</button>
-        <br>${entityBadge(row.team.entity_type)}
+        <br>${entityBadge(row.team.entity_type)} ${teamActiveBadge(row.team.is_active)}
       </td>`}
       ${row.cells.map((cell) => {
         const meta = collageCellMeta(cell, row, year, data.months);
@@ -1712,8 +1729,68 @@ const askLockerNumber = (emptyLockers = []) => new Promise((resolve, reject) => 
   };
 });
 
+const openMemberRequestModal = (requestType, member) => {
+  const modal = ensureModal();
+  const form = modal.querySelector("#crudForm");
+  const isDelete = requestType === "delete";
+  modal.querySelector("#crudModalTitle").textContent = isDelete
+    ? `درخواست حذف — ${member.full_name || "عضو"}`
+    : `درخواست ویرایش — ${member.full_name || "عضو"}`;
+  form.innerHTML = isDelete
+    ? `<p class="hint">پس از تأیید مرکز، عضو از فهرست نهاد حذف می‌شود.</p>
+       <label class="wide"><span>توضیح (اختیاری)</span><textarea name="notes" rows="3"></textarea></label>
+       <div class="modal-actions">
+         <button class="button danger" type="submit">ثبت درخواست حذف</button>
+         <button class="button ghost" type="button" data-close-modal>انصراف</button>
+       </div>`
+    : `<div class="crud-grid">
+         <label><span>نام *</span><input name="full_name" type="text" required value="${escapeHtml(member.full_name || "")}" /></label>
+         <label><span>موبایل *</span><input name="phone" type="text" required value="${escapeHtml(member.phone || "")}" /></label>
+         <label><span>کد ملی *</span><input name="national_id" type="text" required value="${escapeHtml(member.national_id || "")}" /></label>
+         <label><span>دسترسی تردد</span>
+           <select name="wants_access">
+             <option value="0" ${Number(member.wants_access) !== 1 ? "selected" : ""}>خیر</option>
+             <option value="1" ${Number(member.wants_access) === 1 ? "selected" : ""}>بله — نیاز به کد تردد دارد</option>
+           </select>
+         </label>
+         <label class="wide"><span>توضیح</span><textarea name="notes" rows="2">${escapeHtml(member.notes || "")}</textarea></label>
+       </div>
+       <div class="modal-actions">
+         <button class="button" type="submit">ثبت درخواست ویرایش</button>
+         <button class="button ghost" type="button" data-close-modal>انصراف</button>
+       </div>`;
+  form.querySelector("[data-close-modal]")?.addEventListener("click", closeModal);
+  form.onsubmit = async (event) => {
+    event.preventDefault();
+    const submitButton = form.querySelector('button[type="submit"]');
+    submitButton.disabled = true;
+    try {
+      const payload = {
+        member_id: String(member.id),
+        request_type: requestType,
+        ...Object.fromEntries(new FormData(form).entries()),
+      };
+      await postJson("api.php?resource=member-requests&action=create", payload);
+      closeModal();
+      showToast("درخواست ثبت شد.", "success");
+      document.querySelector('data-table[endpoint*="member-requests"]')?.load?.();
+    } catch (error) {
+      showToast(error.message, "error");
+    } finally {
+      submitButton.disabled = false;
+    }
+  };
+  modal.hidden = false;
+  trapFocus(modal);
+};
+
 const workflowApprove = async (resource, id, row = {}, workflowType = "") => {
   if (resource === "pending-members" || workflowType === "member-approve") {
+    await postJson(`api.php?resource=${encodeURIComponent(resource)}&action=approve`, { id });
+    return;
+  }
+
+  if (resource === "pending-member-requests" || workflowType === "member-request") {
     await postJson(`api.php?resource=${encodeURIComponent(resource)}&action=approve`, { id });
     return;
   }
@@ -1877,8 +1954,17 @@ const formatCell = (column, value, row, resource) => {
   if (column === "is_active" && resource === "teams") {
     return Number(value) === 1
       ? '<span class="badge badge-paid">فعال</span>'
-      : '<span class="badge badge-debt">غیرفعال</span>';
+      : '<span class="badge badge-debt">غیرفعال — بدون قرارداد سال جاری</span>';
   }
+  if (column === "team_label" || column === "team_name") {
+    const name = escapeHtml(value || "—");
+    const active = row.team_is_active;
+    if (active !== undefined && active !== null && value) {
+      return `${name} ${teamActiveBadge(active)}`;
+    }
+    return name;
+  }
+  if (column === "request_type") return escapeHtml(requestTypeLabel(value));
   if (column === "usage_type") return escapeHtml(usageLabels[value] || value || "—");
   if (column === "category" && resource === "development_plans") {
     return escapeHtml(devCategoryLabels[value] || value || "—");
@@ -2208,14 +2294,19 @@ class DataTable extends HTMLElement {
         : "";
       const canEditRow = (editable && canWrite) || rowAllowsTeamEdit(this.resource, row);
       const canDeleteRow = (editable && canWrite) || rowAllowsTeamDelete(this.resource, row);
-      const actions = canEditRow || canDeleteRow || profileAction || workflowAction
-        ? `<td class="row-actions">${profileAction}${workflowAction}
+      const memberTeamActions = panelMode === "team" && this.resource === "members" && row.approval_status === "approved"
+        ? `<button class="mini-button" type="button" data-action="request-member-edit" data-id="${escapeHtml(row.id)}">درخواست ویرایش</button>
+           <button class="mini-button danger" type="button" data-action="request-member-delete" data-id="${escapeHtml(row.id)}">درخواست حذف</button>`
+        : "";
+      const actions = canEditRow || canDeleteRow || profileAction || workflowAction || memberTeamActions
+        ? `<td class="row-actions">${profileAction}${workflowAction}${memberTeamActions}
         ${canEditRow ? `<button class="mini-button" type="button" data-action="edit" data-id="${escapeHtml(row.id)}">ویرایش</button>` : ""}
         ${canDeleteRow ? `<button class="mini-button danger" type="button" data-action="delete" data-id="${escapeHtml(row.id)}">حذف</button>` : ""}</td>` : "";
       return `<tr class="${rowHighlight ? "highlighted" : ""}">${cells}${actions}</tr>`;
     }).join("");
     const hasActions = rows.some((row) =>
       (editable && canWrite) || rowAllowsTeamEdit(this.resource, row) || rowAllowsTeamDelete(this.resource, row)
+      || (panelMode === "team" && this.resource === "members" && row.approval_status === "approved")
     ) || this.resource === "teams" || workflow;
     wrap.innerHTML = `<table><thead><tr>${head}${hasActions ? "<th>عملیات</th>" : ""}</tr></thead><tbody>${body}</tbody></table>`;
     if (mobile) mobile.innerHTML = "";
@@ -2264,6 +2355,15 @@ class DataTable extends HTMLElement {
     if (!record) return;
     if (button.dataset.action === "profile") {
       openTeamProfile(id).catch((error) => showToast(error.message, "error"));
+      return;
+    }
+    if (button.dataset.action === "request-member-edit") {
+      openMemberRequestModal("update", record);
+      return;
+    }
+    if (button.dataset.action === "request-member-delete") {
+      if (!window.confirm(`درخواست حذف «${record.full_name || "عضو"}» ثبت شود؟`)) return;
+      openMemberRequestModal("delete", record);
       return;
     }
     if (button.dataset.action === "show-portal") {

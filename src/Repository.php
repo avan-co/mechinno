@@ -172,6 +172,18 @@ final class Repository
             ];
         }
 
+        $pendingMemberRequests = $this->scalar("SELECT COUNT(*) FROM member_requests WHERE status = 'pending'");
+        if ($pendingMemberRequests > 0) {
+            $items[] = [
+                'priority' => 18,
+                'type' => 'member',
+                'label' => number_format($pendingMemberRequests) . ' درخواست تغییر عضو',
+                'detail' => 'ویرایش یا حذف اعضای تأیید‌شده',
+                'section' => 'members',
+                'target' => 'pending-member-requests',
+            ];
+        }
+
         $totalDebt = $this->totalContractDebt();
         if ($totalDebt > 0) {
             $items[] = [
@@ -344,7 +356,9 @@ final class Repository
             'pending-members' => "SELECT COUNT(*) FROM members WHERE approval_status = 'pending'",
             'pending-payments' => "SELECT COUNT(*) FROM transactions WHERE category = 'واریز تیم' AND payment_status = 'pending'",
             'pending-locker-requests' => "SELECT COUNT(*) FROM locker_requests WHERE status = 'pending'",
+            'pending-member-requests' => "SELECT COUNT(*) FROM member_requests WHERE status = 'pending'",
             'locker-requests' => 'SELECT COUNT(*) FROM locker_requests',
+            'member-requests' => 'SELECT COUNT(*) FROM member_requests',
             'desk-assignments' => 'SELECT COUNT(*) FROM desk_assignments',
             'team_contracts' => 'SELECT COUNT(*) FROM team_contracts',
             'payment-history' => "SELECT COUNT(*) FROM transactions WHERE category = 'واریز تیم'"
@@ -447,14 +461,14 @@ final class Repository
                 . $this->searchClause('members', $filters, true)
                 . ' ORDER BY m.id',
             'desks' => "SELECT d.id, d.number, d.team_id, d.usage_type, d.formal_seats, d.informal_seats,
-                        d.row_index, d.col_index, d.notes, t.name AS team_name, t.entity_type
+                        d.row_index, d.col_index, d.notes, t.name AS team_name, t.entity_type, t.is_active AS team_is_active
                  FROM desks d
                  LEFT JOIN teams t ON t.id = d.team_id"
                 . ($teamId !== null ? " WHERE d.team_id = {$teamId}" : '')
                 . $this->searchClause('desks', $filters, $teamId !== null)
                 . ' ORDER BY d.number',
             'lockers' => "SELECT l.id, l.locker_number, l.team_id, l.status, l.delivered_at, l.key_number, l.spare_key, l.notes,
-                        t.name AS team_label
+                        t.name AS team_label, t.is_active AS team_is_active
                  FROM lockers l
                  LEFT JOIN teams t ON t.id = l.team_id"
                 . ($teamId !== null ? " WHERE l.team_id = {$teamId}" : '')
@@ -508,6 +522,22 @@ final class Repository
                  INNER JOIN teams t ON t.id = lr.team_id
                  WHERE lr.status = 'pending'
                  ORDER BY lr.submitted_at DESC, lr.id DESC",
+            'pending-member-requests' => "SELECT mr.id, mr.team_id, mr.member_id, mr.request_type, mr.full_name, mr.phone,
+                        mr.national_id, mr.wants_access, mr.notes, mr.submitted_at,
+                        m.full_name AS current_full_name, m.member_code, t.name AS team_label
+                 FROM member_requests mr
+                 INNER JOIN teams t ON t.id = mr.team_id
+                 INNER JOIN members m ON m.id = mr.member_id
+                 WHERE mr.status = 'pending'
+                 ORDER BY mr.submitted_at DESC, mr.id DESC",
+            'member-requests' => "SELECT mr.id, mr.team_id, mr.member_id, mr.request_type, mr.full_name, mr.phone,
+                        mr.national_id, mr.wants_access, mr.notes, mr.status, mr.submitted_at, mr.reviewed_at,
+                        mr.rejection_reason, m.full_name AS current_full_name, m.member_code, t.name AS team_label
+                 FROM member_requests mr
+                 LEFT JOIN teams t ON t.id = mr.team_id
+                 LEFT JOIN members m ON m.id = mr.member_id"
+                . ($teamId !== null ? " WHERE mr.team_id = {$teamId}" : '')
+                . ' ORDER BY mr.submitted_at DESC, mr.id DESC',
             'locker-requests' => "SELECT lr.id, lr.team_id, lr.notes, lr.status, lr.submitted_at, lr.reviewed_at,
                         lr.rejection_reason, lr.locker_id, l.locker_number,
                         t.name AS team_label
@@ -773,13 +803,21 @@ final class Repository
         $teamId = Access::scopedTeamId();
         if ($teamId !== null) {
             $teams = $this->preparedRows(
-                'SELECT id, entity_code, entity_type, name FROM teams WHERE id = :id',
+                'SELECT id, entity_code, entity_type, name, is_active FROM teams WHERE id = :id',
                 ['id' => $teamId]
             );
         } else {
-            $teams = $this->preparedRows(
-                'SELECT id, entity_code, entity_type, name FROM teams ORDER BY entity_type, name'
-            );
+            $teamIds = $contracts->teamIdsWithContractInYear($fiscalYear);
+            if ($teamIds === []) {
+                $teams = [];
+            } else {
+                $idList = implode(',', array_map('intval', $teamIds));
+                $teams = $this->rows(
+                    "SELECT id, entity_code, entity_type, name, is_active
+                     FROM teams WHERE id IN ({$idList})
+                     ORDER BY is_active DESC, entity_type, name"
+                );
+            }
         }
         $months = [];
         for ($i = 1; $i <= 12; $i++) {
@@ -1145,7 +1183,7 @@ final class Repository
         $scope = Access::scopedTeamId();
         $rows = $this->rows(
             'SELECT d.id, d.number, d.team_id, d.usage_type, d.formal_seats, d.informal_seats,
-                    d.row_index, d.col_index, t.name AS team_name
+                    d.row_index, d.col_index, t.name AS team_name, t.is_active AS team_is_active
              FROM desks d
              LEFT JOIN teams t ON t.id = d.team_id
              ORDER BY d.number'
