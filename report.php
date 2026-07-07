@@ -79,7 +79,8 @@ $statusClass = static function (?string $status): string {
       <section class="report-section report-section--break">
         <h2 class="section-title">نهادها (تیم / شرکت / دانشجو)</h2>
         <p class="section-note">تعداد: <?= ReportData::money(count($data['teams'])) ?> نهاد</p>
-        <table class="data-table">
+        <div class="table-scroll">
+        <table class="data-table data-table--wide">
           <thead>
             <tr>
               <th>کد</th><th>نوع</th><th>نام</th><th>مسئول</th><th>تماس</th><th>میز</th><th>شروع قرارداد</th><th>پایان قرارداد</th><th>عضویت</th>
@@ -105,12 +106,14 @@ $statusClass = static function (?string $status): string {
             <?php endif; ?>
           </tbody>
         </table>
+        </div>
       </section>
 
       <section class="report-section report-section--break">
         <h2 class="section-title">اعضا</h2>
         <p class="section-note">تعداد: <?= ReportData::money(count($data['members'])) ?> عضو — میزها در سطح نهاد تخصیص یافته‌اند.</p>
-        <table class="data-table">
+        <div class="table-scroll">
+        <table class="data-table data-table--wide">
           <thead>
             <tr>
               <th>کد عضو</th><th>نام</th><th>نهاد</th><th>نوع نهاد</th><th>میزهای نهاد</th><th>درخواست تردد</th><th>کد تردد</th><th>تماس</th><th>کدملی</th>
@@ -136,11 +139,13 @@ $statusClass = static function (?string $status): string {
             <?php endif; ?>
           </tbody>
         </table>
+        </div>
       </section>
 
       <section class="report-section report-section--break">
         <h2 class="section-title">میزها (۲۴ میز)</h2>
-        <table class="data-table">
+        <div class="table-scroll">
+        <table class="data-table data-table--wide">
           <thead>
             <tr><th>شماره</th><th>نهاد</th><th>نوع</th><th>توضیحات</th></tr>
           </thead>
@@ -155,12 +160,14 @@ $statusClass = static function (?string $status): string {
             <?php endforeach; ?>
           </tbody>
         </table>
+        </div>
       </section>
 
       <section class="report-section report-section--break">
         <h2 class="section-title">شارژ ماهانه — خلاصه نهادها</h2>
         <p class="section-note">مجموع واریزی سال جاری، مانده بدهی سال و مانده کل قرارداد هر نهاد</p>
-        <table class="data-table">
+        <div class="table-scroll">
+        <table class="data-table data-table--wide">
           <thead>
             <tr><th>نهاد</th><th>مجموع واریزی امسال (ریال)</th><th>مانده بدهی سال (ریال)</th><th>مانده کل قرارداد (ریال)</th></tr>
           </thead>
@@ -179,11 +186,13 @@ $statusClass = static function (?string $status): string {
             <?php endif; ?>
           </tbody>
         </table>
+        </div>
       </section>
 
       <section class="report-section report-section--break">
         <h2 class="section-title">کمدها</h2>
-        <table class="data-table">
+        <div class="table-scroll">
+        <table class="data-table data-table--wide">
           <thead>
             <tr><th>شماره</th><th>وضعیت</th><th>نهاد</th><th>تحویل</th></tr>
           </thead>
@@ -202,11 +211,13 @@ $statusClass = static function (?string $status): string {
             <?php endif; ?>
           </tbody>
         </table>
+        </div>
       </section>
 
       <section class="report-section report-section--break">
         <h2 class="section-title">نرخ‌های ماهانه</h2>
-        <table class="data-table">
+        <div class="table-scroll">
+        <table class="data-table data-table--wide">
           <thead>
             <tr><th>سال</th><th>عنوان</th><th>نرخ شارژ/میز</th><th>نرخ اجاره غیررسمی</th><th>تاریخ اثر</th><th>توضیحات</th></tr>
           </thead>
@@ -227,12 +238,14 @@ $statusClass = static function (?string $status): string {
             <?php endif; ?>
           </tbody>
         </table>
+        </div>
       </section>
 
       <section class="report-section report-section--break">
         <h2 class="section-title">تراکنش‌های مالی</h2>
         <p class="section-note">تعداد: <?= ReportData::money(count($data['transactions'])) ?> تراکنش</p>
-        <table class="data-table">
+        <div class="table-scroll">
+        <table class="data-table data-table--wide">
           <thead>
             <tr><th>تاریخ</th><th>شرح</th><th>مبلغ (ریال)</th><th>دسته</th><th>نهاد</th><th>سال</th><th>ماه</th></tr>
           </thead>
@@ -254,6 +267,7 @@ $statusClass = static function (?string $status): string {
             <?php endif; ?>
           </tbody>
         </table>
+        </div>
       </section>
 
       <footer class="report-footer">

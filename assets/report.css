@@ -181,12 +181,19 @@ body {
 }
 
 /* ── جداول ── */
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin-bottom: 4px;
+}
+
 .data-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 9.5pt;
   margin-bottom: 4px;
 }
+.data-table--wide { min-width: 720px; }
 .data-table th,
 .data-table td {
   padding: 6px 8px;
@@ -239,6 +246,11 @@ body {
     padding: 0;
     box-shadow: none;
   }
+  .table-scroll { overflow: visible; }
+  .data-table { font-size: 8pt; }
+  .data-table--wide { min-width: 0; }
+  .kpi-grid { grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .kpi-value { font-size: 11pt; }
   .report-section { break-inside: avoid-page; }
   .data-table { break-inside: auto; }
   .data-table thead { display: table-header-group; }
@@ -246,6 +258,14 @@ body {
 }
 
 @media screen and (max-width: 800px) {
+  .report-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 12px 14px;
+  }
+  .report-toolbar h1 { font-size: 14px; }
+  .report-actions { justify-content: stretch; }
+  .report-actions .btn { flex: 1; justify-content: center; }
   .report-doc { width: 100%; margin: 0; padding: 16px; box-shadow: none; }
   .kpi-grid { grid-template-columns: repeat(2, 1fr); }
   .two-col { grid-template-columns: 1fr; }
