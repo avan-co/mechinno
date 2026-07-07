@@ -159,19 +159,20 @@ $statusClass = static function (?string $status): string {
 
       <section class="report-section report-section--break">
         <h2 class="section-title">شارژ ماهانه — خلاصه نهادها</h2>
-        <p class="section-note">مجموع واریزی سال جاری و مانده بدهی هر نهاد</p>
+        <p class="section-note">مجموع واریزی سال جاری، مانده بدهی سال و مانده کل قرارداد هر نهاد</p>
         <table class="data-table">
           <thead>
-            <tr><th>نهاد</th><th>مجموع واریزی امسال (ریال)</th><th>مجموع بدهی (ریال)</th></tr>
+            <tr><th>نهاد</th><th>مجموع واریزی امسال (ریال)</th><th>مانده بدهی سال (ریال)</th><th>مانده کل قرارداد (ریال)</th></tr>
           </thead>
           <tbody>
             <?php if ($data['debts'] === []): ?>
-              <tr class="empty-row"><td colspan="3">نهادی با شارژ یا واریز ثبت نشده است.</td></tr>
+              <tr class="empty-row"><td colspan="4">نهادی با شارژ یا واریز ثبت نشده است.</td></tr>
             <?php else: ?>
               <?php foreach ($data['debts'] as $row): ?>
                 <tr>
                   <td><?= e(ReportData::cell($row['team_name'] ?? null)) ?></td>
                   <td class="num"><?= ReportData::money($row['paid_year'] ?? 0) ?></td>
+                  <td class="num"><?= ReportData::money($row['debt_year'] ?? 0) ?></td>
                   <td class="num"><?= ReportData::money($row['debt_total'] ?? 0) ?></td>
                 </tr>
               <?php endforeach; ?>
@@ -204,7 +205,7 @@ $statusClass = static function (?string $status): string {
       </section>
 
       <section class="report-section report-section--break">
-        <h2 class="section-title">نرخ‌های سالانه</h2>
+        <h2 class="section-title">نرخ‌های ماهانه</h2>
         <table class="data-table">
           <thead>
             <tr><th>سال</th><th>عنوان</th><th>نرخ شارژ/میز</th><th>نرخ اجاره غیررسمی</th><th>تاریخ اثر</th><th>توضیحات</th></tr>

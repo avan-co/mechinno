@@ -62,10 +62,10 @@ $assert($teamId > 0 && ($team['entity_code'] ?? '') !== '', 'crud: team created 
 $teamsList = $repo->paginatedResource('teams', 1, 25);
 $row = $teamsList['rows'][0] ?? [];
 $assert(($row['portal_username'] ?? '') === strtolower(preg_replace('/[^a-zA-Z0-9]/', '', (string) $team['entity_code'])), 'entity: portal username from entity_code');
-$assert(($row['portal_password'] ?? '') !== '', 'entity: portal password set');
+$assert((int) ($row['portal_has_password'] ?? 0) === 1, 'entity: portal password set');
 
 // --- Auth: database login for entity ---
-$plainPassword = (string) ($row['portal_password'] ?? '');
+$plainPassword = (string) $pdo->query("SELECT password_plain FROM panel_users WHERE team_id = {$teamId}")->fetchColumn();
 $_SESSION = [];
 $assert(Auth::attempt($pdo, ['auth' => ['enabled' => true]], (string) $row['portal_username'], $plainPassword), 'auth: entity login works');
 $assert(Access::isTeam() && Access::scopedTeamId() === $teamId, 'auth: entity session scoped to team');

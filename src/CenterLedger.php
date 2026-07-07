@@ -145,7 +145,8 @@ final class CenterLedger
      */
     private function billingSummary(): array
     {
-        $chargeTotal = (int) $this->pdo->query('SELECT COALESCE(SUM(amount), 0) FROM charges')->fetchColumn();
+        $repository = new Repository($this->pdo);
+        $chargeTotal = $repository->totalContractCharge();
         $receivedTotal = (int) $this->pdo->query(
             "SELECT COALESCE(SUM(amount), 0) FROM transactions
              WHERE category = 'واریز تیم' AND payment_status = 'approved' AND confirmed = 1"
@@ -154,7 +155,7 @@ final class CenterLedger
         return [
             'charge_total' => $chargeTotal,
             'received_total' => $receivedTotal,
-            'receivable' => max(0, $chargeTotal - $receivedTotal),
+            'receivable' => $repository->totalContractDebt(),
         ];
     }
 

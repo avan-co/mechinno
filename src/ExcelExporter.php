@@ -23,11 +23,11 @@ final class ExcelExporter
                     (SELECT COUNT(*) FROM desks d WHERE d.team_id = t.id),
                     t.contract_start, t.contract_end,
                     t.joined_at, t.warning, t.notes,
-                    u.username, u.password_plain
+                    u.username
                     FROM teams t
                     LEFT JOIN panel_users u ON u.team_id = t.id AND u.role = 'team'
                     ORDER BY t.entity_type, t.name",
-                'headers' => ['کد', 'نوع', 'نام', 'مسئول', 'تماس', 'تعداد میز', 'شروع قرارداد', 'پایان قرارداد', 'عضویت', 'اخطار', 'توضیحات', 'نام کاربری نهاد', 'رمز ورود نهاد'],
+                'headers' => ['کد', 'نوع', 'نام', 'مسئول', 'تماس', 'تعداد میز', 'شروع قرارداد', 'پایان قرارداد', 'عضویت', 'اخطار', 'توضیحات', 'نام کاربری نهاد'],
             ],
             'members' => [
                 'title' => 'اعضا',
@@ -91,19 +91,7 @@ final class ExcelExporter
             ],
             'debts' => [
                 'title' => 'مطالبات مرکز',
-                'query' => "SELECT t.name AS team_name, c.fiscal_year, c.month_name,
-                            c.charge_amount, c.rent_amount, c.amount AS amount_due,
-                            COALESCE(p.paid, 0) AS amount_paid,
-                            CASE WHEN COALESCE(p.paid, 0) >= c.amount THEN 'پرداخت‌شده'
-                                 WHEN COALESCE(p.paid, 0) > 0 THEN 'ناقص' ELSE 'بدهکار به مرکز' END AS status
-                     FROM charges c
-                     JOIN teams t ON t.id = c.team_id
-                     LEFT JOIN (
-                        SELECT team_id, fiscal_year, month_index, SUM(amount) AS paid
-                        FROM transactions WHERE category = 'واریز تیم' AND confirmed = 1
-                        GROUP BY team_id, fiscal_year, month_index
-                     ) p ON p.team_id = c.team_id AND p.fiscal_year = c.fiscal_year AND p.month_index = c.month_index
-                     ORDER BY c.fiscal_year, t.name, c.month_index",
+                'query' => '',
                 'headers' => ['نهاد', 'سال', 'ماه', 'شارژ', 'اجاره', 'مبلغ مستحق', 'دریافت‌شده', 'وضعیت'],
             ],
             'transactions' => [
@@ -184,6 +172,20 @@ final class ExcelExporter
             $report = $reports[$key];
             if ($key === 'summary') {
                 $xml .= $this->summaryWorksheetXml($generatedAt);
+                continue;
+            }
+            if ($key === 'debts') {
+                $rows = array_map(static fn (array $row): array => [
+                    $row['team_name'] ?? '',
+                    $row['fiscal_year'] ?? '',
+                    $row['month_name'] ?? '',
+                    $row['charge_amount'] ?? 0,
+                    $row['rent_amount'] ?? 0,
+                    $row['amount_due'] ?? 0,
+                    $row['amount_paid'] ?? 0,
+                    $row['status'] ?? '',
+                ], (new Repository($this->pdo))->chargeDebtRows());
+                $xml .= $this->worksheetXml($report['title'], $report['headers'], $rows, $generatedAt);
                 continue;
             }
             $rows = $this->pdo->query($report['query'])->fetchAll(PDO::FETCH_NUM);

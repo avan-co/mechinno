@@ -82,7 +82,7 @@ final class Crud
                     'usage_type' => [
                         'label' => 'نوع استفاده',
                         'type' => 'select',
-                        'options' => ['formal' => 'رسمی', 'informal' => 'غیررسمی'],
+                        'options' => ['formal' => 'رسمی', 'informal' => 'غیررسمی', 'mixed' => 'ترکیبی'],
                         'required' => true,
                     ],
                     'notes' => ['label' => 'توضیحات', 'type' => 'textarea'],
@@ -117,7 +117,7 @@ final class Crud
                 'fields' => [
                     'tx_date' => ['label' => 'تاریخ', 'type' => 'date', 'placeholder' => '1404/01/01', 'required' => true],
                     'description' => ['label' => 'شرح', 'type' => 'textarea', 'required' => true],
-                    'amount' => ['label' => 'مبلغ (مثبت درآمد / منفی هزینه)', 'type' => 'number', 'required' => true],
+                    'amount' => ['label' => 'مبلغ (ریال)', 'type' => 'number', 'required' => true, 'placeholder' => 'درآمد مثبت / هزینه منفی'],
                     'category' => ['label' => 'دسته', 'type' => 'select', 'options' => [
                         'درآمد' => 'درآمد',
                         'هزینه' => 'هزینه',
@@ -787,7 +787,9 @@ final class Crud
             }
             $charge = (int) ($data['charge_amount'] ?? 0);
             $rent = (int) ($data['rent_amount'] ?? 0);
-            if (empty($data['amount']) && ($charge > 0 || $rent > 0)) {
+            if (!isset($data['amount']) && ($charge > 0 || $rent > 0)) {
+                $data['amount'] = $charge + $rent;
+            } elseif (isset($data['amount']) && $data['amount'] === '' && ($charge > 0 || $rent > 0)) {
                 $data['amount'] = $charge + $rent;
             }
         }
@@ -843,7 +845,7 @@ final class Crud
             $data['updated_at'] = $today;
         }
         if ($resource === 'desks') {
-            if (isset($data['usage_type']) && ($data['usage_type'] ?? '') === 'mixed') {
+            if (isset($data['usage_type']) && !in_array((string) $data['usage_type'], ['formal', 'informal', 'mixed'], true)) {
                 $data['usage_type'] = 'formal';
             }
         }
