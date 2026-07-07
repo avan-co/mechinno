@@ -291,6 +291,45 @@ $devPlan = $crud->create('development_plans', [
 ]);
 $assert(($devPlan['title'] ?? '') === 'ایده تست', 'crud: development plan created');
 
+$expense = $crud->create('transactions', [
+    'tx_date' => '1405/03/01',
+    'category' => 'هزینه',
+    'finance_subtype' => 'لوازم مصرفی',
+    'description' => 'خرید لوازم تست',
+    'amount' => '50000',
+    'confirmed' => '1',
+]);
+$assert((int) ($expense['amount'] ?? 0) === -50000, 'finance: expense stored as negative');
+$income = $crud->create('transactions', [
+    'tx_date' => '1405/03/02',
+    'category' => 'درآمد',
+    'finance_subtype' => 'دوره آموزشی',
+    'description' => 'کارگاه تست',
+    'amount' => '100000',
+    'confirmed' => '1',
+]);
+$assert((int) ($income['amount'] ?? 0) === 100000, 'finance: income stored as positive');
+
+$deskAssign = $crud->create('desk_assignments', [
+    'desk_id' => '1',
+    'team_id' => (string) $teamId,
+    'usage_type' => 'formal',
+    'assigned_from' => '1404/01/01',
+    'assigned_until' => '1404/12/29',
+    'notes' => 'سال قبل',
+]);
+$assert((int) ($deskAssign['desk_number'] ?? 0) === 1, 'desk_assignments: historical record created');
+
+$inactiveTeam = $crud->create('teams', [
+    'entity_type' => 'team',
+    'name' => 'نهاد غیرفعال تست',
+    'leader' => 'تست',
+    'is_active' => '0',
+]);
+$assert((int) ($inactiveTeam['is_active'] ?? 1) === 0, 'teams: inactive flag stored');
+$teamsSorted = $repo->paginatedResource('teams', 1, 50);
+$assert((int) ($teamsSorted['rows'][0]['is_active'] ?? 0) === 1, 'teams: active entities listed first');
+
 $settings = new CenterSettings($pdo);
 $updated = $settings->update([
     'bank_name' => 'بانک تست',

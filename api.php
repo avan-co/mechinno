@@ -198,6 +198,9 @@ try {
         if ($resource === 'members' && isset($_GET['approval_status']) && $_GET['approval_status'] !== '') {
             $filters['approval_status'] = (string) $_GET['approval_status'];
         }
+        if ($resource === 'desk-assignments' && isset($_GET['fiscal_year']) && $_GET['fiscal_year'] !== '') {
+            $filters['fiscal_year'] = (string) $_GET['fiscal_year'];
+        }
         json_response($repository->paginatedResource($resource, $page, $perPage, $filters));
     }
 

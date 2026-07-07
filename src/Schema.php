@@ -259,6 +259,7 @@ final class Schema
                 'entity_type' => "VARCHAR(32) NOT NULL DEFAULT 'team'",
                 'contract_start' => 'VARCHAR(32) NULL',
                 'contract_end' => 'VARCHAR(32) NULL',
+                'is_active' => 'TINYINT NOT NULL DEFAULT 1',
             ],
             'members' => [
                 'member_code' => 'VARCHAR(32) NULL',
@@ -298,6 +299,7 @@ final class Schema
                 'announced_at' => 'VARCHAR(32) NULL',
                 'reviewed_at' => 'VARCHAR(32) NULL',
                 'payment_plan' => 'TEXT NULL',
+                'finance_subtype' => 'VARCHAR(64) NULL',
             ],
             'panel_users' => [
                 'password_plain' => 'VARCHAR(64) NULL',
@@ -327,6 +329,9 @@ final class Schema
 
         if (self::columnExists($pdo, 'members', 'approval_status')) {
             $pdo->exec("UPDATE members SET approval_status = 'approved' WHERE approval_status IS NULL OR approval_status = ''");
+        }
+        if (self::columnExists($pdo, 'teams', 'is_active')) {
+            $pdo->exec('UPDATE teams SET is_active = 1 WHERE is_active IS NULL');
         }
         if (self::columnExists($pdo, 'transactions', 'payment_status')) {
             $pdo->exec("UPDATE transactions SET payment_status = 'approved' WHERE payment_status IS NULL OR payment_status = ''");

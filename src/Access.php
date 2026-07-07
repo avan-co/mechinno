@@ -88,7 +88,7 @@ final class Access
             return ['members', 'transactions', 'locker_requests'];
         }
 
-        $resources = ['teams', 'members', 'desks', 'lockers', 'locker_requests', 'charges', 'transactions', 'rate_settings', 'development_plans', 'team_contracts'];
+        $resources = ['teams', 'members', 'desks', 'desk_assignments', 'lockers', 'locker_requests', 'charges', 'transactions', 'rate_settings', 'development_plans', 'team_contracts'];
         if (self::isAdmin()) {
             $resources[] = 'panel_users';
         }

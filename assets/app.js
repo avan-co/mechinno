@@ -52,7 +52,8 @@ const labels = {
   portal_username: "نام کاربری نهاد",
   portal_has_password: "رمز ورود نهاد",
   role: "نقش",
-  is_active: "فعال",
+  finance_subtype: "نوع",
+  is_active: "وضعیت",
   approval_status: "وضعیت تأیید",
   payment_status: "وضعیت واریز",
   payment_reference: "شماره پیگیری",
@@ -89,7 +90,7 @@ const sectionMeta = {
   lockers: { eyebrow: "کمدها", title: "مدیریت کمدها", subtitle: "شماره کمدها را خودتان تعریف و تخصیص دهید" },
   charges: { eyebrow: "شارژ", title: "نرخ و شارژ ماهانه", subtitle: "تعریف نرخ سالانه، محاسبه خودکار و پیگیری پرداخت" },
   transactions: { eyebrow: "مالی", title: "دفتر معین و موجودی نقدی", subtitle: "گردش واقعی حساب مرکز — بدون تکرار شارژ سیستمی" },
-  development: { eyebrow: "برنامه‌ریزی", title: "برنامه توسعه", subtitle: "ایده‌ها، اقدامات و برنامه اجرایی مرکز" },
+  development: { eyebrow: "برنامه‌ریزی", title: "برنامه توسعه", subtitle: "کارهای جاری مرکز — اولویت‌بندی و پیگیری ساده" },
   users: { eyebrow: "دسترسی", title: "کاربران پنل", subtitle: "مدیریت نقش‌ها و پنل اختصاصی نهادها" },
 };
 
@@ -165,7 +166,7 @@ const moneyCards = new Set(["income_year", "income_month", "expense_year", "expe
 const monthNames = ["", "فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور", "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"];
 
 const resourceColumns = {
-  teams: ["entity_code", "entity_type", "name", "leader", "phone", "joined_at", "portal_username", "portal_has_password", "desk_count", "warning", "notes"],
+  teams: ["entity_code", "entity_type", "name", "is_active", "leader", "phone", "joined_at", "portal_username", "portal_has_password", "desk_count", "warning", "notes"],
   team_contracts: ["team_name", "fiscal_year", "contract_start", "contract_end", "notes"],
   members: ["member_code", "full_name", "team_label", "entity_type", "desk_numbers", "wants_access", "access_code", "phone", "national_id", "approval_status", "rejection_reason"],
   desks: ["number", "team_name", "usage_type", "assignment_from", "assignment_until", "notes"],
@@ -180,7 +181,7 @@ const resourceColumns = {
   "pending-members": ["member_code", "full_name", "team_label", "phone", "national_id", "wants_access", "submitted_at"],
   "pending-payments": ["tx_date", "team_name", "fiscal_year", "month_name", "amount", "payment_reference", "announced_at", "notes", "description"],
   "payment-history": ["tx_date", "team_name", "fiscal_year", "month_name", "amount", "payment_status", "payment_reference", "announced_at", "reviewed_at", "notes"],
-  development_plans: ["title", "category", "priority", "status", "due_date", "depends_on_title", "estimated_cost", "estimated_revenue", "related_section", "description", "notes", "sort_order"],
+  development_plans: ["title", "status", "priority", "due_date", "notes"],
 };
 
 const teamPanelHiddenColumns = {
@@ -194,6 +195,11 @@ const teamPanelHiddenColumns = {
 };
 
 const createDefaults = {
+  teams: () => ({ is_active: "1" }),
+  desk_assignments: () => ({
+    assigned_from: window.MECHINNO?.today || "",
+    usage_type: "formal",
+  }),
   charges: () => ({ fiscal_year: window.MECHINNO?.fiscalYear || "" }),
   rate_settings: () => ({ fiscal_year: window.MECHINNO?.fiscalYear || "" }),
   transactions: () => ({
@@ -202,7 +208,7 @@ const createDefaults = {
     tx_date: window.MECHINNO?.today || "",
     confirmed: "1",
   }),
-  development_plans: () => ({ category: "idea", priority: "medium", status: "open", sort_order: "0" }),
+  development_plans: () => ({ priority: "medium", status: "open" }),
   members: () => ({ wants_access: "0" }),
   "locker-requests": () => ({}),
 };
@@ -214,7 +220,7 @@ const panelMode = window.MECHINNO?.panel || "admin";
 
 const editableResources = new Set(
   canWrite
-    ? ["members", "teams", "team_contracts", "desks", "lockers", "charges", "transactions", "rate_settings", "panel_users", "development_plans"]
+    ? ["members", "teams", "team_contracts", "desks", "desk_assignments", "lockers", "charges", "transactions", "rate_settings", "panel_users", "development_plans"]
     : canTeamSubmit
       ? ["members", "transactions", "locker-requests"]
       : []
@@ -368,13 +374,14 @@ const fetchJson = async (url, options = {}) => {
   return data;
 };
 
-const fetchResource = async (endpoint, { page = 1, perPage = 25, category = "", paymentStatus = "", approvalStatus = "", q = "" } = {}) => {
+const fetchResource = async (endpoint, { page = 1, perPage = 25, category = "", paymentStatus = "", approvalStatus = "", fiscalYear = "", q = "" } = {}) => {
   const url = new URL(endpoint, window.location.href);
   url.searchParams.set("page", String(page));
   url.searchParams.set("per_page", String(perPage));
   if (category) url.searchParams.set("category", category);
   if (paymentStatus) url.searchParams.set("payment_status", paymentStatus);
   if (approvalStatus) url.searchParams.set("approval_status", approvalStatus);
+  if (fiscalYear) url.searchParams.set("fiscal_year", fiscalYear);
   if (q) url.searchParams.set("q", q);
   const data = await fetchJson(url.toString());
   if (Array.isArray(data)) {
@@ -463,14 +470,13 @@ const activateSection = (id, options = {}) => {
   closeDrawer();
   reloadSectionTables(id);
 
-  if (id === "desks" && panelMode === "admin") loadDeskGrid().catch((error) => showToast(error.message, "error"));
+  if (id === "desks" && panelMode === "admin") {
+    loadDeskGrid().catch((error) => showToast(error.message, "error"));
+    initDeskHistoryYear().catch(() => {});
+  }
   if (id === "desks" && panelMode === "team") loadTeamDeskAssignments().catch((error) => showToast(error.message, "error"));
   if (id === "profile" && panelMode === "team") loadTeamProfile().catch((error) => showToast(error.message, "error"));
   if (id === "charges") loadChargesCollage().catch((error) => showToast(error.message, "error"));
-  if (id === "development") {
-    loadDevProgramSummary().catch(() => {});
-    loadDevKanban().catch(() => {});
-  }
   if (id === "transactions" && canWrite) loadPaymentSettings().catch(() => {});
   if (id === "transactions" && panelMode === "admin") loadLedger().catch((error) => showToast(error.message, "error"));
   if (id === "payments" && panelMode === "team") {
@@ -764,7 +770,7 @@ const loadLedger = async () => {
       <td class="num">${escapeHtml(String(row.line_no ?? "—"))}</td>
       <td>${escapeHtml(formatPlain(row.tx_date))}</td>
       <td>${escapeHtml(row.entry_type_label || entryTypeLabel(row.entry_type))}</td>
-      <td class="ledger-desc">${escapeHtml(row.description || "—")}</td>
+      <td class="ledger-desc" title="${escapeHtml(row.description || "")}">${escapeHtml(row.description || "—")}</td>
       <td class="num ledger-income">${escapeHtml(credit)}</td>
       <td class="num ledger-expense">${escapeHtml(debit)}</td>
       <td class="num ledger-balance-cell">${escapeHtml(formatMoney(row.running_balance ?? 0))}</td>
@@ -928,13 +934,31 @@ const loadPaymentGuide = async () => {
     <div class="payment-guide-steps" dir="rtl">
       <h3>مراحل پرداخت شارژ</h3>
       <ol>
-        <li>مبلغ شارژ ماه را از بخش «شارژ و پرداخت» ببینید.</li>
-        <li>مبلغ را به حساب بالا واریز کنید.</li>
-        <li>در جدول «اعلام‌های در انتظار تأیید»، واریز را با مبلغ، تاریخ، سال و ماه ثبت کنید (ماه اعلام‌شده فقط برای پیگیری شماست).</li>
-        <li>پس از تأیید مرکز، مبلغ به‌ترتیب <strong>FIFO</strong> به قدیمی‌ترین ماه‌های دارای مانده تخصیص می‌یابد و در سوابق پرداخت نمایش داده می‌شود.</li>
+        <li>در بخش «اعلام واریز»، ماه‌های بدهی خود را انتخاب کنید.</li>
+        <li>مبلغ دقیق نمایش‌داده‌شده را به حساب بالا واریز کنید — <strong>نه بیشتر</strong>.</li>
+        <li>پس از واریز، تاریخ و شماره پیگیری را ثبت و «اعلام واریز انجام‌شده» را بزنید.</li>
+        <li>پس از تأیید مرکز، مبلغ به ماه‌های انتخاب‌شده تخصیص می‌یابد.</li>
       </ol>
       ${data.payment_guide ? `<p class="payment-guide-note" dir="rtl">${escapeHtml(data.payment_guide)}</p>` : ""}
     </div>`;
+};
+
+const initDeskHistoryYear = async () => {
+  const select = document.getElementById("deskHistoryYear");
+  const table = document.getElementById("deskAssignmentsTable");
+  if (!select || !table) return;
+  const data = await fetchJson("api.php?resource=charge-fiscal-years");
+  const years = data.years?.length ? data.years : [window.MECHINNO?.fiscalYear || "1405"];
+  select.innerHTML = years.map((year) => `<option value="${escapeHtml(year)}">${escapeHtml(year)}</option>`).join("");
+  const apply = () => {
+    table.fiscalYearFilter = select.value;
+    table.load();
+  };
+  if (!select.dataset.ready) {
+    select.dataset.ready = "1";
+    select.addEventListener("change", apply);
+  }
+  apply();
 };
 
 const loadDevProgramSummary = async () => {
@@ -1258,8 +1282,9 @@ const openTeamProfile = async (teamId) => {
       <button type="button" class="button ghost" data-profile-action="charges">مشاهده شارژ</button>
       <button type="button" class="button ghost" data-profile-action="desks">مشاهده میزها</button>
     </div>`}
+    ${profileSection("قراردادهای سالانه", data.contracts || [], ["fiscal_year", "contract_start", "contract_end", "notes"])}
     ${profileSection("میزهای نهاد", data.desks, ["number", "usage_type", "notes"])}
-    ${profileSection("تاریخچه تخصیص میز", data.desk_assignments || [], ["desk_number", "usage_type", "assigned_from", "assigned_until"])}
+    ${profileSection("تاریخچه تخصیص میز", data.desk_assignments || [], ["desk_number", "usage_type", "assigned_from", "assigned_until", "notes"])}
     ${profileSection("اعضا", data.members, ["member_code", "full_name", "access_code", "phone", "national_id"])}
     ${profileSection("کمدها", data.lockers, ["locker_number", "status", "delivered_at", "key_number"], (column, row) => {
       if (column === "locker_number") return lockerLink(row.locker_number);
@@ -1362,27 +1387,15 @@ const openPortalCredentialsModal = ({ username, password }) => {
 const loadTeamPaymentWizard = async () => {
   const host = document.getElementById("teamPaymentWizard");
   if (!host) return;
-  const [monthsData, settings] = await Promise.all([
-    fetchJson("api.php?resource=team-payable-months"),
-    fetchJson("api.php?resource=center-settings").catch(() => ({})),
-  ]);
+  const monthsData = await fetchJson("api.php?resource=team-payable-months");
   const months = monthsData.months || [];
   if (!months.length) {
     host.innerHTML = `<div class="empty">ماه بدهی باز ندارید.</div>`;
     return;
   }
-  const accountRows = [
-    ["بانک", settings.bank_name],
-    ["صاحب حساب", settings.account_holder],
-    ["شماره حساب", settings.account_number],
-    ["شماره کارت", settings.card_number],
-    ["شماره شبا", settings.sheba],
-  ].filter(([, v]) => v);
   host.innerHTML = `
     <div class="payment-wizard">
       <p class="hint warning-text">مبلغ را دقیقاً مطابق عدد زیر واریز کنید. واریز بیشتر قابل ثبت نیست و مازاد از دست می‌رود.</p>
-      ${accountRows.length ? `<div class="payment-account-grid">${accountRows.map(([label, value]) => `
-        <div class="payment-account-item"><span>${escapeHtml(label)}</span><strong class="ltr-value" dir="ltr">${escapeHtml(formatBankValue(label, value))}</strong></div>`).join("")}</div>` : `<div class="notice warn">اطلاعات حساب هنوز ثبت نشده است.</div>`}
       <div class="payment-month-picker" id="paymentMonthPicker">
         ${months.map((m) => `
           <label class="payment-month-option">
@@ -1392,9 +1405,9 @@ const loadTeamPaymentWizard = async () => {
             <strong>${escapeHtml(formatMoney(m.amount_remaining))}</strong>
           </label>`).join("")}
       </div>
-      <div class="payment-wizard-total">
+      <div class="payment-wizard-total payment-wizard-hero">
         <span>مبلغ دقیق واریز</span>
-        <strong id="paymentWizardTotal">۰</strong>
+        <strong id="paymentWizardTotal" class="payment-hero-amount">۰</strong>
       </div>
       <form id="teamPaymentForm" class="crud-grid">
         <label><span>تاریخ واریز</span><input name="tx_date" type="text" required value="${escapeHtml(window.MECHINNO?.today || "")}" /></label>
@@ -1549,6 +1562,9 @@ const fieldInput = (name, meta, value) => {
   const safeValue = value ?? "";
   const ltr = ltrFields.has(name) ? 'dir="ltr" class="ltr-input"' : "";
 
+  if (type === "hidden") {
+    return `<input type="hidden" name="${escapeHtml(name)}" value="${escapeHtml(safeValue)}" />`;
+  }
   if (type === "textarea") {
     return `<textarea name="${escapeHtml(name)}" ${required} ${placeholder}>${escapeHtml(safeValue)}</textarea>`;
   }
@@ -1586,11 +1602,16 @@ const openRecordModal = ({ resource, definition, record = null, onSaved, title =
     : "";
   form.innerHTML = `
     <div class="crud-grid">
-      ${Object.entries(definition.fields).map(([name, meta]) => `
+      ${Object.entries(definition.fields).map(([name, meta]) => {
+        if (meta.type === "hidden") {
+          return fieldInput(name, meta, formRecord[name] ?? "");
+        }
+        return `
         <label class="${meta.type === "textarea" ? "wide" : ""}">
           <span>${escapeHtml(meta.label)}${meta.required ? " *" : ""}</span>
           ${fieldInput(name, meta, formRecord[name] ?? "")}
-        </label>`).join("")}
+        </label>`;
+      }).join("")}
     </div>
     ${fifoHint}
     <div class="modal-actions">
@@ -1776,31 +1797,69 @@ const askRejectReason = () => new Promise((resolve, reject) => {
   };
 });
 
-const openFinanceModal = async (category) => {
-  const meta = await loadCrudMeta();
-  const base = meta.resources.transactions;
-  const fieldKeys = category === "هزینه"
-    ? ["tx_date", "description", "amount", "notes"]
-    : ["tx_date", "description", "amount", "notes"];
-  const fields = Object.fromEntries(fieldKeys.map((key) => [key, base.fields[key]]));
-  if (category === "هزینه") {
-    fields.amount = { label: "مبلغ هزینه (ریال)", type: "number", required: true };
-  } else {
-    fields.amount = { label: "مبلغ درآمد (ریال)", type: "number", required: true };
-  }
+const incomeSubtypeOptions = {
+  "دوره آموزشی": "دوره آموزشی / کارگاه",
+  "جریمه نهاد": "جریمه نهاد",
+  "اسپانسری": "اسپانسری / حمایت مالی",
+  "اجاره فضا": "اجاره سالن / فضا",
+  "خدمات": "فروش خدمات",
+  "سایر": "سایر درآمد",
+};
+
+const expenseSubtypeOptions = {
+  "لوازم مصرفی": "لوازم مصرفی",
+  "خوراکی": "خوراکی و پذیرایی",
+  "تعمیرات": "تعمیرات و نگهداری",
+  "حقوق": "حقوق و دستمزد",
+  "خدمات": "خدمات پیمانکاری",
+  "آب و برق": "آب، برق، اینترنت",
+  "سایر": "سایر هزینه",
+};
+
+const openFinanceModal = async (category, record = null) => {
+  const isEdit = Boolean(record?.id);
+  const subtypeOptions = category === "هزینه" ? expenseSubtypeOptions : incomeSubtypeOptions;
+  const fields = {
+    category: { type: "hidden" },
+    confirmed: { type: "hidden" },
+    tx_date: { label: "تاریخ", type: "date", required: true, placeholder: "1404/01/01" },
+    finance_subtype: {
+      label: category === "هزینه" ? "نوع هزینه" : "نوع درآمد",
+      type: "select",
+      options: subtypeOptions,
+      required: true,
+    },
+    description: {
+      label: "شرح تکمیلی",
+      type: "textarea",
+      required: false,
+      placeholder: category === "هزینه" ? "مثلاً خرید لوازم آشپزخانه" : "مثلاً برگزاری دوره طراحی محصول",
+    },
+    amount: {
+      label: category === "هزینه" ? "مبلغ هزینه (ریال)" : "مبلغ درآمد (ریال)",
+      type: "number",
+      required: true,
+    },
+    notes: { label: "یادداشت داخلی", type: "textarea" },
+  };
   openRecordModal({
     resource: "transactions",
-    definition: { title: category === "هزینه" ? "ثبت هزینه" : "ثبت درآمد دستی", fields },
+    definition: { title: isEdit
+      ? (category === "هزینه" ? "ویرایش هزینه" : "ویرایش درآمد")
+      : (category === "هزینه" ? "ثبت هزینه" : "ثبت درآمد دستی"), fields },
     record: {
+      ...(record || {}),
       category,
       confirmed: "1",
-      tx_date: window.MECHINNO?.today || "",
-      amount: "",
-      description: "",
+      tx_date: record?.tx_date || window.MECHINNO?.today || "",
+      finance_subtype: record?.finance_subtype || "",
+      amount: record ? Math.abs(Number(record.amount || 0)) || "" : "",
+      description: record?.description || "",
+      notes: record?.notes || "",
     },
     onSaved: async () => {
       await refreshAfterMutation("transactions");
-      showToast(category === "هزینه" ? "هزینه ثبت شد." : "درآمد ثبت شد.", "success");
+      showToast(isEdit ? "ذخیره شد." : (category === "هزینه" ? "هزینه ثبت شد." : "درآمد ثبت شد."), "success");
     },
   });
 };
@@ -1815,6 +1874,11 @@ document.getElementById("addExpenseButton")?.addEventListener("click", () => {
 
 const formatCell = (column, value, row, resource) => {
   if (column === "entity_type") return entityBadge(value);
+  if (column === "is_active" && resource === "teams") {
+    return Number(value) === 1
+      ? '<span class="badge badge-paid">فعال</span>'
+      : '<span class="badge badge-debt">غیرفعال</span>';
+  }
   if (column === "usage_type") return escapeHtml(usageLabels[value] || value || "—");
   if (column === "category" && resource === "development_plans") {
     return escapeHtml(devCategoryLabels[value] || value || "—");
@@ -1823,6 +1887,7 @@ const formatCell = (column, value, row, resource) => {
     if (value === "واریز تیم") return "دریافت از نهاد";
     return escapeHtml(value || "—");
   }
+  if (column === "finance_subtype") return escapeHtml(value || "—");
   if (column === "confirmed") return Number(value) === 1 ? "بله" : "خیر";
   if (column === "wants_access") return accessStatusLabel(row);
   if (column === "access_code") {
@@ -1911,6 +1976,7 @@ class DataTable extends HTMLElement {
     this.workflowType = this.getAttribute("data-workflow-type") || "";
     this.noAdd = this.hasAttribute("data-no-add") || this.hasAttribute("data-readonly");
     this.txCategoryFilter = this.getAttribute("data-tx-filter") || "";
+    this.fiscalYearFilter = this.getAttribute("data-fiscal-year") || "";
     this.paymentStatusFilter = this.getAttribute("data-payment-filter") || "";
     this.approvalStatusFilter = this.getAttribute("data-approval-filter") || "";
     this.tableKey = this.getAttribute("data-table-key") || "";
@@ -1962,6 +2028,10 @@ class DataTable extends HTMLElement {
       }, 300);
     });
     this.querySelector(".add-button")?.addEventListener("click", () => {
+      if (this.resource === "transactions" && this.txCategoryFilter) {
+        openFinanceModal(this.txCategoryFilter).catch((error) => showToast(error.message, "error"));
+        return;
+      }
       openRecordModal({
         resource: this.resource,
         definition: this.definition,
@@ -2004,6 +2074,7 @@ class DataTable extends HTMLElement {
         category: this.txCategoryFilter,
         paymentStatus: this.paymentStatusFilter,
         approvalStatus: this.approvalStatusFilter,
+        fiscalYear: this.fiscalYearFilter,
         q: this.filter.trim(),
       });
       this.rows = result.rows;
@@ -2035,10 +2106,24 @@ class DataTable extends HTMLElement {
     return this.rows;
   }
 
+  resolveTableColumns(rows) {
+    let preferred = resourceColumns[this.resource] ?? [];
+    if (this.resource === "transactions" && this.txCategoryFilter) {
+      preferred = ["tx_date", "finance_subtype", "description", "amount", "notes"];
+    }
+    if (panelMode === "team" && teamPanelHiddenColumns[this.resource]) {
+      const hidden = new Set(teamPanelHiddenColumns[this.resource]);
+      preferred = preferred.filter((column) => !hidden.has(column));
+    }
+    if (!rows.length) return preferred;
+    const available = new Set(Object.keys(rows[0]));
+    return preferred.filter((column) => available.has(column));
+  }
+
   renderMobileCards(rows) {
     const container = this.querySelector(".mobile-cards");
     if (!isMobile()) return false;
-    const columns = rows.length ? resolveColumns(rows, this.resource).slice(0, 6) : [];
+    const columns = rows.length ? this.resolveTableColumns(rows).slice(0, 6) : [];
     const editable = tableAllowsEdit(this, this.definition);
     const workflow = this.workflow && canWrite;
     container.innerHTML = rows.length
@@ -2088,7 +2173,7 @@ class DataTable extends HTMLElement {
       return;
     }
 
-    const columns = resolveColumns(rows, this.resource);
+    const columns = this.resolveTableColumns(rows);
     const editable = tableAllowsEdit(this, this.definition);
     const workflow = this.workflow && canWrite;
     const statusField = this.definition?.status_field;
@@ -2205,6 +2290,10 @@ class DataTable extends HTMLElement {
     }
     if (!this.definition) return;
     if (button.dataset.action === "edit") {
+      if (this.resource === "transactions" && this.txCategoryFilter) {
+        openFinanceModal(this.txCategoryFilter, { ...record }).catch((error) => showToast(error.message, "error"));
+        return;
+      }
       openRecordModal({
         resource: this.resource,
         definition: this.definition,

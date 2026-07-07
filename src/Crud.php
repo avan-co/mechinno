@@ -20,7 +20,7 @@ final class Crud
             'teams' => [
                 'table' => 'teams',
                 'title' => 'نهاد',
-                'order' => 'entity_type, name',
+                'order' => 'is_active DESC, entity_type, name',
                 'status_field' => null,
                 'source' => true,
                 'fields' => [
@@ -34,6 +34,11 @@ final class Crud
                     'leader' => ['label' => 'سرگروه / مسئول', 'type' => 'text'],
                     'phone' => ['label' => 'تماس', 'type' => 'text'],
                     'joined_at' => ['label' => 'تاریخ عضویت', 'type' => 'date', 'placeholder' => '1404/01/01'],
+                    'is_active' => [
+                        'label' => 'وضعیت نهاد',
+                        'type' => 'select',
+                        'options' => ['1' => 'فعال', '0' => 'غیرفعال'],
+                    ],
                     'warning' => ['label' => 'اخطار', 'type' => 'text'],
                     'notes' => ['label' => 'توضیحات', 'type' => 'textarea'],
                 ],
@@ -102,6 +107,26 @@ final class Crud
                     'assignment_until' => ['label' => 'تاریخ پایان تخصیص', 'type' => 'date', 'placeholder' => '1404/12/29'],
                 ],
             ],
+            'desk_assignments' => [
+                'table' => 'desk_assignments',
+                'title' => 'تخصیص میز (تاریخچه)',
+                'order' => 'assigned_from DESC, desk_number',
+                'status_field' => null,
+                'source' => false,
+                'fields' => [
+                    'desk_id' => ['label' => 'میز', 'type' => 'select', 'options' => [], 'required' => true],
+                    'team_id' => ['label' => 'نهاد', 'type' => 'select', 'options' => [], 'required' => true],
+                    'usage_type' => [
+                        'label' => 'نوع استفاده',
+                        'type' => 'select',
+                        'options' => ['formal' => 'رسمی', 'informal' => 'غیررسمی', 'mixed' => 'ترکیبی'],
+                        'required' => true,
+                    ],
+                    'assigned_from' => ['label' => 'تاریخ شروع', 'type' => 'date', 'required' => true, 'placeholder' => '1404/01/01'],
+                    'assigned_until' => ['label' => 'تاریخ پایان', 'type' => 'date', 'placeholder' => '1404/12/29'],
+                    'notes' => ['label' => 'توضیحات', 'type' => 'textarea'],
+                ],
+            ],
             'lockers' => [
                 'table' => 'lockers',
                 'title' => 'کمد',
@@ -135,6 +160,7 @@ final class Crud
                         'هزینه' => 'هزینه',
                         'واریز تیم' => 'دریافت از نهاد',
                     ], 'required' => true],
+                    'finance_subtype' => ['label' => 'نوع', 'type' => 'select', 'options' => []],
                     'team_id' => ['label' => 'نهاد (برای دریافت شارژ)', 'type' => 'select', 'options' => []],
                     'fiscal_year' => ['label' => 'سال مالی', 'type' => 'text'],
                     'month_index' => ['label' => 'ماه', 'type' => 'select', 'options' => self::monthOptions()],
@@ -279,6 +305,9 @@ final class Crud
                     }
                     $definition['fields'][$field]['options'] = $planOptions;
                 }
+                if ($name === 'desk_assignments' && $field === 'desk_id') {
+                    $definition['fields'][$field]['options'] = $this->deskOptions();
+                }
                 if ($field === 'team_id' && Access::isTeam()) {
                     $scopedTeamId = Access::scopedTeamId();
                     if ($scopedTeamId !== null) {
@@ -333,6 +362,9 @@ final class Crud
         }
         if (Access::isTeam() && $resource === 'desks') {
             unset($fields['assignment_from'], $fields['assignment_until']);
+        }
+        if ($resource === 'development_plans' && !Access::isTeam()) {
+            return array_intersect_key($fields, array_flip(['title', 'status', 'priority', 'due_date', 'notes']));
         }
 
         return $fields;
@@ -666,6 +698,11 @@ final class Crud
             if (!in_array($type, ['team', 'company', 'student'], true)) {
                 throw new InvalidArgumentException('نوع نهاد معتبر نیست.');
             }
+            if (isset($data['is_active'])) {
+                $data['is_active'] = (int) $data['is_active'];
+            } elseif ($creating) {
+                $data['is_active'] = 1;
+            }
             if ($creating) {
                 $data['entity_code'] = $this->ids->nextEntityCode($type);
             }
@@ -820,6 +857,20 @@ final class Crud
                 $data['month_index'] = null;
                 $data['payment_status'] = 'approved';
                 $data['confirmed'] = 1;
+                $data['payment_plan'] = null;
+                if (in_array($category, ['درآمد', 'هزینه'], true)) {
+                    $subtype = trim((string) ($data['finance_subtype'] ?? ''));
+                    $allowed = $category === 'درآمد' ? self::incomeSubtypeOptions() : self::expenseSubtypeOptions();
+                    if ($subtype === '' || !isset($allowed[$subtype])) {
+                        throw new InvalidArgumentException('نوع ' . ($category === 'درآمد' ? 'درآمد' : 'هزینه') . ' را انتخاب کنید.');
+                    }
+                    $detail = trim((string) ($data['description'] ?? ''));
+                    if ($detail === '') {
+                        $data['description'] = $subtype;
+                    }
+                } else {
+                    $data['finance_subtype'] = null;
+                }
                 if (($data['category'] ?? '') === 'هزینه' && (int) ($data['amount'] ?? 0) > 0) {
                     $data['amount'] = -abs((int) $data['amount']);
                 }
@@ -866,6 +917,27 @@ final class Crud
         if ($resource === 'rate_settings' && isset($data['fiscal_year'])) {
             $data['fiscal_year'] = JalaliDate::normalizeDigits($data['fiscal_year']);
         }
+        if ($resource === 'desk_assignments') {
+            $deskId = (int) ($data['desk_id'] ?? 0);
+            if ($deskId <= 0) {
+                throw new InvalidArgumentException('میز را انتخاب کنید.');
+            }
+            $deskStatement = $this->pdo->prepare('SELECT number FROM desks WHERE id = :id');
+            $deskStatement->execute(['id' => $deskId]);
+            $deskNumber = $deskStatement->fetchColumn();
+            if ($deskNumber === false) {
+                throw new InvalidArgumentException('میز یافت نشد.');
+            }
+            $data['desk_number'] = (int) $deskNumber;
+            if (isset($data['assigned_from'])) {
+                $data['assigned_from'] = JalaliDate::normalizeDigits((string) $data['assigned_from']);
+            }
+            if (isset($data['assigned_until']) && $this->blank($data['assigned_until'])) {
+                $data['assigned_until'] = null;
+            } elseif (isset($data['assigned_until'])) {
+                $data['assigned_until'] = JalaliDate::normalizeDigits((string) $data['assigned_until']);
+            }
+        }
         if ($resource === 'panel_users') {
             $role = (string) ($data['role'] ?? '');
             if ($role === Access::ROLE_TEAM) {
@@ -896,6 +968,8 @@ final class Crud
             if ($creating) {
                 $data['created_at'] = $today;
                 $data['status'] = $data['status'] ?? 'open';
+                $data['category'] = $data['category'] ?? 'action';
+                $data['priority'] = $data['priority'] ?? 'medium';
                 $data['sort_order'] = (int) ($data['sort_order'] ?? 0);
             }
             if (isset($data['depends_on_id']) && $this->blank($data['depends_on_id'])) {
@@ -1005,11 +1079,14 @@ final class Crud
     {
         $options = [];
         $labels = ['team' => 'تیم', 'company' => 'شرکت', 'student' => 'دانشجو'];
-        foreach ($this->pdo->query('SELECT id, entity_type, name, leader FROM teams ORDER BY entity_type, name')->fetchAll() as $team) {
+        foreach ($this->pdo->query('SELECT id, entity_type, name, leader, is_active FROM teams ORDER BY is_active DESC, entity_type, name')->fetchAll() as $team) {
             $type = $labels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
             $label = $type . ' — ' . ($team['name'] ?? '');
             if (($team['leader'] ?? '') !== '') {
                 $label .= ' (' . $team['leader'] . ')';
+            }
+            if ((int) ($team['is_active'] ?? 1) === 0) {
+                $label .= ' — غیرفعال';
             }
             $options[(string) $team['id']] = $label;
         }
@@ -1205,5 +1282,36 @@ final class Crud
         usort($plan, static fn (array $a, array $b): int => [$a['fiscal_year'], $a['month_index']] <=> [$b['fiscal_year'], $b['month_index']]);
 
         return $plan;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public static function incomeSubtypeOptions(): array
+    {
+        return [
+            'دوره آموزشی' => 'دوره آموزشی / کارگاه',
+            'جریمه نهاد' => 'جریمه نهاد',
+            'اسپانسری' => 'اسپانسری / حمایت مالی',
+            'اجاره فضا' => 'اجاره سالن / فضا',
+            'خدمات' => 'فروش خدمات',
+            'سایر' => 'سایر درآمد',
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public static function expenseSubtypeOptions(): array
+    {
+        return [
+            'لوازم مصرفی' => 'لوازم مصرفی',
+            'خوراکی' => 'خوراکی و پذیرایی',
+            'تعمیرات' => 'تعمیرات و نگهداری',
+            'حقوق' => 'حقوق و دستمزد',
+            'خدمات' => 'خدمات پیمانکاری',
+            'آب و برق' => 'آب، برق، اینترنت',
+            'سایر' => 'سایر هزینه',
+        ];
     }
 }
