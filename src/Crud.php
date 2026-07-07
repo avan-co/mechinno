@@ -34,9 +34,21 @@ final class Crud
                     'leader' => ['label' => 'سرگروه / مسئول', 'type' => 'text'],
                     'phone' => ['label' => 'تماس', 'type' => 'text'],
                     'joined_at' => ['label' => 'تاریخ عضویت', 'type' => 'date', 'placeholder' => '1404/01/01'],
-                    'contract_start' => ['label' => 'شروع قرارداد', 'type' => 'date', 'placeholder' => '1404/01/01'],
-                    'contract_end' => ['label' => 'پایان قرارداد', 'type' => 'date', 'placeholder' => '1404/12/29'],
                     'warning' => ['label' => 'اخطار', 'type' => 'text'],
+                    'notes' => ['label' => 'توضیحات', 'type' => 'textarea'],
+                ],
+            ],
+            'team_contracts' => [
+                'table' => 'team_contracts',
+                'title' => 'قرارداد سالانه',
+                'order' => 'fiscal_year DESC, team_id',
+                'status_field' => null,
+                'source' => false,
+                'fields' => [
+                    'team_id' => ['label' => 'نهاد', 'type' => 'select', 'options' => [], 'required' => true],
+                    'fiscal_year' => ['label' => 'سال مالی', 'type' => 'text', 'required' => true, 'placeholder' => '1404'],
+                    'contract_start' => ['label' => 'شروع قرارداد', 'type' => 'date', 'required' => true, 'placeholder' => '1404/01/01'],
+                    'contract_end' => ['label' => 'پایان قرارداد', 'type' => 'date', 'required' => true, 'placeholder' => '1404/12/29'],
                     'notes' => ['label' => 'توضیحات', 'type' => 'textarea'],
                 ],
             ],
@@ -314,9 +326,6 @@ final class Crud
         if (Access::isTeam() && $resource === 'transactions') {
             return [
                 'tx_date' => $fields['tx_date'],
-                'fiscal_year' => array_merge($fields['fiscal_year'], ['required' => true]),
-                'month_index' => array_merge($fields['month_index'], ['required' => true]),
-                'amount' => ['label' => 'مبلغ واریز (ریال)', 'type' => 'number', 'required' => true],
                 'payment_reference' => $fields['payment_reference'],
                 'description' => ['label' => 'توضیح واریز', 'type' => 'textarea', 'required' => true],
                 'notes' => $fields['notes'],
@@ -346,7 +355,21 @@ final class Crud
         $deskAssignmentDates = $this->extractDeskAssignmentDates($resource, $payload);
         $data = $this->sanitizePayload(['fields' => $fields], $payload, true);
         $this->stripDeskAssignmentColumns($resource, $data);
+        if (Access::isTeam() && $resource === 'transactions') {
+            $data['payment_plan'] = $payload['payment_plan'] ?? '';
+        }
         $this->applyResourceRules($resource, $data, true);
+
+        if ($resource === 'charges') {
+            $existingId = $this->findChargeId(
+                (int) ($data['team_id'] ?? 0),
+                (string) ($data['fiscal_year'] ?? ''),
+                (int) ($data['month_index'] ?? 0)
+            );
+            if ($existingId !== null) {
+                return $this->update($resource, $existingId, $payload);
+            }
+        }
 
         $columns = array_keys($data);
         $statement = $this->pdo->prepare(sprintf(
@@ -374,6 +397,9 @@ final class Crud
                 (string) ($record['entity_code'] ?? ''),
                 (string) ($record['leader'] ?? '')
             );
+        }
+        if ($resource === 'team_contracts') {
+            (new TeamContracts($this->pdo))->syncTeamContractCache((int) ($data['team_id'] ?? 0));
         }
 
         return $this->find($resource, $id);
@@ -432,6 +458,10 @@ final class Crud
         if ($resource === 'teams' && isset($data['leader'])) {
             EntityAccounts::syncLeaderName($this->pdo, $id, (string) $data['leader']);
         }
+        if ($resource === 'team_contracts') {
+            $record = $this->find($resource, $id);
+            (new TeamContracts($this->pdo))->syncTeamContractCache((int) ($record['team_id'] ?? $data['team_id'] ?? 0));
+        }
 
         return $this->find($resource, $id);
     }
@@ -448,6 +478,16 @@ final class Crud
         }
         if ($resource === 'teams') {
             EntityAccounts::deleteForTeam($this->pdo, $id);
+        }
+        if ($resource === 'team_contracts') {
+            $record = $this->find($resource, $id);
+            $teamId = (int) ($record['team_id'] ?? 0);
+            $this->pdo->prepare(sprintf('DELETE FROM %s WHERE id = :id', $definition['table']))->execute(['id' => $id]);
+            if ($teamId > 0) {
+                (new TeamContracts($this->pdo))->syncTeamContractCache($teamId);
+            }
+
+            return;
         }
         if ($resource === 'desks') {
             throw new InvalidArgumentException('حذف میز مجاز نیست.');
@@ -668,15 +708,29 @@ final class Crud
             $data['submitted_at'] = JalaliDate::todayParts()['formatted'];
         }
         if ($resource === 'teams' && $creating) {
-            if (empty($data['contract_start'])) {
-                $today = JalaliDate::todayParts();
-                $data['contract_start'] = sprintf('%04d/%02d/01', $today['year'], $today['month']);
+            // قرارداد سالانه جداگانه در بخش «قراردادهای نهاد» ثبت می‌شود.
+        }
+        if ($resource === 'team_contracts') {
+            if (isset($data['fiscal_year'])) {
+                $data['fiscal_year'] = JalaliDate::normalizeDigits($data['fiscal_year']);
             }
-            if (empty($data['contract_end'])) {
-                $start = JalaliDate::tryNormalize($data['contract_start'] ?? '');
-                if ($start !== '') {
-                    $year = (int) substr($start, 0, 4);
-                    $data['contract_end'] = sprintf('%04d/12/29', $year);
+            if ($creating) {
+                $data['created_at'] = JalaliDate::todayParts()['formatted'];
+            }
+            $teamId = (int) ($data['team_id'] ?? 0);
+            $year = (string) ($data['fiscal_year'] ?? '');
+            if ($teamId > 0 && $year !== '') {
+                $check = $this->pdo->prepare(
+                    'SELECT id FROM team_contracts WHERE team_id = :team_id AND fiscal_year = :year'
+                    . ($creating ? '' : ' AND id <> :id')
+                );
+                $params = ['team_id' => $teamId, 'year' => $year];
+                if (!$creating && $recordId > 0) {
+                    $params['id'] = $recordId;
+                }
+                $check->execute($params);
+                if ($check->fetchColumn() !== false) {
+                    throw new InvalidArgumentException('برای این نهاد در این سال مالی قبلاً قرارداد ثبت شده است.');
                 }
             }
         }
@@ -743,16 +797,21 @@ final class Crud
                 $data['confirmed'] = 0;
                 $data['payment_status'] = 'pending';
                 $data['announced_at'] = JalaliDate::todayParts()['formatted'];
-                $data['amount'] = abs((int) ($data['amount'] ?? 0));
                 if ($creating) {
-                    $dup = $this->countPendingTeamPayment(
-                        $teamId,
-                        (int) $data['amount'],
-                        (string) ($data['fiscal_year'] ?? ''),
-                        (int) ($data['month_index'] ?? 0)
+                    $plan = $this->normalizeTeamPaymentPlan($teamId, $data['payment_plan'] ?? null);
+                    $data['payment_plan'] = json_encode($plan, JSON_UNESCAPED_UNICODE);
+                    $data['amount'] = array_sum(array_column($plan, 'amount'));
+                    $data['fiscal_year'] = $plan[0]['fiscal_year'];
+                    $data['month_index'] = $plan[0]['month_index'];
+                    $monthNames = self::monthOptions();
+                    $labels = array_map(
+                        static fn (array $item): string => ($monthNames[(string) $item['month_index']] ?? '') . ' ' . $item['fiscal_year'],
+                        $plan
                     );
+                    $data['description'] = 'اعلام واریز — ' . implode('، ', $labels);
+                    $dup = $this->countPendingTeamPayment($teamId);
                     if ($dup > 0) {
-                        throw new InvalidArgumentException('اعلام واریز مشابهی در انتظار تأیید است. ابتدا وضعیت قبلی را بررسی کنید یا آن را حذف کنید.');
+                        throw new InvalidArgumentException('اعلام واریز دیگری در انتظار تأیید است. ابتدا آن را پیگیری یا حذف کنید.');
                     }
                 }
             } elseif ($category !== 'واریز تیم') {
@@ -858,6 +917,18 @@ final class Crud
         if ($resource === 'desks') {
             if (isset($data['usage_type']) && !in_array((string) $data['usage_type'], ['formal', 'informal', 'mixed'], true)) {
                 $data['usage_type'] = 'formal';
+            }
+            $contracts = new TeamContracts($this->pdo);
+            $existingDesk = $recordId > 0 ? $this->find('desks', $recordId) : [];
+            $oldTeamId = (int) ($existingDesk['team_id'] ?? 0);
+            $newTeamId = array_key_exists('team_id', $data)
+                ? (int) ($data['team_id'] ?? 0)
+                : $oldTeamId;
+            if ($newTeamId > 0 && $newTeamId !== $oldTeamId) {
+                $contracts->assertCanAssignDesk($newTeamId);
+            }
+            if ($newTeamId <= 0 && $oldTeamId > 0) {
+                $contracts->assertCanFreeDesk($oldTeamId);
             }
         }
     }
@@ -1059,20 +1130,80 @@ final class Crud
         throw new InvalidArgumentException('نهاد نمی‌تواند این رکورد را تغییر دهد.');
     }
 
-    private function countPendingTeamPayment(int $teamId, int $amount, string $fiscalYear, int $monthIndex): int
+    private function countPendingTeamPayment(int $teamId): int
     {
         $statement = $this->pdo->prepare(
             "SELECT COUNT(*) FROM transactions
-             WHERE team_id = :team_id AND category = 'واریز تیم' AND payment_status = 'pending'
-             AND amount = :amount AND fiscal_year = :year AND month_index = :month"
+             WHERE team_id = :team_id AND category = 'واریز تیم' AND payment_status = 'pending'"
+        );
+        $statement->execute(['team_id' => $teamId]);
+
+        return (int) $statement->fetchColumn();
+    }
+
+    private function findChargeId(int $teamId, string $fiscalYear, int $monthIndex): ?int
+    {
+        if ($teamId <= 0 || $fiscalYear === '' || $monthIndex <= 0) {
+            return null;
+        }
+        $statement = $this->pdo->prepare(
+            'SELECT id FROM charges WHERE team_id = :team_id AND fiscal_year = :year AND month_index = :month LIMIT 1'
         );
         $statement->execute([
             'team_id' => $teamId,
-            'amount' => $amount,
             'year' => JalaliDate::normalizeDigits($fiscalYear),
             'month' => $monthIndex,
         ]);
+        $id = $statement->fetchColumn();
 
-        return (int) $statement->fetchColumn();
+        return $id === false ? null : (int) $id;
+    }
+
+    /**
+     * @return list<array{fiscal_year:string,month_index:int,amount:int}>
+     */
+    private function normalizeTeamPaymentPlan(int $teamId, mixed $raw): array
+    {
+        if (is_string($raw)) {
+            $decoded = json_decode($raw, true);
+            $raw = is_array($decoded) ? $decoded : [];
+        }
+        if (!is_array($raw) || $raw === []) {
+            throw new InvalidArgumentException('حداقل یک ماه بدهی را برای واریز انتخاب کنید.');
+        }
+
+        $payable = [];
+        foreach ((new Repository($this->pdo))->teamPayableMonths($teamId) as $row) {
+            $key = ($row['fiscal_year'] ?? '') . '-' . ($row['month_index'] ?? '');
+            $payable[$key] = (int) ($row['amount_remaining'] ?? 0);
+        }
+
+        $plan = [];
+        $seen = [];
+        foreach ($raw as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $fy = JalaliDate::normalizeDigits((string) ($item['fiscal_year'] ?? ''));
+            $mi = (int) ($item['month_index'] ?? 0);
+            $key = $fy . '-' . $mi;
+            if ($fy === '' || $mi <= 0 || isset($seen[$key])) {
+                continue;
+            }
+            $remaining = (int) ($payable[$key] ?? 0);
+            if ($remaining <= 0) {
+                throw new InvalidArgumentException('یکی از ماه‌های انتخاب‌شده بدهی ندارد یا قبلاً پرداخت شده است.');
+            }
+            $plan[] = ['fiscal_year' => $fy, 'month_index' => $mi, 'amount' => $remaining];
+            $seen[$key] = true;
+        }
+
+        if ($plan === []) {
+            throw new InvalidArgumentException('ماه‌های انتخاب‌شده معتبر نیستند.');
+        }
+
+        usort($plan, static fn (array $a, array $b): int => [$a['fiscal_year'], $a['month_index']] <=> [$b['fiscal_year'], $b['month_index']]);
+
+        return $plan;
     }
 }

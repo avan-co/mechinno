@@ -53,10 +53,15 @@ $team = $crud->create('teams', [
     'name' => 'شرکت آزمایشی',
     'leader' => 'علی رضایی',
     'phone' => '09121234567',
+    'joined_at' => '1404/01/01',
+]);
+$teamId = (int) $team['id'];
+$crud->create('team_contracts', [
+    'team_id' => (string) $teamId,
+    'fiscal_year' => '1405',
     'contract_start' => '1405/01/01',
     'contract_end' => '1405/12/29',
 ]);
-$teamId = (int) $team['id'];
 $assert($teamId > 0 && ($team['entity_code'] ?? '') !== '', 'crud: team created with entity_code');
 
 $teamsList = $repo->paginatedResource('teams', 1, 25);
@@ -125,14 +130,51 @@ $assert(!in_array('pending-members', $allowed, true), 'access: team cannot acces
 $assert(!in_array('pending-payments', $allowed, true), 'access: team cannot access pending-payments');
 $assert(in_array('desks', $allowed, true), 'access: team can access desks');
 
+$pdo->exec('UPDATE desks SET team_id = ' . $teamId . ', usage_type = "formal", formal_seats = 2 WHERE number = 1');
+(new DeskAssignments($pdo))->syncDeskAssignment(1, [
+    'number' => 1,
+    'team_id' => $teamId,
+    'usage_type' => 'formal',
+    'assignment_from' => '1405/01/01',
+    'assignment_until' => '1405/12/29',
+]);
+
+$_SESSION = [
+    'mechinno_authenticated' => true,
+    'mechinno_role' => Access::ROLE_ADMIN_EDITOR,
+    'mechinno_user' => 'admin',
+    'mechinno_user_id' => 0,
+];
+$crud->create('rate_settings', [
+    'fiscal_year' => '1405',
+    'title' => 'نرخ تست تیم',
+    'charge_rate' => '300',
+    'informal_rent_rate' => '500',
+    'effective_from' => '1405/01/01',
+]);
+(new Seeder($pdo))->recalculateCharges('1405');
+
+$_SESSION = [
+    'mechinno_authenticated' => true,
+    'mechinno_role' => Access::ROLE_TEAM,
+    'mechinno_team_id' => $teamId,
+    'mechinno_user' => $row['portal_username'],
+    'mechinno_user_id' => 1,
+];
+$payable = $repo->teamPayableMonths($teamId);
+$assert($payable !== [], 'charges: team has payable months');
+$firstPayable = $payable[0];
 $payment = $crud->create('transactions', [
     'tx_date' => '1405/02/10',
     'description' => 'اعلام واریز تست',
-    'amount' => '500000',
-    'fiscal_year' => '1405',
-    'month_index' => '2',
     'payment_reference' => 'REF-001',
+    'payment_plan' => [[
+        'fiscal_year' => $firstPayable['fiscal_year'],
+        'month_index' => $firstPayable['month_index'],
+        'amount' => $firstPayable['amount_remaining'],
+    ]],
 ]);
+$assert((int) ($payment['amount'] ?? 0) === (int) $firstPayable['amount_remaining'], 'workflow: team payment exact amount');
 $assert(($payment['payment_status'] ?? '') === 'pending', 'workflow: team payment pending');
 $assert((int) ($payment['confirmed'] ?? 1) === 0, 'workflow: team payment not confirmed yet');
 
@@ -140,7 +182,6 @@ $pendingTeamTx = $repo->paginatedResource('transactions', 1, 25, ['payment_statu
 $pendingIds = array_map(static fn ($r) => (int) ($r['id'] ?? 0), $pendingTeamTx['rows']);
 $assert(in_array((int) $payment['id'], $pendingIds, true), 'transactions: pending filter works for team');
 
-$pdo->exec('UPDATE desks SET team_id = ' . $teamId . ', usage_type = "formal", formal_seats = 2 WHERE number = 1');
 $deskMap = $repo->paginatedResource('desks', 1, 100);
 $assert(count($deskMap['rows']) >= 1, 'api: team desks list after assign');
 
@@ -151,17 +192,12 @@ $_SESSION = [
     'mechinno_user' => 'admin',
     'mechinno_user_id' => 0,
 ];
-$crud->create('rate_settings', [
-    'fiscal_year' => '1405',
-    'title' => 'نرخ تست',
-    'charge_rate' => '300',
-    'informal_rent_rate' => '500',
-    'effective_from' => '1405/01/01',
-]);
-(new Seeder($pdo))->recalculateCharges('1405');
 $matrix = $repo->chargesMatrix('1405');
-$assert(count($matrix['rows']) >= 1, 'charges: matrix has teams');
+$assert(count($matrix['rows']) >= 1, 'charges: matrix has teams with contract and desk');
 $assert(($matrix['rows'][0]['cells'][0]['amount_due'] ?? 0) > 0, 'charges: auto-calculated amount');
+$matrixEmptyYear = $repo->chargesMatrix('1404');
+$teamIn1404 = array_filter($matrixEmptyYear['rows'] ?? [], static fn (array $r): bool => (int) ($r['team']['id'] ?? 0) === $teamId);
+$assert($teamIn1404 === [], 'charges: team without 1404 contract hidden from collage');
 $ledger = (new CenterLedger($pdo))->snapshot();
 $assert(array_key_exists('balance', $ledger), 'ledger: snapshot has balance');
 $systemRows = array_filter($ledger['rows'] ?? [], static fn (array $r): bool => str_starts_with((string) ($r['source_file'] ?? ''), 'system:'));
@@ -226,19 +262,24 @@ $_SESSION = [
     'mechinno_user' => $row['portal_username'] ?? 'team',
     'mechinno_user_id' => 1,
 ];
+$payableAfterFirst = $repo->teamPayableMonths($teamId);
+$assert($payableAfterFirst !== [], 'payments: remaining months after first approval');
+$nextPayable = $payableAfterFirst[0];
 $doublePayment = $crud->create('transactions', [
     'tx_date' => '1405/03/15',
-    'description' => 'واریز دو ماه',
-    'amount' => '1200',
-    'fiscal_year' => '1405',
-    'month_index' => '3',
+    'description' => 'واریز ماه بعد',
     'payment_reference' => 'REF-002',
+    'payment_plan' => [[
+        'fiscal_year' => $nextPayable['fiscal_year'],
+        'month_index' => $nextPayable['month_index'],
+        'amount' => $nextPayable['amount_remaining'],
+    ]],
 ]);
 $_SESSION['mechinno_role'] = Access::ROLE_ADMIN_EDITOR;
 $workflow->approvePayment((int) $doublePayment['id']);
 $_SESSION['mechinno_role'] = Access::ROLE_TEAM;
 $teamCards = $repo->summary()['cards'] ?? [];
-$assert((int) ($teamCards['paid_total'] ?? 0) >= 1200, 'payments: approved amount counts toward paid_total');
+$assert((int) ($teamCards['paid_total'] ?? 0) >= (int) $nextPayable['amount_remaining'], 'payments: approved amount counts toward paid_total');
 $assert(isset($teamCards['charge_total']), 'dashboard: team cards include charge_total');
 
 $_SESSION['mechinno_role'] = Access::ROLE_ADMIN_EDITOR;
@@ -274,13 +315,18 @@ $assert(($teamSummarySettings['sheba'] ?? '') === 'IR120123456789012345678901', 
 $history = $repo->paginatedResource('payment-history', 1, 25);
 $historyIds = array_map(static fn ($r) => (int) ($r['id'] ?? 0), $history['rows']);
 $assert(in_array((int) $approvedPayment['id'], $historyIds, true), 'payment-history: approved payment listed');
+$payableForReject = $repo->teamPayableMonths($teamId);
+$rejectPayable = $payableForReject[0] ?? null;
+$assert($rejectPayable !== null, 'payments: month available for reject test');
 $pendingReject = $crud->create('transactions', [
     'tx_date' => '1405/06/01',
     'description' => 'واریز برای رد',
-    'amount' => '777',
-    'fiscal_year' => '1405',
-    'month_index' => '6',
     'payment_reference' => 'REJ-001',
+    'payment_plan' => [[
+        'fiscal_year' => $rejectPayable['fiscal_year'],
+        'month_index' => $rejectPayable['month_index'],
+        'amount' => $rejectPayable['amount_remaining'],
+    ]],
 ]);
 $assert(($pendingReject['payment_status'] ?? '') === 'pending', 'workflow: payment pending before reject');
 $_SESSION['mechinno_role'] = Access::ROLE_ADMIN_EDITOR;

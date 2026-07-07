@@ -67,6 +67,23 @@ try {
         json_response($repository->deskMap());
     }
 
+    if ($resource === 'team-payable-months') {
+        $teamId = Access::scopedTeamId() ?? (int) ($_GET['team_id'] ?? 0);
+        if ($teamId <= 0) {
+            json_response(['error' => 'نهاد معتبر نیست.'], 422);
+        }
+        json_response(['months' => $repository->teamPayableMonths($teamId)]);
+    }
+
+    if ($resource === 'teams' && $action === 'portal-credentials' && $_SERVER['REQUEST_METHOD'] === 'GET') {
+        Access::requireWriteJson();
+        $teamId = (int) ($_GET['id'] ?? 0);
+        if ($teamId <= 0) {
+            json_response(['error' => 'نهاد معتبر نیست.'], 422);
+        }
+        json_response($repository->teamPortalCredentials($teamId));
+    }
+
     if ($resource === 'center-settings') {
         $settings = new CenterSettings($pdo);
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -160,7 +177,7 @@ try {
     $paginatedResources = [
         'teams', 'members', 'desks', 'lockers', 'charges', 'transactions', 'rate_settings', 'panel_users',
         'development_plans', 'pending-members', 'pending-payments', 'pending-locker-requests',
-        'locker-requests', 'desk-assignments', 'payment-history',
+        'locker-requests', 'desk-assignments', 'payment-history', 'team_contracts',
     ];
     if (in_array($resource, $paginatedResources, true)) {
         $page = (int) ($_GET['page'] ?? 1);

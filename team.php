@@ -231,7 +231,10 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
                 <div class="panel-head"><h2>راهنمای پرداخت شارژ</h2></div>
                 <div id="paymentGuideContent" class="payment-guide">در حال بارگذاری…</div>
               </article>
-              <p class="hint">پس از واریز، اعلام کنید. ماه اعلام‌شده فقط برای پیگیری شماست — پس از تأیید، تخصیص واقعی به‌صورت FIFO (قدیمی‌ترین مانده قرارداد) انجام می‌شود. واریزهای در انتظار در جدول اول نمایش داده می‌شوند.</p>
+              <article class="panel">
+                <div class="panel-head"><h2>اعلام واریز</h2></div>
+                <div id="teamPaymentWizard">در حال بارگذاری…</div>
+              </article>
               <data-table title="اعلام‌های در انتظار تأیید" endpoint="api.php?resource=transactions" data-payment-filter="pending"></data-table>
               <data-table title="سوابق پرداخت" endpoint="api.php?resource=payment-history" data-readonly></data-table>
             </section>

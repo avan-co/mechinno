@@ -346,6 +346,7 @@ final class Repository
             'pending-locker-requests' => "SELECT COUNT(*) FROM locker_requests WHERE status = 'pending'",
             'locker-requests' => 'SELECT COUNT(*) FROM locker_requests',
             'desk-assignments' => 'SELECT COUNT(*) FROM desk_assignments',
+            'team_contracts' => 'SELECT COUNT(*) FROM team_contracts',
             'payment-history' => "SELECT COUNT(*) FROM transactions WHERE category = 'واریز تیم'"
                 . $this->paymentHistoryStatusSql($filters, true),
             default => throw new InvalidArgumentException('Unknown resource.'),
@@ -425,6 +426,13 @@ final class Repository
                 . ($teamId !== null ? " WHERE t.id = {$teamId}" : '')
                 . $this->searchClause('teams', $filters)
                 . ' ORDER BY t.entity_type, t.name',
+            'team_contracts' => "SELECT tc.id, tc.team_id, tc.fiscal_year, tc.contract_start, tc.contract_end, tc.notes, tc.created_at,
+                        t.name AS team_name, t.entity_type
+                 FROM team_contracts tc
+                 INNER JOIN teams t ON t.id = tc.team_id"
+                . ($teamId !== null ? " WHERE tc.team_id = {$teamId}" : '')
+                . $this->searchClause('team_contracts', $filters, $teamId !== null)
+                . ' ORDER BY tc.fiscal_year DESC, t.name',
             'members' => "SELECT m.id, m.member_code, m.team_id, m.access_code, m.full_name, m.phone, m.national_id, m.notes,
                         m.approval_status, m.submitted_at, m.reviewed_at, m.rejection_reason, m.wants_access,
                         t.name AS team_label, t.entity_type,
@@ -750,20 +758,27 @@ final class Repository
         ];
     }
 
+    private function contracts(): TeamContracts
+    {
+        return new TeamContracts($this->pdo);
+    }
+
     /**
      * @return array<string, mixed>
      */
     public function chargesMatrix(string $fiscalYear): array
     {
+        $fiscalYear = JalaliDate::normalizeDigits($fiscalYear);
+        $contracts = $this->contracts();
         $teamId = Access::scopedTeamId();
         if ($teamId !== null) {
             $teams = $this->preparedRows(
-                'SELECT id, entity_code, entity_type, name, contract_start, contract_end FROM teams WHERE id = :id',
+                'SELECT id, entity_code, entity_type, name FROM teams WHERE id = :id',
                 ['id' => $teamId]
             );
         } else {
             $teams = $this->preparedRows(
-                'SELECT id, entity_code, entity_type, name, contract_start, contract_end FROM teams ORDER BY entity_type, name'
+                'SELECT id, entity_code, entity_type, name FROM teams ORDER BY entity_type, name'
             );
         }
         $months = [];
@@ -796,13 +811,20 @@ final class Repository
         }
         $rows = [];
         foreach ($teams as $team) {
+            $tid = (int) $team['id'];
+            if (!$contracts->hasContractInYear($tid, $fiscalYear)) {
+                continue;
+            }
+            if (!$contracts->hasDeskInFiscalYear($tid, $fiscalYear)) {
+                continue;
+            }
+            $dates = $contracts->contractDatesForYear($tid, $fiscalYear);
+            $hasInformal = $contracts->hasInformalDeskInYear($tid, $fiscalYear);
             $cells = [];
-            $contractStart = (string) ($team['contract_start'] ?? '');
-            $contractEnd = (string) ($team['contract_end'] ?? '');
-            $teamAllocations = $allocationMap[(int) $team['id']] ?? [];
+            $teamAllocations = $allocationMap[$tid] ?? [];
             foreach ($months as $month) {
                 $idx = (int) $month['index'];
-                if (!JalaliDate::monthInContract($fiscalYear, $idx, $contractStart, $contractEnd)) {
+                if (!JalaliDate::monthInContract($fiscalYear, $idx, $dates['start'], $dates['end'])) {
                     $cells[] = [
                         'month_index' => $idx,
                         'charge_amount' => 0,
@@ -813,7 +835,18 @@ final class Repository
                     ];
                     continue;
                 }
-                $due = $chargeMap[$team['id']][$idx] ?? null;
+                if ($contracts->deskCountForMonth($tid, $fiscalYear, $idx) <= 0) {
+                    $cells[] = [
+                        'month_index' => $idx,
+                        'charge_amount' => 0,
+                        'rent_amount' => 0,
+                        'amount_due' => 0,
+                        'amount_paid' => 0,
+                        'status' => '—',
+                    ];
+                    continue;
+                }
+                $due = $chargeMap[$tid][$idx] ?? null;
                 $paid = (int) ($teamAllocations[$fiscalYear . '-' . $idx] ?? 0);
                 $amountDue = (int) ($due['amount'] ?? 0);
                 $cells[] = [
@@ -825,10 +858,93 @@ final class Repository
                     'status' => $amountDue <= 0 ? '—' : ($paid >= $amountDue ? 'پرداخت‌شده' : ($paid > 0 ? 'ناقص' : 'بدهکار به مرکز')),
                 ];
             }
-            $rows[] = ['team' => $team, 'cells' => $cells];
+            $rows[] = [
+                'team' => array_merge($team, [
+                    'has_informal_desk' => $hasInformal,
+                    'contract_start' => $dates['start'],
+                    'contract_end' => $dates['end'],
+                ]),
+                'cells' => $cells,
+            ];
         }
 
-        return ['fiscal_year' => $fiscalYear, 'months' => $months, 'rows' => $rows];
+        return [
+            'fiscal_year' => $fiscalYear,
+            'months' => $months,
+            'rows' => $rows,
+            'show_rent_column' => array_reduce(
+                $rows,
+                static fn (bool $carry, array $row): bool => $carry || (bool) ($row['team']['has_informal_desk'] ?? false),
+                false
+            ),
+        ];
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    public function teamPayableMonths(int $teamId): array
+    {
+        Access::assertTeamAccess($teamId);
+        $contracts = $this->contracts();
+        $allocation = $this->allocatedPaymentsForTeam($teamId);
+        $byMonth = $allocation['by_month'];
+        $rows = [];
+        foreach ($this->preparedRows(
+            'SELECT fiscal_year, month_index, month_name, amount FROM charges
+             WHERE team_id = :id ORDER BY fiscal_year, month_index',
+            ['id' => $teamId]
+        ) as $charge) {
+            $fy = JalaliDate::normalizeDigits((string) ($charge['fiscal_year'] ?? ''));
+            $mi = (int) ($charge['month_index'] ?? 0);
+            $dates = $contracts->contractDatesForYear($teamId, $fy);
+            if (!JalaliDate::monthInContract($fy, $mi, $dates['start'], $dates['end'])) {
+                continue;
+            }
+            if ($contracts->deskCountForMonth($teamId, $fy, $mi) <= 0) {
+                continue;
+            }
+            $key = $fy . '-' . $mi;
+            $due = (int) ($charge['amount'] ?? 0);
+            $paid = (int) ($byMonth[$key] ?? 0);
+            $remaining = max(0, $due - $paid);
+            if ($remaining <= 0) {
+                continue;
+            }
+            $rows[] = [
+                'fiscal_year' => $fy,
+                'month_index' => $mi,
+                'month_name' => (string) ($charge['month_name'] ?? $this->monthName($mi)),
+                'amount_due' => $due,
+                'amount_paid' => $paid,
+                'amount_remaining' => $remaining,
+            ];
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function teamPortalCredentials(int $teamId): array
+    {
+        if (!Access::canWrite()) {
+            throw new InvalidArgumentException('دسترسی مجاز نیست.');
+        }
+        $row = $this->preparedRow(
+            "SELECT u.username, u.password_plain FROM panel_users u
+             WHERE u.team_id = :team_id AND u.role = 'team' LIMIT 1",
+            ['team_id' => $teamId]
+        );
+        if ($row === null) {
+            throw new InvalidArgumentException('حساب ورود نهاد یافت نشد.');
+        }
+
+        return [
+            'username' => (string) ($row['username'] ?? ''),
+            'password' => (string) ($row['password_plain'] ?? ''),
+        ];
     }
 
     /**
@@ -836,10 +952,11 @@ final class Repository
      */
     public function chargeDebtRows(): array
     {
+        $contracts = $this->contracts();
         $allocationMap = $this->paymentAllocationByTeamMonth();
         $rows = [];
         foreach ($this->rows(
-            'SELECT c.team_id, t.name AS team_name, t.contract_start, t.contract_end,
+            'SELECT c.team_id, t.name AS team_name,
                     c.fiscal_year, c.month_index, c.month_name,
                     c.charge_amount, c.rent_amount, c.amount AS amount_due
              FROM charges c
@@ -849,12 +966,11 @@ final class Repository
             $teamId = (int) ($row['team_id'] ?? 0);
             $fiscalYear = (string) ($row['fiscal_year'] ?? '');
             $monthIndex = (int) ($row['month_index'] ?? 0);
-            if (!JalaliDate::monthInContract(
-                $fiscalYear,
-                $monthIndex,
-                (string) ($row['contract_start'] ?? ''),
-                (string) ($row['contract_end'] ?? '')
-            )) {
+            $dates = $contracts->contractDatesForYear($teamId, $fiscalYear);
+            if (!JalaliDate::monthInContract($fiscalYear, $monthIndex, $dates['start'], $dates['end'])) {
+                continue;
+            }
+            if ($contracts->deskCountForMonth($teamId, $fiscalYear, $monthIndex) <= 0) {
                 continue;
             }
             $key = $fiscalYear . '-' . $monthIndex;
@@ -908,6 +1024,12 @@ final class Repository
 
         return [
             'team' => self::stripLegacyColumns($team),
+            'contracts' => $this->preparedRows(
+                'SELECT id, fiscal_year, contract_start, contract_end, notes, created_at
+                 FROM team_contracts WHERE team_id = :id ORDER BY fiscal_year DESC',
+                ['id' => $teamId]
+            ),
+            'has_informal_desk' => $this->contracts()->hasInformalDeskInYear($teamId, $this->currentFiscalYear()),
             'desks' => array_map(
                 fn (array $row): array => $this->stripLegacyRow($row),
                 $this->preparedRows('SELECT id, number, team_id, usage_type, formal_seats, informal_seats, row_index, col_index, notes FROM desks WHERE team_id = :id ORDER BY number', ['id' => $teamId])
@@ -1120,8 +1242,9 @@ final class Repository
 
     private function contractDebtForTeamInYear(int $teamId, string $fiscalYear): int
     {
-        $team = $this->preparedRow('SELECT contract_start, contract_end FROM teams WHERE id = :id', ['id' => $teamId]);
-        if ($team === null) {
+        $contracts = $this->contracts();
+        $dates = $contracts->contractDatesForYear($teamId, $fiscalYear);
+        if ($dates['start'] === '' && $dates['end'] === '') {
             return 0;
         }
         $allocation = $this->allocatedPaymentsForTeam($teamId);
@@ -1131,12 +1254,10 @@ final class Repository
             ['id' => $teamId, 'year' => $fiscalYear]
         ) as $row) {
             $monthIndex = (int) ($row['month_index'] ?? 0);
-            if (!JalaliDate::monthInContract(
-                $fiscalYear,
-                $monthIndex,
-                (string) ($team['contract_start'] ?? ''),
-                (string) ($team['contract_end'] ?? '')
-            )) {
+            if (!JalaliDate::monthInContract($fiscalYear, $monthIndex, $dates['start'], $dates['end'])) {
+                continue;
+            }
+            if ($contracts->deskCountForMonth($teamId, $fiscalYear, $monthIndex) <= 0) {
                 continue;
             }
             $due = (int) ($row['amount'] ?? 0);
@@ -1177,8 +1298,9 @@ final class Repository
             ];
         }
 
-        $teamRow = $this->preparedRow('SELECT contract_end FROM teams WHERE id = :id', ['id' => $teamId]);
-        $end = (string) ($teamRow['contract_end'] ?? '');
+        $currentYear = $this->currentFiscalYear();
+        $contract = $this->contracts()->contractForYear($teamId, $currentYear);
+        $end = $contract ? (string) ($contract['contract_end'] ?? '') : '';
         if ($end !== '') {
             $today = JalaliDate::todayParts()['formatted'];
             if (JalaliDate::compare($end, $today) >= 0) {
@@ -1213,6 +1335,9 @@ final class Repository
         foreach ($this->rows('SELECT DISTINCT fiscal_year FROM rate_settings WHERE fiscal_year IS NOT NULL AND fiscal_year <> \'\'') as $row) {
             $years[] = JalaliDate::normalizeDigits((string) ($row['fiscal_year'] ?? ''));
         }
+        foreach ($this->rows('SELECT DISTINCT fiscal_year FROM team_contracts WHERE fiscal_year IS NOT NULL AND fiscal_year <> \'\'') as $row) {
+            $years[] = JalaliDate::normalizeDigits((string) ($row['fiscal_year'] ?? ''));
+        }
         $years[] = $this->currentFiscalYear();
         $years = array_values(array_unique(array_filter($years)));
         rsort($years, SORT_STRING);
@@ -1234,6 +1359,7 @@ final class Repository
         $quoted = $this->pdo->quote($like);
         $expr = match ($name) {
             'teams' => "t.name LIKE {$quoted} OR t.leader LIKE {$quoted} OR t.phone LIKE {$quoted} OR t.entity_code LIKE {$quoted} OR COALESCE(u.username, '') LIKE {$quoted}",
+            'team_contracts' => "t.name LIKE {$quoted} OR COALESCE(tc.fiscal_year, '') LIKE {$quoted} OR COALESCE(tc.notes, '') LIKE {$quoted}",
             'members' => "m.full_name LIKE {$quoted} OR COALESCE(m.phone, '') LIKE {$quoted} OR COALESCE(m.national_id, '') LIKE {$quoted} OR COALESCE(m.member_code, '') LIKE {$quoted} OR COALESCE(t.name, '') LIKE {$quoted}",
             'desks' => "CAST(d.number AS TEXT) LIKE {$quoted} OR COALESCE(t.name, '') LIKE {$quoted} OR COALESCE(d.notes, '') LIKE {$quoted}",
             'lockers' => "CAST(l.locker_number AS TEXT) LIKE {$quoted} OR COALESCE(t.name, '') LIKE {$quoted} OR COALESCE(l.notes, '') LIKE {$quoted}",
@@ -1258,23 +1384,22 @@ final class Repository
 
     private function contractChargeTotalForTeam(int $teamId): int
     {
-        $team = $this->preparedRow('SELECT contract_start, contract_end FROM teams WHERE id = :id', ['id' => $teamId]);
-        if ($team === null) {
-            return 0;
-        }
+        $contracts = $this->contracts();
         $total = 0;
         foreach ($this->preparedRows(
             'SELECT fiscal_year, month_index, amount FROM charges WHERE team_id = :id',
             ['id' => $teamId]
         ) as $row) {
-            if (JalaliDate::monthInContract(
-                (string) ($row['fiscal_year'] ?? ''),
-                (int) ($row['month_index'] ?? 0),
-                (string) ($team['contract_start'] ?? ''),
-                (string) ($team['contract_end'] ?? '')
-            )) {
-                $total += (int) ($row['amount'] ?? 0);
+            $fy = (string) ($row['fiscal_year'] ?? '');
+            $mi = (int) ($row['month_index'] ?? 0);
+            $dates = $contracts->contractDatesForYear($teamId, $fy);
+            if (!JalaliDate::monthInContract($fy, $mi, $dates['start'], $dates['end'])) {
+                continue;
             }
+            if ($contracts->deskCountForMonth($teamId, $fy, $mi) <= 0) {
+                continue;
+            }
+            $total += (int) ($row['amount'] ?? 0);
         }
 
         return $total;
@@ -1295,37 +1420,110 @@ final class Repository
      */
     private function allocatedPaymentsForTeam(int $teamId): array
     {
-        $team = $this->preparedRow('SELECT contract_start, contract_end FROM teams WHERE id = :id', ['id' => $teamId]);
-        if ($team === null) {
-            return ['by_month' => [], 'remaining' => 0];
-        }
-
+        $contracts = $this->contracts();
         $charges = [];
         foreach ($this->preparedRows(
             'SELECT fiscal_year, month_index, amount FROM charges WHERE team_id = :id ORDER BY fiscal_year, month_index',
             ['id' => $teamId]
         ) as $row) {
-            if (!JalaliDate::monthInContract(
-                (string) ($row['fiscal_year'] ?? ''),
-                (int) ($row['month_index'] ?? 0),
-                (string) ($team['contract_start'] ?? ''),
-                (string) ($team['contract_end'] ?? '')
-            )) {
+            $fy = (string) ($row['fiscal_year'] ?? '');
+            $mi = (int) ($row['month_index'] ?? 0);
+            $dates = $contracts->contractDatesForYear($teamId, $fy);
+            if (!JalaliDate::monthInContract($fy, $mi, $dates['start'], $dates['end'])) {
                 continue;
             }
-            $key = ($row['fiscal_year'] ?? '') . '-' . (int) ($row['month_index'] ?? 0);
+            if ($contracts->deskCountForMonth($teamId, $fy, $mi) <= 0) {
+                continue;
+            }
+            $key = $fy . '-' . $mi;
             $charges[$key] = ($charges[$key] ?? 0) + (int) ($row['amount'] ?? 0);
         }
 
-        $remaining = $this->contractPaidTotalForTeam($teamId);
         $byMonth = [];
-        foreach ($charges as $key => $due) {
-            $allocated = min($remaining, $due);
-            $byMonth[$key] = $allocated;
-            $remaining -= $allocated;
+        foreach (array_keys($charges) as $key) {
+            $byMonth[$key] = 0;
         }
 
-        return ['by_month' => $byMonth, 'remaining' => max(0, $remaining)];
+        $payments = $this->preparedRows(
+            "SELECT amount, payment_plan FROM transactions
+             WHERE team_id = :id AND category = 'واریز تیم' AND payment_status = 'approved' AND confirmed = 1
+             ORDER BY COALESCE(reviewed_at, tx_date), id",
+            ['id' => $teamId]
+        );
+
+        foreach ($payments as $payment) {
+            $remaining = (int) ($payment['amount'] ?? 0);
+            $plan = $this->decodePaymentPlan($payment['payment_plan'] ?? null);
+            if ($plan !== []) {
+                foreach ($plan as $item) {
+                    $key = JalaliDate::normalizeDigits((string) ($item['fiscal_year'] ?? ''))
+                        . '-' . (int) ($item['month_index'] ?? 0);
+                    if (!isset($charges[$key])) {
+                        continue;
+                    }
+                    $dueLeft = $charges[$key] - ($byMonth[$key] ?? 0);
+                    $planned = (int) ($item['amount'] ?? 0);
+                    $alloc = min($remaining, $dueLeft, $planned > 0 ? $planned : $dueLeft);
+                    if ($alloc <= 0) {
+                        continue;
+                    }
+                    $byMonth[$key] = ($byMonth[$key] ?? 0) + $alloc;
+                    $remaining -= $alloc;
+                }
+            }
+            if ($remaining > 0) {
+                foreach ($charges as $key => $due) {
+                    $dueLeft = $due - ($byMonth[$key] ?? 0);
+                    if ($dueLeft <= 0) {
+                        continue;
+                    }
+                    $alloc = min($remaining, $dueLeft);
+                    $byMonth[$key] = ($byMonth[$key] ?? 0) + $alloc;
+                    $remaining -= $alloc;
+                    if ($remaining <= 0) {
+                        break;
+                    }
+                }
+            }
+        }
+
+        $totalPaid = $this->contractPaidTotalForTeam($teamId);
+        $allocated = array_sum($byMonth);
+
+        return ['by_month' => $byMonth, 'remaining' => max(0, $totalPaid - $allocated)];
+    }
+
+    /**
+     * @return list<array{fiscal_year:string,month_index:int,amount:int}>
+     */
+    private function decodePaymentPlan(mixed $raw): array
+    {
+        if ($raw === null || $raw === '') {
+            return [];
+        }
+        if (is_string($raw)) {
+            $decoded = json_decode($raw, true);
+            if (!is_array($decoded)) {
+                return [];
+            }
+            $raw = $decoded;
+        }
+        if (!is_array($raw)) {
+            return [];
+        }
+        $items = [];
+        foreach ($raw as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $items[] = [
+                'fiscal_year' => JalaliDate::normalizeDigits((string) ($item['fiscal_year'] ?? '')),
+                'month_index' => (int) ($item['month_index'] ?? 0),
+                'amount' => (int) ($item['amount'] ?? 0),
+            ];
+        }
+
+        return $items;
     }
 
     /**
@@ -1358,8 +1556,15 @@ final class Repository
         $today = JalaliDate::todayParts()['formatted'];
         $todayYear = (int) substr($today, 0, 4);
         $todayMonth = (int) substr($today, 5, 2);
+        $currentYear = $this->currentFiscalYear();
         $rows = [];
-        foreach ($this->rows('SELECT id, name, contract_end FROM teams WHERE contract_end IS NOT NULL AND contract_end <> \'\' ORDER BY contract_end') as $team) {
+        foreach ($this->rows(
+            'SELECT tc.team_id AS id, t.name, tc.contract_end
+             FROM team_contracts tc
+             INNER JOIN teams t ON t.id = tc.team_id
+             WHERE tc.fiscal_year = ' . $this->pdo->quote($currentYear) . '
+             ORDER BY tc.contract_end'
+        ) as $team) {
             $end = (string) ($team['contract_end'] ?? '');
             if ($end === '' || JalaliDate::compare($end, $today) < 0) {
                 continue;
