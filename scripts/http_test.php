@@ -161,8 +161,16 @@ if (!is_file($root . '/config.php')) {
         }
     }
     $assert($teamRow !== null && ($teamRow['portal_username'] ?? '') !== '', 'http: new team has portal username');
+    $assert((int) ($teamRow['portal_has_password'] ?? 0) === 1, 'http: new team has portal password flag');
     $entityUser = (string) ($teamRow['portal_username'] ?? '');
-    $entityPass = (string) ($teamRow['portal_password'] ?? '');
+    $resetPortal = $request('POST', '/api.php?resource=teams&action=reset-portal-password', json_encode([
+        'id' => $newTeamId,
+    ], JSON_UNESCAPED_UNICODE), [
+        'Content-Type: application/json',
+        'X-CSRF-Token: ' . $apiToken,
+    ]);
+    $entityPass = (string) ($resetPortal['json']['credentials']['password'] ?? '');
+    $assert($entityPass !== '', 'http: reset portal password returns credentials');
 
     // Logout
     $request('GET', '/logout.php');

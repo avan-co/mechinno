@@ -708,6 +708,13 @@ textarea[dir="ltr"] {
 .cell-clickable { cursor: pointer; }
 .cell-clickable:hover { outline: 2px solid var(--primary); }
 
+@media (max-width: 768px) {
+  .collage-table { min-width: 0; font-size: 10px; }
+  .collage-table th, .collage-table td { padding: 4px 3px; }
+  .collage-table .team-col { min-width: 88px; font-size: 11px; }
+  .charges-collage { -webkit-overflow-scrolling: touch; }
+}
+
 .filter-bar {
   margin-bottom: 10px;
   padding: 10px 14px;

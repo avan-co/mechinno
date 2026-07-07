@@ -51,6 +51,10 @@ try {
         json_response($repository->chargesMatrix($year));
     }
 
+    if ($resource === 'charge-fiscal-years') {
+        json_response(['years' => $repository->chargeFiscalYears()]);
+    }
+
     if ($resource === 'team-profile') {
         $teamId = (int) ($_GET['id'] ?? 0);
         if (Access::isTeam()) {
@@ -161,6 +165,9 @@ try {
         }
         if ($resource === 'transactions' && isset($_GET['payment_status']) && $_GET['payment_status'] !== '') {
             $filters['payment_status'] = (string) $_GET['payment_status'];
+        }
+        if (isset($_GET['q']) && trim((string) $_GET['q']) !== '') {
+            $filters['q'] = trim((string) $_GET['q']);
         }
         json_response($repository->paginatedResource($resource, $page, $perPage, $filters));
     }

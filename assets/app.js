@@ -49,7 +49,7 @@ const labels = {
   joined_at: "عضویت",
   warning: "اخطار",
   portal_username: "نام کاربری نهاد",
-  portal_password: "رمز ورود نهاد",
+  portal_has_password: "رمز ورود نهاد",
   role: "نقش",
   is_active: "فعال",
   approval_status: "وضعیت تأیید",
@@ -141,7 +141,7 @@ const moneyCards = new Set(["income_year", "income_month", "expense_year", "expe
 const monthNames = ["", "فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور", "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"];
 
 const resourceColumns = {
-  teams: ["entity_code", "entity_type", "name", "leader", "phone", "contract_start", "contract_end", "portal_username", "portal_password", "desk_count", "joined_at", "warning", "notes"],
+  teams: ["entity_code", "entity_type", "name", "leader", "phone", "contract_start", "contract_end", "portal_username", "portal_has_password", "desk_count", "joined_at", "warning", "notes"],
   members: ["member_code", "full_name", "team_label", "entity_type", "desk_numbers", "wants_access", "access_code", "phone", "national_id", "approval_status", "rejection_reason"],
   desks: ["number", "team_name", "usage_type", "assignment_from", "assignment_until", "notes"],
   "desk-assignments": ["desk_number", "team_name", "usage_type", "assigned_from", "assigned_until", "notes"],
@@ -298,7 +298,9 @@ const formatNumber = (value) => {
 
 const formatMoney = (value) => {
   if (value === null || value === undefined || value === "") return "—";
-  return `${Number(value).toLocaleString("fa-IR")} ریال`;
+  const maybe = Number(value);
+  if (Number.isNaN(maybe)) return "—";
+  return `${maybe.toLocaleString("fa-IR")} ریال`;
 };
 
 const fetchJson = async (url, options = {}) => {
@@ -309,12 +311,13 @@ const fetchJson = async (url, options = {}) => {
   return data;
 };
 
-const fetchResource = async (endpoint, { page = 1, perPage = 25, category = "", paymentStatus = "" } = {}) => {
+const fetchResource = async (endpoint, { page = 1, perPage = 25, category = "", paymentStatus = "", q = "" } = {}) => {
   const url = new URL(endpoint, window.location.href);
   url.searchParams.set("page", String(page));
   url.searchParams.set("per_page", String(perPage));
   if (category) url.searchParams.set("category", category);
   if (paymentStatus) url.searchParams.set("payment_status", paymentStatus);
+  if (q) url.searchParams.set("q", q);
   const data = await fetchJson(url.toString());
   if (Array.isArray(data)) {
     return { rows: data, total: data.length, page: 1, per_page: data.length, pages: 1 };
@@ -428,6 +431,7 @@ document.querySelectorAll(".nav-item, .bottom-nav-item").forEach((item) => {
 });
 
 document.getElementById("menuToggle")?.addEventListener("click", openDrawer);
+document.getElementById("bottomNavMenu")?.addEventListener("click", openDrawer);
 document.getElementById("sidebarBackdrop")?.addEventListener("click", closeDrawer);
 
 document.querySelectorAll(".start-step[data-go]").forEach((item) => {
@@ -589,14 +593,23 @@ const loadDashboard = async () => {
   if (welcome) welcome.hidden = Number(data.cards?.teams || 0) > 0;
 };
 
-const renderRecentApprovals = (items) => {
+const renderRecentApprovals = (items, actionItems = []) => {
   const container = document.getElementById("recentApprovals");
   if (!container) return;
-  if (!items?.length) {
+  const actionHtml = (actionItems || []).map((item) => `
+    <button type="button" class="action-item action-${escapeHtml(item.type || "default")}"
+      data-nav-section="${escapeHtml(item.section || "overview")}">
+      <div class="action-item-head">
+        <strong>${escapeHtml(item.label || "—")}</strong>
+        <span class="badge badge-debt">اقدام</span>
+      </div>
+      <span>${escapeHtml(item.detail || "")}</span>
+    </button>`).join("");
+  if (!items?.length && !actionHtml) {
     container.innerHTML = `<div class="empty">هنوز تأیید یا ردی از مرکز ثبت نشده است.</div>`;
     return;
   }
-  container.innerHTML = items.map((item) => {
+  const approvalHtml = (items || []).map((item) => {
     const statusClass = item.status === "approved" ? "action-payment" : "action-debt";
     const badge = item.status === "approved" ? "badge-paid" : "badge-debt";
     const statusLabel = item.status === "approved" ? "تأیید‌شده" : "رد‌شده";
@@ -611,6 +624,7 @@ const renderRecentApprovals = (items) => {
       ${item.date ? `<small class="hint">${escapeHtml(item.date)}</small>` : ""}
     </button>`;
   }).join("");
+  container.innerHTML = actionHtml + approvalHtml;
 };
 
 const renderTeamDashboard = (data) => {
@@ -620,7 +634,7 @@ const renderTeamDashboard = (data) => {
     renderCards({ ...data.cards, desk_numbers: data.cards?.desk_numbers || "—" }, teamCardConfig);
   }
   renderCurrentMonth(data.current_month || {});
-  renderRecentApprovals(data.recent_approvals || []);
+  renderRecentApprovals(data.recent_approvals || [], data.action_items || []);
   renderChargeChart((data.monthly_charges || []).map((row) => ({
     fiscal_year: row.fiscal_year,
     month_name: row.month_name,
@@ -962,33 +976,25 @@ const loadChargesCollage = async () => {
     yearSelect.dataset.ready = "1";
     yearSelect.addEventListener("change", () => loadChargesCollage().catch((error) => showToast(error.message, "error")));
   }
-  let rateRows = [];
-  if (panelMode !== "team") {
-    try {
-      const rateData = await fetchResource("api.php?resource=rate_settings", { page: 1, perPage: 100 });
-      rateRows = rateData.rows;
-    } catch (error) {
-      rateRows = [];
-    }
+  let years = [];
+  try {
+    const yearData = await fetchJson("api.php?resource=charge-fiscal-years");
+    years = yearData.years || [];
+  } catch (error) {
+    years = [window.MECHINNO?.fiscalYear || "1404"];
   }
-  const { rows: chargeRows } = await fetchResource("api.php?resource=charges", { page: 1, perPage: 200 });
-  const yearSet = new Set([
-    window.MECHINNO?.fiscalYear || "1404",
-    ...rateRows.map((r) => String(r.fiscal_year || "")),
-    ...chargeRows.map((r) => String(r.fiscal_year || "")),
-  ]);
   if (panelMode === "team" && window.MECHINNO?.teamId) {
     try {
       const profile = await fetchJson(`api.php?resource=team-profile&id=${encodeURIComponent(window.MECHINNO.teamId)}`);
       const team = profile.team || {};
-      if (team.contract_start) yearSet.add(String(team.contract_start).slice(0, 4));
-      if (team.contract_end) yearSet.add(String(team.contract_end).slice(0, 4));
-      (profile.charges || []).forEach((row) => yearSet.add(String(row.fiscal_year || "")));
+      if (team.contract_start) years.push(String(team.contract_start).slice(0, 4));
+      if (team.contract_end) years.push(String(team.contract_end).slice(0, 4));
+      (profile.charges || []).forEach((row) => years.push(String(row.fiscal_year || "")));
     } catch (error) {
       // ignore profile year enrichment errors
     }
   }
-  const years = [...yearSet].filter(Boolean).sort((a, b) => Number(b) - Number(a));
+  years = [...new Set(years.filter(Boolean))].sort((a, b) => Number(b) - Number(a));
   const current = yearSelect.value || window.MECHINNO?.fiscalYear || years[0] || "1404";
   yearSelect.innerHTML = years.map((y) => `<option value="${escapeHtml(y)}">${escapeHtml(y)}</option>`).join("");
   yearSelect.value = years.includes(current) ? current : years[0];
@@ -1134,14 +1140,15 @@ const openTeamProfile = async (teamId) => {
           },
         });
       } else if (action === "deposit") {
+        const month = data.current_month || {};
         openDepositModal({
           teamId,
           teamName: data.team.name,
-          fiscalYear: window.MECHINNO?.fiscalYear || "1404",
-          monthIndex: window.MECHINNO?.monthIndex || 1,
-          monthName: "",
-          amountDue: Number(data.summary.debt_total || 0),
-          amountPaid: 0,
+          fiscalYear: month.fiscal_year || window.MECHINNO?.fiscalYear || "1404",
+          monthIndex: month.month_index || window.MECHINNO?.monthIndex || 1,
+          monthName: month.month_name || "",
+          amountDue: Number(month.charge_total || 0),
+          amountPaid: Number(month.paid_total || 0),
         });
       } else if (action === "charges") {
         closeModal();
@@ -1153,6 +1160,7 @@ const openTeamProfile = async (teamId) => {
     });
   });
   modal.hidden = false;
+  trapFocus(modal);
 };
 
 const openDepositModal = async ({ teamId, teamName, fiscalYear, monthIndex, monthName, amountDue, amountPaid }) => {
@@ -1203,7 +1211,41 @@ const ensureModal = () => {
 
 const closeModal = () => {
   const modal = document.getElementById("crudModal");
-  if (modal) modal.hidden = true;
+  if (modal) {
+    releaseFocusTrap(modal);
+    modal.hidden = true;
+  }
+};
+
+const focusTrapState = new WeakMap();
+
+const trapFocus = (modal) => {
+  const card = modal.querySelector(".modal-card");
+  if (!card) return;
+  const focusable = card.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+  if (!focusable.length) return;
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  const handler = (event) => {
+    if (event.key !== "Tab") return;
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
+  card.addEventListener("keydown", handler);
+  focusTrapState.set(modal, handler);
+  first.focus();
+};
+
+const releaseFocusTrap = (modal) => {
+  const handler = focusTrapState.get(modal);
+  if (!handler) return;
+  modal.querySelector(".modal-card")?.removeEventListener("keydown", handler);
+  focusTrapState.delete(modal);
 };
 
 const ltrFields = new Set([
@@ -1280,6 +1322,7 @@ const openRecordModal = ({ resource, definition, record = null, onSaved, title =
     }
   };
   modal.hidden = false;
+  trapFocus(modal);
 };
 
 const devCategoryLabels = { idea: "ایده", action: "اقدام", planned: "برنامه‌ریزی‌شده" };
@@ -1289,6 +1332,72 @@ const relatedSectionLabels = {
   teams: "نهادها", members: "اعضا", desks: "میزها", lockers: "کمدها", charges: "شارژ", transactions: "مالی",
 };
 
+const askLockerNumber = (emptyLockers = []) => new Promise((resolve, reject) => {
+  let modal = document.getElementById("lockerModal");
+  if (!modal) {
+    document.body.insertAdjacentHTML("beforeend", `
+      <div id="lockerModal" class="modal-backdrop" hidden>
+        <div class="modal-card" role="dialog" aria-labelledby="lockerModalTitle">
+          <div class="modal-head">
+            <h2 id="lockerModalTitle">تخصیص کمد</h2>
+            <button class="modal-close" type="button" data-locker-cancel aria-label="بستن">×</button>
+          </div>
+          <label class="wide"><span>شماره کمد</span>
+            <input id="lockerNumberInput" type="number" min="1" placeholder="مثلاً ۱۲" list="emptyLockerOptions" />
+            <datalist id="emptyLockerOptions"></datalist>
+          </label>
+          <p class="hint" id="lockerModalHint"></p>
+          <div class="form-actions">
+            <button type="button" class="button ghost" data-locker-cancel>انصراف</button>
+            <button type="button" class="button" data-locker-confirm>تأیید تخصیص</button>
+          </div>
+        </div>
+      </div>`);
+    modal = document.getElementById("lockerModal");
+    modal.addEventListener("click", (event) => {
+      if (event.target === modal) {
+        modal.hidden = true;
+        reject(new Error("cancelled"));
+      }
+    });
+  }
+
+  const input = modal.querySelector("#lockerNumberInput");
+  const datalist = modal.querySelector("#emptyLockerOptions");
+  const hint = modal.querySelector("#lockerModalHint");
+  datalist.innerHTML = emptyLockers.map((n) => `<option value="${escapeHtml(String(n))}"></option>`).join("");
+  hint.textContent = emptyLockers.length
+    ? `کمدهای خالی: ${emptyLockers.slice(0, 8).join("، ")}${emptyLockers.length > 8 ? "…" : ""}`
+    : "شماره کمد خالی را وارد کنید.";
+  input.value = emptyLockers[0] ? String(emptyLockers[0]) : "";
+  modal.hidden = false;
+  input.focus();
+  trapFocus(modal);
+
+  const cleanup = () => {
+    modal.hidden = true;
+    releaseFocusTrap(modal);
+    modal.querySelectorAll("[data-locker-cancel]").forEach((btn) => { btn.onclick = null; });
+    modal.querySelector("[data-locker-confirm]").onclick = null;
+  };
+
+  modal.querySelectorAll("[data-locker-cancel]").forEach((btn) => {
+    btn.onclick = () => {
+      cleanup();
+      reject(new Error("cancelled"));
+    };
+  });
+  modal.querySelector("[data-locker-confirm]").onclick = () => {
+    const parsed = Number(String(input.value).replace(/[^\d]/g, ""));
+    if (!parsed) {
+      showToast("شماره کمد معتبر نیست.", "error");
+      return;
+    }
+    cleanup();
+    resolve(parsed);
+  };
+});
+
 const workflowApprove = async (resource, id, row = {}, workflowType = "") => {
   if (resource === "pending-members" || workflowType === "member-approve") {
     await postJson(`api.php?resource=${encodeURIComponent(resource)}&action=approve`, { id });
@@ -1296,15 +1405,21 @@ const workflowApprove = async (resource, id, row = {}, workflowType = "") => {
   }
 
   if (resource === "pending-locker-requests" || workflowType === "locker-request") {
-    const lockerNumber = window.prompt("شماره کمد برای تخصیص:", "");
-    if (lockerNumber === null) return;
-    const parsed = Number(String(lockerNumber).replace(/[^\d]/g, ""));
-    if (!parsed) {
-      throw new Error("شماره کمد معتبر نیست.");
+    let emptyLockers = [];
+    try {
+      const lockerData = await fetchResource("api.php?resource=lockers", { page: 1, perPage: 100 });
+      emptyLockers = lockerData.rows
+        .filter((locker) => locker.status === "خالی")
+        .map((locker) => Number(locker.locker_number))
+        .filter((n) => n > 0)
+        .sort((a, b) => a - b);
+    } catch (error) {
+      emptyLockers = [];
     }
+    const lockerNumber = await askLockerNumber(emptyLockers);
     await postJson(`api.php?resource=${encodeURIComponent(resource)}&action=approve`, {
       id,
-      locker_number: parsed,
+      locker_number: lockerNumber,
     });
     return;
   }
@@ -1346,9 +1461,11 @@ const askRejectReason = () => new Promise((resolve, reject) => {
   input.value = "";
   modal.hidden = false;
   input.focus();
+  trapFocus(modal);
 
   const cleanup = () => {
     modal.hidden = true;
+    releaseFocusTrap(modal);
     modal.querySelectorAll("[data-reject-cancel]").forEach((btn) => { btn.onclick = null; });
     modal.querySelector("[data-reject-confirm]").onclick = null;
   };
@@ -1452,6 +1569,7 @@ const formatCell = (column, value, row, resource) => {
     return escapeHtml(map[value] || value || "—");
   }
   if (column === "is_active") return Number(value) === 1 ? "فعال" : "غیرفعال";
+  if (column === "portal_has_password") return Number(value) === 1 ? "تنظیم‌شده" : "—";
   if (column === "password") return "—";
   if (column === "status" && resource === "lockers") return lockerStatusBadge(value);
   if (column === "status" && (resource === "locker-requests" || resource === "pending-locker-requests")) {
@@ -1510,6 +1628,7 @@ class DataTable extends HTMLElement {
     this.total = 0;
     this.pages = 1;
     this.filter = "";
+    this.searchTimer = null;
     const addButtonHtml = this.readOnly
       ? ""
       : `<button class="button add-button" type="button">+ افزودن</button>`;
@@ -1541,25 +1660,12 @@ class DataTable extends HTMLElement {
         </div>
       </article>`;
     this.querySelector(".search").addEventListener("input", (e) => {
-      const next = e.target.value;
-      const hadFilter = Boolean(this.filter.trim());
-      const hasFilter = Boolean(next.trim());
-      this.filter = next;
-      if (!hadFilter && hasFilter) {
-        this.searchPerPage = this.perPage;
-        this.perPage = 100;
+      this.filter = e.target.value;
+      clearTimeout(this.searchTimer);
+      this.searchTimer = setTimeout(() => {
         this.page = 1;
         this.load();
-        return;
-      }
-      if (hadFilter && !hasFilter && this.searchPerPage) {
-        this.perPage = this.searchPerPage;
-        this.searchPerPage = null;
-        this.page = 1;
-        this.load();
-        return;
-      }
-      this.render();
+      }, 300);
     });
     this.querySelector(".add-button")?.addEventListener("click", () => {
       openRecordModal({
@@ -1603,6 +1709,7 @@ class DataTable extends HTMLElement {
         perPage: this.perPage,
         category: this.txCategoryFilter,
         paymentStatus: this.paymentStatusFilter,
+        q: this.filter.trim(),
       });
       this.rows = result.rows;
       this.total = result.total;
@@ -1630,9 +1737,7 @@ class DataTable extends HTMLElement {
   }
 
   filteredRows() {
-    const normalized = this.filter.trim().toLowerCase();
-    if (!normalized) return this.rows;
-    return this.rows.filter((row) => JSON.stringify(row).toLowerCase().includes(normalized));
+    return this.rows;
   }
 
   renderMobileCards(rows) {
