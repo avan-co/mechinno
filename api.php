@@ -210,7 +210,8 @@ try {
         if ($teamId <= 0) {
             json_response(['error' => 'نهاد معتبر نیست.'], 422);
         }
-        $credentials = EntityAccounts::resetPassword($pdo, $teamId);
+        $password = array_key_exists('password', $payload) ? (string) $payload['password'] : null;
+        $credentials = EntityAccounts::resetPassword($pdo, $teamId, $password);
         json_response(['ok' => true, 'credentials' => $credentials]);
     }
 

@@ -2242,6 +2242,87 @@ const fieldInput = (name, meta, value) => {
   return `<input name="${escapeHtml(name)}" type="text" value="${escapeHtml(safeValue)}" ${required} ${placeholder} ${ltr} />`;
 };
 
+const portalPasswordSectionHtml = (title = "رمز ورود پنل نهاد") => `
+  <div class="portal-password-options wide">
+    <span class="portal-password-title">${escapeHtml(title)}</span>
+    <label class="portal-password-choice">
+      <input type="radio" name="portal_password_mode" value="auto" checked />
+      <span>ساخت خودکار (۸ کاراکتر امن)</span>
+    </label>
+    <label class="portal-password-choice">
+      <input type="radio" name="portal_password_mode" value="custom" />
+      <span>تعیین دستی توسط مدیر</span>
+    </label>
+    <label class="portal-password-custom" hidden>
+      <span>رمز دلخواه</span>
+      <input name="portal_password" type="password" dir="ltr" class="ltr-input" autocomplete="new-password" minlength="6" maxlength="64" placeholder="حداقل ۶ کاراکتر" />
+    </label>
+    <p class="hint">نام کاربری از کد نهاد ساخته می‌شود و پس از ثبت قابل مشاهده است.</p>
+  </div>`;
+
+const wirePortalPasswordFields = (form) => {
+  const modeInputs = form.querySelectorAll('input[name="portal_password_mode"]');
+  const customWrap = form.querySelector(".portal-password-custom");
+  const customInput = form.querySelector('input[name="portal_password"]');
+  if (!modeInputs.length || !customWrap) return;
+  const sync = () => {
+    const mode = form.querySelector('input[name="portal_password_mode"]:checked')?.value || "auto";
+    const isCustom = mode === "custom";
+    customWrap.hidden = !isCustom;
+    if (customInput) {
+      customInput.required = isCustom;
+      if (!isCustom) customInput.value = "";
+    }
+  };
+  modeInputs.forEach((input) => input.addEventListener("change", sync));
+  sync();
+};
+
+const collectPortalPasswordPayload = (form) => {
+  const mode = form.querySelector('input[name="portal_password_mode"]:checked')?.value || "auto";
+  if (mode !== "custom") return {};
+  const password = String(form.querySelector('input[name="portal_password"]')?.value || "").trim();
+  if (!password) throw new Error("رمز دلخواه را وارد کنید.");
+  if (password.length < 6) throw new Error("رمز ورود نهاد باید حداقل ۶ کاراکتر باشد.");
+  return { portal_password: password };
+};
+
+const openResetPortalModal = (teamId, teamName = "") => new Promise((resolve, reject) => {
+  const modal = ensureModal();
+  const form = modal.querySelector("#crudForm");
+  modal.querySelector("#crudModalTitle").textContent = `بازنشانی رمز — ${teamName || "نهاد"}`;
+  form.innerHTML = `
+    ${portalPasswordSectionHtml("رمز جدید پنل نهاد")}
+    <div class="modal-actions">
+      <button class="button" type="submit">بازنشانی رمز</button>
+      <button class="button ghost" type="button" data-close-modal>انصراف</button>
+    </div>`;
+  wirePortalPasswordFields(form);
+  form.querySelector("[data-close-modal]").addEventListener("click", () => {
+    closeModal();
+    reject(new Error("cancelled"));
+  });
+  form.onsubmit = async (event) => {
+    event.preventDefault();
+    const submitButton = form.querySelector('button[type="submit"]');
+    submitButton.disabled = true;
+    try {
+      const body = { id: teamId };
+      const custom = collectPortalPasswordPayload(form);
+      if (custom.portal_password) body.password = custom.portal_password;
+      const result = await postJson("api.php?resource=teams&action=reset-portal-password", body);
+      closeModal();
+      resolve(result);
+    } catch (error) {
+      showToast(error.message, "error");
+    } finally {
+      submitButton.disabled = false;
+    }
+  };
+  modal.hidden = false;
+  trapFocus(modal);
+});
+
 const openRecordModal = ({ resource, definition, record = null, onSaved, title = null }) => {
   const modal = ensureModal();
   const form = modal.querySelector("#crudForm");
@@ -2253,6 +2334,9 @@ const openRecordModal = ({ resource, definition, record = null, onSaved, title =
   modal.querySelector("#crudModalTitle").textContent = title || `${isEdit ? "ویرایش" : "افزودن"} ${definition.title}`;
   const paymentHint = resource === "transactions" && panelMode === "team"
     ? `<p class="hint payment-allocation-hint">ماه اعلام‌شده برای پیگیری شماست. پس از تأیید مدیر، مبلغ <strong>ابتدا به قدیمی‌ترین ماه‌های بدهکار</strong> شما تخصیص می‌یابد و ممکن است با ماهی که اعلام کردید متفاوت باشد.</p>`
+    : "";
+  const portalPasswordBlock = resource === "teams" && !isEdit && canWrite && panelMode !== "team"
+    ? portalPasswordSectionHtml()
     : "";
   form.innerHTML = `
     ${isEdit ? `<input type="hidden" name="id" value="${escapeHtml(String(record.id))}" />` : ""}
@@ -2268,12 +2352,14 @@ const openRecordModal = ({ resource, definition, record = null, onSaved, title =
         </label>`;
       }).join("")}
     </div>
+    ${portalPasswordBlock}
     ${paymentHint}
     <div class="modal-actions">
       <button class="button" type="submit">${isEdit ? "ذخیره" : "ثبت"}</button>
       <button class="button ghost" type="button" data-close-modal>انصراف</button>
     </div>`;
   form.querySelector("[data-close-modal]").addEventListener("click", closeModal);
+  if (portalPasswordBlock) wirePortalPasswordFields(form);
   form.onsubmit = async (event) => {
     event.preventDefault();
     const submitButton = form.querySelector('button[type="submit"]');
@@ -2281,6 +2367,7 @@ const openRecordModal = ({ resource, definition, record = null, onSaved, title =
     try {
       const payload = Object.fromEntries(new FormData(form).entries());
       if (isEdit) payload.id = payload.id || record.id;
+      if (portalPasswordBlock) Object.assign(payload, collectPortalPasswordPayload(form));
       await postJson(`api.php?resource=${encodeURIComponent(resource)}&action=${isEdit ? "update" : "create"}`, payload);
       closeModal();
       await onSaved();
@@ -3214,13 +3301,13 @@ class DataTable extends HTMLElement {
 
     if (button.dataset.action === "reset-portal") {
       if (!canWrite) return;
-      if (!window.confirm("رمز ورود این نهاد بازنشانی شود؟")) return;
       try {
-        const result = await postJson("api.php?resource=teams&action=reset-portal-password", { id });
+        const team = this.rows.find((row) => Number(row.id) === id);
+        const result = await openResetPortalModal(id, team?.name || "");
         await this.load();
         showToast(`رمز جدید: ${result.credentials?.password || "—"}`, "success");
       } catch (error) {
-        showToast(error.message, "error");
+        if (error.message !== "cancelled") showToast(error.message, "error");
       }
       return;
     }
