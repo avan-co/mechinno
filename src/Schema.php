@@ -271,6 +271,15 @@ final class Schema
                 'reviewed_at' => 'VARCHAR(32) NULL',
                 'rejection_reason' => 'TEXT NULL',
                 'wants_access' => 'TINYINT NOT NULL DEFAULT 0',
+                'is_leader' => 'TINYINT NOT NULL DEFAULT 0',
+            ],
+            'center_settings' => [
+                'sms_username' => 'VARCHAR(128) NULL',
+                'sms_password' => 'VARCHAR(255) NULL',
+                'sms_from_number' => 'VARCHAR(32) NULL',
+                'sms_daily_limit' => 'INT NOT NULL DEFAULT 500',
+                'sms_unit_cost' => 'BIGINT NOT NULL DEFAULT 0',
+                'sms_updated_at' => 'VARCHAR(32) NULL',
             ],
             'lockers' => [
                 'team_id' => 'INT NULL',
@@ -341,9 +350,11 @@ final class Schema
         }
 
         self::seedCenterSettings($pdo);
+        self::ensureSmsTables($pdo);
         self::backfillTeamContracts($pdo);
         (new TeamContracts($pdo))->migrateFromLegacyTeamDates();
         (new TeamContracts($pdo))->syncAllTeamActiveStatuses();
+        TeamLeaders::backfillAll($pdo);
         CenterLedger::purgeAccrualMirrorEntries($pdo);
     }
 
@@ -603,6 +614,61 @@ final class Schema
                 'desk_id' => (int) $row['desk_id'],
                 'keep_id' => (int) $row['keep_id'],
             ]);
+        }
+    }
+
+    private static function ensureSmsTables(PDO $pdo): void
+    {
+        $driver = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
+        if ($driver === 'sqlite') {
+            $pdo->exec(
+                'CREATE TABLE IF NOT EXISTS sms_logs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    batch_uid TEXT NOT NULL,
+                    message_type TEXT NOT NULL,
+                    member_id INTEGER NULL,
+                    team_id INTEGER NULL,
+                    team_name TEXT NULL,
+                    recipient_name TEXT NULL,
+                    phone TEXT NULL,
+                    is_leader INTEGER NOT NULL DEFAULT 0,
+                    message_text TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    error_message TEXT NULL,
+                    provider_rec_id TEXT NULL,
+                    provider_response TEXT NULL,
+                    cost_rial INTEGER NOT NULL DEFAULT 0,
+                    sent_by TEXT NULL,
+                    created_at TEXT NOT NULL,
+                    sent_at TEXT NULL
+                )'
+            );
+        } else {
+            $pdo->exec(
+                "CREATE TABLE IF NOT EXISTS sms_logs (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    batch_uid VARCHAR(64) NOT NULL,
+                    message_type VARCHAR(32) NOT NULL,
+                    member_id INT NULL,
+                    team_id INT NULL,
+                    team_name VARCHAR(255) NULL,
+                    recipient_name VARCHAR(255) NULL,
+                    phone VARCHAR(32) NULL,
+                    is_leader TINYINT NOT NULL DEFAULT 0,
+                    message_text TEXT NOT NULL,
+                    status VARCHAR(16) NOT NULL,
+                    error_message TEXT NULL,
+                    provider_rec_id VARCHAR(64) NULL,
+                    provider_response TEXT NULL,
+                    cost_rial BIGINT NOT NULL DEFAULT 0,
+                    sent_by VARCHAR(64) NULL,
+                    created_at VARCHAR(32) NOT NULL,
+                    sent_at VARCHAR(32) NULL,
+                    INDEX idx_sms_logs_batch (batch_uid),
+                    INDEX idx_sms_logs_created (created_at),
+                    INDEX idx_sms_logs_status (status)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+            );
         }
     }
 

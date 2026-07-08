@@ -98,6 +98,71 @@ try {
         json_response($settings->get());
     }
 
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && $resource === 'teams' && $action === 'change-leader') {
+        require_csrf_json();
+        Access::requireWriteJson();
+        $payload = json_decode((string) file_get_contents('php://input'), true);
+        if (!is_array($payload)) {
+            $payload = $_POST;
+        }
+        $teamId = (int) ($payload['id'] ?? 0);
+        $memberId = (int) ($payload['member_id'] ?? 0);
+        if ($teamId <= 0 || $memberId <= 0) {
+            json_response(['error' => 'نهاد و عضو معتبر انتخاب کنید.'], 422);
+        }
+        $team = (new TeamLeaders($pdo))->changeLeader($teamId, $memberId);
+        json_response(['ok' => true, 'team' => $team]);
+    }
+
+    if ($resource === 'sms-settings') {
+        $sms = new SmsService($pdo);
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            require_csrf_json();
+            Access::requireWriteJson();
+            $payload = json_decode((string) file_get_contents('php://input'), true);
+            if (!is_array($payload)) {
+                $payload = $_POST;
+            }
+            json_response(['ok' => true, 'settings' => $sms->updateSettings($payload)]);
+        }
+        json_response($sms->settings());
+    }
+
+    if ($resource === 'sms-stats') {
+        json_response((new SmsService($pdo))->stats());
+    }
+
+    if ($resource === 'sms-charge-preview') {
+        $teamId = isset($_GET['team_id']) ? (int) $_GET['team_id'] : null;
+        if ($teamId !== null && $teamId <= 0) {
+            $teamId = null;
+        }
+        json_response(['items' => (new SmsService($pdo))->chargeReminderPreview($teamId)]);
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && $resource === 'sms-send') {
+        require_csrf_json();
+        Access::requireWriteJson();
+        $payload = json_decode((string) file_get_contents('php://input'), true);
+        if (!is_array($payload)) {
+            $payload = $_POST;
+        }
+        $message = trim((string) ($payload['message'] ?? ''));
+        $memberIds = array_map('intval', (array) ($payload['member_ids'] ?? []));
+        json_response(['ok' => true, 'result' => (new SmsService($pdo))->sendAnnouncement($message, $memberIds)]);
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && $resource === 'sms-send-charge-reminders') {
+        require_csrf_json();
+        Access::requireWriteJson();
+        $payload = json_decode((string) file_get_contents('php://input'), true);
+        if (!is_array($payload)) {
+            $payload = $_POST;
+        }
+        $items = is_array($payload['items'] ?? null) ? $payload['items'] : [];
+        json_response(['ok' => true, 'result' => (new SmsService($pdo))->sendChargeReminders($items)]);
+    }
+
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && $resource === 'teams' && $action === 'reset-portal-password') {
         require_csrf_json();
         Access::requireWriteJson();
@@ -185,6 +250,7 @@ try {
         'teams', 'members', 'desks', 'lockers', 'charges', 'transactions', 'rate_settings', 'panel_users',
         'development_plans', 'pending-members', 'pending-member-requests', 'pending-payments', 'pending-locker-requests',
         'locker-requests', 'member-requests', 'desk-assignments', 'payment-history', 'team_contracts',
+        'sms-recipients', 'sms-history',
     ];
     if (in_array($resource, $paginatedResources, true)) {
         $page = (int) ($_GET['page'] ?? 1);
@@ -204,6 +270,31 @@ try {
         }
         if ($resource === 'members' && isset($_GET['approval_status']) && $_GET['approval_status'] !== '') {
             $filters['approval_status'] = (string) $_GET['approval_status'];
+        }
+        if (in_array($resource, ['members', 'sms-recipients'], true)) {
+            if (isset($_GET['team_id']) && $_GET['team_id'] !== '') {
+                $filters['team_id'] = (string) $_GET['team_id'];
+            }
+            if (isset($_GET['entity_type']) && $_GET['entity_type'] !== '') {
+                $filters['entity_type'] = (string) $_GET['entity_type'];
+            }
+            if (isset($_GET['is_leader']) && $_GET['is_leader'] !== '') {
+                $filters['is_leader'] = (string) $_GET['is_leader'];
+            }
+            if (isset($_GET['wants_access']) && $_GET['wants_access'] !== '') {
+                $filters['wants_access'] = (string) $_GET['wants_access'];
+            }
+        }
+        if ($resource === 'sms-history') {
+            if (isset($_GET['message_type']) && $_GET['message_type'] !== '') {
+                $filters['message_type'] = (string) $_GET['message_type'];
+            }
+            if (isset($_GET['status']) && $_GET['status'] !== '') {
+                $filters['status'] = (string) $_GET['status'];
+            }
+            if (isset($_GET['team_id']) && $_GET['team_id'] !== '') {
+                $filters['team_id'] = (string) $_GET['team_id'];
+            }
         }
         if ($resource === 'desk-assignments' && isset($_GET['fiscal_year']) && $_GET['fiscal_year'] !== '') {
             $filters['fiscal_year'] = (string) $_GET['fiscal_year'];

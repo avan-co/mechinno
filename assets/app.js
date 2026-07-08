@@ -5,6 +5,7 @@ const labels = {
   member_code: "کد عضو",
   access_code: "کد تردد",
   wants_access: "دسترسی تردد",
+  is_leader: "نقش",
   contract_start: "شروع قرارداد",
   contract_end: "پایان قرارداد",
   fiscal_year: "سال مالی",
@@ -106,6 +107,7 @@ const sectionMeta = {
   transactions: { eyebrow: "مالی", title: "دفتر معین و موجودی نقدی", subtitle: "گردش واقعی حساب مرکز — بدون تکرار شارژ سیستمی" },
   development: { eyebrow: "برنامه‌ریزی", title: "برنامه توسعه", subtitle: "کارهای جاری مرکز — اولویت‌بندی و پیگیری ساده" },
   users: { eyebrow: "دسترسی", title: "کاربران پنل", subtitle: "مدیریت نقش‌ها و پنل اختصاصی نهادها" },
+  sms: { eyebrow: "اطلاع‌رسانی", title: "پیامک", subtitle: "ارسال اطلاعیه و یادآور شارژ به اعضا و مسئولین نهادها" },
 };
 
 const teamSectionMeta = {
@@ -182,7 +184,7 @@ const monthNames = ["", "فروردین", "اردیبهشت", "خرداد", "ت�
 const resourceColumns = {
   teams: ["entity_code", "entity_type", "name", "is_active", "leader", "phone", "joined_at", "portal_username", "portal_has_password", "desk_count", "warning", "notes"],
   team_contracts: ["team_name", "fiscal_year", "contract_start", "contract_end", "notes"],
-  members: ["member_code", "full_name", "team_label", "entity_type", "desk_numbers", "wants_access", "access_code", "phone", "national_id", "approval_status", "rejection_reason"],
+  members: ["member_code", "full_name", "is_leader", "team_label", "entity_type", "desk_numbers", "wants_access", "access_code", "phone", "national_id", "approval_status", "rejection_reason"],
   desks: ["number", "team_name", "usage_type", "assignment_from", "assignment_until", "notes"],
   "desk-assignments": ["fiscal_year", "desk_number", "team_name", "usage_type", "assigned_from", "assigned_until", "notes"],
   lockers: ["locker_number", "status", "team_label", "delivered_at", "key_number", "spare_key"],
@@ -401,7 +403,21 @@ const fetchJson = async (url, options = {}) => {
   return data;
 };
 
-const fetchResource = async (endpoint, { page = 1, perPage = 25, category = "", paymentStatus = "", approvalStatus = "", fiscalYear = "", q = "" } = {}) => {
+const fetchResource = async (endpoint, {
+  page = 1,
+  perPage = 25,
+  category = "",
+  paymentStatus = "",
+  approvalStatus = "",
+  fiscalYear = "",
+  teamId = "",
+  entityType = "",
+  isLeader = "",
+  wantsAccess = "",
+  messageType = "",
+  status = "",
+  q = "",
+} = {}) => {
   const url = new URL(endpoint, window.location.href);
   url.searchParams.set("page", String(page));
   url.searchParams.set("per_page", String(perPage));
@@ -409,6 +425,12 @@ const fetchResource = async (endpoint, { page = 1, perPage = 25, category = "", 
   if (paymentStatus) url.searchParams.set("payment_status", paymentStatus);
   if (approvalStatus) url.searchParams.set("approval_status", approvalStatus);
   if (fiscalYear) url.searchParams.set("fiscal_year", fiscalYear);
+  if (teamId) url.searchParams.set("team_id", teamId);
+  if (entityType) url.searchParams.set("entity_type", entityType);
+  if (isLeader !== "") url.searchParams.set("is_leader", isLeader);
+  if (wantsAccess !== "") url.searchParams.set("wants_access", wantsAccess);
+  if (messageType) url.searchParams.set("message_type", messageType);
+  if (status) url.searchParams.set("status", status);
   if (q) url.searchParams.set("q", q);
   const data = await fetchJson(url.toString());
   if (Array.isArray(data)) {
@@ -509,6 +531,10 @@ const activateSection = (id, options = {}) => {
   if (id === "payments" && panelMode === "team") {
     loadPaymentGuide().catch(() => {});
     loadTeamPaymentWizard().catch((error) => showToast(error.message, "error"));
+  }
+  if (id === "members" && panelMode === "admin") initMemberFilters().catch(() => {});
+  if (id === "sms" && panelMode === "admin") {
+    window.initSmsPanel?.();
   }
   if (options.scrollTarget) {
     setTimeout(() => {
@@ -1985,6 +2011,11 @@ document.getElementById("addExpenseButton")?.addEventListener("click", () => {
 
 const formatCell = (column, value, row, resource) => {
   if (column === "entity_type") return entityBadge(value);
+  if (column === "is_leader") {
+    return Number(value) === 1
+      ? '<span class="badge badge-paid">مسئول نهاد</span>'
+      : '<span class="badge">عضو</span>';
+  }
   if (column === "is_active" && resource === "teams") {
     return Number(value) === 1
       ? '<span class="badge badge-paid">فعال</span>'
@@ -2087,6 +2118,100 @@ const resolveColumns = (rows, resource) => {
   return preferred.filter((c) => available.has(c));
 };
 
+const openChangeLeaderModal = async (teamId, teamName) => {
+  const { rows } = await fetchResource("api.php?resource=members", {
+    page: 1,
+    perPage: 200,
+    teamId: String(teamId),
+    approvalStatus: "approved",
+  });
+  if (!rows.length) {
+    throw new Error("برای این نهاد عضو تأیید‌شده‌ای وجود ندارد.");
+  }
+  const modal = ensureModal();
+  const form = modal.querySelector("#crudForm");
+  modal.querySelector("#crudModalTitle").textContent = `تغییر مسئول: ${teamName || "نهاد"}`;
+  form.innerHTML = `
+    <p class="hint">مسئول جدید را از بین اعضای تأیید‌شده این نهاد انتخاب کنید. نام و تماس نهاد به‌روز می‌شود.</p>
+    <label>
+      <span>عضو مسئول *</span>
+      <select name="member_id" required>
+        <option value="">انتخاب کنید</option>
+        ${rows.map((row) => `<option value="${escapeHtml(row.id)}">${escapeHtml(row.full_name || "—")}${Number(row.is_leader) === 1 ? " (مسئول فعلی)" : ""}</option>`).join("")}
+      </select>
+    </label>
+    <div class="modal-actions">
+      <button class="button" type="submit">ثبت مسئول جدید</button>
+      <button class="button ghost" type="button" data-close-modal>انصراف</button>
+    </div>`;
+  form.querySelector("[data-close-modal]").addEventListener("click", closeModal);
+  form.onsubmit = async (event) => {
+    event.preventDefault();
+    const memberId = Number(new FormData(form).get("member_id"));
+    if (!memberId) return;
+    await postJson("api.php?resource=teams&action=change-leader", { id: teamId, member_id: memberId });
+    closeModal();
+    await refreshAfterMutation("teams");
+    await refreshAfterMutation("members");
+    showToast("مسئول نهاد به‌روز شد.", "success");
+  };
+  modal.hidden = false;
+  trapFocus(modal);
+};
+
+const initMemberFilters = async () => {
+  const bar = document.getElementById("memberFilters");
+  const table = document.getElementById("membersTable");
+  if (!bar || !table) return;
+  const meta = await loadCrudMeta();
+  const teamOptions = meta.resources?.teams?.fields?.team_id?.options
+    || meta.resources?.members?.fields?.team_id?.options
+    || {};
+  const teamEntries = Object.entries(teamOptions);
+  bar.innerHTML = `
+    <label>نهاد
+      <select id="memberFilterTeam">
+        <option value="">همه</option>
+        ${teamEntries.map(([value, label]) => `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`).join("")}
+      </select>
+    </label>
+    <label>نوع نهاد
+      <select id="memberFilterEntityType">
+        <option value="">همه</option>
+        <option value="team">تیم</option>
+        <option value="company">شرکت</option>
+        <option value="student">دانشجو</option>
+      </select>
+    </label>
+    <label>نقش
+      <select id="memberFilterLeader">
+        <option value="">همه</option>
+        <option value="1">مسئول</option>
+        <option value="0">عضو عادی</option>
+      </select>
+    </label>
+    <label>دسترسی تردد
+      <select id="memberFilterAccess">
+        <option value="">همه</option>
+        <option value="1">نیاز به تردد</option>
+        <option value="0">بدون تردد</option>
+      </select>
+    </label>`;
+  const apply = () => {
+    table.setAttribute("data-member-team", bar.querySelector("#memberFilterTeam").value);
+    table.setAttribute("data-member-entity-type", bar.querySelector("#memberFilterEntityType").value);
+    table.setAttribute("data-member-leader", bar.querySelector("#memberFilterLeader").value);
+    table.setAttribute("data-member-access", bar.querySelector("#memberFilterAccess").value);
+    table.memberTeamFilter = bar.querySelector("#memberFilterTeam").value;
+    table.memberEntityTypeFilter = bar.querySelector("#memberFilterEntityType").value;
+    table.memberLeaderFilter = bar.querySelector("#memberFilterLeader").value;
+    table.memberAccessFilter = bar.querySelector("#memberFilterAccess").value;
+    table.page = 1;
+    table.load?.();
+  };
+  bar.querySelectorAll("select").forEach((select) => select.addEventListener("change", apply));
+};
+
 class DataTable extends HTMLElement {
   connectedCallback() {
     this.title = this.getAttribute("title");
@@ -2099,6 +2224,10 @@ class DataTable extends HTMLElement {
     this.fiscalYearFilter = this.getAttribute("data-fiscal-year") || "";
     this.paymentStatusFilter = this.getAttribute("data-payment-filter") || "";
     this.approvalStatusFilter = this.getAttribute("data-approval-filter") || "";
+    this.memberTeamFilter = this.getAttribute("data-member-team") || "";
+    this.memberEntityTypeFilter = this.getAttribute("data-member-entity-type") || "";
+    this.memberLeaderFilter = this.getAttribute("data-member-leader") || "";
+    this.memberAccessFilter = this.getAttribute("data-member-access") || "";
     this.tableKey = this.getAttribute("data-table-key") || "";
     this.readOnly = tableSuppressesAdd(this);
     this.definition = null;
@@ -2195,6 +2324,10 @@ class DataTable extends HTMLElement {
         paymentStatus: this.paymentStatusFilter,
         approvalStatus: this.approvalStatusFilter,
         fiscalYear: this.fiscalYearFilter,
+        teamId: this.memberTeamFilter,
+        entityType: this.memberEntityTypeFilter,
+        isLeader: this.memberLeaderFilter,
+        wantsAccess: this.memberAccessFilter,
         q: this.filter.trim(),
       });
       this.rows = result.rows;
@@ -2256,7 +2389,8 @@ class DataTable extends HTMLElement {
           </div>`).join("");
         const profileBtn = this.resource === "teams"
           ? `<button class="mini-button primary" type="button" data-action="profile" data-id="${escapeHtml(row.id)}">پروفایل</button>
-             ${canWrite ? `<button class="mini-button" type="button" data-action="show-portal" data-id="${escapeHtml(row.id)}">نمایش رمز</button>
+             ${canWrite ? `<button class="mini-button" type="button" data-action="change-leader" data-id="${escapeHtml(row.id)}">تغییر مسئول</button>
+             <button class="mini-button" type="button" data-action="show-portal" data-id="${escapeHtml(row.id)}">نمایش رمز</button>
            <button class="mini-button" type="button" data-action="reset-portal" data-id="${escapeHtml(row.id)}">بازنشانی رمز</button>` : ""}` : "";
         const workflowBtns = workflow
           ? `<button class="mini-button primary" type="button" data-action="approve" data-id="${escapeHtml(row.id)}">تأیید</button>
@@ -2320,7 +2454,8 @@ class DataTable extends HTMLElement {
       }).join("");
       const profileAction = this.resource === "teams"
         ? `<button class="mini-button primary" type="button" data-action="profile" data-id="${escapeHtml(row.id)}">پروفایل</button>
-           ${canWrite ? `<button class="mini-button" type="button" data-action="show-portal" data-id="${escapeHtml(row.id)}">نمایش رمز</button>
+           ${canWrite ? `<button class="mini-button" type="button" data-action="change-leader" data-id="${escapeHtml(row.id)}">تغییر مسئول</button>
+           <button class="mini-button" type="button" data-action="show-portal" data-id="${escapeHtml(row.id)}">نمایش رمز</button>
            <button class="mini-button" type="button" data-action="reset-portal" data-id="${escapeHtml(row.id)}">بازنشانی رمز</button>` : ""}` : "";
       const workflowAction = workflow
         ? `<button class="mini-button primary" type="button" data-action="approve" data-id="${escapeHtml(row.id)}">تأیید</button>
@@ -2389,6 +2524,11 @@ class DataTable extends HTMLElement {
     if (!record) return;
     if (button.dataset.action === "profile") {
       openTeamProfile(id).catch((error) => showToast(error.message, "error"));
+      return;
+    }
+    if (button.dataset.action === "change-leader" && canWrite) {
+      const team = this.rows.find((row) => Number(row.id) === id);
+      openChangeLeaderModal(id, team?.name || "").catch((error) => showToast(error.message, "error"));
       return;
     }
     if (button.dataset.action === "request-member-edit") {
