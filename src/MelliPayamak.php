@@ -46,10 +46,7 @@ final class MelliPayamak
      */
     public function getUserNumbers(string $username, string $password): array
     {
-        $response = $this->request('GetUserNumbers', [
-            'username' => $username,
-            'password' => $password,
-        ]);
+        $response = $this->request('GetUserNumbers', $this->authFields($username, $password, true));
         if (!$response['ok']) {
             return ['ok' => false, 'numbers' => [], 'error' => $response['error'], 'raw' => $response['raw']];
         }
@@ -75,14 +72,12 @@ final class MelliPayamak
      */
     public function getMessages(string $username, string $password, int $location, int $index, int $count, string $from = ''): array
     {
-        $response = $this->request('GetMessages', [
-            'username' => $username,
-            'password' => $password,
-            'location' => (string) $location,
-            'index' => (string) max(0, $index),
-            'count' => (string) max(1, min(500, $count)),
-            'from' => $from,
-        ]);
+        $response = $this->request('GetMessages', array_merge($this->authFields($username, $password, true), [
+            'Location' => (string) $location,
+            'Index' => (string) max(0, $index),
+            'Count' => (string) max(1, min(500, $count)),
+            'From' => $from,
+        ]));
         if (!$response['ok']) {
             return ['ok' => false, 'messages' => [], 'error' => $response['error'], 'raw' => $response['raw']];
         }
@@ -105,11 +100,9 @@ final class MelliPayamak
             return ['ok' => false, 'status' => null, 'status_code' => null, 'error' => 'شناسه پیامک نامعتبر است.', 'raw' => ''];
         }
 
-        $response = $this->request('GetDeliveries2', [
-            'username' => $username,
-            'password' => $password,
-            'recId' => $recId,
-        ]);
+        $response = $this->request('GetDeliveries2', array_merge($this->authFields($username, $password, true), [
+            'recID' => $recId,
+        ]));
         if (!$response['ok']) {
             return ['ok' => false, 'status' => null, 'status_code' => null, 'error' => $response['error'], 'raw' => $response['raw']];
         }
@@ -130,10 +123,7 @@ final class MelliPayamak
      */
     public function getCredit(string $username, string $password): array
     {
-        $response = $this->request('GetCredit', [
-            'username' => $username,
-            'password' => $password,
-        ]);
+        $response = $this->request('GetCredit', $this->authFields($username, $password, true));
         if (!$response['ok']) {
             return ['ok' => false, 'credit' => null, 'error' => $response['error'], 'raw' => $response['raw']];
         }
@@ -153,10 +143,7 @@ final class MelliPayamak
      */
     public function getBasePrice(string $username, string $password): array
     {
-        $response = $this->request('GetBasePrice', [
-            'username' => $username,
-            'password' => $password,
-        ]);
+        $response = $this->request('GetBasePrice', $this->authFields($username, $password, true));
         if (!$response['ok']) {
             return ['ok' => false, 'price' => null, 'error' => $response['error'], 'raw' => $response['raw']];
         }
@@ -172,13 +159,26 @@ final class MelliPayamak
     }
 
     /**
+     * @return array<string, string>
+     */
+    private function authFields(string $username, string $password, bool $legacyPanel = false): array
+    {
+        $username = trim($username);
+        $password = trim($password);
+
+        return $legacyPanel
+            ? ['UserName' => $username, 'PassWord' => $password]
+            : ['username' => $username, 'password' => $password];
+    }
+
+    /**
      * @param array<string, scalar|null> $fields
      * @return array{ok:bool, data:mixed, error:?string, raw:string}
      */
     private function request(string $operation, array $fields): array
     {
-        $username = trim((string) ($fields['username'] ?? ''));
-        $password = trim((string) ($fields['password'] ?? ''));
+        $username = trim((string) ($fields['username'] ?? $fields['UserName'] ?? ''));
+        $password = trim((string) ($fields['password'] ?? $fields['PassWord'] ?? ''));
         if ($username === '' || $password === '') {
             return ['ok' => false, 'data' => null, 'error' => 'تنظیمات پیامک کامل نیست.', 'raw' => ''];
         }

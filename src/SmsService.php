@@ -22,12 +22,16 @@ final class SmsService
             'sms_base_price' => (int) ($settings['sms_unit_cost'] ?? 0),
         ]);
 
-        if ($withLive && $configured) {
-            $live = $this->refreshPricing();
-            $result['sms_credit'] = $live['credit'];
-            if ($live['base_price'] !== null) {
-                $result['sms_base_price'] = (int) $live['base_price'];
-                $result['sms_unit_cost'] = (int) $live['base_price'];
+        if ($withLive && $this->hasApiCredentials($settings)) {
+            try {
+                $live = $this->refreshPricing();
+                $result['sms_credit'] = $live['credit'];
+                if ($live['base_price'] !== null) {
+                    $result['sms_base_price'] = (int) $live['base_price'];
+                    $result['sms_unit_cost'] = (int) $live['base_price'];
+                }
+            } catch (InvalidArgumentException $exception) {
+                $result['live_error'] = $exception->getMessage();
             }
         }
 
@@ -44,6 +48,67 @@ final class SmsService
         return trim((string) ($settings['sms_username'] ?? '')) !== ''
             && trim((string) ($settings['sms_password'] ?? '')) !== ''
             && trim((string) ($settings['sms_from_number'] ?? '')) !== '';
+    }
+
+    /**
+     * @param array<string, mixed>|null $settings
+     */
+    public function hasApiCredentials(?array $settings = null): bool
+    {
+        $settings ??= (new CenterSettings($this->pdo))->smsSettingsForSend();
+
+        return trim((string) ($settings['sms_username'] ?? '')) !== ''
+            && trim((string) ($settings['sms_password'] ?? '')) !== '';
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function testConnection(): array
+    {
+        Access::requireWriteJson();
+        $send = (new CenterSettings($this->pdo))->smsSettingsForSend();
+        if (!$this->hasApiCredentials($send)) {
+            throw new InvalidArgumentException('نام کاربری و رمز API را ابتدا ذخیره کنید.');
+        }
+
+        $client = new MelliPayamak();
+        $username = (string) $send['sms_username'];
+        $password = (string) $send['sms_password'];
+        $checks = [];
+
+        $creditResult = $client->getCredit($username, $password);
+        $checks['credit'] = [
+            'ok' => $creditResult['ok'],
+            'value' => $creditResult['credit'],
+            'error' => $creditResult['error'],
+        ];
+
+        $priceResult = $client->getBasePrice($username, $password);
+        $checks['base_price'] = [
+            'ok' => $priceResult['ok'],
+            'value' => $priceResult['price'],
+            'error' => $priceResult['error'],
+        ];
+
+        $linesResult = $client->getUserNumbers($username, $password);
+        $checks['lines'] = [
+            'ok' => $linesResult['ok'] && $linesResult['numbers'] !== [],
+            'value' => $linesResult['numbers'],
+            'error' => $linesResult['error'],
+        ];
+
+        $ok = ($checks['credit']['ok'] ?? false)
+            || ($checks['base_price']['ok'] ?? false)
+            || ($checks['lines']['ok'] ?? false);
+
+        return [
+            'ok' => $ok,
+            'checks' => $checks,
+            'message' => $ok
+                ? 'اتصال به API ملی‌پیامک برقرار است.'
+                : 'اتصال به API ناموفق بود. نام کاربری، رمز API و دسترسی REST را بررسی کنید.',
+        ];
     }
 
     /**
@@ -191,7 +256,7 @@ final class SmsService
             $errors[] = (string) $priceResult['error'];
         }
         if ($credit === null && $price === null && $errors !== []) {
-            throw new RuntimeException($errors[0]);
+            throw new InvalidArgumentException($errors[0]);
         }
 
         return ['credit' => $credit, 'base_price' => $price];
@@ -828,7 +893,7 @@ final class SmsService
             (string) $send['sms_password']
         );
         if (!$result['ok'] || $result['numbers'] === []) {
-            throw new RuntimeException($result['error'] ?? 'استعلام خطوط ارسال ناموفق بود.');
+            throw new InvalidArgumentException($result['error'] ?? 'استعلام خطوط ارسال ناموفق بود.');
         }
 
         (new CenterSettings($this->pdo))->storeSmsLineNumbers($result['numbers'], (string) ($send['sms_from_number'] ?? ''));

@@ -138,6 +138,16 @@ try {
         json_response(['ok' => true, 'result' => (new SmsService($pdo))->queryLines()]);
     }
 
+    if ($resource === 'sms-test') {
+        $sms = new SmsService($pdo);
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            require_csrf_json();
+            Access::requireWriteJson();
+            json_response(['ok' => true, 'result' => $sms->testConnection()]);
+        }
+        json_response(['error' => 'Method not allowed'], 405);
+    }
+
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && $resource === 'sms-sync-history') {
         require_csrf_json();
         json_response(['ok' => true, 'result' => (new SmsService($pdo))->syncHistoryFromApi()]);
