@@ -213,6 +213,34 @@ foreach ($partialMatrix['rows'] ?? [] as $matrixRow) {
 $assert($chargedMonths === 7, 'charges: partial desk assignment charges only assigned months');
 $assert($emptyAfterDesk === 0, 'charges: no charges after desk assignment end month');
 
+$expiredDeskId = (int) ($pdo->query('SELECT id FROM desks WHERE number = 10')->fetchColumn() ?: 0);
+if ($expiredDeskId > 0) {
+    $pdo->exec('DELETE FROM desk_assignments WHERE desk_id = ' . $expiredDeskId);
+    (new DeskAssignments($pdo))->syncDeskAssignment($expiredDeskId, [
+        'number' => 10,
+        'team_id' => $teamId,
+        'usage_type' => 'formal',
+        'assignment_from' => '1405/01/01',
+        'assignment_until' => JalaliDate::monthEnd('1405', 3),
+    ]);
+    $_SESSION = [
+        'mechinno_authenticated' => true,
+        'mechinno_role' => Access::ROLE_ADMIN_EDITOR,
+        'mechinno_user' => 'admin',
+        'mechinno_user_id' => 0,
+    ];
+    $extendedUntil = JalaliDate::monthEnd('1405', 8);
+    $expiredUpdate = $crud->update('desks', $expiredDeskId, [
+        'team_id' => (string) $teamId,
+        'usage_type' => 'formal',
+        'assignment_from_month' => '1',
+        'assignment_until_month' => '8',
+    ]);
+    $assert(($expiredUpdate['assignment_until'] ?? '') === $extendedUntil, 'desks: expired year assignment extends end month in place');
+    $assignmentCount = (int) $pdo->query('SELECT COUNT(*) FROM desk_assignments WHERE desk_id = ' . $expiredDeskId)->fetchColumn();
+    $assert($assignmentCount === 1, 'desks: extending expired assignment does not create duplicate row');
+}
+
 $_SESSION = [
     'mechinno_authenticated' => true,
     'mechinno_role' => Access::ROLE_TEAM,
