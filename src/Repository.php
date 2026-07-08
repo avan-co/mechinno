@@ -285,6 +285,9 @@ final class Repository
             fn (array $row): array => $this->stripLegacyRow($row),
             $this->rows($sql . ' LIMIT ' . (int) $perPage . ' OFFSET ' . (int) $offset)
         );
+        if ($name === 'desks') {
+            $rows = $this->enrichDeskAssignmentRows($rows);
+        }
 
         return [
             'rows' => $rows,
@@ -2056,6 +2059,27 @@ final class Repository
     private function currentFiscalYear(): string
     {
         return (string) JalaliDate::todayParts()['year'];
+    }
+
+    /**
+     * @param list<array<string, mixed>> $rows
+     * @return list<array<string, mixed>>
+     */
+    private function enrichDeskAssignmentRows(array $rows): array
+    {
+        $assignments = new DeskAssignments($this->pdo);
+
+        return array_map(static function (array $row) use ($assignments): array {
+            $teamId = (int) ($row['team_id'] ?? 0);
+            $assignment = $assignments->assignmentForDeskForm(
+                (int) ($row['id'] ?? 0),
+                $teamId > 0 ? $teamId : null
+            );
+            $row['assignment_from'] = (string) ($assignment['assigned_from'] ?? '');
+            $row['assignment_until'] = (string) ($assignment['assigned_until'] ?? '');
+
+            return $row;
+        }, $rows);
     }
 
     private function currentMonthIndex(): int

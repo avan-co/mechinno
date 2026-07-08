@@ -24,13 +24,16 @@ final class Schema
     public static function reset(PDO $pdo): void
     {
         $tables = [
+            'sms_logs',
             'development_plans',
             'panel_users',
             'transactions',
             'charges',
             'rate_settings',
             'locker_requests',
+            'member_requests',
             'desk_assignments',
+            'team_contracts',
             'lockers',
             'members',
             'desks',
@@ -53,6 +56,10 @@ final class Schema
 
         if (!$isSqlite) {
             $pdo->exec('SET FOREIGN_KEY_CHECKS = 1');
+        }
+
+        if (self::columnExists($pdo, 'center_settings', 'legacy_team_contracts_migrated')) {
+            $pdo->exec('UPDATE center_settings SET legacy_team_contracts_migrated = 1 WHERE id = 1');
         }
     }
 
@@ -358,7 +365,6 @@ final class Schema
 
         self::seedCenterSettings($pdo);
         self::ensureSmsTables($pdo);
-        (new TeamContracts($pdo))->migrateFromLegacyTeamDates();
         (new TeamContracts($pdo))->syncAllTeamActiveStatuses();
         TeamLeaders::backfillAll($pdo);
         CenterLedger::purgeAccrualMirrorEntries($pdo);
