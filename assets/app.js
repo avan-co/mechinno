@@ -52,6 +52,11 @@ const labels = {
   confirmed: "تأیید",
   charge_rate: "نرخ شارژ",
   informal_rent_rate: "نرخ اجاره غیررسمی",
+  charge_rate_override: "نرخ شارژ اختصاصی",
+  informal_rent_rate_override: "نرخ اجاره اختصاصی",
+  charge_exempt: "معاف شارژ",
+  rent_exempt: "معاف اجاره",
+  billing_exemptions: "معافیت",
   effective_from: "تاریخ اثر",
   joined_at: "عضویت",
   year_status: "وضعیت سال جاری",
@@ -100,6 +105,20 @@ const requestTypeLabel = (type) => ({
   delete: "حذف",
 }[type] || type || "—");
 const usageLabels = { formal: "رسمی", informal: "غیررسمی", mixed: "ترکیبی" };
+
+const billingExemptionBadges = (row = {}) => {
+  const bits = [];
+  if (Number(row.charge_exempt) === 1) bits.push('<span class="badge badge-partial">معاف شارژ</span>');
+  if (Number(row.rent_exempt) === 1) bits.push('<span class="badge badge-partial">معاف اجاره</span>');
+  return bits.length ? bits.join(" ") : "—";
+};
+
+const teamBillingBadges = (billing = {}) => {
+  if (!billing?.has_billing_adjustments) return "";
+  return (billing.labels || []).map((label) =>
+    `<span class="badge badge-team billing-badge" title="${escapeHtml(label)}">${escapeHtml(label)}</span>`
+  ).join(" ");
+};
 
 const sectionMeta = {
   overview: { eyebrow: "داشبورد", title: "مدیریت مرکز نوآوری", subtitle: "خلاصه وضعیت مرکز و اقدامات پیشنهادی" },
@@ -221,10 +240,10 @@ const fiscalYearFromDate = (value) => {
 
 const resourceColumns = {
   teams: ["entity_code", "entity_type", "name", "is_active", "year_status", "leader", "phone", "joined_at", "portal_username", "portal_has_password", "desk_count", "warning", "notes"],
-  team_contracts: ["team_name", "fiscal_year", "contract_status", "contract_start", "contract_end", "notes"],
+  team_contracts: ["team_name", "fiscal_year", "contract_status", "contract_start", "contract_end", "charge_rate_override", "informal_rent_rate_override", "notes"],
   members: ["member_code", "full_name", "is_leader", "team_label", "entity_type", "desk_numbers", "wants_access", "access_code", "phone", "national_id", "approval_status", "rejection_reason"],
   desks: ["number", "team_name", "usage_type", "assignment_period", "notes"],
-  "desk-assignments": ["assignment_status", "fiscal_year", "desk_number", "team_name", "usage_type", "assignment_period", "notes"],
+  "desk-assignments": ["assignment_status", "fiscal_year", "desk_number", "team_name", "usage_type", "billing_exemptions", "assignment_period", "notes"],
   lockers: ["locker_number", "status", "team_label", "delivered_at", "key_number", "spare_key"],
   "locker-requests": ["submitted_at", "status", "locker_number", "notes", "reviewed_at", "rejection_reason"],
   "member-requests": ["submitted_at", "request_type", "current_full_name", "full_name", "phone", "national_id", "status", "reviewed_at", "rejection_reason"],
@@ -1169,6 +1188,8 @@ const openDeskHistoryAssignModal = async (prefill = {}) => {
       usage_type: prefill.usage_type || "formal",
       assigned_from_month: validAssignmentMonth(prefill.assigned_from_month, "1"),
       assigned_until_month: validAssignmentMonth(prefill.assigned_until_month, "12"),
+      charge_exempt: prefill.charge_exempt ? "1" : "0",
+      rent_exempt: prefill.rent_exempt ? "1" : "0",
       notes: prefill.notes || "",
     }],
   };
@@ -1205,6 +1226,12 @@ const openDeskHistoryAssignModal = async (prefill = {}) => {
       </label>
       <label class="wide"><span>یادداشت</span>
         <input data-field="notes" data-index="${index}" type="text" value="${escapeHtml(desk.notes || "")}" />
+      </label>
+      <label class="desk-exempt-check"><span>معافیت</span>
+        <span class="check-row-inline">
+          <label><input type="checkbox" data-field="charge_exempt" data-index="${index}" value="1" ${Number(desk.charge_exempt) === 1 ? "checked" : ""} /> معاف شارژ</label>
+          <label><input type="checkbox" data-field="rent_exempt" data-index="${index}" value="1" ${Number(desk.rent_exempt) === 1 ? "checked" : ""} /> معاف اجاره</label>
+        </span>
       </label>
       ${state.desks.length > 1 ? `<button type="button" class="mini-button danger" data-remove-desk="${index}">حذف ردیف</button>` : ""}
     </div>`).join("");
@@ -1272,7 +1299,12 @@ const openDeskHistoryAssignModal = async (prefill = {}) => {
       state.desks.forEach((desk, index) => {
         form.querySelectorAll(`[data-index="${index}"]`).forEach((input) => {
           const field = input.dataset.field;
-          if (field && desk[field] !== undefined) input.value = desk[field];
+          if (!field || desk[field] === undefined) return;
+          if (input.type === "checkbox") {
+            input.checked = String(desk[field]) === "1";
+            return;
+          }
+          input.value = desk[field];
         });
       });
     };
@@ -1282,6 +1314,10 @@ const openDeskHistoryAssignModal = async (prefill = {}) => {
         const index = Number(input.dataset.index);
         const field = input.dataset.field;
         if (!state.desks[index] || !field) return;
+        if (input.type === "checkbox") {
+          state.desks[index][field] = input.checked ? "1" : "0";
+          return;
+        }
         state.desks[index][field] = input.value;
       });
     };
@@ -1330,7 +1366,11 @@ const openDeskHistoryAssignModal = async (prefill = {}) => {
           const index = Number(input.dataset.index);
           const field = input.dataset.field;
           if (!state.desks[index] || !field) return;
-          state.desks[index][field] = input.value;
+          if (input.type === "checkbox") {
+            state.desks[index][field] = input.checked ? "1" : "0";
+          } else {
+            state.desks[index][field] = input.value;
+          }
           if (field === "assigned_from_month" || field === "assigned_until_month") {
             state.monthsTouched = true;
           }
@@ -1354,6 +1394,8 @@ const openDeskHistoryAssignModal = async (prefill = {}) => {
         usage_type: "formal",
         assigned_from_month: String(state.contractStartMonth || 1),
         assigned_until_month: String(state.contractEndMonth || 12),
+        charge_exempt: "0",
+        rent_exempt: "0",
         notes: "",
       });
       form.querySelector(".desk-assign-rows").innerHTML = renderDeskRows();
@@ -1385,6 +1427,8 @@ const openDeskHistoryAssignModal = async (prefill = {}) => {
             fiscal_year: state.fiscalYear,
             assigned_from_month: months.assigned_from_month,
             assigned_until_month: months.assigned_until_month,
+            charge_exempt: desk.charge_exempt || "0",
+            rent_exempt: desk.rent_exempt || "0",
             notes: desk.notes || "",
           }
           : null;
@@ -1404,6 +1448,8 @@ const openDeskHistoryAssignModal = async (prefill = {}) => {
               fiscal_year: state.fiscalYear,
               assigned_from_month: rowMonths.assigned_from_month,
               assigned_until_month: rowMonths.assigned_until_month,
+              charge_exempt: deskRow.charge_exempt || "0",
+              rent_exempt: deskRow.rent_exempt || "0",
               notes: deskRow.notes || "",
             };
             debugLog("desk-assign:create", createPayload);
@@ -1694,14 +1740,19 @@ const loadTeamChargeRates = async () => {
     const profile = await fetchJson(`api.php?resource=team-profile&id=${encodeURIComponent(window.MECHINNO.teamId)}`);
     const rates = profile.current_year_rates || {};
     const year = rates.fiscal_year || window.MECHINNO?.fiscalYear || "—";
+    const contract = (profile.contracts || []).find((row) => String(row.fiscal_year) === String(year));
+    const chargeRate = contract?.charge_rate_override || rates.charge_rate || 0;
+    const rentRate = contract?.informal_rent_rate_override || rates.informal_rent_rate || 0;
+    const billing = profile.billing_summaries?.[year];
     host.innerHTML = `
       <div class="team-charge-rates-grid">
         <div class="month-stat"><span>سال</span><strong>${escapeHtml(year)}</strong></div>
-        <div class="month-stat"><span>شارژ هر میز (ماهانه)</span><strong>${escapeHtml(formatMoney(rates.charge_rate || 0))}</strong></div>
+        <div class="month-stat"><span>شارژ هر میز (ماهانه)</span><strong>${escapeHtml(formatMoney(chargeRate))}${contract?.charge_rate_override ? " <small class='hint'>(اختصاصی)</small>" : ""}</strong></div>
         ${profile.has_informal_desk
-          ? `<div class="month-stat"><span>اجاره غیررسمی هر میز</span><strong>${escapeHtml(formatMoney(rates.informal_rent_rate || 0))}</strong></div>`
+          ? `<div class="month-stat"><span>اجاره غیررسمی هر میز</span><strong>${escapeHtml(formatMoney(rentRate))}${contract?.informal_rent_rate_override ? " <small class='hint'>(اختصاصی)</small>" : ""}</strong></div>`
           : ""}
       </div>
+      ${billing?.has_billing_adjustments ? `<div class="team-billing-badges">${teamBillingBadges(billing)}</div>` : ""}
       <p class="hint">نرخ‌های سال‌های گذشته در کلاژ همان سال نمایش داده می‌شود. بدهی هر ماه فقط برای ماه‌هایی که میز فعال دارید محاسبه می‌شود.</p>`;
   } catch (error) {
     host.innerHTML = `<div class="empty">نرخ سال جاری در دسترس نیست.</div>`;
@@ -1775,6 +1826,7 @@ const loadChargesCollage = async () => {
       ${panelMode === "team" ? "" : `<td class="team-col">
         <button type="button" class="text-link" data-team-id="${escapeHtml(row.team.id)}">${escapeHtml(row.team.name)}</button>
         <br>${entityBadge(row.team.entity_type)} ${teamActiveBadge(row.team.is_active)}
+        ${row.team.billing?.has_billing_adjustments ? `<div class="team-billing-badges">${teamBillingBadges(row.team.billing)}</div>` : ""}
       </td>`}
       ${row.cells.map((cell) => {
         const meta = collageCellMeta(cell, row, year, data.months);
@@ -2536,6 +2588,10 @@ const formatCell = (column, value, row, resource) => {
   }
   if (column === "request_type") return escapeHtml(requestTypeLabel(value));
   if (column === "usage_type") return escapeHtml(usageLabels[value] || value || "—");
+  if (column === "billing_exemptions") return billingExemptionBadges(row);
+  if (["charge_rate_override", "informal_rent_rate_override"].includes(column)) {
+    return value === null || value === "" || value === undefined ? "—" : escapeHtml(formatMoney(value));
+  }
   if (column === "category" && resource === "development_plans") {
     return escapeHtml(devCategoryLabels[value] || value || "—");
   }

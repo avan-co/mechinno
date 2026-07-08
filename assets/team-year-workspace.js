@@ -59,6 +59,26 @@
     return `<span class="year-check-item ${cls}"><span class="year-check-icon">${icon}</span>${S().escapeHtml(label)}</span>`;
   };
 
+  const deskExemptBadges = (row) => {
+    const bits = [];
+    if (Number(row.charge_exempt) === 1) bits.push('<span class="badge badge-partial">معاف شارژ</span>');
+    if (Number(row.rent_exempt) === 1) bits.push('<span class="badge badge-partial">معاف اجاره</span>');
+    return bits.length ? bits.join(" ") : "—";
+  };
+
+  const renderBillingSummary = (profile, year) => {
+    const billing = profile.billing_summaries?.[year]
+      || (profile.year_summaries || []).find((row) => String(row.fiscal_year) === String(year))?.billing;
+    if (!billing?.has_billing_adjustments) return "";
+    return `<article class="year-panel year-panel--billing">
+      <h3>تنظیمات مالی ویژه</h3>
+      <div class="billing-label-list">${(billing.labels || []).map((label) =>
+        `<span class="badge badge-team billing-badge">${S().escapeHtml(label)}</span>`
+      ).join("")}</div>
+      <p class="hint">این موارد در محاسبه خودکار شارژ و نمایش کلاژ لحاظ می‌شوند.</p>
+    </article>`;
+  };
+
   const renderYearChecklist = (summary) => `
     <div class="year-checklist">
       ${checklistItem(summary.has_contract, "قرارداد")}
@@ -87,6 +107,8 @@
         <div class="year-contract-readonly">
           <div><span>شروع</span><strong>${S().escapeHtml(S().formatPlain(contract.contract_start))}</strong></div>
           <div><span>پایان</span><strong>${S().escapeHtml(S().formatPlain(contract.contract_end))}</strong></div>
+          ${contract.charge_rate_override ? `<div><span>نرخ شارژ اختصاصی</span><strong>${S().escapeHtml(S().formatMoney(contract.charge_rate_override))}</strong></div>` : ""}
+          ${contract.informal_rent_rate_override ? `<div><span>نرخ اجاره اختصاصی</span><strong>${S().escapeHtml(S().formatMoney(contract.informal_rent_rate_override))}</strong></div>` : ""}
           ${contract.notes ? `<p class="hint">${S().escapeHtml(contract.notes)}</p>` : ""}
         </div>
       </article>`;
@@ -102,6 +124,8 @@
         <div class="crud-grid year-form-grid">
           <label><span>شروع قرارداد</span><input name="contract_start" type="text" required value="${S().escapeHtml(contract?.contract_start || `${year}/01/01`)}" placeholder="${year}/01/01" /></label>
           <label><span>پایان قرارداد</span><input name="contract_end" type="text" required value="${S().escapeHtml(contract?.contract_end || `${year}/12/29`)}" placeholder="${year}/12/29" /></label>
+          <label><span>نرخ شارژ اختصاصی</span><input name="charge_rate_override" type="number" min="0" step="1" value="${S().escapeHtml(contract?.charge_rate_override ?? "")}" placeholder="خالی = نرخ عمومی" /></label>
+          <label><span>نرخ اجاره اختصاصی</span><input name="informal_rent_rate_override" type="number" min="0" step="1" value="${S().escapeHtml(contract?.informal_rent_rate_override ?? "")}" placeholder="خالی = نرخ عمومی" /></label>
           <label class="wide"><span>توضیحات</span><textarea name="notes" rows="2">${S().escapeHtml(contract?.notes || "")}</textarea></label>
         </div>
         <div class="year-panel-actions">
@@ -119,10 +143,11 @@
         <tr>
           <td>${S().deskLink ? S().deskLink(row.desk_number) : S().escapeHtml(row.desk_number)}</td>
           <td>${S().escapeHtml(S().usageLabels[row.usage_type] || row.usage_type || "—")}</td>
+          <td>${deskExemptBadges(row)}</td>
           <td>${S().escapeHtml(row.assignment_period || S().formatMonthRange?.(row.assigned_from, row.assigned_until) || S().formatPlain(row.assigned_from))}</td>
           <td>${S().escapeHtml(row.notes || "—")}</td>
         </tr>`).join("")
-      : `<tr><td colspan="4">میزی برای این سال ثبت نشده است. از بخش <strong>تاریخچه تخصیص</strong> ثبت کنید.</td></tr>`;
+      : `<tr><td colspan="5">میزی برای این سال ثبت نشده است. از بخش <strong>تاریخچه تخصیص</strong> ثبت کنید.</td></tr>`;
 
     return `<article class="year-panel">
       <div class="year-panel-head">
@@ -132,7 +157,7 @@
       <div class="table-wrap">
         <table class="data-table year-desk-table">
           <thead><tr>
-            <th>میز</th><th>نوع</th><th>بازه</th><th>یادداشت</th>
+            <th>میز</th><th>نوع</th><th>معافیت</th><th>بازه</th><th>یادداشت</th>
           </tr></thead>
           <tbody>${rows}</tbody>
         </table>
@@ -156,12 +181,13 @@
         <button type="button" class="button ghost" data-go-charges>مشاهده کلاژ شارژ</button>
       </div>` : ""}
       ${chargeRows.length ? `<details class="year-charge-details"><summary>جزئیات ماهانه (${chargeRows.length} ماه)</summary>
-        <div class="table-wrap"><table class="data-table"><thead><tr><th>ماه</th><th>شارژ</th><th>اجاره</th><th>جمع</th></tr></thead>
+        <div class="table-wrap"><table class="data-table"><thead><tr><th>ماه</th><th>شارژ</th><th>اجاره</th><th>جمع</th><th>توضیح محاسبه</th></tr></thead>
         <tbody>${chargeRows.map((row) => `<tr>
           <td>${S().escapeHtml(row.month_name || row.month_index)}</td>
           <td>${S().escapeHtml(S().formatMoney(row.charge_amount))}</td>
           <td>${S().escapeHtml(S().formatMoney(row.rent_amount))}</td>
           <td>${S().escapeHtml(S().formatMoney(row.amount))}</td>
+          <td class="charge-note-cell">${S().escapeHtml(row.note || "—")}</td>
         </tr>`).join("")}</tbody></table></div>
       </details>` : ""}
     </article>`;
@@ -191,6 +217,7 @@
         ${renderYearChecklist(summary)}
         <div class="year-workspace-panels">
           ${renderContractPanel(profile, year, summary, teamId, writable)}
+          ${renderBillingSummary(profile, year)}
           ${renderDeskPanel(profile, year)}
           ${renderChargesPanel(profile, year, teamId, writable)}
         </div>
@@ -227,6 +254,8 @@
       fiscal_year: year,
       contract_start: form.contract_start.value,
       contract_end: form.contract_end.value,
+      charge_rate_override: form.charge_rate_override?.value?.trim() || "",
+      informal_rent_rate_override: form.informal_rent_rate_override?.value?.trim() || "",
       notes: form.notes.value,
     };
     const isPast = String(year) !== String(currentFiscalYear());
@@ -449,6 +478,8 @@
         team_id: String(existing.team_id),
         fiscal_year: existing.fiscal_year || year,
         usage_type: existing.usage_type || "formal",
+        charge_exempt: Number(existing.charge_exempt) === 1 ? "1" : "0",
+        rent_exempt: Number(existing.rent_exempt) === 1 ? "1" : "0",
         notes: existing.notes || "",
         lockDesk: true,
         assigned_from_month: monthFromRecord(existing, "assigned_from_month", "assigned_from"),

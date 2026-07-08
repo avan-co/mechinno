@@ -458,7 +458,8 @@ final class Repository
                 . ($teamId !== null ? " WHERE t.id = {$teamId}" : '')
                 . $this->searchClause('teams', $filters)
                 . ' ORDER BY t.is_active DESC, t.entity_type, t.name',
-            'team_contracts' => "SELECT tc.id, tc.team_id, tc.fiscal_year, tc.contract_start, tc.contract_end, tc.notes, tc.created_at,
+            'team_contracts' => "SELECT tc.id, tc.team_id, tc.fiscal_year, tc.contract_start, tc.contract_end,
+                        tc.charge_rate_override, tc.informal_rent_rate_override, tc.notes, tc.created_at,
                         t.name AS team_name, t.entity_type, t.is_active AS team_is_active
                  FROM team_contracts tc
                  INNER JOIN teams t ON t.id = tc.team_id"
@@ -587,7 +588,7 @@ final class Repository
                 . ($teamId !== null ? " WHERE lr.team_id = {$teamId}" : '')
                 . ' ORDER BY lr.submitted_at DESC, lr.id DESC',
             'desk-assignments' => "SELECT da.id, da.desk_id, da.desk_number, da.team_id, da.usage_type,
-                        da.assigned_from, da.assigned_until, da.notes,
+                        da.assigned_from, da.assigned_until, da.notes, da.charge_exempt, da.rent_exempt,
                         SUBSTR(da.assigned_from, 1, 4) AS fiscal_year, t.name AS team_name, t.is_active AS team_is_active
                  FROM desk_assignments da
                  LEFT JOIN teams t ON t.id = da.team_id"
@@ -901,6 +902,7 @@ final class Repository
             }
             $dates = $contracts->contractDatesForYear($tid, $fiscalYear);
             $hasInformal = $contracts->hasInformalDeskInYear($tid, $fiscalYear);
+            $billing = $contracts->billingSummaryForTeamInYear($tid, $fiscalYear);
             $cells = [];
             $teamAllocations = $allocationMap[$tid] ?? [];
             foreach ($months as $month) {
@@ -933,6 +935,7 @@ final class Repository
                     'has_informal_desk' => $hasInformal,
                     'contract_start' => $dates['start'],
                     'contract_end' => $dates['end'],
+                    'billing' => $billing,
                 ]),
                 'cells' => $cells,
             ];
@@ -1126,7 +1129,8 @@ final class Repository
         return [
             'team' => self::stripLegacyColumns($team),
             'contracts' => $this->preparedRows(
-                'SELECT id, fiscal_year, contract_start, contract_end, notes, created_at
+                'SELECT id, fiscal_year, contract_start, contract_end, notes, created_at,
+                        charge_rate_override, informal_rent_rate_override
                  FROM team_contracts WHERE team_id = :id ORDER BY fiscal_year DESC',
                 ['id' => $teamId]
             ),
@@ -1160,7 +1164,8 @@ final class Repository
                     return $row;
                 },
                 $this->preparedRows(
-                'SELECT da.id, da.desk_id, da.desk_number, da.usage_type, da.assigned_from, da.assigned_until, da.notes,
+                'SELECT da.id, da.desk_id, da.desk_number, da.usage_type, da.assigned_from, da.assigned_until,
+                        da.notes, da.charge_exempt, da.rent_exempt,
                         SUBSTR(da.assigned_from, 1, 4) AS fiscal_year
                  FROM desk_assignments da
                  WHERE da.team_id = :id
@@ -1203,7 +1208,32 @@ final class Repository
             'year_summaries' => $this->yearSummariesForTeam($teamId),
             'current_month' => $this->currentMonthSummaryForTeam($teamId),
             'current_year_rates' => $this->currentYearRatesSummary(),
+            'billing_summaries' => $this->billingSummariesForTeam($teamId),
         ];
+    }
+
+    /**
+     * @return array<string, array<string, mixed>>
+     */
+    private function billingSummariesForTeam(int $teamId): array
+    {
+        $contracts = $this->contracts();
+        $years = [];
+        foreach ($this->preparedRows(
+            'SELECT DISTINCT fiscal_year FROM team_contracts WHERE team_id = :id',
+            ['id' => $teamId]
+        ) as $row) {
+            $year = JalaliDate::normalizeDigits((string) ($row['fiscal_year'] ?? ''));
+            if ($year !== '') {
+                $years[$year] = true;
+            }
+        }
+        $summaries = [];
+        foreach (array_keys($years) as $year) {
+            $summaries[$year] = $contracts->billingSummaryForTeamInYear($teamId, $year);
+        }
+
+        return $summaries;
     }
 
     /**
@@ -1271,11 +1301,14 @@ final class Repository
                 'contract_start' => $contract['contract_start'] ?? null,
                 'contract_end' => $contract['contract_end'] ?? null,
                 'contract_notes' => $contract['notes'] ?? null,
+                'charge_rate_override' => $contract['charge_rate_override'] ?? null,
+                'informal_rent_rate_override' => $contract['informal_rent_rate_override'] ?? null,
                 'desk_count' => count($deskAssignments),
                 'charge_total' => $this->contractChargeTotalForTeamInYear($teamId, $year),
                 'paid_total' => $this->contractPaidAllocatedForTeamInYear($teamId, $year),
                 'debt_total' => $this->contractDebtForTeamInYear($teamId, $year),
                 'is_current_year' => $year === $currentYear,
+                'billing' => $contracts->billingSummaryForTeamInYear($teamId, $year),
             ];
         }
 

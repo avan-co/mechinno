@@ -310,6 +310,70 @@ $assert(($duplicateAmounts[5]['charge_amount'] ?? 0) === 300, 'charges: duplicat
 (new Seeder($pdo))->recalculateCharges('1405');
 $afterGlobalRecalc = (new Seeder($pdo))->monthlyAmountsForTeam($teamId, '1405');
 $assert(($afterGlobalRecalc[5]['charge_amount'] ?? 0) === 300, 'charges: global recalc keeps single-desk amounts');
+
+$crud->update('desk_assignments', $assignmentId, [
+    'team_id' => (string) $teamId,
+    'desk_id' => '1',
+    'usage_type' => 'informal',
+    'fiscal_year' => '1405',
+    'assigned_from_month' => '5',
+    'assigned_until_month' => '7',
+    'charge_exempt' => '1',
+    'rent_exempt' => '0',
+    'notes' => '',
+]);
+$chargeExemptAmounts = (new Seeder($pdo))->monthlyAmountsForTeam($teamId, '1405');
+$assert(($chargeExemptAmounts[5]['charge_amount'] ?? -1) === 0, 'billing: charge-exempt desk skips charge amount');
+$assert(($chargeExemptAmounts[5]['rent_amount'] ?? 0) === 500, 'billing: charge-exempt desk still pays informal rent');
+
+$crud->update('desk_assignments', $assignmentId, [
+    'team_id' => (string) $teamId,
+    'desk_id' => '1',
+    'usage_type' => 'informal',
+    'fiscal_year' => '1405',
+    'assigned_from_month' => '5',
+    'assigned_until_month' => '7',
+    'charge_exempt' => '0',
+    'rent_exempt' => '1',
+    'notes' => '',
+]);
+$rentExemptAmounts = (new Seeder($pdo))->monthlyAmountsForTeam($teamId, '1405');
+$assert(($rentExemptAmounts[5]['charge_amount'] ?? 0) === 300, 'billing: rent-exempt desk still pays charge');
+$assert(($rentExemptAmounts[5]['rent_amount'] ?? -1) === 0, 'billing: rent-exempt desk skips informal rent');
+
+$contractRow = $pdo->query("SELECT id FROM team_contracts WHERE team_id = {$teamId} AND fiscal_year = '1405'")->fetch();
+$assert($contractRow !== false, 'billing: team contract exists for test year');
+$crud->update('team_contracts', (int) $contractRow['id'], [
+    'team_id' => (string) $teamId,
+    'fiscal_year' => '1405',
+    'contract_start' => '1405/01/01',
+    'contract_end' => '1405/12/29',
+    'charge_rate_override' => '200',
+    'informal_rent_rate_override' => '',
+    'notes' => '',
+]);
+$crud->update('desk_assignments', $assignmentId, [
+    'team_id' => (string) $teamId,
+    'desk_id' => '1',
+    'usage_type' => 'formal',
+    'fiscal_year' => '1405',
+    'assigned_from_month' => '5',
+    'assigned_until_month' => '7',
+    'charge_exempt' => '0',
+    'rent_exempt' => '0',
+    'notes' => '',
+]);
+$customRateAmounts = (new Seeder($pdo))->monthlyAmountsForTeam($teamId, '1405');
+$assert(($customRateAmounts[5]['charge_amount'] ?? 0) === 200, 'billing: contract charge override applies');
+$billingSummary = (new TeamContracts($pdo))->billingSummaryForTeamInYear($teamId, '1405');
+$assert(($billingSummary['has_custom_rates'] ?? false) === true, 'billing: summary flags custom contract rates');
+$assert(($billingSummary['has_billing_adjustments'] ?? false) === true, 'billing: summary reports billing adjustments');
+(new Seeder($pdo))->recalculateChargesForTeam($teamId, '1405');
+$chargeNote = (string) ($pdo->query(
+    "SELECT note FROM charges WHERE team_id = {$teamId} AND fiscal_year = '1405' AND month_index = 5 AND source_file = 'system'"
+)->fetchColumn() ?: '');
+$assert(str_contains($chargeNote, 'خودکار'), 'billing: system charge stores auto-calculation note');
+
 $pdo->exec('DELETE FROM desk_assignments WHERE desk_id = 1 AND id <> ' . $assignmentId);
 
 $expiredDeskId = (int) ($pdo->query('SELECT id FROM desks WHERE number = 10')->fetchColumn() ?: 0);

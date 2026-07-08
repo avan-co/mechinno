@@ -277,7 +277,7 @@ final class TeamContracts
         $yearStart = $fiscalYear . '/01/01';
         $yearEnd = $fiscalYear . '/12/29';
         $assignments = $this->pdo->prepare(
-            'SELECT desk_number, usage_type, assigned_from, assigned_until
+            'SELECT desk_number, usage_type, assigned_from, assigned_until, charge_exempt, rent_exempt
              FROM desk_assignments
              WHERE team_id = :team_id
                AND assigned_from <= :year_end
@@ -302,6 +302,101 @@ final class TeamContracts
     }
 
     /**
+     * @return array{
+     *   has_custom_rates:bool,
+     *   has_exemptions:bool,
+     *   has_billing_adjustments:bool,
+     *   charge_rate_override:?int,
+     *   informal_rent_rate_override:?int,
+     *   exempt_desks:list<array{desk_number:int, charge_exempt:bool, rent_exempt:bool}>,
+     *   labels:list<string>,
+     *   summary_text:string
+     * }
+     */
+    public function billingSummaryForTeamInYear(int $teamId, string $fiscalYear): array
+    {
+        $fiscalYear = JalaliDate::normalizeDigits($fiscalYear);
+        $contract = $this->contractForYear($teamId, $fiscalYear);
+        $chargeOverride = $this->nullableRate($contract['charge_rate_override'] ?? null);
+        $rentOverride = $this->nullableRate($contract['informal_rent_rate_override'] ?? null);
+        $labels = [];
+        if ($chargeOverride !== null) {
+            $labels[] = 'نرخ شارژ اختصاصی: ' . number_format($chargeOverride);
+        }
+        if ($rentOverride !== null) {
+            $labels[] = 'نرخ اجاره اختصاصی: ' . number_format($rentOverride);
+        }
+
+        $exemptDesks = [];
+        foreach ($this->deskAssignmentsForTeamInYear($teamId, $fiscalYear) as $assignment) {
+            $deskNumber = (int) ($assignment['desk_number'] ?? 0);
+            if ($deskNumber <= 0) {
+                continue;
+            }
+            $chargeExempt = $this->isExemptFlag($assignment['charge_exempt'] ?? 0);
+            $rentExempt = $this->isExemptFlag($assignment['rent_exempt'] ?? 0);
+            if (!$chargeExempt && !$rentExempt) {
+                continue;
+            }
+            $exemptDesks[$deskNumber] = [
+                'desk_number' => $deskNumber,
+                'charge_exempt' => $chargeExempt,
+                'rent_exempt' => $rentExempt,
+            ];
+            if ($chargeExempt && $rentExempt) {
+                $labels[] = 'میز ' . $deskNumber . ': معاف شارژ و اجاره';
+            } elseif ($chargeExempt) {
+                $labels[] = 'میز ' . $deskNumber . ': معاف شارژ';
+            } else {
+                $labels[] = 'میز ' . $deskNumber . ': معاف اجاره';
+            }
+        }
+
+        return [
+            'has_custom_rates' => $chargeOverride !== null || $rentOverride !== null,
+            'has_exemptions' => $exemptDesks !== [],
+            'has_billing_adjustments' => $chargeOverride !== null || $rentOverride !== null || $exemptDesks !== [],
+            'charge_rate_override' => $chargeOverride,
+            'informal_rent_rate_override' => $rentOverride,
+            'exempt_desks' => array_values($exemptDesks),
+            'labels' => $labels,
+            'summary_text' => $labels === [] ? '' : implode(' · ', $labels),
+        ];
+    }
+
+    /**
+     * @param array{charge_rate:int, informal_rent_rate:int} $globalRates
+     * @return array{charge_rate:int, informal_rent_rate:int, uses_custom_charge_rate:bool, uses_custom_rent_rate:bool}
+     */
+    public function ratesForTeamInMonth(int $teamId, string $fiscalYear, array $globalRates): array
+    {
+        $contract = $this->contractForYear($teamId, $fiscalYear);
+        $chargeOverride = $this->nullableRate($contract['charge_rate_override'] ?? null);
+        $rentOverride = $this->nullableRate($contract['informal_rent_rate_override'] ?? null);
+
+        return [
+            'charge_rate' => $chargeOverride ?? (int) ($globalRates['charge_rate'] ?? 0),
+            'informal_rent_rate' => $rentOverride ?? (int) ($globalRates['informal_rent_rate'] ?? 0),
+            'uses_custom_charge_rate' => $chargeOverride !== null,
+            'uses_custom_rent_rate' => $rentOverride !== null,
+        ];
+    }
+
+    private function nullableRate(mixed $value): ?int
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return (int) $value;
+    }
+
+    private function isExemptFlag(mixed $value): bool
+    {
+        return (int) $value === 1;
+    }
+
+    /**
      * @return list<array<string, mixed>>
      */
     private function deskAssignmentsFromCurrentDesks(int $teamId): array
@@ -317,7 +412,7 @@ final class TeamContracts
         }
 
         $assignmentStatement = $this->pdo->prepare(
-            'SELECT assigned_from, assigned_until
+            'SELECT assigned_from, assigned_until, charge_exempt, rent_exempt
              FROM desk_assignments
              WHERE desk_id = :desk_id
                AND team_id = :team_id
@@ -345,6 +440,8 @@ final class TeamContracts
                 'usage_type' => (string) ($desk['usage_type'] ?? 'formal'),
                 'assigned_from' => (string) ($assignment['assigned_from'] ?? ''),
                 'assigned_until' => (string) ($assignment['assigned_until'] ?? ''),
+                'charge_exempt' => (int) ($assignment['charge_exempt'] ?? 0),
+                'rent_exempt' => (int) ($assignment['rent_exempt'] ?? 0),
             ];
         }
 

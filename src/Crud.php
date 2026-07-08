@@ -54,6 +54,8 @@ final class Crud
                     'fiscal_year' => ['label' => 'سال مالی', 'type' => 'text', 'required' => true, 'placeholder' => '1404'],
                     'contract_start' => ['label' => 'شروع قرارداد', 'type' => 'date', 'required' => true, 'placeholder' => '1404/01/01'],
                     'contract_end' => ['label' => 'پایان قرارداد', 'type' => 'date', 'required' => true, 'placeholder' => '1404/12/29'],
+                    'charge_rate_override' => ['label' => 'نرخ شارژ اختصاصی (اختیاری)', 'type' => 'number', 'placeholder' => 'خالی = نرخ عمومی'],
+                    'informal_rent_rate_override' => ['label' => 'نرخ اجاره اختصاصی (اختیاری)', 'type' => 'number', 'placeholder' => 'خالی = نرخ عمومی'],
                     'notes' => ['label' => 'توضیحات', 'type' => 'textarea'],
                 ],
             ],
@@ -151,6 +153,16 @@ final class Crud
                     'fiscal_year' => ['label' => 'سال مالی', 'type' => 'text', 'required' => true],
                     'assigned_from_month' => ['label' => 'از ماه', 'type' => 'select', 'options' => self::monthOptionsRequired(), 'required' => true],
                     'assigned_until_month' => ['label' => 'تا ماه', 'type' => 'select', 'options' => self::monthOptionsRequired(), 'required' => true],
+                    'charge_exempt' => [
+                        'label' => 'معاف از شارژ',
+                        'type' => 'select',
+                        'options' => ['0' => 'خیر', '1' => 'بله'],
+                    ],
+                    'rent_exempt' => [
+                        'label' => 'معاف از اجاره',
+                        'type' => 'select',
+                        'options' => ['0' => 'خیر', '1' => 'بله'],
+                    ],
                     'notes' => ['label' => 'توضیحات', 'type' => 'textarea'],
                 ],
             ],
@@ -910,6 +922,11 @@ final class Crud
             if (isset($data['fiscal_year'])) {
                 $data['fiscal_year'] = JalaliDate::normalizeDigits($data['fiscal_year']);
             }
+            foreach (['charge_rate_override', 'informal_rent_rate_override'] as $field) {
+                if (array_key_exists($field, $data)) {
+                    $data[$field] = $this->blank($data[$field]) ? null : (int) $data[$field];
+                }
+            }
             if ($creating) {
                 $data['created_at'] = JalaliDate::todayParts()['formatted'];
             }
@@ -1137,6 +1154,11 @@ final class Crud
             }
             if ($teamId > 0) {
                 (new TeamContracts($this->pdo))->assertCanAssignDeskForYear($teamId, $fiscalYear);
+            }
+            foreach (['charge_exempt', 'rent_exempt'] as $field) {
+                if (array_key_exists($field, $data)) {
+                    $data[$field] = (int) (!empty($data[$field]) && (string) $data[$field] !== '0');
+                }
             }
         }
         if ($resource === 'panel_users') {

@@ -50,10 +50,18 @@ final class DeskAssignments
             'assigned_from' => $assignedFrom,
             'assigned_until' => $assignedUntil !== '' ? $assignedUntil : null,
             'notes' => $desk['notes'] ?? null,
+            'charge_exempt' => (int) ($desk['charge_exempt'] ?? 0),
+            'rent_exempt' => (int) ($desk['rent_exempt'] ?? 0),
         ];
 
         $yearRecord = $this->findAssignmentForYear($deskId, $fiscalYear, $teamId);
         if ($yearRecord !== null) {
+            if (!array_key_exists('charge_exempt', $desk)) {
+                $payload['charge_exempt'] = (int) ($yearRecord['charge_exempt'] ?? 0);
+            }
+            if (!array_key_exists('rent_exempt', $desk)) {
+                $payload['rent_exempt'] = (int) ($yearRecord['rent_exempt'] ?? 0);
+            }
             $this->updateAssignment(
                 (int) $yearRecord['id'],
                 $this->mergeUntilFromExisting($payload, $yearRecord, $includesUntil)
@@ -237,7 +245,7 @@ final class DeskAssignments
 
         $yearStart = $fiscalYear . '/01/01';
         $yearEnd = $fiscalYear . '/12/29';
-        $sql = 'SELECT id, desk_id, desk_number, team_id, usage_type, assigned_from, assigned_until, notes
+        $sql = 'SELECT id, desk_id, desk_number, team_id, usage_type, assigned_from, assigned_until, notes, charge_exempt, rent_exempt
                 FROM desk_assignments
                 WHERE desk_id = :desk_id
                   AND assigned_from <= :year_end
@@ -262,7 +270,7 @@ final class DeskAssignments
     {
         $today = JalaliDate::todayParts()['formatted'];
         $statement = $this->pdo->prepare(
-            'SELECT id, desk_id, desk_number, team_id, usage_type, assigned_from, assigned_until, notes
+            'SELECT id, desk_id, desk_number, team_id, usage_type, assigned_from, assigned_until, notes, charge_exempt, rent_exempt
              FROM desk_assignments
              WHERE desk_id = :desk_id
                AND assigned_from <= :today
@@ -282,7 +290,7 @@ final class DeskAssignments
     private function findOpenAssignment(int $deskId): ?array
     {
         $statement = $this->pdo->prepare(
-            'SELECT id, desk_id, desk_number, team_id, usage_type, assigned_from, assigned_until, notes
+            'SELECT id, desk_id, desk_number, team_id, usage_type, assigned_from, assigned_until, notes, charge_exempt, rent_exempt
              FROM desk_assignments
              WHERE desk_id = :desk_id
                AND (assigned_until IS NULL OR assigned_until = \'\')
@@ -316,8 +324,8 @@ final class DeskAssignments
         );
 
         $this->pdo->prepare(
-            'INSERT INTO desk_assignments (desk_id, desk_number, team_id, usage_type, assigned_from, assigned_until, notes)
-             VALUES (:desk_id, :desk_number, :team_id, :usage_type, :assigned_from, :assigned_until, :notes)'
+            'INSERT INTO desk_assignments (desk_id, desk_number, team_id, usage_type, assigned_from, assigned_until, notes, charge_exempt, rent_exempt)
+             VALUES (:desk_id, :desk_number, :team_id, :usage_type, :assigned_from, :assigned_until, :notes, :charge_exempt, :rent_exempt)'
         )->execute([
             'desk_id' => (int) $payload['desk_id'],
             'desk_number' => (int) $payload['desk_number'],
@@ -326,6 +334,8 @@ final class DeskAssignments
             'assigned_from' => (string) $payload['assigned_from'],
             'assigned_until' => $payload['assigned_until'],
             'notes' => $payload['notes'] ?? null,
+            'charge_exempt' => (int) ($payload['charge_exempt'] ?? 0),
+            'rent_exempt' => (int) ($payload['rent_exempt'] ?? 0),
         ]);
         $id = (int) $this->pdo->lastInsertId();
         if ($id > 0) {
@@ -351,7 +361,8 @@ final class DeskAssignments
         $this->pdo->prepare(
             'UPDATE desk_assignments
              SET team_id = :team_id, usage_type = :usage_type, notes = :notes,
-                 assigned_from = :assigned_from, assigned_until = :assigned_until, desk_number = :desk_number
+                 assigned_from = :assigned_from, assigned_until = :assigned_until, desk_number = :desk_number,
+                 charge_exempt = :charge_exempt, rent_exempt = :rent_exempt
              WHERE id = :id'
         )->execute([
             'team_id' => (int) $payload['team_id'],
@@ -360,6 +371,8 @@ final class DeskAssignments
             'assigned_from' => (string) $payload['assigned_from'],
             'assigned_until' => $payload['assigned_until'],
             'desk_number' => (int) $payload['desk_number'],
+            'charge_exempt' => (int) ($payload['charge_exempt'] ?? 0),
+            'rent_exempt' => (int) ($payload['rent_exempt'] ?? 0),
             'id' => $id,
         ]);
         $record = $this->findAssignment($id);
@@ -469,7 +482,7 @@ final class DeskAssignments
     private function findAssignment(int $id): ?array
     {
         $statement = $this->pdo->prepare(
-            'SELECT id, desk_id, desk_number, team_id, usage_type, assigned_from, assigned_until, notes
+            'SELECT id, desk_id, desk_number, team_id, usage_type, assigned_from, assigned_until, notes, charge_exempt, rent_exempt
              FROM desk_assignments WHERE id = :id'
         );
         $statement->execute(['id' => $id]);

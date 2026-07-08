@@ -321,6 +321,14 @@ final class Schema
             'rate_settings' => [
                 'informal_rent_rate' => 'BIGINT NULL',
             ],
+            'team_contracts' => [
+                'charge_rate_override' => 'BIGINT NULL',
+                'informal_rent_rate_override' => 'BIGINT NULL',
+            ],
+            'desk_assignments' => [
+                'charge_exempt' => 'TINYINT NOT NULL DEFAULT 0',
+                'rent_exempt' => 'TINYINT NOT NULL DEFAULT 0',
+            ],
             'charges' => [
                 'charge_amount' => 'BIGINT NULL',
                 'rent_amount' => 'BIGINT NULL',

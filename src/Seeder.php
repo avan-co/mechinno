@@ -72,7 +72,8 @@ final class Seeder
 
         $updateSystem = $this->pdo->prepare(
             'UPDATE charges
-             SET month_name = :month_name, charge_amount = :charge_amount, rent_amount = :rent_amount, amount = :amount
+             SET month_name = :month_name, charge_amount = :charge_amount, rent_amount = :rent_amount,
+                 amount = :amount, note = :note
              WHERE id = :id'
         );
 
@@ -94,6 +95,7 @@ final class Seeder
                 'charge_amount' => $parts['charge_amount'],
                 'rent_amount' => $parts['rent_amount'],
                 'amount' => $parts['amount'],
+                'note' => (string) ($parts['note'] ?? ''),
             ];
             if (isset($systemByMonth[$monthIndex])) {
                 $updateSystem->execute($payload + ['id' => $systemByMonth[$monthIndex]]);
@@ -108,7 +110,7 @@ final class Seeder
                 'charge_amount' => $payload['charge_amount'],
                 'rent_amount' => $payload['rent_amount'],
                 'amount' => $payload['amount'],
-                'note' => '',
+                'note' => $payload['note'],
                 'source_file' => 'system',
                 'source_sheet' => 'auto',
             ]);
@@ -123,7 +125,7 @@ final class Seeder
     }
 
     /**
-     * @return array<int, array{charge_amount:int, rent_amount:int, amount:int}>
+     * @return array<int, array{charge_amount:int, rent_amount:int, amount:int, note:string}>
      */
     public function monthlyAmountsForTeam(int $teamId, string $fiscalYear): array
     {
@@ -133,6 +135,7 @@ final class Seeder
             return [];
         }
 
+        $billingSummary = $contracts->billingSummaryForTeamInYear($teamId, $fiscalYear);
         $months = [];
         for ($month = 1; $month <= 12; $month++) {
             $desksInMonth = [];
@@ -142,31 +145,111 @@ final class Seeder
                 }
                 $deskNumber = (int) ($assignment['desk_number'] ?? 0);
                 $key = $deskNumber > 0 ? (string) $deskNumber : 'row:' . count($desksInMonth);
-                $desksInMonth[$key] = (string) ($assignment['usage_type'] ?? 'formal');
+                $desksInMonth[$key] = [
+                    'desk_number' => $deskNumber,
+                    'usage_type' => (string) ($assignment['usage_type'] ?? 'formal'),
+                    'charge_exempt' => $this->isExemptFlag($assignment['charge_exempt'] ?? 0),
+                    'rent_exempt' => $this->isExemptFlag($assignment['rent_exempt'] ?? 0),
+                ];
             }
-            $deskCount = count($desksInMonth);
-            $informalDeskCount = 0;
-            foreach ($desksInMonth as $usage) {
-                if (in_array($usage, ['informal', 'mixed'], true)) {
-                    $informalDeskCount++;
-                }
-            }
-            if ($deskCount === 0) {
+            if ($desksInMonth === []) {
                 continue;
             }
-            $rates = $this->ratesForMonthInternal($fiscalYear, $month);
+
+            $chargeableDeskCount = 0;
+            $rentableDeskCount = 0;
+            $monthExemptLabels = [];
+            foreach ($desksInMonth as $desk) {
+                if (!$desk['charge_exempt']) {
+                    $chargeableDeskCount++;
+                }
+                if (in_array($desk['usage_type'], ['informal', 'mixed'], true) && !$desk['rent_exempt']) {
+                    $rentableDeskCount++;
+                }
+                if ($desk['desk_number'] <= 0) {
+                    continue;
+                }
+                if ($desk['charge_exempt'] && $desk['rent_exempt']) {
+                    $monthExemptLabels[] = 'میز ' . $desk['desk_number'] . ' معاف';
+                } elseif ($desk['charge_exempt']) {
+                    $monthExemptLabels[] = 'میز ' . $desk['desk_number'] . ' معاف شارژ';
+                } elseif ($desk['rent_exempt']) {
+                    $monthExemptLabels[] = 'میز ' . $desk['desk_number'] . ' معاف اجاره';
+                }
+            }
+            if ($chargeableDeskCount === 0 && $rentableDeskCount === 0) {
+                continue;
+            }
+
+            $globalRates = $this->ratesForMonthInternal($fiscalYear, $month);
+            $rates = $contracts->ratesForTeamInMonth($teamId, $fiscalYear, $globalRates);
             $chargeRate = (int) ($rates['charge_rate'] ?? 0);
             $rentRate = (int) ($rates['informal_rent_rate'] ?? 0);
-            $monthlyCharge = $deskCount * $chargeRate;
-            $monthlyRent = $informalDeskCount * $rentRate;
+            $monthlyCharge = $chargeableDeskCount * $chargeRate;
+            $monthlyRent = $rentableDeskCount * $rentRate;
             $months[$month] = [
                 'charge_amount' => $monthlyCharge,
                 'rent_amount' => $monthlyRent,
                 'amount' => $monthlyCharge + $monthlyRent,
+                'note' => $this->buildChargeNote(
+                    $chargeableDeskCount,
+                    $rentableDeskCount,
+                    $chargeRate,
+                    $rentRate,
+                    $monthExemptLabels,
+                    (bool) ($rates['uses_custom_charge_rate'] ?? false),
+                    (bool) ($rates['uses_custom_rent_rate'] ?? false),
+                    (string) ($billingSummary['summary_text'] ?? '')
+                ),
             ];
         }
 
         return $months;
+    }
+
+    /**
+     * @param list<string> $monthExemptLabels
+     */
+    private function buildChargeNote(
+        int $chargeableDeskCount,
+        int $rentableDeskCount,
+        int $chargeRate,
+        int $rentRate,
+        array $monthExemptLabels,
+        bool $customChargeRate,
+        bool $customRentRate,
+        string $teamSummary
+    ): string {
+        $parts = [];
+        if ($chargeableDeskCount > 0) {
+            $parts[] = $chargeableDeskCount . ' میز × ' . number_format($chargeRate) . ' شارژ';
+        }
+        if ($rentableDeskCount > 0) {
+            $parts[] = $rentableDeskCount . ' اجاره × ' . number_format($rentRate);
+        }
+        $note = 'خودکار: ' . implode(' + ', $parts);
+        if ($customChargeRate || $customRentRate) {
+            $rateBits = [];
+            if ($customChargeRate) {
+                $rateBits[] = 'نرخ شارژ اختصاصی';
+            }
+            if ($customRentRate) {
+                $rateBits[] = 'نرخ اجاره اختصاصی';
+            }
+            $note .= ' | ' . implode(' · ', $rateBits);
+        }
+        if ($monthExemptLabels !== []) {
+            $note .= ' | ' . implode(' · ', array_unique($monthExemptLabels));
+        } elseif ($teamSummary !== '' && str_contains($teamSummary, 'معاف')) {
+            $note .= ' | ' . $teamSummary;
+        }
+
+        return $note;
+    }
+
+    private function isExemptFlag(mixed $value): bool
+    {
+        return (int) $value === 1;
     }
 
     /**
