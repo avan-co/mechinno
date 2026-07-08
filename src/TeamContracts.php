@@ -277,7 +277,7 @@ final class TeamContracts
         $yearStart = $fiscalYear . '/01/01';
         $yearEnd = $fiscalYear . '/12/29';
         $assignments = $this->pdo->prepare(
-            'SELECT desk_number, usage_type, assigned_from, assigned_until, charge_exempt, rent_exempt
+            'SELECT desk_number, usage_type, assigned_from, assigned_until' . $this->deskAssignmentExemptSelect() . '
              FROM desk_assignments
              WHERE team_id = :team_id
                AND assigned_from <= :year_end
@@ -289,7 +289,7 @@ final class TeamContracts
             'year_start' => $yearStart,
             'year_end' => $yearEnd,
         ]);
-        $rows = $assignments->fetchAll();
+        $rows = $this->normalizeDeskAssignmentRows($assignments->fetchAll());
         if ($rows !== []) {
             return $this->dedupeAssignmentsByDesk($rows);
         }
@@ -317,8 +317,8 @@ final class TeamContracts
     {
         $fiscalYear = JalaliDate::normalizeDigits($fiscalYear);
         $contract = $this->contractForYear($teamId, $fiscalYear);
-        $chargeOverride = $this->nullableRate($contract['charge_rate_override'] ?? null);
-        $rentOverride = $this->nullableRate($contract['informal_rent_rate_override'] ?? null);
+        $chargeOverride = $this->nullableRate(is_array($contract) ? ($contract['charge_rate_override'] ?? null) : null);
+        $rentOverride = $this->nullableRate(is_array($contract) ? ($contract['informal_rent_rate_override'] ?? null) : null);
         $labels = [];
         if ($chargeOverride !== null) {
             $labels[] = 'نرخ شارژ اختصاصی: ' . number_format($chargeOverride);
@@ -412,7 +412,7 @@ final class TeamContracts
         }
 
         $assignmentStatement = $this->pdo->prepare(
-            'SELECT assigned_from, assigned_until, charge_exempt, rent_exempt
+            'SELECT assigned_from, assigned_until' . $this->deskAssignmentExemptSelect() . '
              FROM desk_assignments
              WHERE desk_id = :desk_id
                AND team_id = :team_id
@@ -434,6 +434,7 @@ final class TeamContracts
             if ($assignment === false) {
                 continue;
             }
+            $assignment = $this->normalizeDeskAssignmentRows([$assignment])[0];
 
             $assignments[] = [
                 'desk_number' => (int) ($desk['number'] ?? 0),
@@ -578,5 +579,34 @@ final class TeamContracts
         } catch (PDOException) {
             return false;
         }
+    }
+
+    private function deskAssignmentExemptSelect(): string
+    {
+        static $columns = null;
+        if ($columns !== null) {
+            return $columns;
+        }
+
+        $columns = Schema::hasColumn($this->pdo, 'desk_assignments', 'charge_exempt')
+            && Schema::hasColumn($this->pdo, 'desk_assignments', 'rent_exempt')
+            ? ', charge_exempt, rent_exempt'
+            : '';
+
+        return $columns;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $rows
+     * @return list<array<string, mixed>>
+     */
+    private function normalizeDeskAssignmentRows(array $rows): array
+    {
+        return array_map(static function (array $row): array {
+            $row['charge_exempt'] = (int) ($row['charge_exempt'] ?? 0);
+            $row['rent_exempt'] = (int) ($row['rent_exempt'] ?? 0);
+
+            return $row;
+        }, $rows);
     }
 }

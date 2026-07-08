@@ -588,7 +588,7 @@ final class Repository
                 . ($teamId !== null ? " WHERE lr.team_id = {$teamId}" : '')
                 . ' ORDER BY lr.submitted_at DESC, lr.id DESC',
             'desk-assignments' => "SELECT da.id, da.desk_id, da.desk_number, da.team_id, da.usage_type,
-                        da.assigned_from, da.assigned_until, da.notes, da.charge_exempt, da.rent_exempt,
+                        da.assigned_from, da.assigned_until, da.notes" . $this->deskAssignmentExemptSelect('da') . ",
                         SUBSTR(da.assigned_from, 1, 4) AS fiscal_year, t.name AS team_name, t.is_active AS team_is_active
                  FROM desk_assignments da
                  LEFT JOIN teams t ON t.id = da.team_id"
@@ -1160,12 +1160,14 @@ final class Repository
                     $untilMonth = JalaliDate::monthIndexFromDate($until);
                     $row['assigned_from_month'] = $fromMonth > 0 ? (string) $fromMonth : '';
                     $row['assigned_until_month'] = $untilMonth > 0 ? (string) $untilMonth : '';
+                    $row['charge_exempt'] = (int) ($row['charge_exempt'] ?? 0);
+                    $row['rent_exempt'] = (int) ($row['rent_exempt'] ?? 0);
 
                     return $row;
                 },
                 $this->preparedRows(
                 'SELECT da.id, da.desk_id, da.desk_number, da.usage_type, da.assigned_from, da.assigned_until,
-                        da.notes, da.charge_exempt, da.rent_exempt,
+                        da.notes' . $this->deskAssignmentExemptSelect('da') . ',
                         SUBSTR(da.assigned_from, 1, 4) AS fiscal_year
                  FROM desk_assignments da
                  WHERE da.team_id = :id
@@ -2491,5 +2493,21 @@ final class Repository
     private function stripLegacyRow(array $row): array
     {
         return self::stripLegacyColumns($row);
+    }
+
+    private function deskAssignmentExemptSelect(string $alias = 'da'): string
+    {
+        static $suffix = null;
+        if ($suffix !== null) {
+            return $suffix;
+        }
+
+        $prefix = $alias !== '' ? $alias . '.' : '';
+        $suffix = Schema::hasColumn($this->pdo, 'desk_assignments', 'charge_exempt')
+            && Schema::hasColumn($this->pdo, 'desk_assignments', 'rent_exempt')
+            ? ', ' . $prefix . 'charge_exempt, ' . $prefix . 'rent_exempt'
+            : '';
+
+        return $suffix;
     }
 }

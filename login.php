@@ -72,12 +72,7 @@ $assetVer = (string) max(
 
     <main class="login-screen">
       <section class="login-card">
-        <div class="login-brand">
-          <?= Brand::mark('hero') ?>
-          <div class="login-brand-copy">
-            <strong>Mechinno</strong>
-            <small>مرکز نوآوری مکانیک</small>
-          </div>
+        <div class="login-top-bar">
           <button class="theme-toggle login-theme-toggle" id="themeToggle" type="button" title="تغییر تم" aria-label="تغییر تم">
             <span class="theme-toggle-track" aria-hidden="true">
               <svg class="icon-sun" viewBox="0 0 24 24" width="18" height="18"><path d="M12 18a6 6 0 1 1 6-6 6 6 0 0 1-6 6Zm0-16h2v3h-2V2Zm0 19h2v3h-2v-3ZM2 11h3v2H2v-2Zm19 0h3v2h-3v-2Z" fill="currentColor"/></svg>
@@ -85,6 +80,13 @@ $assetVer = (string) max(
             </span>
             <span class="theme-toggle-label">تم</span>
           </button>
+        </div>
+        <div class="login-brand">
+          <?= Brand::mark('hero') ?>
+          <div class="login-brand-copy">
+            <strong>Mechinno</strong>
+            <small>مرکز نوآوری مکانیک</small>
+          </div>
         </div>
 
         <h1>ورود به پنل</h1>
