@@ -1,7 +1,8 @@
-/* global MECHINNO, fetchJson, postJson, showToast, escapeHtml, formatMoney, canWrite, csrfToken, createSmsEditor, SMS_EDITOR_VARS */
+/* global fetchJson, postJson, showToast, escapeHtml, formatMoney, canWrite, createSmsEditor, SMS_EDITOR_VARS */
 
 let smsSettingsState = null;
 let templateEditor = null;
+let smsSettingsReady = false;
 
 const loadSmsSettingsPage = async () => {
   const data = await fetchJson("api.php?resource=sms-settings");
@@ -61,6 +62,11 @@ const renderSmsSettingsStats = (data) => {
 const renderTemplateEditor = (value) => {
   const host = document.getElementById("smsChargeTemplateEditor");
   if (!host) return;
+  if (host.dataset.ready) {
+    templateEditor?.setValue(value);
+    return;
+  }
+  host.dataset.ready = "1";
   templateEditor = createSmsEditor(host, {
     label: "الگوی یادآور شارژ",
     value,
@@ -70,31 +76,39 @@ const renderTemplateEditor = (value) => {
   });
 };
 
-document.getElementById("smsSaveTemplate")?.addEventListener("click", async () => {
-  if (!canWrite || !templateEditor) return;
-  const payload = {
-    sms_username: smsSettingsState?.sms_username || "",
-    sms_from_number: smsSettingsState?.sms_from_number || "",
-    sms_daily_limit: smsSettingsState?.sms_daily_limit || 500,
-    sms_charge_template: templateEditor.getValue(),
-  };
-  await postJson("api.php?resource=sms-settings", payload);
-  showToast("الگوی یادآور ذخیره شد.", "success");
-});
+const bindSmsSettingsActions = () => {
+  if (smsSettingsReady) return;
+  smsSettingsReady = true;
 
-document.getElementById("smsManualQueryLines")?.addEventListener("click", async () => {
-  if (!canWrite) return;
-  const result = await postJson("api.php?resource=sms-query-lines", {});
-  showToast(`خطوط به‌روز شد — ${(result.result?.numbers || []).length} خط`, "success");
-  await loadSmsSettingsPage();
-});
+  document.getElementById("smsSaveTemplate")?.addEventListener("click", async () => {
+    if (!canWrite || !templateEditor) return;
+    const payload = {
+      sms_username: smsSettingsState?.sms_username || "",
+      sms_from_number: smsSettingsState?.sms_from_number || "",
+      sms_daily_limit: smsSettingsState?.sms_daily_limit || 500,
+      sms_charge_template: templateEditor.getValue(),
+    };
+    await postJson("api.php?resource=sms-settings", payload);
+    showToast("الگوی یادآور ذخیره شد.", "success");
+  });
 
-document.getElementById("smsSyncHistory")?.addEventListener("click", async () => {
-  const result = await postJson("api.php?resource=sms-sync-history", {});
-  const synced = result.result?.synced ?? 0;
-  const confirmed = result.result?.confirmed ?? 0;
-  showToast(`همگام‌سازی انجام شد — تایید: ${confirmed}، جدید: ${synced}`, "success");
-  await loadSmsSettingsPage();
-});
+  document.getElementById("smsManualQueryLines")?.addEventListener("click", async () => {
+    if (!canWrite) return;
+    const result = await postJson("api.php?resource=sms-query-lines", {});
+    showToast(`خطوط به‌روز شد — ${(result.result?.numbers || []).length} خط`, "success");
+    await loadSmsSettingsPage();
+  });
 
-loadSmsSettingsPage().catch((error) => showToast(error.message, "error"));
+  document.getElementById("smsSyncHistory")?.addEventListener("click", async () => {
+    const result = await postJson("api.php?resource=sms-sync-history", {});
+    const synced = result.result?.synced ?? 0;
+    const confirmed = result.result?.confirmed ?? 0;
+    showToast(`همگام‌سازی انجام شد — تایید: ${confirmed}، جدید: ${synced}`, "success");
+    await loadSmsSettingsPage();
+  });
+};
+
+window.initSmsSettingsPanel = () => {
+  bindSmsSettingsActions();
+  loadSmsSettingsPage().catch((error) => showToast(error.message, "error"));
+};
