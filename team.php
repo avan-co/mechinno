@@ -5,21 +5,32 @@ declare(strict_types=1);
 require_once __DIR__ . '/src/bootstrap.php';
 
 $isConfigured = is_file(__DIR__ . '/config.php');
-if ($isConfigured) {
-    require_auth();
-    Access::requireTeamHtml();
-}
-$pdo = $isConfigured ? require_database() : null;
-$teamId = Access::scopedTeamId() ?? 0;
+$pageError = null;
+$pdo = null;
+$teamId = 0;
 $team = null;
-if ($teamId > 0 && $pdo) {
-    $statement = $pdo->prepare(
-        'SELECT id, entity_code, entity_type, name, leader, phone, contract_start, contract_end, joined_at, warning, notes
-         FROM teams WHERE id = :id'
-    );
-    $statement->execute(['id' => $teamId]);
-    $team = $statement->fetch() ?: null;
+$authContext = ['role' => '', 'canWrite' => false, 'panel' => 'team', 'teamId' => null, 'username' => ''];
+
+try {
+    if ($isConfigured) {
+        require_auth();
+        Access::requireTeamHtml();
+        $pdo = require_database();
+        $teamId = Access::scopedTeamId() ?? 0;
+        if ($teamId > 0) {
+            $statement = $pdo->prepare(
+                'SELECT id, entity_code, entity_type, name, leader, phone, contract_start, contract_end, joined_at, warning, notes
+                 FROM teams WHERE id = :id'
+            );
+            $statement->execute(['id' => $teamId]);
+            $team = $statement->fetch() ?: null;
+        }
+        $authContext = Access::clientContext();
+    }
+} catch (Throwable $exception) {
+    $pageError = safe_error_message($exception);
 }
+
 $today = JalaliDate::todayParts();
 $assetVer = (string) max(
     filemtime(__DIR__ . '/assets/styles.css'),
@@ -27,7 +38,6 @@ $assetVer = (string) max(
     filemtime(__DIR__ . '/assets/team-year-workspace.js'),
     (int) Brand::version()
 );
-$authContext = Access::clientContext();
 $entityLabels = ['team' => 'تیم', 'company' => 'شرکت', 'student' => 'دانشجو'];
 $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
 ?>
@@ -52,7 +62,15 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
     </script>
   </head>
   <body class="app-body">
-    <?php if (!$isConfigured || !$team): ?>
+    <?php if ($pageError): ?>
+      <main class="setup-screen">
+        <section class="setup-card">
+          <h1>خطا</h1>
+          <div class="notice danger"><?= e($pageError) ?></div>
+          <a class="button" href="logout.php">خروج</a>
+        </section>
+      </main>
+    <?php elseif (!$isConfigured || !$team): ?>
       <main class="setup-screen">
         <section class="setup-card">
           <h1>خطا</h1>

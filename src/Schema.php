@@ -966,6 +966,11 @@ final class Schema
         }
     }
 
+    public static function hasColumn(PDO $pdo, string $table, string $column): bool
+    {
+        return self::columnExists($pdo, $table, $column);
+    }
+
     private static function columnExists(PDO $pdo, string $table, string $column): bool
     {
         if ($pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite') {

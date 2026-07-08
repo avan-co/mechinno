@@ -189,6 +189,9 @@ if (!is_file($root . '/config.php')) {
     $r = $htmlRequest('/team.php');
     $assert($r['status'] === 200 && str_contains($r['body'], 'تیم HTTP تست'), 'http: entity team panel loads');
 
+    $r = $request('GET', '/api.php?resource=summary');
+    $assert($r['status'] === 200 && isset($r['json']['cards']), 'http: entity summary API');
+
     $r = $request('GET', '/api.php?resource=desks');
     $assert($r['status'] === 200, 'http: entity can access desks list');
 
