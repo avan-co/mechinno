@@ -73,8 +73,8 @@ $assetVer = (string) max(
     <main class="login-screen">
       <section class="login-card">
         <div class="login-brand">
-          <?= Brand::mark() ?>
-          <div>
+          <?= Brand::mark('hero') ?>
+          <div class="login-brand-copy">
             <strong>Mechinno</strong>
             <small>مرکز نوآوری مکانیک</small>
           </div>

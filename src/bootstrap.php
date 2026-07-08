@@ -33,6 +33,33 @@ function app_base_path(): string
     return dirname(__DIR__);
 }
 
+function app_web_base(): string
+{
+    static $base = null;
+    if ($base !== null) {
+        return $base;
+    }
+
+    if (app_configured()) {
+        $config = app_config();
+        $configured = $config['base_path'] ?? null;
+        if (is_string($configured) && $configured !== '') {
+            $base = rtrim(str_replace('\\', '/', $configured), '/') . '/';
+            return $base;
+        }
+    }
+
+    $script = str_replace('\\', '/', (string) ($_SERVER['SCRIPT_NAME'] ?? ''));
+    $dir = dirname($script);
+    if ($dir === '/' || $dir === '.' || $dir === '') {
+        $base = '';
+        return $base;
+    }
+
+    $base = rtrim($dir, '/') . '/';
+    return $base;
+}
+
 function e(mixed $value): string
 {
     return htmlspecialchars((string) $value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');

@@ -62,7 +62,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $configured) {
   <body>
     <main class="setup-screen">
       <section class="setup-card wide">
-        <?= Brand::mark() ?>
+        <div class="setup-brand">
+          <?= Brand::mark('hero') ?>
+          <div class="setup-brand-copy">
+            <strong>Mechinno</strong>
+            <small>مرکز نوآوری مکانیک — ICAUT</small>
+          </div>
+        </div>
         <h1>راه‌اندازی پنل</h1>
         <p>دو حالت دارید: <strong>همگام‌سازی دیتابیس</strong> (بدون حذف داده) یا <strong>بازنشانی کامل</strong> (پنل خالی با ۲۴ میز).</p>
 
