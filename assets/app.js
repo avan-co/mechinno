@@ -113,11 +113,45 @@ const billingExemptionBadges = (row = {}) => {
   return bits.length ? bits.join(" ") : "—";
 };
 
-const teamBillingBadges = (billing = {}) => {
+const teamBillingBadges = (billing = {}, options = {}) => {
   if (!billing?.has_billing_adjustments) return "";
-  return (billing.labels || []).map((label) =>
-    `<span class="badge badge-team billing-badge" title="${escapeHtml(label)}">${escapeHtml(label)}</span>`
-  ).join(" ");
+  const compact = options.compact === true;
+  if (!compact) {
+    return (billing.labels || []).map((label) =>
+      `<span class="badge badge-team billing-badge" title="${escapeHtml(label)}">${escapeHtml(label)}</span>`
+    ).join("");
+  }
+
+  const chips = [];
+  const summaryTitle = escapeHtml(billing.summary_text || (billing.labels || []).join(" · "));
+  if (billing.has_custom_rates) {
+    const rateBits = [];
+    if (billing.charge_rate_override) rateBits.push(`شارژ ${formatMoney(billing.charge_rate_override)}`);
+    if (billing.informal_rent_rate_override) rateBits.push(`اجاره ${formatMoney(billing.informal_rent_rate_override)}`);
+    chips.push(`<span class="billing-chip billing-chip--rate" title="${escapeHtml(rateBits.join(" · "))}">نرخ ویژه</span>`);
+  }
+
+  const exemptDesks = billing.exempt_desks || [];
+  if (exemptDesks.length > 0) {
+    const full = exemptDesks.filter((d) => d.charge_exempt && d.rent_exempt);
+    const chargeOnly = exemptDesks.filter((d) => d.charge_exempt && !d.rent_exempt);
+    const rentOnly = exemptDesks.filter((d) => !d.charge_exempt && d.rent_exempt);
+    const deskLabel = (list, suffix) => {
+      const nums = list.map((d) => d.desk_number).sort((a, b) => a - b);
+      const text = nums.length === 1 ? `میز ${nums[0]}` : `${nums.length} میز`;
+      const title = nums.map((n) => `میز ${n}`).join("، ");
+      return `<span class="billing-chip billing-chip--exempt" title="${escapeHtml(`${title} — ${suffix}`)}">${escapeHtml(`${text} ${suffix}`)}</span>`;
+    };
+    if (full.length) chips.push(deskLabel(full, "معاف"));
+    if (chargeOnly.length) chips.push(deskLabel(chargeOnly, "معاف شارژ"));
+    if (rentOnly.length) chips.push(deskLabel(rentOnly, "معاف اجاره"));
+  }
+
+  if (chips.length === 0 && billing.labels?.length) {
+    return `<span class="billing-chip billing-chip--info" title="${summaryTitle}">تنظیم مالی ویژه</span>`;
+  }
+
+  return chips.join("");
 };
 
 const sectionMeta = {
@@ -1752,7 +1786,7 @@ const loadTeamChargeRates = async () => {
           ? `<div class="month-stat"><span>اجاره غیررسمی هر میز</span><strong>${escapeHtml(formatMoney(rentRate))}${contract?.informal_rent_rate_override ? " <small class='hint'>(اختصاصی)</small>" : ""}</strong></div>`
           : ""}
       </div>
-      ${billing?.has_billing_adjustments ? `<div class="team-billing-badges">${teamBillingBadges(billing)}</div>` : ""}
+      ${billing?.has_billing_adjustments ? `<div class="team-billing-badges team-billing-badges--compact">${teamBillingBadges(billing, { compact: true })}</div>` : ""}
       <p class="hint">نرخ‌های سال‌های گذشته در کلاژ همان سال نمایش داده می‌شود. بدهی هر ماه فقط برای ماه‌هایی که میز فعال دارید محاسبه می‌شود.</p>`;
   } catch (error) {
     host.innerHTML = `<div class="empty">نرخ سال جاری در دسترس نیست.</div>`;
@@ -1826,7 +1860,7 @@ const loadChargesCollage = async () => {
       ${panelMode === "team" ? "" : `<td class="team-col">
         <button type="button" class="text-link" data-team-id="${escapeHtml(row.team.id)}">${escapeHtml(row.team.name)}</button>
         <br>${entityBadge(row.team.entity_type)} ${teamActiveBadge(row.team.is_active)}
-        ${row.team.billing?.has_billing_adjustments ? `<div class="team-billing-badges">${teamBillingBadges(row.team.billing)}</div>` : ""}
+        ${row.team.billing?.has_billing_adjustments ? `<div class="team-billing-badges team-billing-badges--compact">${teamBillingBadges(row.team.billing, { compact: true })}</div>` : ""}
       </td>`}
       ${row.cells.map((cell) => {
         const meta = collageCellMeta(cell, row, year, data.months);
@@ -3375,5 +3409,6 @@ window.MechinnoShared = {
   openChargeModal,
   loadDeskGrid,
   deskLink,
+  teamBillingBadges,
   MECHINNO: window.MECHINNO,
 };

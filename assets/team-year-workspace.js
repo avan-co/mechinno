@@ -72,10 +72,9 @@
     if (!billing?.has_billing_adjustments) return "";
     return `<article class="year-panel year-panel--billing">
       <h3>تنظیمات مالی ویژه</h3>
-      <div class="billing-label-list">${(billing.labels || []).map((label) =>
-        `<span class="badge badge-team billing-badge">${S().escapeHtml(label)}</span>`
-      ).join("")}</div>
-      <p class="hint">این موارد در محاسبه خودکار شارژ و نمایش کلاژ لحاظ می‌شوند.</p>
+      <div class="billing-label-list">${S().teamBillingBadges?.(billing, { compact: true }) || ""}</div>
+      ${billing.summary_text ? `<p class="hint billing-summary-hint">${S().escapeHtml(billing.summary_text)}</p>` : ""}
+      <p class="hint">این موارد در محاسبه خودکار شارژ لحاظ می‌شوند.</p>
     </article>`;
   };
 
