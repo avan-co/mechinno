@@ -164,6 +164,7 @@ try {
         $crudResource = match ($resource) {
             'locker-requests' => 'locker_requests',
             'member-requests' => 'member_requests',
+            'desk-assignments' => 'desk_assignments',
             default => $resource,
         };
 
