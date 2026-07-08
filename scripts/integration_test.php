@@ -365,6 +365,8 @@ $_SESSION = [
 $smsStats = (new SmsService($pdo))->stats();
 $assert(isset($smsStats['daily_limit']), 'sms: stats endpoint data');
 $assert(array_key_exists('panel_credit', $smsStats), 'sms: stats include panel credit');
+$assert(array_key_exists('sms_configured', $smsStats), 'sms: stats include configured flag');
+$assert((new SmsService($pdo))->isApiConfigured() === false, 'sms: not configured without credentials');
 $smsRecipients = $repo->paginatedResource('sms-recipients', 1, 50, ['is_leader' => '1']);
 $assert(count($smsRecipients['rows']) >= 1, 'sms: leader recipients listed');
 $allMembers = $repo->paginatedResource('members', 1, 100, []);

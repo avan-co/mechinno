@@ -4,8 +4,8 @@ let smsSettingsState = null;
 let templateEditor = null;
 let smsSettingsReady = false;
 
-const loadSmsSettingsPage = async () => {
-  const data = await fetchJson("api.php?resource=sms-settings");
+const loadSmsSettingsPage = async (withLive = false) => {
+  const data = await fetchJson(`api.php?resource=sms-settings${withLive ? "&live=1" : ""}`);
   smsSettingsState = data;
   renderSmsSettingsForm(data);
   renderSmsSettingsStats(data);
@@ -34,6 +34,7 @@ const renderSmsSettingsForm = (data) => {
       <label><span>هزینه هر پیامک (ریال — از API)</span><input name="sms_unit_cost" type="number" value="${escapeHtml(data.sms_base_price || data.sms_unit_cost || 0)}" readonly /></label>
     </div>
     <p class="hint">${data.sms_lines_queried_at ? `آخرین استعلام خطوط: ${escapeHtml(data.sms_lines_queried_at)}` : "پس از اولین ذخیره، خطوط ارسال به‌صورت خودکار استعلام می‌شوند."}</p>
+    ${data.sms_configured ? "" : `<p class="hint">برای شروع، نام کاربری و رمز API ملی‌پیامک را وارد و ذخیره کنید.</p>`}
     ${canWrite ? `<div class="modal-actions"><button class="button" type="submit">ذخیره تنظیمات</button></div>` : `<p class="hint">فقط مشاهده</p>`}`;
 
   if (!canWrite) return;
@@ -90,6 +91,11 @@ const bindSmsSettingsActions = () => {
     };
     await postJson("api.php?resource=sms-settings", payload);
     showToast("الگوی یادآور ذخیره شد.", "success");
+  });
+
+  document.getElementById("smsRefreshLiveStats")?.addEventListener("click", async () => {
+    await loadSmsSettingsPage(true);
+    showToast("آمار زنده از API بروز شد.", "success");
   });
 
   document.getElementById("smsManualQueryLines")?.addEventListener("click", async () => {

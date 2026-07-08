@@ -82,12 +82,24 @@ final class CenterSettings
     public function smsSettings(): array
     {
         $this->ensureRow();
-        $statement = $this->pdo->query(
-            'SELECT sms_username, sms_password, sms_from_number, sms_daily_limit, sms_unit_cost, sms_updated_at,
-                    sms_line_numbers, sms_lines_queried_at, sms_charge_template, sms_history_synced_at
-             FROM center_settings WHERE id = 1'
-        );
-        $row = $statement->fetch() ?: [];
+        try {
+            $statement = $this->pdo->query(
+                'SELECT sms_username, sms_password, sms_from_number, sms_daily_limit, sms_unit_cost, sms_updated_at,
+                        sms_line_numbers, sms_lines_queried_at, sms_charge_template, sms_history_synced_at
+                 FROM center_settings WHERE id = 1'
+            );
+            $row = $statement->fetch() ?: [];
+        } catch (PDOException) {
+            $statement = $this->pdo->query(
+                'SELECT sms_username, sms_password, sms_from_number, sms_daily_limit, sms_unit_cost, sms_updated_at
+                 FROM center_settings WHERE id = 1'
+            );
+            $row = $statement->fetch() ?: [];
+            $row['sms_line_numbers'] = '';
+            $row['sms_lines_queried_at'] = '';
+            $row['sms_charge_template'] = '';
+            $row['sms_history_synced_at'] = '';
+        }
 
         return [
             'sms_username' => (string) ($row['sms_username'] ?? ''),
