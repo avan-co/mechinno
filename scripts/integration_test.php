@@ -441,6 +441,41 @@ $assert($teamChargePreview !== null, 'sms: charge preview includes indebted team
 $assert(($teamChargePreview['can_send'] ?? false) === true, 'sms: charge preview can send to approved leader');
 $assert((int) ($teamChargePreview['debt_total'] ?? 0) === (int) ($teamDebtor['debt_total'] ?? 0), 'sms: preview debt matches debtor list');
 
+$manualDebtTeam = $crud->create('teams', [
+    'entity_type' => 'company',
+    'name' => 'نهاد بدهی دستی',
+    'leader' => 'مسئول دستی',
+    'phone' => '09123334444',
+    'joined_at' => '1405/01/01',
+]);
+$manualDebtTeamId = (int) $manualDebtTeam['id'];
+$crud->create('team_contracts', [
+    'team_id' => (string) $manualDebtTeamId,
+    'fiscal_year' => '1405',
+    'contract_start' => '1405/01/01',
+    'contract_end' => '1405/12/29',
+]);
+$crud->create('charges', [
+    'team_id' => (string) $manualDebtTeamId,
+    'fiscal_year' => '1405',
+    'month_index' => '6',
+    'month_name' => 'شهریور',
+    'charge_amount' => '450000',
+    'rent_amount' => '0',
+    'amount' => '450000',
+    'note' => 'شارژ دستی بدون میز',
+]);
+$manualDebtors = $repo->debtorTeamsForSms();
+$manualDebtor = null;
+foreach ($manualDebtors as $debtorRow) {
+    if ((int) ($debtorRow['team_id'] ?? 0) === $manualDebtTeamId) {
+        $manualDebtor = $debtorRow;
+        break;
+    }
+}
+$assert($manualDebtor !== null, 'sms: manual charge without desk assignment appears in debtor list');
+$assert((int) ($manualDebtor['debt_total'] ?? 0) === 450000, 'sms: manual charge debt total preserved');
+
 $_SESSION = [
     'mechinno_authenticated' => true,
     'mechinno_role' => Access::ROLE_ADMIN_EDITOR,
