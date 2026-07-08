@@ -187,18 +187,6 @@ try {
         ]);
     }
 
-    if ($resource === 'sms-charge-preview') {
-        $teamId = isset($_GET['team_id']) ? (int) $_GET['team_id'] : null;
-        if ($teamId !== null && $teamId <= 0) {
-            $teamId = null;
-        }
-        $items = (new SmsService($pdo))->chargeReminderPreview($teamId);
-        json_response(['items' => $items, 'recipient_count' => count(array_filter(
-            $items,
-            static fn (array $item): bool => ($item['can_send'] ?? false) === true
-        ))]);
-    }
-
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && $resource === 'sms-send') {
         require_csrf_json();
         Access::requireWriteJson();
@@ -209,32 +197,6 @@ try {
         $message = trim((string) ($payload['message'] ?? ''));
         $memberIds = array_map('intval', (array) ($payload['member_ids'] ?? []));
         json_response(['ok' => true, 'result' => (new SmsService($pdo))->sendAnnouncement($message, $memberIds)]);
-    }
-
-    if ($_SERVER['REQUEST_METHOD'] === 'POST' && $resource === 'sms-send-charge-reminders') {
-        require_csrf_json();
-        Access::requireWriteJson();
-        $payload = json_decode((string) file_get_contents('php://input'), true);
-        if (!is_array($payload)) {
-            $payload = $_POST;
-        }
-        $items = is_array($payload['items'] ?? null) ? $payload['items'] : [];
-        $teamIds = array_map('intval', (array) ($payload['team_ids'] ?? []));
-        $template = trim((string) ($payload['template'] ?? ''));
-        if ($items === [] && $teamIds !== []) {
-            foreach ($teamIds as $teamId) {
-                if ($teamId > 0) {
-                    $items[] = ['team_id' => $teamId];
-                }
-            }
-        }
-        json_response([
-            'ok' => true,
-            'result' => (new SmsService($pdo))->sendChargeReminders(
-                $items,
-                $template !== '' ? $template : null
-            ),
-        ]);
     }
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && $resource === 'teams' && $action === 'reset-portal-password') {

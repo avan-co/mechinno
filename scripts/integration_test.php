@@ -429,22 +429,11 @@ $allMembers = $repo->paginatedResource('members', 1, 100, []);
 $leaderMembers = $repo->paginatedResource('members', 1, 100, ['is_leader' => '1']);
 $assert($leaderMembers['total'] <= $allMembers['total'], 'members: leader filter reduces result set');
 $assert($leaderMembers['total'] >= 1, 'members: leader filter returns leaders');
-$smsService = new SmsService($pdo);
-$teamName = 'TeamAlphaTest';
-$rendered = $smsService->renderChargeTemplate(
-    '{team_name} — {debt_total}',
-    ['team_name' => $teamName, 'debt_total' => 1200000, 'debt_summary' => ''],
-    ['bank_name' => '', 'card_number' => '', 'account_number' => ''],
-    ['full_name' => 'Leader']
-);
-$assert(str_contains($rendered, $teamName), 'sms: charge template renders team name');
-$assert(str_contains($rendered, '1,200,000'), 'sms: charge template renders debt total');
 $assert(MelliPayamak::deliveryLabel(4) === 'رسیده به گوشی', 'sms: delivery label mapping');
 $assert(MelliPayamak::deliveryLabel(0) === 'ارسال شده به مخابرات', 'sms: delivery code 0 label');
 $assert(MelliPayamak::deliveryLabel(-2) === 'شناسه پیامک نامعتبر یا هنوز ثبت نشده', 'sms: delivery error code label');
 $adminAllowed = Access::allowedResources();
 $assert(in_array('sms-send', $adminAllowed, true), 'access: admin can send sms announcements');
-$assert(in_array('sms-send-charge-reminders', $adminAllowed, true), 'access: admin can send charge reminders');
 
 $smsCenter = new CenterSettings($pdo);
 $smsCenter->updateSms([
@@ -452,25 +441,10 @@ $smsCenter->updateSms([
     'sms_password' => 'testpass',
     'sms_from_number' => '30001234',
 ]);
-$smsCenter->updateSms(['sms_charge_template' => 'الگوی تست {team_name}']);
 $partial = $smsCenter->smsSettings();
 $assert(($partial['sms_username'] ?? '') === 'testuser', 'sms: partial update preserves username');
 $sendSettings = $smsCenter->smsSettingsForSend();
 $assert(($sendSettings['sms_password'] ?? '') === 'testpass', 'sms: partial update preserves password');
-$assert(str_contains((string) ($partial['sms_charge_template'] ?? ''), 'الگوی تست'), 'sms: template section updates template only');
-
-$chargePreview = $smsService->chargeReminderPreview();
-$assert(is_array($chargePreview), 'sms: charge preview returns array');
-$teamChargePreview = null;
-foreach ($chargePreview as $previewRow) {
-    if ((int) ($previewRow['team_id'] ?? 0) === $teamId) {
-        $teamChargePreview = $previewRow;
-        break;
-    }
-}
-$assert($teamChargePreview !== null, 'sms: charge preview includes contracted team');
-$assert(($teamChargePreview['can_send'] ?? false) === true, 'sms: charge preview can send to approved leader');
-$assert(str_contains((string) ($teamChargePreview['message'] ?? ''), 'الگوی تست'), 'sms: charge preview uses configured template');
 
 $debtors = $repo->debtorTeamsForSms();
 $teamDebtor = null;
@@ -530,14 +504,6 @@ foreach ($manualDebtors as $debtorRow) {
 }
 $assert($manualDebtor !== null, 'charges: manual charge without desk assignment appears in debtor list');
 $assert((int) ($manualDebtor['debt_total'] ?? 0) === 450000, 'charges: manual charge debt total preserved');
-$manualPreview = null;
-foreach ($smsService->chargeReminderPreview() as $previewRow) {
-    if ((int) ($previewRow['team_id'] ?? 0) === $manualDebtTeamId) {
-        $manualPreview = $previewRow;
-        break;
-    }
-}
-$assert($manualPreview !== null, 'sms: charge preview includes manually contracted team');
 
 $_SESSION = [
     'mechinno_authenticated' => true,

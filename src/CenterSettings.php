@@ -13,8 +13,6 @@ final class CenterSettings
         'payment_guide' => "پس از واریز شارژ، مبلغ، تاریخ، سال مالی و ماه را در بخش «اعلام واریز» ثبت کنید تا مدیر مرکز تأیید کند.",
     ];
 
-    public const DEFAULT_CHARGE_TEMPLATE = "{team_name} گرامی؛\nلطفاً وارد سامانه شوید و وضعیت پرداخت شارژ خود را بررسی کنید.\n{bank_info}\nمرکز نوآوری مکانیک";
-
     public function __construct(private readonly PDO $pdo)
     {
     }
@@ -85,7 +83,7 @@ final class CenterSettings
         try {
             $statement = $this->pdo->query(
                 'SELECT sms_username, sms_password, sms_from_number, sms_daily_limit, sms_unit_cost, sms_updated_at,
-                        sms_line_numbers, sms_lines_queried_at, sms_charge_template, sms_history_synced_at,
+                        sms_line_numbers, sms_lines_queried_at, sms_history_synced_at,
                         sms_panel_credit, sms_live_synced_at
                  FROM center_settings WHERE id = 1'
             );
@@ -98,7 +96,6 @@ final class CenterSettings
             $row = $statement->fetch() ?: [];
             $row['sms_line_numbers'] = '';
             $row['sms_lines_queried_at'] = '';
-            $row['sms_charge_template'] = '';
             $row['sms_history_synced_at'] = '';
             $row['sms_panel_credit'] = null;
             $row['sms_live_synced_at'] = '';
@@ -113,9 +110,6 @@ final class CenterSettings
             'sms_updated_at' => (string) ($row['sms_updated_at'] ?? ''),
             'sms_line_numbers' => $this->decodeLineNumbers((string) ($row['sms_line_numbers'] ?? '')),
             'sms_lines_queried_at' => (string) ($row['sms_lines_queried_at'] ?? ''),
-            'sms_charge_template' => (string) ($row['sms_charge_template'] ?? '') !== ''
-                ? (string) $row['sms_charge_template']
-                : self::DEFAULT_CHARGE_TEMPLATE,
             'sms_history_synced_at' => (string) ($row['sms_history_synced_at'] ?? ''),
             'sms_panel_credit' => isset($row['sms_panel_credit']) && $row['sms_panel_credit'] !== null
                 ? (int) $row['sms_panel_credit']
@@ -131,7 +125,7 @@ final class CenterSettings
     {
         $this->ensureRow();
         $statement = $this->pdo->query(
-            'SELECT sms_username, sms_password, sms_from_number, sms_daily_limit, sms_unit_cost, sms_charge_template
+            'SELECT sms_username, sms_password, sms_from_number, sms_daily_limit, sms_unit_cost
              FROM center_settings WHERE id = 1'
         );
         $row = $statement->fetch() ?: [];
@@ -142,9 +136,6 @@ final class CenterSettings
             'sms_from_number' => (string) ($row['sms_from_number'] ?? ''),
             'sms_daily_limit' => (int) ($row['sms_daily_limit'] ?? 500),
             'sms_unit_cost' => (int) ($row['sms_unit_cost'] ?? 0),
-            'sms_charge_template' => (string) ($row['sms_charge_template'] ?? '') !== ''
-                ? (string) $row['sms_charge_template']
-                : self::DEFAULT_CHARGE_TEMPLATE,
         ];
     }
 
@@ -157,7 +148,7 @@ final class CenterSettings
         $this->ensureRow();
         $current = $this->pdo->query(
             'SELECT sms_username, sms_password, sms_from_number, sms_daily_limit, sms_unit_cost,
-                    sms_line_numbers, sms_lines_queried_at, sms_charge_template
+                    sms_line_numbers, sms_lines_queried_at
              FROM center_settings WHERE id = 1'
         )->fetch() ?: [];
 
@@ -193,13 +184,6 @@ final class CenterSettings
             ? trim((string) $payload['sms_lines_queried_at'])
             : trim((string) ($current['sms_lines_queried_at'] ?? ''));
 
-        $chargeTemplate = array_key_exists('sms_charge_template', $payload)
-            ? trim((string) $payload['sms_charge_template'])
-            : trim((string) ($current['sms_charge_template'] ?? ''));
-        if ($chargeTemplate === '') {
-            $chargeTemplate = self::DEFAULT_CHARGE_TEMPLATE;
-        }
-
         $statement = $this->pdo->prepare(
             'UPDATE center_settings SET
                 sms_username = :sms_username,
@@ -209,7 +193,6 @@ final class CenterSettings
                 sms_unit_cost = :sms_unit_cost,
                 sms_line_numbers = :sms_line_numbers,
                 sms_lines_queried_at = :sms_lines_queried_at,
-                sms_charge_template = :sms_charge_template,
                 sms_updated_at = :sms_updated_at
              WHERE id = 1'
         );
@@ -221,7 +204,6 @@ final class CenterSettings
             'sms_unit_cost' => $unitCost,
             'sms_line_numbers' => $lineNumbersJson,
             'sms_lines_queried_at' => $linesQueriedAt,
-            'sms_charge_template' => $chargeTemplate,
             'sms_updated_at' => JalaliDate::todayParts()['formatted'],
         ]);
 

@@ -12,6 +12,13 @@ $base = getenv('MECHINNO_TEST_URL') ?: 'http://127.0.0.1:8765';
 $cookieFile = sys_get_temp_dir() . '/mechinno_http_test_cookies.txt';
 @unlink($cookieFile);
 
+$config = is_file($root . '/config.php') ? require $root . '/config.php' : [];
+$auth = is_array($config['auth'] ?? null) ? $config['auth'] : [];
+$adminUser = (string) ($auth['username'] ?? 'admin');
+$adminPass = (string) ($auth['password'] ?? '');
+$viewerUser = (string) ($auth['viewer_username'] ?? 'viewer');
+$viewerPass = (string) ($auth['viewer_password'] ?? '');
+
 $serverStarted = false;
 if (getenv('MECHINNO_TEST_URL') === false) {
     $probe = @file_get_contents($base . '/login.php');
@@ -114,7 +121,7 @@ $assert($r['status'] === 200 && str_contains($r['body'], 'ورود به پنل')
 // Login as admin (requires config.php)
 if (!is_file($root . '/config.php')) {
     $errors[] = 'http: config.php missing for login tests';
-} elseif (!$formLogin('admin', 'TestAdmin123')) {
+} elseif ($adminPass === '' || !$formLogin($adminUser, $adminPass)) {
     $errors[] = 'http: admin login redirects';
 } else {
     $r = $request('GET', '/api.php?resource=summary');
@@ -145,6 +152,7 @@ if (!is_file($root . '/config.php')) {
         'entity_type' => 'team',
         'name' => 'تیم HTTP تست',
         'leader' => 'مسئول تست',
+        'phone' => '09121234567',
     ], JSON_UNESCAPED_UNICODE), [
         'Content-Type: application/json',
         'X-CSRF-Token: ' . $apiToken,
@@ -204,7 +212,7 @@ if (!is_file($root . '/config.php')) {
 
     // Viewer read-only
     $request('GET', '/logout.php');
-    $assert($formLogin('viewer', 'TestViewer123'), 'http: viewer login');
+    $assert($viewerPass !== '' && $formLogin($viewerUser, $viewerPass), 'http: viewer login');
 
     $r = $request('GET', '/api.php?resource=panel_users');
     $assert($r['status'] === 200, 'http: viewer can list panel_users');

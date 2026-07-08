@@ -303,17 +303,6 @@ $assetVer = (string) max(
                 <?php endif; ?>
               </article>
               <article class="panel">
-                <div class="panel-head">
-                  <h2>یادآور پرداخت شارژ</h2>
-                  <?php if (Access::canWrite()): ?>
-                  <button type="button" class="button" id="smsSendChargeReminders">ارسال یادآور</button>
-                  <?php endif; ?>
-                </div>
-                <p class="hint">پیامک یادآوری برای مسئولین نهادهای دارای قرارداد سال جاری — بدون ذکر مبلغ بدهی؛ از نهادها خواسته می‌شود وارد سامانه شوند و وضعیت پرداخت را ببینند.</p>
-                <p id="smsChargeRecipientInfo" class="hint">در حال بارگذاری…</p>
-                <div id="smsChargeTemplateInline"></div>
-              </article>
-              <article class="panel">
                 <div class="panel-head"><h2>تاریخچه پیامک‌ها</h2></div>
                 <div class="table-wrap table-scroll">
                   <table id="smsHistoryTable" class="data-table data-table--wide">
@@ -333,16 +322,6 @@ $assetVer = (string) max(
               <article class="panel">
                 <div class="panel-head"><h2>خط ارسال و محدودیت روزانه</h2></div>
                 <form id="smsLineForm" class="payment-settings-form">در حال بارگذاری…</form>
-              </article>
-              <article class="panel">
-                <div class="panel-head"><h2>الگوی یادآور شارژ</h2></div>
-                <p class="hint">برای ارسال دسته‌ای یادآور، همین الگو برای همه نهادهای انتخاب‌شده اعمال می‌شود.</p>
-                <div id="smsChargeTemplateEditor"></div>
-                <?php if (Access::canWrite()): ?>
-                <div class="modal-actions">
-                  <button class="button" type="button" id="smsSaveTemplate">ذخیره الگو</button>
-                </div>
-                <?php endif; ?>
               </article>
               <article class="panel">
                 <div class="panel-head"><h2>آمار و همگام‌سازی</h2></div>

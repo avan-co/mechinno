@@ -138,9 +138,6 @@ final class SmsService
                 'sms_from_number' => $payload['sms_from_number'] ?? '',
                 'sms_daily_limit' => $payload['sms_daily_limit'] ?? $current['sms_daily_limit'] ?? 500,
             ],
-            'template' => [
-                'sms_charge_template' => $payload['sms_charge_template'] ?? '',
-            ],
             default => $payload,
         };
 
@@ -265,55 +262,6 @@ final class SmsService
     }
 
     /**
-     * @return list<array<string, mixed>>
-     */
-    public function chargeReminderPreview(?int $teamId = null): array
-    {
-        $contracts = new TeamContracts($this->pdo);
-        $fiscalYear = $contracts->currentFiscalYear();
-        $settings = (new CenterSettings($this->pdo))->get();
-        $smsSettings = (new CenterSettings($this->pdo))->smsSettingsForSend();
-        $template = (string) ($smsSettings['sms_charge_template'] ?? CenterSettings::DEFAULT_CHARGE_TEMPLATE);
-        $items = [];
-
-        $teamStatement = $this->pdo->prepare('SELECT id, name FROM teams WHERE id = :id');
-        foreach ($contracts->teamIdsWithContractInYear($fiscalYear) as $contractTeamId) {
-            if ($teamId !== null && $contractTeamId !== $teamId) {
-                continue;
-            }
-
-            $teamStatement->execute(['id' => $contractTeamId]);
-            $team = $teamStatement->fetch();
-            if ($team === false) {
-                continue;
-            }
-
-            $teamName = (string) ($team['name'] ?? '');
-            $leader = $this->leaderRecipient($contractTeamId);
-            $displayLeader = $this->teamLeaderDisplay($contractTeamId);
-            $leaderMissing = $leader === null;
-            $leaderData = $displayLeader ?? [];
-            $phone = trim((string) ($leaderData['phone'] ?? ''));
-            $row = ['team_id' => $contractTeamId, 'team_name' => $teamName];
-            $items[] = [
-                'team_id' => $contractTeamId,
-                'team_name' => $teamName,
-                'fiscal_year' => $fiscalYear,
-                'member_id' => (int) ($leader['id'] ?? 0),
-                'leader_name' => (string) ($leaderData['full_name'] ?? ''),
-                'phone' => $phone,
-                'leader_missing' => $leaderMissing,
-                'can_send' => !$leaderMissing && $phone !== '',
-                'message' => $leaderMissing
-                    ? ''
-                    : $this->renderChargeTemplate($template, $row, $settings, $leader ?? $leaderData),
-            ];
-        }
-
-        return $items;
-    }
-
-    /**
      * @param list<int> $memberIds
      * @return array<string, mixed>
      */
@@ -333,90 +281,6 @@ final class SmsService
         $this->assertDailyCapacity(count($recipients));
 
         return $this->dispatchBatch($batchUid, 'announcement', $recipients, static fn (array $member): string => $message);
-    }
-
-    /**
-     * @param list<array{member_id:int,message?:string,team_id?:int}> $items
-     * @return array<string, mixed>
-     */
-    public function sendChargeReminders(array $items, ?string $template = null): array
-    {
-        Access::requireWriteJson();
-
-        $batchUid = $this->newBatchUid();
-        $centerSettings = (new CenterSettings($this->pdo))->get();
-        $smsSettings = (new CenterSettings($this->pdo))->smsSettingsForSend();
-        $template = trim((string) ($template ?? $smsSettings['sms_charge_template'] ?? CenterSettings::DEFAULT_CHARGE_TEMPLATE));
-        if ($template === '') {
-            throw new InvalidArgumentException('الگوی یادآور شارژ خالی است.');
-        }
-
-        if ($items === []) {
-            foreach ($this->chargeReminderPreview() as $preview) {
-                if (($preview['can_send'] ?? false) !== true) {
-                    continue;
-                }
-                $items[] = [
-                    'team_id' => (int) ($preview['team_id'] ?? 0),
-                    'member_id' => (int) ($preview['member_id'] ?? 0),
-                ];
-            }
-        }
-
-        if ($items === []) {
-            throw new InvalidArgumentException('نهاد دارای قرارداد با مسئول قابل ارسال یافت نشد.');
-        }
-
-        $previewByTeam = [];
-        foreach ($this->chargeReminderPreview() as $preview) {
-            $previewByTeam[(int) ($preview['team_id'] ?? 0)] = $preview;
-        }
-
-        $recipients = [];
-        $messages = [];
-        foreach ($items as $item) {
-            $memberId = (int) ($item['member_id'] ?? 0);
-            $teamId = (int) ($item['team_id'] ?? 0);
-            if ($memberId <= 0 && $teamId > 0) {
-                $leader = $this->leaderRecipient($teamId);
-                $memberId = (int) ($leader['id'] ?? 0);
-            }
-            if ($memberId <= 0) {
-                continue;
-            }
-            $customMessage = trim((string) ($item['message'] ?? ''));
-            if ($customMessage !== '') {
-                $messages[$memberId] = $customMessage;
-            } elseif ($teamId > 0 && isset($previewByTeam[$teamId])) {
-                $preview = $previewByTeam[$teamId];
-                $leader = $this->leaderRecipient($teamId);
-                $row = [
-                    'team_id' => $teamId,
-                    'team_name' => (string) ($preview['team_name'] ?? ''),
-                ];
-                $messages[$memberId] = $this->renderChargeTemplate($template, $row, $centerSettings, $leader ?? []);
-            } else {
-                $messages[$memberId] = $template;
-            }
-            $recipients[] = $memberId;
-        }
-
-        $recipientRows = $this->loadMembersByIds($recipients, leadersOnly: true);
-        $this->assertDailyCapacity(count($recipientRows));
-
-        return $this->dispatchBatch(
-            $batchUid,
-            'charge_reminder',
-            $recipientRows,
-            static function (array $member) use ($messages): string {
-                $text = trim($messages[(int) ($member['id'] ?? 0)] ?? '');
-                if ($text === '') {
-                    throw new InvalidArgumentException('متن یادآور برای «' . ($member['full_name'] ?? 'عضو') . '» خالی است.');
-                }
-
-                return $text;
-            }
-        );
     }
 
     /**
@@ -746,109 +610,21 @@ final class SmsService
      * @param list<int> $memberIds
      * @return list<array<string,mixed>>
      */
-    private function loadMembersByIds(array $memberIds, bool $leadersOnly = false): array
+    private function loadMembersByIds(array $memberIds): array
     {
         $ids = array_values(array_unique(array_filter(array_map('intval', $memberIds), static fn (int $id): bool => $id > 0)));
         if ($ids === []) {
             return [];
         }
         $idList = implode(',', $ids);
-        $leaderSql = $leadersOnly ? ' AND m.is_leader = 1' : '';
 
         return $this->pdo->query(
             "SELECT m.id, m.team_id, m.full_name, m.phone, m.is_leader, t.name AS team_label
              FROM members m
              LEFT JOIN teams t ON t.id = m.team_id
-             WHERE m.id IN ({$idList}) AND m.approval_status = 'approved'{$leaderSql}
+             WHERE m.id IN ({$idList}) AND m.approval_status = 'approved'
              ORDER BY m.is_leader DESC, t.name, m.full_name"
         )->fetchAll();
-    }
-
-    /**
-     * @return array<string, mixed>|null
-     */
-    private function leaderRecipient(int $teamId): ?array
-    {
-        $statement = $this->pdo->prepare(
-            "SELECT m.id, m.full_name, m.phone, m.team_id, t.name AS team_label, m.is_leader
-             FROM members m
-             LEFT JOIN teams t ON t.id = m.team_id
-             WHERE m.team_id = :team_id AND m.is_leader = 1 AND m.approval_status = 'approved'
-             ORDER BY m.id LIMIT 1"
-        );
-        $statement->execute(['team_id' => $teamId]);
-        $row = $statement->fetch();
-
-        return $row === false ? null : $row;
-    }
-
-    /**
-     * @return array<string, mixed>|null
-     */
-    private function teamLeaderDisplay(int $teamId): ?array
-    {
-        $leader = $this->leaderRecipient($teamId);
-        if ($leader !== null) {
-            return $leader;
-        }
-
-        $teamStatement = $this->pdo->prepare('SELECT leader, phone FROM teams WHERE id = :team_id');
-        $teamStatement->execute(['team_id' => $teamId]);
-        $team = $teamStatement->fetch();
-        if ($team === false) {
-            return null;
-        }
-        $name = trim((string) ($team['leader'] ?? ''));
-        $phone = TeamLeaders::normalizePhone((string) ($team['phone'] ?? ''));
-        if ($name === '' && $phone === '') {
-            return null;
-        }
-
-        return [
-            'id' => 0,
-            'full_name' => $name !== '' ? $name : 'مسئول نهاد',
-            'phone' => $phone,
-            'team_id' => $teamId,
-            'team_label' => '',
-            'is_leader' => 1,
-        ];
-    }
-
-    /**
-     * @param array<string, mixed> $row
-     * @param array<string, string> $settings
-     * @param array<string, mixed> $leader
-     */
-    public function renderChargeTemplate(string $template, array $row, array $settings, array $leader = []): string
-    {
-        $debtSummary = trim((string) ($row['debt_summary'] ?? ''));
-        $bank = trim((string) ($settings['bank_name'] ?? ''));
-        $card = trim((string) ($settings['card_number'] ?? ''));
-        $account = trim((string) ($settings['account_number'] ?? ''));
-        $bankInfo = '';
-        if ($card !== '') {
-            $bankInfo = 'کارت: ' . $card;
-        } elseif ($account !== '') {
-            $bankInfo = 'حساب: ' . $account;
-        } elseif ($bank !== '') {
-            $bankInfo = 'بانک: ' . $bank;
-        }
-
-        $replacements = [
-            '{team_name}' => (string) ($row['team_name'] ?? 'نهاد'),
-            '{leader_name}' => (string) ($leader['full_name'] ?? ''),
-            '{debt_total}' => number_format((int) ($row['debt_total'] ?? 0)),
-            '{debt_summary}' => $debtSummary !== '' ? 'دوره: ' . $debtSummary : '',
-            '{bank_info}' => $bankInfo,
-            '{card_number}' => $card,
-            '{account_number}' => $account,
-            '{bank_name}' => $bank,
-        ];
-
-        $text = strtr($template, $replacements);
-        $lines = array_values(array_filter(array_map('trim', preg_split('/\R+/', $text) ?: []), static fn (string $line): bool => $line !== ''));
-
-        return implode("\n", $lines);
     }
 
     /**
