@@ -74,6 +74,84 @@ final class CenterSettings
         return $this->get();
     }
 
+    /**
+     * @return array<string, mixed>
+     */
+    public function smsSettings(): array
+    {
+        $this->ensureRow();
+        $statement = $this->pdo->query(
+            'SELECT sms_username, sms_password, sms_from_number, sms_daily_limit, sms_unit_cost, sms_updated_at
+             FROM center_settings WHERE id = 1'
+        );
+        $row = $statement->fetch() ?: [];
+
+        return [
+            'sms_username' => (string) ($row['sms_username'] ?? ''),
+            'sms_password_set' => trim((string) ($row['sms_password'] ?? '')) !== '',
+            'sms_from_number' => (string) ($row['sms_from_number'] ?? ''),
+            'sms_daily_limit' => (int) ($row['sms_daily_limit'] ?? 500),
+            'sms_unit_cost' => (int) ($row['sms_unit_cost'] ?? 0),
+            'sms_updated_at' => (string) ($row['sms_updated_at'] ?? ''),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function smsSettingsForSend(): array
+    {
+        $this->ensureRow();
+        $statement = $this->pdo->query(
+            'SELECT sms_username, sms_password, sms_from_number, sms_daily_limit, sms_unit_cost
+             FROM center_settings WHERE id = 1'
+        );
+        $row = $statement->fetch() ?: [];
+
+        return [
+            'sms_username' => (string) ($row['sms_username'] ?? ''),
+            'sms_password' => (string) ($row['sms_password'] ?? ''),
+            'sms_from_number' => (string) ($row['sms_from_number'] ?? ''),
+            'sms_daily_limit' => (int) ($row['sms_daily_limit'] ?? 500),
+            'sms_unit_cost' => (int) ($row['sms_unit_cost'] ?? 0),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @return array<string, mixed>
+     */
+    public function updateSms(array $payload): array
+    {
+        $this->ensureRow();
+        $current = $this->pdo->query('SELECT sms_password FROM center_settings WHERE id = 1')->fetch() ?: [];
+        $password = trim((string) ($payload['sms_password'] ?? ''));
+        if ($password === '') {
+            $password = (string) ($current['sms_password'] ?? '');
+        }
+
+        $statement = $this->pdo->prepare(
+            'UPDATE center_settings SET
+                sms_username = :sms_username,
+                sms_password = :sms_password,
+                sms_from_number = :sms_from_number,
+                sms_daily_limit = :sms_daily_limit,
+                sms_unit_cost = :sms_unit_cost,
+                sms_updated_at = :sms_updated_at
+             WHERE id = 1'
+        );
+        $statement->execute([
+            'sms_username' => trim((string) ($payload['sms_username'] ?? '')),
+            'sms_password' => $password,
+            'sms_from_number' => trim((string) ($payload['sms_from_number'] ?? '')),
+            'sms_daily_limit' => max(1, (int) ($payload['sms_daily_limit'] ?? 500)),
+            'sms_unit_cost' => max(0, (int) ($payload['sms_unit_cost'] ?? 0)),
+            'sms_updated_at' => JalaliDate::todayParts()['formatted'],
+        ]);
+
+        return $this->smsSettings();
+    }
+
     private function ensureRow(): void
     {
         $exists = (int) $this->pdo->query('SELECT COUNT(*) FROM center_settings WHERE id = 1')->fetchColumn();

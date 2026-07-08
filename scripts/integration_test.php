@@ -63,6 +63,9 @@ $crud->create('team_contracts', [
     'contract_end' => '1405/12/29',
 ]);
 $assert($teamId > 0 && ($team['entity_code'] ?? '') !== '', 'crud: team created with entity_code');
+$leaderMember = $pdo->query("SELECT id, is_leader, full_name FROM members WHERE team_id = {$teamId} AND is_leader = 1")->fetch();
+$assert($leaderMember !== false, 'teams: leader member auto-created');
+$assert(($leaderMember['full_name'] ?? '') === 'علی رضایی', 'teams: leader member name matches team leader');
 
 $teamsList = $repo->paginatedResource('teams', 1, 25);
 $row = $teamsList['rows'][0] ?? [];
@@ -352,6 +355,18 @@ $_SESSION = [
 ];
 $teamDeskHistory = $repo->paginatedResource('desk-assignments', 1, 100);
 $assert(count($teamDeskHistory['rows']) >= 2, 'desk-assignments: team panel shows full history');
+
+$_SESSION = [
+    'mechinno_authenticated' => true,
+    'mechinno_role' => Access::ROLE_ADMIN_EDITOR,
+    'mechinno_user' => 'admin',
+    'mechinno_user_id' => 0,
+];
+$smsStats = (new SmsService($pdo))->stats();
+$assert(isset($smsStats['daily_limit']), 'sms: stats endpoint data');
+$smsRecipients = $repo->paginatedResource('sms-recipients', 1, 50, ['is_leader' => '1']);
+$assert(count($smsRecipients['rows']) >= 1, 'sms: leader recipients listed');
+
 $_SESSION = [
     'mechinno_authenticated' => true,
     'mechinno_role' => Access::ROLE_ADMIN_EDITOR,
@@ -363,6 +378,7 @@ $inactiveTeam = $crud->create('teams', [
     'entity_type' => 'team',
     'name' => 'نهاد غیرفعال تست',
     'leader' => 'تست',
+    'phone' => '09120000002',
 ]);
 $contracts = new TeamContracts($pdo);
 $contracts->syncTeamActiveStatus((int) $inactiveTeam['id']);

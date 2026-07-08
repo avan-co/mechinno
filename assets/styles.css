@@ -339,6 +339,58 @@ code { color: var(--primary); font-size: 0.9em; }
   color: var(--muted);
 }
 
+.member-filters,
+.sms-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 12px 0 16px;
+}
+
+.member-filters label,
+.sms-filters label,
+.sms-filters input,
+.sms-filters select {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.sms-filters input[type="search"] {
+  min-width: 220px;
+}
+
+.charge-reminder-list {
+  display: grid;
+  gap: 12px;
+}
+
+.charge-reminder-card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.charge-reminder-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.charge-reminder-card textarea {
+  width: 100%;
+  min-height: 110px;
+}
+
+.sms-selection-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .team-profile-grid {
   margin-bottom: 16px;
 }

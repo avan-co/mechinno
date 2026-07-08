@@ -59,6 +59,11 @@ final class Access
         'crud-meta',
         'recalculate-charges',
         'ledger',
+        'sms-settings',
+        'sms-stats',
+        'sms-charge-preview',
+        'sms-recipients',
+        'sms-history',
     ];
 
     public static function role(): string

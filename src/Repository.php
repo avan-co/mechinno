@@ -335,7 +335,7 @@ final class Repository
         }
 
         if (trim((string) ($filters['q'] ?? '')) !== '' && in_array($name, [
-            'teams', 'members', 'desks', 'lockers', 'charges', 'transactions', 'rate_settings', 'panel_users', 'development_plans',
+            'teams', 'members', 'desks', 'lockers', 'charges', 'transactions', 'rate_settings', 'panel_users', 'development_plans', 'sms-recipients',
         ], true)) {
             return (int) $this->pdo->query(
                 'SELECT COUNT(*) FROM (' . $this->resourceSql($name, $filters) . ') AS filtered_rows'
@@ -344,8 +344,14 @@ final class Repository
 
         $sql = match ($name) {
             'teams' => 'SELECT COUNT(*) FROM teams',
-            'members' => "SELECT COUNT(*) FROM members WHERE (approval_status IN ('approved', 'rejected') OR approval_status IS NULL)"
-                . $this->memberApprovalClause($filters, true),
+            'members' => "SELECT COUNT(*) FROM members m LEFT JOIN teams t ON t.id = m.team_id
+                WHERE (m.approval_status IN ('approved', 'rejected') OR m.approval_status IS NULL)"
+                . $this->memberApprovalClause($filters, true)
+                . $this->memberListFilterClause($filters, true),
+            'sms-recipients' => "SELECT COUNT(*) FROM members m INNER JOIN teams t ON t.id = m.team_id
+                WHERE m.approval_status = 'approved'"
+                . $this->memberListFilterClause($filters, true),
+            'sms-history' => 'SELECT COUNT(*) FROM sms_logs WHERE 1=1' . $this->smsHistoryFilterClause($filters, true),
             'desks' => 'SELECT COUNT(*) FROM desks',
             'lockers' => 'SELECT COUNT(*) FROM lockers',
             'charges' => 'SELECT COUNT(*) FROM charges',
@@ -448,7 +454,7 @@ final class Repository
                 . $this->searchClause('team_contracts', $filters, $teamId !== null)
                 . ' ORDER BY tc.fiscal_year DESC, t.name',
             'members' => "SELECT m.id, m.member_code, m.team_id, m.access_code, m.full_name, m.phone, m.national_id, m.notes,
-                        m.approval_status, m.submitted_at, m.reviewed_at, m.rejection_reason, m.wants_access,
+                        m.approval_status, m.submitted_at, m.reviewed_at, m.rejection_reason, m.wants_access, m.is_leader,
                         t.name AS team_label, t.entity_type,
                         (SELECT GROUP_CONCAT(d.number ORDER BY d.number)
                          FROM desks d WHERE d.team_id = m.team_id) AS desk_numbers
@@ -458,8 +464,22 @@ final class Repository
                     ? " WHERE m.team_id = {$teamId}"
                     : " WHERE m.approval_status IN ('approved', 'rejected') OR m.approval_status IS NULL")
                 . $this->memberApprovalClause($filters)
+                . $this->memberListFilterClause($filters)
                 . $this->searchClause('members', $filters, true)
-                . ' ORDER BY m.id',
+                . ' ORDER BY m.is_leader DESC, t.name, m.full_name, m.id',
+            'sms-recipients' => "SELECT m.id, m.member_code, m.team_id, m.full_name, m.phone, m.national_id,
+                        m.wants_access, m.is_leader, t.name AS team_label, t.entity_type
+                 FROM members m
+                 INNER JOIN teams t ON t.id = m.team_id
+                 WHERE m.approval_status = 'approved'"
+                . $this->memberListFilterClause($filters)
+                . $this->searchClause('members', $filters, true)
+                . ' ORDER BY m.is_leader DESC, t.name, m.full_name, m.id',
+            'sms-history' => 'SELECT id, batch_uid, message_type, member_id, team_id, team_name, recipient_name, phone,
+                        is_leader, message_text, status, error_message, provider_rec_id, cost_rial, sent_by, created_at, sent_at
+                 FROM sms_logs WHERE 1=1'
+                . $this->smsHistoryFilterClause($filters)
+                . ' ORDER BY created_at DESC, id DESC',
             'desks' => "SELECT d.id, d.number, d.team_id, d.usage_type, d.formal_seats, d.informal_seats,
                         d.row_index, d.col_index, d.notes, t.name AS team_name, t.entity_type, t.is_active AS team_is_active
                  FROM desks d
@@ -1687,7 +1707,7 @@ final class Repository
     private function memberApprovalClause(array $filters, bool $forCount = false): string
     {
         $status = (string) ($filters['approval_status'] ?? '');
-        $prefix = $forCount ? ' AND ' : ' AND ';
+        $prefix = ' AND ';
 
         return match ($status) {
             'approved' => $prefix . "m.approval_status = 'approved'",
@@ -1695,6 +1715,96 @@ final class Repository
             'all' => '',
             default => '',
         };
+    }
+
+    /**
+     * @param array<string, string> $filters
+     */
+    private function memberListFilterClause(array $filters, bool $forCount = false): string
+    {
+        $clauses = [];
+        $teamId = (int) ($filters['team_id'] ?? 0);
+        if ($teamId > 0) {
+            $clauses[] = 'm.team_id = ' . $teamId;
+        }
+        $entityType = trim((string) ($filters['entity_type'] ?? ''));
+        if ($entityType !== '') {
+            $clauses[] = 't.entity_type = ' . $this->pdo->quote($entityType);
+        }
+        if (($filters['is_leader'] ?? '') !== '') {
+            $clauses[] = 'm.is_leader = ' . ((int) $filters['is_leader'] === 1 ? 1 : 0);
+        }
+        if (($filters['wants_access'] ?? '') !== '') {
+            $clauses[] = 'm.wants_access = ' . ((int) $filters['wants_access'] === 1 ? 1 : 0);
+        }
+
+        return $clauses === [] ? '' : ' AND ' . implode(' AND ', $clauses);
+    }
+
+    /**
+     * @param array<string, string> $filters
+     */
+    private function smsHistoryFilterClause(array $filters, bool $forCount = false): string
+    {
+        $clauses = [];
+        $type = trim((string) ($filters['message_type'] ?? ''));
+        if ($type !== '') {
+            $clauses[] = 'message_type = ' . $this->pdo->quote($type);
+        }
+        $status = trim((string) ($filters['status'] ?? ''));
+        if ($status !== '') {
+            $clauses[] = 'status = ' . $this->pdo->quote($status);
+        }
+        $teamId = (int) ($filters['team_id'] ?? 0);
+        if ($teamId > 0) {
+            $clauses[] = 'team_id = ' . $teamId;
+        }
+        $q = trim((string) ($filters['q'] ?? ''));
+        if ($q !== '') {
+            $like = '%' . addcslashes($q, '%_\\') . '%';
+            $quoted = $this->pdo->quote($like);
+            $clauses[] = "(recipient_name LIKE {$quoted} OR phone LIKE {$quoted} OR team_name LIKE {$quoted} OR message_text LIKE {$quoted})";
+        }
+
+        return $clauses === [] ? '' : ' AND ' . implode(' AND ', $clauses);
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    public function debtorTeamsForSms(): array
+    {
+        $rows = [];
+        foreach ($this->rows('SELECT id, name FROM teams ORDER BY name') as $team) {
+            $teamId = (int) ($team['id'] ?? 0);
+            $debt = $this->contractDebtForTeam($teamId);
+            if ($debt <= 0) {
+                continue;
+            }
+            $summaryParts = [];
+            $allocation = $this->allocatedPaymentsForTeam($teamId);
+            foreach ($this->preparedRows(
+                'SELECT fiscal_year, month_index, amount FROM charges WHERE team_id = :id ORDER BY fiscal_year, month_index',
+                ['id' => $teamId]
+            ) as $charge) {
+                $fy = JalaliDate::normalizeDigits((string) ($charge['fiscal_year'] ?? ''));
+                $mi = (int) ($charge['month_index'] ?? 0);
+                $key = $fy . '-' . $mi;
+                $due = (int) ($charge['amount'] ?? 0);
+                $paid = (int) ($allocation['by_month'][$key] ?? 0);
+                if ($due > $paid) {
+                    $summaryParts[] = ($this->monthName($mi) . ' ' . $fy);
+                }
+            }
+            $rows[] = [
+                'team_id' => $teamId,
+                'team_name' => (string) ($team['name'] ?? ''),
+                'debt_total' => $debt,
+                'debt_summary' => implode('، ', array_slice($summaryParts, 0, 6)),
+            ];
+        }
+
+        return $rows;
     }
 
     /**

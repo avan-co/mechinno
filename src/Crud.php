@@ -31,8 +31,8 @@ final class Crud
                         'required' => true,
                     ],
                     'name' => ['label' => 'نام', 'type' => 'text', 'required' => true],
-                    'leader' => ['label' => 'سرگروه / مسئول', 'type' => 'text'],
-                    'phone' => ['label' => 'تماس', 'type' => 'text'],
+                    'leader' => ['label' => 'سرگروه / مسئول', 'type' => 'text', 'required' => true],
+                    'phone' => ['label' => 'تماس مسئول', 'type' => 'text', 'required' => true],
                     'joined_at' => ['label' => 'تاریخ عضویت', 'type' => 'date', 'placeholder' => '1404/01/01'],
                     'is_active' => [
                         'label' => 'وضعیت نهاد',
@@ -478,6 +478,7 @@ final class Crud
                 (string) ($record['entity_code'] ?? ''),
                 (string) ($record['leader'] ?? '')
             );
+            (new TeamLeaders($this->pdo))->ensureLeaderMember($id);
         }
         if ($resource === 'team_contracts') {
             (new TeamContracts($this->pdo))->syncTeamContractCache((int) ($data['team_id'] ?? 0));
@@ -542,6 +543,9 @@ final class Crud
         if ($resource === 'teams' && isset($data['leader'])) {
             EntityAccounts::syncLeaderName($this->pdo, $id, (string) $data['leader']);
         }
+        if ($resource === 'teams' && (isset($data['leader']) || isset($data['phone']))) {
+            (new TeamLeaders($this->pdo))->syncLeaderFromTeam($id);
+        }
         if ($resource === 'team_contracts') {
             $record = $this->find($resource, $id);
             (new TeamContracts($this->pdo))->syncTeamContractCache((int) ($record['team_id'] ?? $data['team_id'] ?? 0));
@@ -557,6 +561,12 @@ final class Crud
         }
         $definition = $this->definition($resource);
         $this->assertExists($definition, $id);
+        if ($resource === 'members') {
+            $row = $this->find($resource, $id);
+            if ((int) ($row['is_leader'] ?? 0) === 1) {
+                throw new InvalidArgumentException('ابتدا مسئول نهاد را از دکمه «تغییر مسئول» به عضو دیگر منتقل کنید.');
+            }
+        }
         if ($resource === 'panel_users') {
             $this->assertPanelUserDeletable($id);
         }
