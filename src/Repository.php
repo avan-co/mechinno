@@ -1369,7 +1369,8 @@ final class Repository
                 $until
             );
             $row['assigned_from_month'] = (string) JalaliDate::monthIndexFromDate((string) ($row['assigned_from'] ?? ''));
-            $row['assigned_until_month'] = (string) JalaliDate::monthIndexFromDate($until);
+            $untilMonth = JalaliDate::monthIndexFromDate($until);
+            $row['assigned_until_month'] = $untilMonth > 0 ? (string) $untilMonth : '';
             if (empty($row['fiscal_year'])) {
                 $row['fiscal_year'] = JalaliDate::fiscalYearFromDate((string) ($row['assigned_from'] ?? ''));
             }

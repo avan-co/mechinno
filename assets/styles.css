@@ -1550,13 +1550,16 @@ body.is-mobile .table-wrap { display: none; }
 
 .desk-tile { cursor: pointer; }
 
+.toast-host {
   position: fixed;
   top: 16px;
   inset-inline-start: 16px;
-  z-index: 200;
+  z-index: 300;
   display: grid;
   gap: 8px;
+  pointer-events: none;
 }
+.toast-host .toast { pointer-events: auto; }
 .toast {
   padding: 11px 15px;
   border-radius: var(--radius-sm);

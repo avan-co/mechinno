@@ -421,6 +421,7 @@ $activeAssign = $crud->create('desk_assignments', [
     'usage_type' => 'formal',
     'fiscal_year' => '1405',
     'assigned_from_month' => '1',
+    'assigned_until_month' => '12',
     'notes' => 'فعال بدون تحویل',
 ]);
 $deskThree = $crud->find('desks', 3);
