@@ -890,7 +890,6 @@ final class Repository
             $chargeMap[$teamKey][$monthKey]['rent_amount'] += (int) ($row['rent_amount'] ?? 0);
             $chargeMap[$teamKey][$monthKey]['amount'] += $dueAmount;
         }
-        $seeder = new Seeder($this->pdo);
         $rows = [];
         foreach ($teams as $team) {
             $tid = (int) $team['id'];
@@ -899,18 +898,6 @@ final class Repository
             }
             if (!$contracts->hasDeskInFiscalYear($tid, $fiscalYear)) {
                 continue;
-            }
-            if (!isset($chargeMap[$tid]) || $chargeMap[$tid] === []) {
-                $seeder->recalculateChargesForTeam($tid, $fiscalYear);
-                foreach ($this->chargesForFiscalYear($fiscalYear, $tid) as $row) {
-                    $monthKey = (int) $row['month_index'];
-                    $dueAmount = $this->chargeRowDueAmount($row);
-                    $chargeMap[$tid][$monthKey] = [
-                        'charge_amount' => (int) ($row['charge_amount'] ?? 0),
-                        'rent_amount' => (int) ($row['rent_amount'] ?? 0),
-                        'amount' => $dueAmount,
-                    ];
-                }
             }
             $dates = $contracts->contractDatesForYear($tid, $fiscalYear);
             $hasInformal = $contracts->hasInformalDeskInYear($tid, $fiscalYear);
@@ -2301,11 +2288,7 @@ final class Repository
         $assignments = new DeskAssignments($this->pdo);
 
         return array_map(static function (array $row) use ($assignments): array {
-            $teamId = (int) ($row['team_id'] ?? 0);
-            $assignment = $assignments->assignmentForDeskForm(
-                (int) ($row['id'] ?? 0),
-                $teamId > 0 ? $teamId : null
-            );
+            $assignment = $assignments->assignmentForDeskForm((int) ($row['id'] ?? 0), null);
             $from = (string) ($assignment['assigned_from'] ?? '');
             $until = (string) ($assignment['assigned_until'] ?? '');
             $row['assignment_from'] = $from;

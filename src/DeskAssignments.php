@@ -152,11 +152,14 @@ final class DeskAssignments
     public function assignmentForDeskForm(int $deskId, ?int $teamId = null): ?array
     {
         $fiscalYear = (new TeamContracts($this->pdo))->currentFiscalYear();
-        $yearRecord = $this->findAssignmentForYear(
-            $deskId,
-            $fiscalYear,
-            $teamId !== null && $teamId > 0 ? $teamId : null
-        );
+        if ($teamId !== null && $teamId > 0) {
+            $yearRecord = $this->findAssignmentForYear($deskId, $fiscalYear, $teamId);
+            if ($yearRecord !== null) {
+                return $this->assignmentFormFields($yearRecord);
+            }
+        }
+
+        $yearRecord = $this->findAssignmentForYear($deskId, $fiscalYear, null);
         if ($yearRecord !== null) {
             return $this->assignmentFormFields($yearRecord);
         }

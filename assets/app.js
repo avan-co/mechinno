@@ -543,6 +543,22 @@ const reloadSectionTables = (sectionId, resetPage = false) => {
   });
 };
 
+const reloadDeskTables = async () => {
+  const desksTable = document.getElementById("currentDesksTable");
+  const historyTable = document.getElementById("deskAssignmentsTable");
+  if (desksTable) {
+    desksTable.page = 1;
+    await desksTable.load?.();
+  }
+  if (historyTable) {
+    historyTable.page = 1;
+    await historyTable.load?.();
+  }
+  if (panelMode === "admin") {
+    await loadDeskGrid().catch(() => {});
+  }
+};
+
 const refreshAfterMutation = async (sectionId = null) => {
   invalidateCrudMeta();
   if (sectionId) reloadSectionTables(sectionId, true);
@@ -559,10 +575,9 @@ const refreshAfterMutation = async (sectionId = null) => {
       loadLedger().catch(() => {});
     }
   }
-  document.querySelectorAll("data-table").forEach((table) => {
-    if (!sectionId || table.closest(`#${sectionId}`)) return;
-    table.load?.();
-  });
+  if (!sectionId) {
+    document.querySelectorAll("data-table").forEach((table) => table.load?.());
+  }
 };
 
 const closeDrawer = () => {
@@ -1344,6 +1359,7 @@ const openDeskHistoryAssignModal = async (prefill = {}) => {
           }
         }
         closeModal();
+        await reloadDeskTables();
         await refreshAfterMutation("desk-history");
         await refreshAfterMutation("desks");
         showToast("تخصیص میز ذخیره شد.", "success");

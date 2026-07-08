@@ -11,13 +11,28 @@ final class Seeder
     public function recalculateCharges(string $fiscalYear): void
     {
         $fiscalYear = JalaliDate::normalizeDigits($fiscalYear);
-        $this->pdo->prepare('DELETE FROM charges WHERE fiscal_year = :fiscal_year AND source_file = :source')
-            ->execute(['fiscal_year' => $fiscalYear, 'source' => 'system']);
-
         $contracts = new TeamContracts($this->pdo);
-        foreach ($contracts->teamIdsWithContractInYear($fiscalYear) as $teamId) {
-            $this->recalculateChargesForTeam($teamId, $fiscalYear, false);
+        $teamIds = array_unique(array_merge(
+            $contracts->teamIdsWithContractInYear($fiscalYear),
+            $this->teamIdsWithSystemChargesInYear($fiscalYear)
+        ));
+        foreach ($teamIds as $teamId) {
+            $this->recalculateChargesForTeam((int) $teamId, $fiscalYear, true);
         }
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function teamIdsWithSystemChargesInYear(string $fiscalYear): array
+    {
+        $statement = $this->pdo->prepare(
+            'SELECT DISTINCT team_id FROM charges
+             WHERE fiscal_year = :fiscal_year AND source_file = :source AND team_id IS NOT NULL'
+        );
+        $statement->execute(['fiscal_year' => $fiscalYear, 'source' => 'system']);
+
+        return array_map(static fn (array $row): int => (int) ($row['team_id'] ?? 0), $statement->fetchAll());
     }
 
     public function recalculateChargesForTeam(int $teamId, string $fiscalYear, bool $deleteExisting = true): void
@@ -120,14 +135,18 @@ final class Seeder
 
         $months = [];
         for ($month = 1; $month <= 12; $month++) {
-            $deskCount = 0;
-            $informalDeskCount = 0;
+            $desksInMonth = [];
             foreach ($rows as $assignment) {
                 if (!$this->assignmentOverlapsMonth($assignment, $fiscalYear, $month)) {
                     continue;
                 }
-                $deskCount++;
-                $usage = (string) ($assignment['usage_type'] ?? 'formal');
+                $deskNumber = (int) ($assignment['desk_number'] ?? 0);
+                $key = $deskNumber > 0 ? (string) $deskNumber : 'row:' . count($desksInMonth);
+                $desksInMonth[$key] = (string) ($assignment['usage_type'] ?? 'formal');
+            }
+            $deskCount = count($desksInMonth);
+            $informalDeskCount = 0;
+            foreach ($desksInMonth as $usage) {
                 if (in_array($usage, ['informal', 'mixed'], true)) {
                     $informalDeskCount++;
                 }
