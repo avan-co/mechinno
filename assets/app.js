@@ -107,7 +107,8 @@ const sectionMeta = {
   transactions: { eyebrow: "مالی", title: "دفتر معین و موجودی نقدی", subtitle: "گردش واقعی حساب مرکز — بدون تکرار شارژ سیستمی" },
   development: { eyebrow: "برنامه‌ریزی", title: "برنامه توسعه", subtitle: "کارهای جاری مرکز — اولویت‌بندی و پیگیری ساده" },
   users: { eyebrow: "دسترسی", title: "کاربران پنل", subtitle: "مدیریت نقش‌ها و پنل اختصاصی نهادها" },
-  sms: { eyebrow: "اطلاع‌رسانی", title: "پیامک", subtitle: "ارسال اطلاعیه و یادآور شارژ به اعضا و مسئولین نهادها" },
+  sms: { eyebrow: "اطلاع‌رسانی", title: "ارسال پیامک", subtitle: "ارسال اطلاعیه و یادآور شارژ به اعضا و مسئولین نهادها" },
+  "sms-settings": { eyebrow: "پیامک", title: "تنظیمات ملی‌پیامک", subtitle: "اتصال API، خط ارسال، الگوی یادآور و همگام‌سازی" },
 };
 
 const teamSectionMeta = {
@@ -517,6 +518,12 @@ const activateSection = (id, options = {}) => {
 
   updatePageHeader(id);
   closeDrawer();
+  if (options.updateHash !== false && id) {
+    const nextHash = `#${id}`;
+    if (location.hash !== nextHash) {
+      history.replaceState(null, "", `${location.pathname}${location.search}${nextHash}`);
+    }
+  }
   reloadSectionTables(id);
 
   if (id === "desks" && panelMode === "admin") {
@@ -535,6 +542,9 @@ const activateSection = (id, options = {}) => {
   if (id === "members" && panelMode === "admin") initMemberFilters().catch(() => {});
   if (id === "sms" && panelMode === "admin") {
     window.initSmsPanel?.();
+  }
+  if (id === "sms-settings" && panelMode === "admin") {
+    window.initSmsSettingsPanel?.();
   }
   if (options.scrollTarget) {
     setTimeout(() => {
@@ -555,7 +565,7 @@ document.getElementById("menuToggle")?.addEventListener("click", openDrawer);
 document.getElementById("bottomNavMenu")?.addEventListener("click", openDrawer);
 document.getElementById("sidebarBackdrop")?.addEventListener("click", closeDrawer);
 
-document.querySelectorAll(".start-step[data-go]").forEach((item) => {
+document.querySelectorAll(".start-step[data-go], .text-link[data-go], .button[data-go]").forEach((item) => {
   item.addEventListener("click", () => activateSection(item.dataset.go));
 });
 
@@ -2704,7 +2714,9 @@ window.addEventListener("resize", () => {
 
 syncMobileClass();
 document.body.classList.add(panelMode === "team" ? "panel-team" : "panel-admin");
-updatePageHeader("overview");
+const hashSection = (location.hash || "").replace(/^#/, "");
+const initialSection = hashSection && document.getElementById(hashSection) ? hashSection : "overview";
+activateSection(initialSection);
 
 const memberApprovalTabs = document.getElementById("memberApprovalTabs");
 const membersTable = document.getElementById("membersTable");

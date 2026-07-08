@@ -386,6 +386,16 @@ code { color: var(--primary); font-size: 0.9em; }
   font-size: 13px;
 }
 
+button.nav-item {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  text-align: inherit;
+  font: inherit;
+  color: inherit;
+}
+
 .sms-page-head {
   display: flex;
   align-items: flex-start;

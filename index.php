@@ -15,7 +15,8 @@ $assetVer = (string) max(
     filemtime(__DIR__ . '/assets/styles.css'),
     filemtime(__DIR__ . '/assets/app.js'),
     filemtime(__DIR__ . '/assets/sms-panel.js'),
-    filemtime(__DIR__ . '/assets/sms-editor.js')
+    filemtime(__DIR__ . '/assets/sms-editor.js'),
+    filemtime(__DIR__ . '/assets/sms-settings.js')
 );
 ?>
 <!doctype html>
@@ -133,10 +134,10 @@ $assetVer = (string) max(
               <span class="nav-icon nav-icon--green"><svg viewBox="0 0 24 24"><path d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2Zm0 2v.5L12 13 4 6.5V6ZM4 18V8.2l7.4 6.5a1 1 0 0 0 1.2 0L20 8.2V18Z" fill="currentColor"/></svg></span>
               ارسال پیامک
             </button>
-            <a class="nav-item nav-item--sub" href="sms-settings.php">
+            <button class="nav-item nav-item--sub" data-section="sms-settings" type="button">
               <span class="nav-icon nav-icon--green"><svg viewBox="0 0 24 24"><path d="M12 8a1 1 0 0 1 1 1v3h3a1 1 0 1 1 0 2h-4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Zm8-3H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Z" fill="currentColor"/></svg></span>
               تنظیمات پیامک
-            </a>
+            </button>
             <?php endif; ?>
             <?php if (Access::canWrite()): ?>
             <button class="nav-item" data-section="development" type="button">
@@ -249,9 +250,9 @@ $assetVer = (string) max(
 
             <section id="sms" class="section">
               <div class="sms-page-head">
-                <p class="hint">ارسال پیامک از طریق <strong>ملی‌پیامک</strong>. تنظیمات API در <a href="sms-settings.php">صفحه تنظیمات پیامک</a>. مدیر مشاهده‌گر فقط آمار و تاریخچه را می‌بیند.</p>
+                <p class="hint">ارسال پیامک از طریق <strong>ملی‌پیامک</strong>. تنظیمات API در بخش <button type="button" class="text-link" data-go="sms-settings">تنظیمات پیامک</button>. مدیر مشاهده‌گر فقط آمار و تاریخچه را می‌بیند.</p>
                 <?php if (Access::canWrite()): ?>
-                <a class="button ghost" href="sms-settings.php">تنظیمات پیامک</a>
+                <button type="button" class="button ghost" data-go="sms-settings">تنظیمات پیامک</button>
                 <?php endif; ?>
               </div>
               <article class="panel">
@@ -314,6 +315,34 @@ $assetVer = (string) max(
                     <thead><tr><th>زمان</th><th>نوع</th><th>گیرنده</th><th>موبایل</th><th>نهاد</th><th>وضعیت</th><th>دلیوری</th><th>تایید API</th><th>هزینه</th><th>متن</th></tr></thead>
                     <tbody></tbody>
                   </table>
+                </div>
+              </article>
+            </section>
+
+            <section id="sms-settings" class="section">
+              <p class="hint">اتصال REST ملی‌پیامک. خطوط ارسال در اولین ذخیره استعلام می‌شوند؛ بعداً می‌توانید دستی استعلام بگیرید. هزینه هر پیامک از API خوانده می‌شود.</p>
+              <article class="panel">
+                <div class="panel-head"><h2>حساب و خط ارسال</h2></div>
+                <form id="smsSettingsForm" class="payment-settings-form">در حال بارگذاری…</form>
+              </article>
+              <article class="panel">
+                <div class="panel-head"><h2>الگوی یادآور شارژ</h2></div>
+                <p class="hint">برای ارسال دسته‌ای یادآور، همین الگو برای همه نهادهای انتخاب‌شده اعمال می‌شود.</p>
+                <div id="smsChargeTemplateEditor"></div>
+                <?php if (Access::canWrite()): ?>
+                <div class="modal-actions">
+                  <button class="button" type="button" id="smsSaveTemplate">ذخیره الگو</button>
+                </div>
+                <?php endif; ?>
+              </article>
+              <article class="panel">
+                <div class="panel-head"><h2>آمار و همگام‌سازی</h2></div>
+                <div id="smsSettingsStats">در حال بارگذاری…</div>
+                <div class="modal-actions">
+                  <?php if (Access::canWrite()): ?>
+                  <button class="button ghost" type="button" id="smsManualQueryLines">استعلام مجدد خطوط</button>
+                  <button class="button ghost" type="button" id="smsSyncHistory">همگام‌سازی تاریخچه از API</button>
+                  <?php endif; ?>
                 </div>
               </article>
             </section>
@@ -506,6 +535,7 @@ $assetVer = (string) max(
       <script src="assets/app.js?v=<?= e($assetVer) ?>"></script>
       <script src="assets/sms-editor.js?v=<?= e($assetVer) ?>"></script>
       <script src="assets/sms-panel.js?v=<?= e($assetVer) ?>"></script>
+      <script src="assets/sms-settings.js?v=<?= e($assetVer) ?>"></script>
     <?php endif; ?>
   </body>
 </html>

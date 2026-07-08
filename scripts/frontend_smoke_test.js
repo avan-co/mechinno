@@ -62,6 +62,12 @@ if (!fs.existsSync(path.join(__dirname, "..", "sms-settings.php"))) {
   process.exit(1);
 }
 
+const indexSource = fs.readFileSync(path.join(__dirname, "..", "index.php"), "utf8");
+if (!indexSource.includes('id="sms-settings"')) {
+  console.error("index.php must include sms-settings section inside admin panel");
+  process.exit(1);
+}
+
 if (!apiSource.includes("sms-query-lines") || !apiSource.includes("sms-check-deliveries")) {
   console.error("api.php must expose sms-query-lines and sms-check-deliveries");
   process.exit(1);
