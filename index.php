@@ -253,7 +253,7 @@ $assetVer = (string) max(
                   <h2>تاریخچه تخصیص میزها</h2>
                   <select id="deskHistoryYear" class="year-select" aria-label="فیلتر سال"></select>
                 </div>
-                <p class="hint">برای ثبت یا اصلاح میزهای سال‌های قبل، رکورد جدید اضافه کنید یا رکورد موجود را ویرایش کنید.</p>
+                <p class="hint">برای هر سال، رکورد جداگانه با تاریخ شروع و تحویل ثبت کنید. میزهای سال جاری از جدول «جزئیات میزها» یا با افزودن رکورد جدید قابل تخصیص هستند.</p>
                 <data-table id="deskAssignmentsTable" title="" endpoint="api.php?resource=desk-assignments"></data-table>
               </article>
             </section>
@@ -278,7 +278,7 @@ $assetVer = (string) max(
                     <?php endif; ?>
                   </div>
                 </div>
-                <p class="hint"><?php if (Access::canWrite()): ?>روی سلول «بدهکار به مرکز» کلیک کنید تا <strong>ثبت مستقیم مدیر</strong> انجام شود (بدون صف تأیید). واریز نهادها با روش <strong>FIFO</strong> به قدیمی‌ترین ماه‌های دارای مانده تخصیص می‌یابد.<?php else: ?>وضعیت پرداخت هر نهاد در هر ماه — فقط مشاهده. تخصیص واریزها FIFO است.<?php endif; ?></p>
+                <p class="hint"><?php if (Access::canWrite()): ?>روی سلول «بدهکار به مرکز» کلیک کنید تا <strong>ثبت مستقیم مدیر</strong> انجام شود (بدون صف تأیید). واریز نهادها ابتدا به <strong>قدیمی‌ترین ماه‌های بدهکار</strong> تخصیص می‌یابد.<?php else: ?>وضعیت پرداخت هر نهاد در هر ماه — فقط مشاهده. واریزها ابتدا به قدیمی‌ترین بدهی‌ها تخصیص می‌یابند.<?php endif; ?></p>
                 <div id="chargesCollage" class="charges-collage"></div>
               </article>
               <data-table title="ثبت و ویرایش شارژ" endpoint="api.php?resource=charges"></data-table>

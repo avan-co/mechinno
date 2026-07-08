@@ -305,6 +305,32 @@ code { color: var(--primary); font-size: 0.9em; }
   gap: 8px;
 }
 
+.desk-assignment-card.is-active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.desk-assignment-section {
+  display: grid;
+  gap: 12px;
+}
+
+.desk-assignment-section + .desk-assignment-section {
+  margin-top: 20px;
+}
+
+.desk-assignment-section h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.desk-assignment-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .desk-assignment-dates {
   display: flex;
   flex-direction: column;
@@ -543,7 +569,7 @@ code { color: var(--primary); font-size: 0.9em; }
   color: var(--primary);
 }
 
-.fifo-hint {
+.payment-allocation-hint {
   margin: 0 0 12px;
   padding: 10px 12px;
   border-radius: var(--radius-sm);

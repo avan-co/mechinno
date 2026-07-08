@@ -273,7 +273,7 @@ final class ExcelExporter
             ['واریز تأییدشده نهادها (ریال)', (int) $cards['paid_total']],
             ['طلب کل از نهادها (ریال)', (int) $cards['debt_total']],
             ['شارژ ماه ' . ($month['month_name'] ?? ''), (int) ($month['charge_total'] ?? 0)],
-            ['تخصیص FIFO ماه ' . ($month['month_name'] ?? ''), (int) ($month['paid_total'] ?? 0)],
+            ['واریز تخصیص‌یافته ماه ' . ($month['month_name'] ?? ''), (int) ($month['paid_total'] ?? 0)],
             ['مانده طلب ماه ' . ($month['month_name'] ?? ''), (int) ($month['debt_total'] ?? 0)],
         ];
 

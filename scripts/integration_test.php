@@ -320,6 +320,45 @@ $deskAssign = $crud->create('desk_assignments', [
 ]);
 $assert((int) ($deskAssign['desk_number'] ?? 0) === 1, 'desk_assignments: historical record created');
 
+$activeAssign = $crud->create('desk_assignments', [
+    'desk_id' => '3',
+    'team_id' => (string) $teamId,
+    'usage_type' => 'formal',
+    'assigned_from' => '1405/01/01',
+    'notes' => 'فعال بدون تحویل',
+]);
+$deskThree = $crud->find('desks', 3);
+$assert((int) ($deskThree['team_id'] ?? 0) === $teamId, 'desk_assignments: open assignment syncs desks table');
+
+$crud->update('desk_assignments', (int) $activeAssign['id'], [
+    'assigned_until' => '1405/12/29',
+]);
+
+(new DeskAssignments($pdo))->syncDeskAssignment(3, [
+    'number' => 3,
+    'team_id' => $teamId,
+    'usage_type' => 'formal',
+    'assignment_from' => '1406/01/01',
+]);
+$splitCount = (int) $pdo->query('SELECT COUNT(*) FROM desk_assignments WHERE desk_id = 3')->fetchColumn();
+$assert($splitCount >= 2, 'desks: fiscal-year change keeps history');
+
+$_SESSION = [
+    'mechinno_authenticated' => true,
+    'mechinno_role' => Access::ROLE_TEAM,
+    'mechinno_team_id' => $teamId,
+    'mechinno_user' => $row['portal_username'] ?? 'team',
+    'mechinno_user_id' => 1,
+];
+$teamDeskHistory = $repo->paginatedResource('desk-assignments', 1, 100);
+$assert(count($teamDeskHistory['rows']) >= 2, 'desk-assignments: team panel shows full history');
+$_SESSION = [
+    'mechinno_authenticated' => true,
+    'mechinno_role' => Access::ROLE_ADMIN_EDITOR,
+    'mechinno_user' => 'admin',
+    'mechinno_user_id' => 0,
+];
+
 $inactiveTeam = $crud->create('teams', [
     'entity_type' => 'team',
     'name' => 'نهاد غیرفعال تست',
