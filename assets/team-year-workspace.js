@@ -405,7 +405,13 @@
     S().trapFocus(modal);
   };
 
+  const monthFromRecord = (row, monthKey, dateKey) => {
+    const month = S().monthIndexFromDate?.(row[monthKey] || row[dateKey]);
+    return month ? String(month) : "";
+  };
+
   const openDeskAssignModal = async (deskNumber) => {
+    console.log("[mechinno:desk-map:open]", { deskNumber });
     const mapData = await S().fetchJson("api.php?resource=desks-map");
     const mapDesk = (mapData.rows || []).find((row) => Number(row.number) === Number(deskNumber));
     if (!mapDesk) {
@@ -418,50 +424,40 @@
       S().showToast("میز پیدا نشد.", "error");
       return;
     }
-    const meta = await S().loadCrudMeta();
+
     const year = currentFiscalYear();
-    let fromMonth = S().monthIndexFromDate?.(desk.assignment_from_month || desk.assignment_from) || "";
-    let untilMonth = S().monthIndexFromDate?.(desk.assignment_until_month || desk.assignment_until) || "";
-    const hasSavedAssignment = Boolean(
-      fromMonth || untilMonth || desk.assignment_from || desk.assignment_until
-    );
-    if (desk.team_id && !hasSavedAssignment) {
-      try {
-        const { rows: contracts } = await S().fetchResource("api.php?resource=team_contracts", {
-          page: 1,
-          perPage: 50,
-          teamId: desk.team_id,
-        });
-        const contract = contracts.find((row) => String(row.fiscal_year) === String(year));
-        if (contract) {
-          fromMonth = String(S().monthIndexFromDate?.(contract.contract_start) || fromMonth || "1");
-          untilMonth = String(S().monthIndexFromDate?.(contract.contract_end) || untilMonth || "12");
-        }
-      } catch (error) {
-        // ignore contract lookup errors
-      }
+    const assignParams = { page: 1, perPage: 100, fiscalYear: year };
+    if (desk.team_id) assignParams.teamId = desk.team_id;
+    const { rows: assignments } = await S().fetchResource("api.php?resource=desk-assignments", assignParams);
+    const existing = assignments.find((row) => Number(row.desk_id) === Number(desk.id));
+
+    let prefill = {
+      desk_id: String(desk.id),
+      team_id: desk.team_id ? String(desk.team_id) : "",
+      fiscal_year: year,
+      usage_type: desk.usage_type || "formal",
+      notes: desk.notes || "",
+      lockDesk: true,
+      assigned_from_month: monthFromRecord(desk, "assignment_from_month", "assignment_from") || "1",
+      assigned_until_month: monthFromRecord(desk, "assignment_until_month", "assignment_until") || "12",
+    };
+
+    if (existing) {
+      prefill = {
+        id: existing.id,
+        desk_id: String(existing.desk_id),
+        team_id: String(existing.team_id),
+        fiscal_year: existing.fiscal_year || year,
+        usage_type: existing.usage_type || "formal",
+        notes: existing.notes || "",
+        lockDesk: true,
+        assigned_from_month: monthFromRecord(existing, "assigned_from_month", "assigned_from") || "1",
+        assigned_until_month: monthFromRecord(existing, "assigned_until_month", "assigned_until") || "12",
+      };
     }
-    if (!fromMonth) fromMonth = "1";
-    if (!untilMonth) untilMonth = "12";
-    S().openRecordModal({
-      resource: "desks",
-      definition: meta.resources.desks,
-      title: `تخصیص میز ${desk.number} — سال ${year}`,
-      record: {
-        id: String(desk.id),
-        team_id: desk.team_id ? String(desk.team_id) : "",
-        usage_type: desk.usage_type || "formal",
-        assignment_from_month: fromMonth,
-        assignment_until_month: untilMonth,
-        notes: desk.notes || "",
-      },
-      onSaved: async () => {
-        await S().loadDeskGrid?.();
-        await S().refreshAfterMutation("desks");
-        await S().refreshAfterMutation("desk-history");
-        S().showToast("میز به‌روز شد.", "success");
-      },
-    });
+
+    console.log("[mechinno:desk-map:prefill]", { desk, existing, prefill });
+    await S().openDeskHistoryAssignModal(prefill);
   };
 
   const renderTeamStatusChecklist = (row) => {

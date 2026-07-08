@@ -390,8 +390,13 @@ const escapeHtml = (value) =>
     .replaceAll("'", "&#039;");
 
 const showToast = (message, type = "info") => {
+  const logFn = type === "error" ? console.error : console.log;
+  logFn(`[mechinno:toast:${type}]`, message);
   const host = document.getElementById("toastHost");
-  if (!host) return;
+  if (!host) {
+    console.warn("[mechinno:toast] toastHost element missing — message was:", message);
+    return;
+  }
   const toast = document.createElement("div");
   toast.className = `toast toast-${type}`;
   toast.textContent = message;
@@ -429,7 +434,21 @@ const formatMoney = (value) => {
   return `${maybe.toLocaleString("fa-IR")} ریال`;
 };
 
+const debugLog = (scope, ...args) => {
+  console.log(`[mechinno:${scope}]`, ...args);
+};
+
 const fetchJson = async (url, options = {}) => {
+  const method = options.method || "GET";
+  let reqBody;
+  if (options.body) {
+    try {
+      reqBody = JSON.parse(options.body);
+    } catch {
+      reqBody = options.body;
+    }
+  }
+  debugLog("api:request", method, url, reqBody);
   const response = await fetch(url, options);
   const raw = await response.text();
   let data = {};
@@ -437,12 +456,15 @@ const fetchJson = async (url, options = {}) => {
     try {
       data = JSON.parse(raw);
     } catch {
+      console.error("[mechinno:api:parse-error]", url, raw.slice(0, 500));
       throw new Error(raw.trim() || "پاسخ نامعتبر از سرور");
     }
   }
   if (!response.ok) {
+    console.error("[mechinno:api:error]", method, url, response.status, data);
     throw new Error(data.error || raw.trim() || `Request failed: ${url}`);
   }
+  debugLog("api:ok", method, url, data?.record ? { ok: data.ok, recordId: data.record?.id } : data);
   return data;
 };
 
@@ -1109,13 +1131,16 @@ const openDeskHistoryAssignModal = async (prefill = {}) => {
 
   const modal = ensureModal();
   const form = modal.querySelector("#crudForm");
-  modal.querySelector("#crudModalTitle").textContent = prefill.id ? "ویرایش تخصیص میز" : "ثبت تخصیص میز";
+  modal.querySelector("#crudModalTitle").textContent = prefill.id
+    ? `ویرایش تخصیص میز${prefill.lockDesk ? "" : ""}`
+    : (prefill.lockDesk ? "تخصیص میز — سال جاری" : "ثبت تخصیص میز");
   const state = {
     teamId: prefill.team_id ? String(prefill.team_id) : "",
     contractId: "",
     fiscalYear: prefill.fiscal_year ? String(prefill.fiscal_year) : "",
     contractStartMonth: 1,
     contractEndMonth: 12,
+    lockDesk: Boolean(prefill.lockDesk),
     desks: [{
       desk_id: prefill.desk_id ? String(prefill.desk_id) : "",
       usage_type: prefill.usage_type || "formal",
@@ -1124,6 +1149,7 @@ const openDeskHistoryAssignModal = async (prefill = {}) => {
       notes: prefill.notes || "",
     }],
   };
+  debugLog("desk-assign:modal-open", { prefill, state });
 
   const teamOptionsHtml = Object.entries(teamOptions).map(([value, label]) =>
     `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`
@@ -1138,7 +1164,7 @@ const openDeskHistoryAssignModal = async (prefill = {}) => {
   const renderDeskRows = () => state.desks.map((desk, index) => `
     <div class="desk-assign-row" data-desk-row="${index}">
       <label><span>میز</span>
-        <select data-field="desk_id" data-index="${index}" required>
+        <select data-field="desk_id" data-index="${index}" required ${state.lockDesk || prefill.id ? "disabled" : ""}>
           <option value="">انتخاب میز</option>
           ${deskOptionsHtml}
         </select>
@@ -1231,8 +1257,8 @@ const openDeskHistoryAssignModal = async (prefill = {}) => {
       if (!prefill.id) {
         state.desks = state.desks.map((desk) => ({
           ...desk,
-          assigned_from_month: String(state.contractStartMonth),
-          assigned_until_month: String(state.contractEndMonth),
+          assigned_from_month: desk.assigned_from_month || String(state.contractStartMonth),
+          assigned_until_month: desk.assigned_until_month || String(state.contractEndMonth),
         }));
         form.querySelector(".desk-assign-rows").innerHTML = renderDeskRows();
         bindDeskRowInputs();
@@ -1283,9 +1309,9 @@ const openDeskHistoryAssignModal = async (prefill = {}) => {
       const submitButton = form.querySelector('button[type="submit"]');
       submitButton.disabled = true;
       try {
-        if (prefill.id) {
-          const desk = state.desks[0];
-          await postJson("api.php?resource=desk-assignments&action=update", {
+        const desk = state.desks[0];
+        const payload = prefill.id
+          ? {
             id: prefill.id,
             team_id: state.teamId,
             desk_id: desk.desk_id,
@@ -1294,19 +1320,27 @@ const openDeskHistoryAssignModal = async (prefill = {}) => {
             assigned_from_month: desk.assigned_from_month,
             assigned_until_month: desk.assigned_until_month,
             notes: desk.notes || "",
-          });
+          }
+          : null;
+        if (prefill.id) {
+          debugLog("desk-assign:update", payload);
+          const result = await postJson("api.php?resource=desk-assignments&action=update", payload);
+          debugLog("desk-assign:update:ok", result?.record);
         } else {
-          for (const desk of state.desks) {
-            if (!desk.desk_id) continue;
-            await postJson("api.php?resource=desk-assignments&action=create", {
+          for (const deskRow of state.desks) {
+            if (!deskRow.desk_id) continue;
+            const createPayload = {
               team_id: state.teamId,
-              desk_id: desk.desk_id,
-              usage_type: desk.usage_type,
+              desk_id: deskRow.desk_id,
+              usage_type: deskRow.usage_type,
               fiscal_year: state.fiscalYear,
-              assigned_from_month: desk.assigned_from_month,
-              assigned_until_month: desk.assigned_until_month,
-              notes: desk.notes || "",
-            });
+              assigned_from_month: deskRow.assigned_from_month,
+              assigned_until_month: deskRow.assigned_until_month,
+              notes: deskRow.notes || "",
+            };
+            debugLog("desk-assign:create", createPayload);
+            const result = await postJson("api.php?resource=desk-assignments&action=create", createPayload);
+            debugLog("desk-assign:create:ok", result?.record);
           }
         }
         closeModal();
@@ -1314,6 +1348,7 @@ const openDeskHistoryAssignModal = async (prefill = {}) => {
         await refreshAfterMutation("desks");
         showToast("تخصیص میز ذخیره شد.", "success");
       } catch (error) {
+        console.error("[mechinno:desk-assign:save-error]", error);
         showToast(error.message, "error");
       } finally {
         submitButton.disabled = false;
@@ -3207,6 +3242,7 @@ window.MechinnoShared = {
   monthIndexFromDate,
   fiscalYearFromDate,
   openDeskHistoryAssignModal,
+  debugLog,
   profileSection,
   entityTypeLabels,
   openDepositModal,
