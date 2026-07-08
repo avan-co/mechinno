@@ -53,7 +53,7 @@ $statusClass = static function (?string $status): string {
             <strong><?= e($meta['title']) ?></strong>
             <small><?= e($meta['subtitle']) ?></small>
           </div>
-          <?= Brand::mark('report-brand-mark') ?>
+          <?= Brand::mark('report') ?>
         </div>
         <div class="report-meta">
           <span>تاریخ گزارش: <?= e($meta['generated_at']) ?></span>

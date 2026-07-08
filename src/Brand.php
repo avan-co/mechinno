@@ -4,14 +4,40 @@ declare(strict_types=1);
 
 final class Brand
 {
-    private const BRAND_DIR = '/assets/brand';
+    private const BRAND_DIR = 'assets/brand';
+
+    /** @var array<string, array{light: string, dark: string, class: string}> */
+    private const VARIANTS = [
+        'panel' => [
+            'light' => 'icaut-logo-panel.png',
+            'dark' => 'icaut-logo-dark-panel.png',
+            'class' => 'brand-mark brand-mark--panel',
+        ],
+        'hero' => [
+            'light' => 'icaut-logo.png',
+            'dark' => 'icaut-logo-dark.png',
+            'class' => 'brand-mark brand-mark--hero',
+        ],
+        'report' => [
+            'light' => 'icaut-logo-panel.png',
+            'dark' => 'icaut-logo-dark-panel.png',
+            'class' => 'report-brand-mark',
+        ],
+        'compact' => [
+            'light' => 'icaut-logo-sm.png',
+            'dark' => 'icaut-logo-dark-sm.png',
+            'class' => 'brand-mark brand-mark--compact',
+        ],
+    ];
 
     public static function version(): string
     {
-        $base = app_base_path() . self::BRAND_DIR;
+        $base = app_base_path() . '/' . self::BRAND_DIR;
         $files = [
-            'icaut-logo-sm.png',
-            'icaut-logo-dark-sm.png',
+            'icaut-logo-panel.png',
+            'icaut-logo-dark-panel.png',
+            'icaut-logo.png',
+            'icaut-logo-dark.png',
             'favicon.ico',
             'site.webmanifest',
         ];
@@ -28,7 +54,7 @@ final class Brand
 
     public static function asset(string $file): string
     {
-        return self::BRAND_DIR . '/' . ltrim($file, '/');
+        return app_web_base() . self::BRAND_DIR . '/' . ltrim($file, '/');
     }
 
     public static function headTags(): string
@@ -51,16 +77,23 @@ final class Brand
         ]);
     }
 
-    public static function mark(string $class = 'brand-mark', bool $hero = false): string
+    public static function mark(string $variant = 'panel'): string
+    {
+        $config = self::VARIANTS[$variant] ?? self::VARIANTS['panel'];
+
+        return self::renderMark($config['class'], $config['light'], $config['dark']);
+    }
+
+    private static function renderMark(string $class, string $lightFile, string $darkFile): string
     {
         $v = self::version();
-        $sizeClass = $hero ? ' brand-logo--hero' : '';
-        $light = e(self::asset($hero ? 'icaut-logo.png' : 'icaut-logo-sm.png') . '?v=' . $v);
-        $dark = e(self::asset($hero ? 'icaut-logo-dark.png' : 'icaut-logo-dark-sm.png') . '?v=' . $v);
+        $light = e(self::asset($lightFile) . '?v=' . $v);
+        $dark = e(self::asset($darkFile) . '?v=' . $v);
+        $alt = e(self::altText());
 
         return '<span class="' . e($class) . '" aria-hidden="true">'
-            . '<img class="brand-logo brand-logo--light' . $sizeClass . '" src="' . $light . '" alt="" decoding="async" />'
-            . '<img class="brand-logo brand-logo--dark' . $sizeClass . '" src="' . $dark . '" alt="" decoding="async" />'
+            . '<img class="brand-logo brand-logo--light" src="' . $light . '" alt="' . $alt . '" decoding="async" />'
+            . '<img class="brand-logo brand-logo--dark" src="' . $dark . '" alt="' . $alt . '" decoding="async" />'
             . '</span>';
     }
 

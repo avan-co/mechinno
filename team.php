@@ -98,8 +98,8 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
       <div class="shell">
         <aside class="sidebar" id="sidebar">
           <div class="brand">
-            <?= Brand::mark() ?>
-            <div>
+            <?= Brand::mark('panel') ?>
+            <div class="brand-copy">
               <strong><?= e($team['name']) ?></strong>
               <small><?= e($entityLabel) ?> — <?= e($team['entity_code'] ?? '') ?></small>
             </div>

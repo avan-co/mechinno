@@ -45,9 +45,9 @@ $assetVer = (string) max(
     <?php if (!$isConfigured): ?>
       <main class="setup-screen">
         <section class="setup-card">
-          <div class="brand">
-            <?= Brand::mark() ?>
-            <div>
+          <div class="setup-brand">
+            <?= Brand::mark('hero') ?>
+            <div class="setup-brand-copy">
               <strong>Mechinno</strong>
               <small>مرکز نوآوری مکانیک</small>
             </div>
@@ -96,8 +96,8 @@ $assetVer = (string) max(
       <div class="shell">
         <aside class="sidebar" id="sidebar">
           <div class="brand">
-            <?= Brand::mark() ?>
-            <div>
+            <?= Brand::mark('panel') ?>
+            <div class="brand-copy">
               <strong>Mechinno</strong>
               <small>مرکز نوآوری مکانیک</small>
             </div>
