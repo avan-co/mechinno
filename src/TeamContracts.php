@@ -371,8 +371,8 @@ final class TeamContracts
     public function ratesForTeamInMonth(int $teamId, string $fiscalYear, array $globalRates): array
     {
         $contract = $this->contractForYear($teamId, $fiscalYear);
-        $chargeOverride = $this->nullableRate($contract['charge_rate_override'] ?? null);
-        $rentOverride = $this->nullableRate($contract['informal_rent_rate_override'] ?? null);
+        $chargeOverride = $this->nullableRate(is_array($contract) ? ($contract['charge_rate_override'] ?? null) : null);
+        $rentOverride = $this->nullableRate(is_array($contract) ? ($contract['informal_rent_rate_override'] ?? null) : null);
 
         return [
             'charge_rate' => $chargeOverride ?? (int) ($globalRates['charge_rate'] ?? 0),
@@ -579,6 +579,22 @@ final class TeamContracts
         } catch (PDOException) {
             return false;
         }
+    }
+
+    public function contractRateOverrideSelect(string $alias = ''): string
+    {
+        static $cache = [];
+        if (isset($cache[$alias])) {
+            return $cache[$alias];
+        }
+
+        $prefix = $alias !== '' ? $alias . '.' : '';
+        $cache[$alias] = Schema::hasColumn($this->pdo, 'team_contracts', 'charge_rate_override')
+            && Schema::hasColumn($this->pdo, 'team_contracts', 'informal_rent_rate_override')
+            ? ', ' . $prefix . 'charge_rate_override, ' . $prefix . 'informal_rent_rate_override'
+            : '';
+
+        return $cache[$alias];
     }
 
     private function deskAssignmentExemptSelect(): string

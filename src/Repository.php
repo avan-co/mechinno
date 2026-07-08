@@ -459,7 +459,8 @@ final class Repository
                 . $this->searchClause('teams', $filters)
                 . ' ORDER BY t.is_active DESC, t.entity_type, t.name',
             'team_contracts' => "SELECT tc.id, tc.team_id, tc.fiscal_year, tc.contract_start, tc.contract_end,
-                        tc.charge_rate_override, tc.informal_rent_rate_override, tc.notes, tc.created_at,
+                        tc.notes, tc.created_at"
+                . $this->teamContractRateOverrideSelect('tc') . ",
                         t.name AS team_name, t.entity_type, t.is_active AS team_is_active
                  FROM team_contracts tc
                  INNER JOIN teams t ON t.id = tc.team_id"
@@ -1129,8 +1130,8 @@ final class Repository
         return [
             'team' => self::stripLegacyColumns($team),
             'contracts' => $this->preparedRows(
-                'SELECT id, fiscal_year, contract_start, contract_end, notes, created_at,
-                        charge_rate_override, informal_rent_rate_override
+                'SELECT id, fiscal_year, contract_start, contract_end, notes, created_at'
+                . $this->teamContractRateOverrideSelect() . '
                  FROM team_contracts WHERE team_id = :id ORDER BY fiscal_year DESC',
                 ['id' => $teamId]
             ),
@@ -1298,13 +1299,13 @@ final class Repository
             $deskAssignments = $contracts->deskAssignmentsForTeamInYear($teamId, $year);
             $summaries[] = [
                 'fiscal_year' => $year,
-                'has_contract' => $contract !== null,
-                'contract_id' => $contract ? (int) ($contract['id'] ?? 0) : null,
-                'contract_start' => $contract['contract_start'] ?? null,
-                'contract_end' => $contract['contract_end'] ?? null,
-                'contract_notes' => $contract['notes'] ?? null,
-                'charge_rate_override' => $contract['charge_rate_override'] ?? null,
-                'informal_rent_rate_override' => $contract['informal_rent_rate_override'] ?? null,
+                'has_contract' => is_array($contract),
+                'contract_id' => is_array($contract) ? (int) ($contract['id'] ?? 0) : null,
+                'contract_start' => is_array($contract) ? ($contract['contract_start'] ?? null) : null,
+                'contract_end' => is_array($contract) ? ($contract['contract_end'] ?? null) : null,
+                'contract_notes' => is_array($contract) ? ($contract['notes'] ?? null) : null,
+                'charge_rate_override' => is_array($contract) ? ($contract['charge_rate_override'] ?? null) : null,
+                'informal_rent_rate_override' => is_array($contract) ? ($contract['informal_rent_rate_override'] ?? null) : null,
                 'desk_count' => count($deskAssignments),
                 'charge_total' => $this->contractChargeTotalForTeamInYear($teamId, $year),
                 'paid_total' => $this->contractPaidAllocatedForTeamInYear($teamId, $year),
@@ -2509,5 +2510,10 @@ final class Repository
             : '';
 
         return $suffix;
+    }
+
+    private function teamContractRateOverrideSelect(string $alias = ''): string
+    {
+        return $this->contracts()->contractRateOverrideSelect($alias);
     }
 }

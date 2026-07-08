@@ -116,6 +116,19 @@ $joinedOnlyTeamId = (int) $joinedOnlyTeam['id'];
 Schema::migrate($pdo);
 $autoContractCount = (int) $pdo->query("SELECT COUNT(*) FROM team_contracts WHERE team_id = {$joinedOnlyTeamId}")->fetchColumn();
 $assert($autoContractCount === 0, 'contracts: joined_at alone does not auto-create contracts on migrate');
+$_SESSION = [
+    'mechinno_authenticated' => true,
+    'mechinno_role' => Access::ROLE_TEAM,
+    'mechinno_team_id' => $joinedOnlyTeamId,
+    'mechinno_user' => 'joined-only-team',
+    'mechinno_user_id' => 2,
+];
+$joinedOnlyProfile = $repo->teamProfile($joinedOnlyTeamId);
+$assert(isset($joinedOnlyProfile['team']['name']), 'api: team profile without current-year contract');
+$assert(is_array($joinedOnlyProfile['year_summaries'] ?? null), 'api: team profile year summaries without contract');
+$joinedOnlySummary = $repo->summary();
+$assert(isset($joinedOnlySummary['team']['name']), 'api: team summary without current-year contract');
+$_SESSION = [];
 $assert($teamId > 0 && ($team['entity_code'] ?? '') !== '', 'crud: team created with entity_code');
 $leaderMember = $pdo->query("SELECT id, is_leader, full_name FROM members WHERE team_id = {$teamId} AND is_leader = 1")->fetch();
 $assert($leaderMember !== false, 'teams: leader member auto-created');
