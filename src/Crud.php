@@ -543,16 +543,14 @@ final class Crud
         }
         if ($resource === 'desks') {
             $existingDesk = $this->find($resource, $id);
-            (new DeskAssignments($this->pdo))->syncDeskAssignment(
-                $id,
-                array_merge($existingDesk, $deskAssignmentDates)
-            );
+            $deskRecord = array_merge($existingDesk, $data, $deskAssignmentDates);
+            (new DeskAssignments($this->pdo))->syncDeskAssignment($id, $deskRecord);
             $teamIds = array_filter([
                 (int) ($existingDesk['team_id'] ?? 0),
-                (int) ($data['team_id'] ?? $existingDesk['team_id'] ?? 0),
+                (int) ($deskRecord['team_id'] ?? 0),
             ]);
             foreach (array_unique($teamIds) as $teamId) {
-                $this->syncChargesForTeam($teamId, array_merge($existingDesk, $deskAssignmentDates, $data));
+                $this->syncChargesForTeam($teamId, $deskRecord);
             }
         }
         if ($resource === 'desk_assignments') {
@@ -597,6 +595,7 @@ final class Crud
             $this->assertPanelUserDeletable($id);
         }
         if ($resource === 'teams') {
+            $this->pdo->prepare('DELETE FROM team_contracts WHERE team_id = :id')->execute(['id' => $id]);
             EntityAccounts::deleteForTeam($this->pdo, $id);
         }
         if ($resource === 'team_contracts') {

@@ -34,6 +34,11 @@ $assert((int) $pdo->query('SELECT COUNT(*) FROM desks')->fetchColumn() === 24, '
 $installer = new Installer($pdo);
 $result = $installer->installFresh();
 $assert(($result['desks'] ?? 0) === 24 && ($result['teams'] ?? -1) === 0, 'install: fresh reset works');
+$pdo->exec("INSERT INTO team_contracts (team_id, fiscal_year, contract_start, contract_end, notes)
+            VALUES (99, '1403', '1403/01/01', '1403/12/29', 'orphan')");
+$installer->installFresh();
+$orphanContracts = (int) $pdo->query('SELECT COUNT(*) FROM team_contracts')->fetchColumn();
+$assert($orphanContracts === 0, 'install: reset clears team_contracts');
 
 // --- Bootstrap users from config (if config.php exists) ---
 $configPath = Database::configPath();
@@ -170,6 +175,15 @@ $deskAfterUpdate = $crud->update('desks', 1, [
     'assignment_until' => $partialUntil,
 ]);
 $assert(($deskAfterUpdate['assignment_until'] ?? '') === $partialUntil, 'desks: assignment_until persists after save');
+$deskListRow = null;
+foreach ($repo->paginatedResource('desks', 1, 100)['rows'] as $deskRow) {
+    if ((int) ($deskRow['number'] ?? 0) === 1) {
+        $deskListRow = $deskRow;
+        break;
+    }
+}
+$assert($deskListRow !== null, 'desks: list includes assigned desk');
+$assert(($deskListRow['assignment_until'] ?? '') === $partialUntil, 'desks: list shows assignment_until');
 $crud->create('rate_settings', [
     'fiscal_year' => '1405',
     'title' => 'نرخ تست تیم',
