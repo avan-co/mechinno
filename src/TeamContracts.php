@@ -282,7 +282,7 @@ final class TeamContracts
              WHERE team_id = :team_id
                AND assigned_from <= :year_end
                AND (assigned_until IS NULL OR assigned_until = \'\' OR assigned_until >= :year_start)
-             ORDER BY assigned_from DESC, CASE WHEN assigned_until IS NULL OR assigned_until = '' THEN 1 ELSE 0 END, assigned_until DESC'
+             ORDER BY assigned_from DESC, CASE WHEN assigned_until IS NULL OR assigned_until = \'\' THEN 1 ELSE 0 END, assigned_until DESC'
         );
         $assignments->execute([
             'team_id' => $teamId,
@@ -323,7 +323,7 @@ final class TeamContracts
                AND team_id = :team_id
                AND assigned_from <= :year_end
                AND (assigned_until IS NULL OR assigned_until = \'\' OR assigned_until >= :year_start)
-             ORDER BY CASE WHEN assigned_until IS NULL OR assigned_until = '' THEN 1 ELSE 0 END, assigned_from DESC, id DESC
+             ORDER BY CASE WHEN assigned_until IS NULL OR assigned_until = \'\' THEN 1 ELSE 0 END, assigned_from DESC, id DESC
              LIMIT 1'
         );
 

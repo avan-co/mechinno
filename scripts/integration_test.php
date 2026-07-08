@@ -53,6 +53,44 @@ if (is_file($configPath)) {
 $crud = new Crud($pdo);
 $repo = new Repository($pdo);
 
+$syncTeam = $crud->create('teams', [
+    'entity_type' => 'team',
+    'name' => 'نهاد همگام‌سازی',
+    'leader' => 'تست',
+    'phone' => '09123334444',
+    'joined_at' => '1405/01/01',
+]);
+$syncTeamId = (int) $syncTeam['id'];
+$crud->create('team_contracts', [
+    'team_id' => (string) $syncTeamId,
+    'fiscal_year' => '1405',
+    'contract_start' => '1405/03/01',
+    'contract_end' => '1405/08/29',
+]);
+$pdo->exec('UPDATE desks SET team_id = ' . $syncTeamId . ' WHERE number = 2');
+$pdo->prepare(
+    'INSERT INTO desk_assignments (desk_id, desk_number, team_id, usage_type, assigned_from, assigned_until)
+     VALUES (2, 2, :team_id, :usage_type, :assigned_from, NULL)'
+)->execute([
+    'team_id' => $syncTeamId,
+    'usage_type' => 'formal',
+    'assigned_from' => '1405/01/01',
+]);
+$pdo->prepare(
+    'INSERT INTO desk_assignments (desk_id, desk_number, team_id, usage_type, assigned_from, assigned_until)
+     VALUES (2, 2, :team_id, :usage_type, :assigned_from, :assigned_until)'
+)->execute([
+    'team_id' => $syncTeamId,
+    'usage_type' => 'formal',
+    'assigned_from' => '1405/04/01',
+    'assigned_until' => '1405/06/29',
+]);
+$installer->syncDatabase();
+$syncRow = $pdo->query('SELECT assigned_until FROM desk_assignments WHERE desk_id = 2 AND team_id = ' . $syncTeamId . ' ORDER BY id DESC LIMIT 1')->fetch();
+$assert(($syncRow['assigned_until'] ?? '') === '1405/06/29', 'install: sync keeps bounded assignment end date');
+$syncDuplicates = (int) $pdo->query('SELECT COUNT(*) FROM desk_assignments WHERE desk_id = 2 AND team_id = ' . $syncTeamId)->fetchColumn();
+$assert($syncDuplicates === 1, 'install: sync dedupes desk-year assignment rows');
+
 $team = $crud->create('teams', [
     'entity_type' => 'company',
     'name' => 'شرکت آزمایشی',
