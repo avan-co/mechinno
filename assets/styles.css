@@ -131,6 +131,7 @@ code { color: var(--primary); font-size: 0.9em; }
 
 .brand-mark {
   display: grid;
+  grid-template: 1fr / 1fr;
   place-items: center;
   flex-shrink: 0;
   border-radius: 14px;
@@ -158,6 +159,7 @@ code { color: var(--primary); font-size: 0.9em; }
 }
 
 .brand-mark .brand-logo {
+  grid-area: 1 / 1;
   width: 100%;
   height: auto;
   max-height: 120px;
@@ -170,15 +172,15 @@ code { color: var(--primary); font-size: 0.9em; }
   height: 100%;
 }
 
-.brand-logo--dark {
+.brand-mark .brand-logo--dark {
   display: none;
 }
 
-[data-theme="dark"] .brand-logo--light {
+[data-theme="dark"] .brand-mark .brand-logo--light {
   display: none;
 }
 
-[data-theme="dark"] .brand-logo--dark {
+[data-theme="dark"] .brand-mark .brand-logo--dark {
   display: block;
 }
 
@@ -701,6 +703,71 @@ button.nav-item {
   place-items: center;
 }
 .icon-btn svg { width: 18px; height: 18px; }
+
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 4px 12px 4px 6px;
+  border: 1px solid color-mix(in srgb, var(--primary) 34%, var(--line));
+  border-radius: 999px;
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--primary) 14%, var(--surface)) 0%,
+    var(--surface) 100%
+  );
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s ease;
+}
+
+.theme-toggle:hover {
+  border-color: color-mix(in srgb, var(--primary) 52%, var(--line));
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--primary) 20%, var(--surface)) 0%,
+    color-mix(in srgb, var(--primary) 8%, var(--surface)) 100%
+  );
+}
+
+.theme-toggle:active {
+  transform: scale(0.98);
+}
+
+.theme-toggle-track {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary) 22%, var(--surface));
+  color: var(--primary);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 18%, transparent);
+}
+
+.theme-toggle-track svg {
+  width: 17px;
+  height: 17px;
+}
+
+.theme-toggle-label {
+  color: var(--primary);
+  white-space: nowrap;
+}
+
+[data-theme="light"] .theme-toggle-label::after {
+  content: " روشن";
+}
+
+[data-theme="dark"] .theme-toggle-label::after {
+  content: " تاریک";
+}
+
 [data-theme="light"] .icon-moon,
 [data-theme="dark"] .icon-sun { display: none; }
 
@@ -870,6 +937,43 @@ button.nav-item {
   display: grid;
   gap: 4px;
   margin-bottom: 10px;
+}
+
+.portal-password-options {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+}
+
+.portal-password-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.portal-password-choice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.portal-password-choice input {
+  flex-shrink: 0;
+}
+
+.portal-password-custom {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .payment-wizard { display: grid; gap: 14px; }
@@ -1941,7 +2045,9 @@ body.is-mobile .table-wrap { display: none; }
 }
 
 .login-theme-toggle {
-  margin-inline-start: auto;
+  position: absolute;
+  top: 0;
+  inset-inline-start: 0;
 }
 .payment-settings-form .form-actions { margin-top: 4px; }
 .payment-account-grid {

@@ -800,6 +800,9 @@ $assert(!in_array((int) $payment['id'], $pendingAfterIds, true), 'payment-histor
 $credentials = EntityAccounts::resetPassword($pdo, $teamId);
 $assert(strlen($credentials['password'] ?? '') === 8, 'entity: password reset generates 8 chars');
 $assert(Auth::attempt($pdo, ['auth' => ['enabled' => true]], $credentials['username'], $credentials['password']), 'entity: login with reset password');
+$customCredentials = EntityAccounts::resetPassword($pdo, $teamId, 'secret12');
+$assert(($customCredentials['password'] ?? '') === 'secret12', 'entity: custom password reset');
+$assert(Auth::attempt($pdo, ['auth' => ['enabled' => true]], $customCredentials['username'], 'secret12'), 'entity: login with custom password');
 
 // --- Report data ---
 $_SESSION['mechinno_role'] = Access::ROLE_ADMIN_EDITOR;

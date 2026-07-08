@@ -78,9 +78,12 @@ $assetVer = (string) max(
             <strong>Mechinno</strong>
             <small>مرکز نوآوری مکانیک</small>
           </div>
-          <button class="icon-btn login-theme-toggle" id="themeToggle" type="button" title="تغییر تم" aria-label="تغییر تم">
-            <svg class="icon-sun" viewBox="0 0 24 24" width="18" height="18"><path d="M12 18a6 6 0 1 1 6-6 6 6 0 0 1-6 6Zm0-16h2v3h-2V2Zm0 19h2v3h-2v-3ZM2 11h3v2H2v-2Zm19 0h3v2h-3v-2Z" fill="currentColor"/></svg>
-            <svg class="icon-moon" viewBox="0 0 24 24" width="18" height="18"><path d="M21 14.5A7.5 7.5 0 0 1 9.5 3a6 6 0 1 0 11.5 11.5Z" fill="currentColor"/></svg>
+          <button class="theme-toggle login-theme-toggle" id="themeToggle" type="button" title="تغییر تم" aria-label="تغییر تم">
+            <span class="theme-toggle-track" aria-hidden="true">
+              <svg class="icon-sun" viewBox="0 0 24 24" width="18" height="18"><path d="M12 18a6 6 0 1 1 6-6 6 6 0 0 1-6 6Zm0-16h2v3h-2V2Zm0 19h2v3h-2v-3ZM2 11h3v2H2v-2Zm19 0h3v2h-3v-2Z" fill="currentColor"/></svg>
+              <svg class="icon-moon" viewBox="0 0 24 24" width="18" height="18"><path d="M21 14.5A7.5 7.5 0 0 1 9.5 3a6 6 0 1 0 11.5 11.5Z" fill="currentColor"/></svg>
+            </span>
+            <span class="theme-toggle-label">تم</span>
           </button>
         </div>
 

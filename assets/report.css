@@ -90,6 +90,7 @@ body {
 
 .report-brand-mark {
   display: grid;
+  grid-template: 1fr / 1fr;
   width: min(150px, 34vw);
   place-items: center;
   flex-shrink: 0;
@@ -101,6 +102,7 @@ body {
 }
 
 .report-brand-mark .brand-logo {
+  grid-area: 1 / 1;
   width: 100%;
   height: auto;
   max-height: 110px;

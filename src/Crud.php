@@ -499,11 +499,13 @@ final class Crud
         }
         if ($resource === 'teams') {
             $record = $this->find($resource, $id);
+            $portalPassword = trim((string) ($payload['portal_password'] ?? ''));
             EntityAccounts::provisionForTeam(
                 $this->pdo,
                 $id,
                 (string) ($record['entity_code'] ?? ''),
-                (string) ($record['leader'] ?? '')
+                (string) ($record['leader'] ?? ''),
+                $portalPassword !== '' ? $portalPassword : null
             );
             (new TeamLeaders($this->pdo))->ensureLeaderMember($id);
         }

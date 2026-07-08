@@ -15,7 +15,7 @@ final class EntityAccounts
         ?string $password = null
     ): array {
         $username = self::usernameForCode($entityCode);
-        $plainPassword = $password !== null && $password !== '' ? $password : self::generatePassword();
+        $plainPassword = $password !== null && $password !== '' ? self::resolvePortalPassword($password) : self::generatePassword();
         $passwordHash = UserAccounts::hashPassword($plainPassword);
         $fullName = $leaderName !== '' ? $leaderName : 'مسئول نهاد';
 
@@ -62,7 +62,7 @@ final class EntityAccounts
     /**
      * @return array{username:string,password:string}
      */
-    public static function resetPassword(PDO $pdo, int $teamId): array
+    public static function resetPassword(PDO $pdo, int $teamId, ?string $password = null): array
     {
         $statement = $pdo->prepare('SELECT entity_code, leader FROM teams WHERE id = :id');
         $statement->execute(['id' => $teamId]);
@@ -71,13 +71,38 @@ final class EntityAccounts
             throw new InvalidArgumentException('نهاد پیدا نشد.');
         }
 
+        $plainPassword = self::resolvePortalPassword($password);
+
         return self::provisionForTeam(
             $pdo,
             $teamId,
             (string) ($team['entity_code'] ?? ''),
             (string) ($team['leader'] ?? ''),
-            self::generatePassword()
+            $plainPassword
         );
+    }
+
+    public static function resolvePortalPassword(?string $password): string
+    {
+        $plainPassword = trim((string) ($password ?? ''));
+        if ($plainPassword === '') {
+            return self::generatePassword();
+        }
+
+        self::assertValidPortalPassword($plainPassword);
+
+        return $plainPassword;
+    }
+
+    public static function assertValidPortalPassword(string $password): void
+    {
+        $length = strlen($password);
+        if ($length < 6) {
+            throw new InvalidArgumentException('رمز ورود نهاد باید حداقل ۶ کاراکتر باشد.');
+        }
+        if ($length > 64) {
+            throw new InvalidArgumentException('رمز ورود نهاد نباید بیشتر از ۶۴ کاراکتر باشد.');
+        }
     }
 
     public static function syncLeaderName(PDO $pdo, int $teamId, string $leaderName): void
