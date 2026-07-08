@@ -62,6 +62,17 @@ $crud->create('team_contracts', [
     'contract_start' => '1405/01/01',
     'contract_end' => '1405/12/29',
 ]);
+$joinedOnlyTeam = $crud->create('teams', [
+    'entity_type' => 'team',
+    'name' => 'نهاد بدون قرارداد خودکار',
+    'leader' => 'تست خودکار',
+    'phone' => '09120000099',
+    'joined_at' => '1403/01/01',
+]);
+$joinedOnlyTeamId = (int) $joinedOnlyTeam['id'];
+Schema::migrate($pdo);
+$autoContractCount = (int) $pdo->query("SELECT COUNT(*) FROM team_contracts WHERE team_id = {$joinedOnlyTeamId}")->fetchColumn();
+$assert($autoContractCount === 0, 'contracts: joined_at alone does not auto-create contracts on migrate');
 $assert($teamId > 0 && ($team['entity_code'] ?? '') !== '', 'crud: team created with entity_code');
 $leaderMember = $pdo->query("SELECT id, is_leader, full_name FROM members WHERE team_id = {$teamId} AND is_leader = 1")->fetch();
 $assert($leaderMember !== false, 'teams: leader member auto-created');
@@ -134,12 +145,13 @@ $assert(!in_array('pending-payments', $allowed, true), 'access: team cannot acce
 $assert(in_array('desks', $allowed, true), 'access: team can access desks');
 
 $pdo->exec('UPDATE desks SET team_id = ' . $teamId . ', usage_type = "formal", formal_seats = 2 WHERE number = 1');
+$partialUntil = JalaliDate::monthEnd('1405', 7);
 (new DeskAssignments($pdo))->syncDeskAssignment(1, [
     'number' => 1,
     'team_id' => $teamId,
     'usage_type' => 'formal',
     'assignment_from' => '1405/01/01',
-    'assignment_until' => '1405/12/29',
+    'assignment_until' => $partialUntil,
 ]);
 
 $_SESSION = [
@@ -148,6 +160,16 @@ $_SESSION = [
     'mechinno_user' => 'admin',
     'mechinno_user_id' => 0,
 ];
+$deskAfterAssign = $crud->find('desks', 1);
+$assert((int) ($deskAfterAssign['team_id'] ?? 0) === $teamId, 'desks: team remains assigned when end date is set');
+$assert(($deskAfterAssign['assignment_until'] ?? '') === $partialUntil, 'desks: assignment_until is shown on desk form');
+$deskAfterUpdate = $crud->update('desks', 1, [
+    'team_id' => (string) $teamId,
+    'usage_type' => 'formal',
+    'assignment_from' => '1405/01/01',
+    'assignment_until' => $partialUntil,
+]);
+$assert(($deskAfterUpdate['assignment_until'] ?? '') === $partialUntil, 'desks: assignment_until persists after save');
 $crud->create('rate_settings', [
     'fiscal_year' => '1405',
     'title' => 'نرخ تست تیم',
@@ -156,6 +178,26 @@ $crud->create('rate_settings', [
     'effective_from' => '1405/01/01',
 ]);
 (new Seeder($pdo))->recalculateCharges('1405');
+$partialMatrix = $repo->chargesMatrix('1405');
+$chargedMonths = 0;
+$emptyAfterDesk = 0;
+foreach ($partialMatrix['rows'] ?? [] as $matrixRow) {
+    if ((int) ($matrixRow['team']['id'] ?? 0) !== $teamId) {
+        continue;
+    }
+    foreach ($matrixRow['cells'] ?? [] as $cell) {
+        $monthIndex = (int) ($cell['month_index'] ?? 0);
+        $amount = (int) ($cell['amount_due'] ?? 0);
+        if ($amount > 0) {
+            $chargedMonths++;
+        }
+        if ($monthIndex > 7 && $amount > 0) {
+            $emptyAfterDesk++;
+        }
+    }
+}
+$assert($chargedMonths === 7, 'charges: partial desk assignment charges only assigned months');
+$assert($emptyAfterDesk === 0, 'charges: no charges after desk assignment end month');
 
 $_SESSION = [
     'mechinno_authenticated' => true,
@@ -405,6 +447,17 @@ $assert(str_contains((string) ($partial['sms_charge_template'] ?? ''), 'الگو
 
 $chargePreview = $smsService->chargeReminderPreview();
 $assert(is_array($chargePreview), 'sms: charge preview returns array');
+$teamChargePreview = null;
+foreach ($chargePreview as $previewRow) {
+    if ((int) ($previewRow['team_id'] ?? 0) === $teamId) {
+        $teamChargePreview = $previewRow;
+        break;
+    }
+}
+$assert($teamChargePreview !== null, 'sms: charge preview includes contracted team');
+$assert(($teamChargePreview['can_send'] ?? false) === true, 'sms: charge preview can send to approved leader');
+$assert(str_contains((string) ($teamChargePreview['message'] ?? ''), 'الگوی تست'), 'sms: charge preview uses configured template');
+
 $debtors = $repo->debtorTeamsForSms();
 $teamDebtor = null;
 foreach ($debtors as $debtorRow) {
@@ -413,9 +466,7 @@ foreach ($debtors as $debtorRow) {
         break;
     }
 }
-$assert($teamDebtor !== null, 'sms: debtor list includes team with unpaid charges');
-$assert((int) ($teamDebtor['debt_total'] ?? 0) > 0, 'sms: debtor total is positive after partial payment');
-$assert(($teamDebtor['debt_summary'] ?? '') !== '', 'sms: debtor summary lists unpaid months');
+$assert($teamDebtor !== null, 'charges: debtor list still includes team with unpaid charges');
 $matrixAfterPay = $repo->chargesMatrix('1405');
 $matrixDebt = 0;
 foreach ($matrixAfterPay['rows'] ?? [] as $matrixRow) {
@@ -429,17 +480,7 @@ foreach ($matrixAfterPay['rows'] ?? [] as $matrixRow) {
         }
     }
 }
-$assert((int) ($teamDebtor['debt_total'] ?? 0) === $matrixDebt, 'sms: debtor total matches charges collage');
-$teamChargePreview = null;
-foreach ($chargePreview as $previewRow) {
-    if ((int) ($previewRow['team_id'] ?? 0) === $teamId) {
-        $teamChargePreview = $previewRow;
-        break;
-    }
-}
-$assert($teamChargePreview !== null, 'sms: charge preview includes indebted team');
-$assert(($teamChargePreview['can_send'] ?? false) === true, 'sms: charge preview can send to approved leader');
-$assert((int) ($teamChargePreview['debt_total'] ?? 0) === (int) ($teamDebtor['debt_total'] ?? 0), 'sms: preview debt matches debtor list');
+$assert((int) ($teamDebtor['debt_total'] ?? 0) === $matrixDebt, 'charges: debtor total matches charges collage');
 
 $manualDebtTeam = $crud->create('teams', [
     'entity_type' => 'company',
@@ -473,8 +514,16 @@ foreach ($manualDebtors as $debtorRow) {
         break;
     }
 }
-$assert($manualDebtor !== null, 'sms: manual charge without desk assignment appears in debtor list');
-$assert((int) ($manualDebtor['debt_total'] ?? 0) === 450000, 'sms: manual charge debt total preserved');
+$assert($manualDebtor !== null, 'charges: manual charge without desk assignment appears in debtor list');
+$assert((int) ($manualDebtor['debt_total'] ?? 0) === 450000, 'charges: manual charge debt total preserved');
+$manualPreview = null;
+foreach ($smsService->chargeReminderPreview() as $previewRow) {
+    if ((int) ($previewRow['team_id'] ?? 0) === $manualDebtTeamId) {
+        $manualPreview = $previewRow;
+        break;
+    }
+}
+$assert($manualPreview !== null, 'sms: charge preview includes manually contracted team');
 
 $_SESSION = [
     'mechinno_authenticated' => true,

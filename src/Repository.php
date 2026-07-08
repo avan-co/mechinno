@@ -324,8 +324,11 @@ final class Repository
                 ),
                 'locker-requests' => $this->preparedScalar('SELECT COUNT(*) FROM locker_requests WHERE team_id = :id', ['id' => $teamId]),
                 'desk-assignments' => $this->preparedScalar(
-                    'SELECT COUNT(*) FROM desk_assignments WHERE team_id = :id AND (assigned_until IS NULL OR assigned_until = \'\')',
-                    ['id' => $teamId]
+                    'SELECT COUNT(*) FROM desk_assignments
+                     WHERE team_id = :id
+                       AND assigned_from <= :today
+                       AND (assigned_until IS NULL OR assigned_until = \'\' OR assigned_until >= :today)',
+                    ['id' => $teamId, 'today' => JalaliDate::todayParts()['formatted']]
                 ),
                 default => 0,
             };

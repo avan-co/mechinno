@@ -291,23 +291,14 @@ $assetVer = (string) max(
               </article>
               <article class="panel">
                 <div class="panel-head">
-                  <h2>یادآور پرداخت شارژ (مسئولین بدهکار)</h2>
+                  <h2>یادآور پرداخت شارژ</h2>
                   <?php if (Access::canWrite()): ?>
-                  <button type="button" class="button" id="smsSendChargeReminders">ارسال یادآور انتخاب‌شده‌ها</button>
+                  <button type="button" class="button" id="smsSendChargeReminders">ارسال یادآور</button>
                   <?php endif; ?>
                 </div>
-                <p class="hint">یک الگو برای همه نهادهای انتخاب‌شده — متغیرها به‌صورت خودکار جایگزین می‌شوند.</p>
+                <p class="hint">پیامک یادآوری برای مسئولین نهادهای دارای قرارداد سال جاری — بدون ذکر مبلغ بدهی؛ از نهادها خواسته می‌شود وارد سامانه شوند و وضعیت پرداخت را ببینند.</p>
+                <p id="smsChargeRecipientInfo" class="hint">در حال بارگذاری…</p>
                 <div id="smsChargeTemplateInline"></div>
-                <div class="charge-reminder-layout">
-                  <div>
-                    <h3 class="panel-subtitle">نهادهای بدهکار</h3>
-                    <div id="smsChargeDebtorList" class="charge-debtor-list">در حال بارگذاری…</div>
-                  </div>
-                  <div>
-                    <h3 class="panel-subtitle">پیش‌نمایش نمونه</h3>
-                    <pre id="smsChargePreview" class="sms-editor-preview-block">—</pre>
-                  </div>
-                </div>
               </article>
               <article class="panel">
                 <div class="panel-head"><h2>تاریخچه پیامک‌ها</h2></div>

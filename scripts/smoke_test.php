@@ -29,6 +29,13 @@ $assert(EntityAccounts::usernameForCode('T-012') === 't012', 'usernameForCode no
 $assert((int) ($teamsPage['rows'][0]['portal_has_password'] ?? 0) === 1, 'team portal password flag visible to admin');
 
 $pdo->exec('UPDATE desks SET team_id = 1, usage_type = "mixed", formal_seats = 1, informal_seats = 1 WHERE number = 1');
+(new DeskAssignments($pdo))->syncDeskAssignment(1, [
+    'number' => 1,
+    'team_id' => 1,
+    'usage_type' => 'mixed',
+    'assignment_from' => '1405/01/01',
+    'assignment_until' => '1405/12/29',
+]);
 
 $member = $crud->create('members', [
     'team_id' => '1',

@@ -190,12 +190,19 @@ final class TeamContracts
 
     public function migrateFromLegacyTeamDates(): void
     {
-        if (!$this->tableExists()) {
+        if (!$this->tableExists() || $this->legacyContractsMigrated()) {
             return;
         }
-        $teams = $this->pdo->query('SELECT id, joined_at, contract_start, contract_end FROM teams')->fetchAll();
+
+        $countStatement = $this->pdo->prepare('SELECT COUNT(*) FROM team_contracts WHERE team_id = :team_id');
+        $teams = $this->pdo->query('SELECT id, contract_start, contract_end FROM teams')->fetchAll();
         foreach ($teams as $team) {
             $teamId = (int) $team['id'];
+            $countStatement->execute(['team_id' => $teamId]);
+            if ((int) $countStatement->fetchColumn() > 0) {
+                continue;
+            }
+
             $start = JalaliDate::tryNormalize((string) ($team['contract_start'] ?? ''));
             $end = JalaliDate::tryNormalize((string) ($team['contract_end'] ?? ''));
             if ($start === '' && $end === '') {
@@ -213,6 +220,8 @@ final class TeamContracts
             }
             $this->upsertContract($teamId, $fiscalYear, $start, $end, 'مهاجرت از تاریخ قرارداد قبلی');
         }
+
+        $this->markLegacyContractsMigrated();
     }
 
     public function upsertContract(int $teamId, string $fiscalYear, string $start, string $end, ?string $notes = null): void
@@ -284,22 +293,96 @@ final class TeamContracts
      */
     private function deskAssignmentsFromCurrentDesks(int $teamId): array
     {
-        $desks = $this->pdo->prepare('SELECT number, usage_type FROM desks WHERE team_id = :team_id');
+        $fiscalYear = $this->currentFiscalYear();
+        $yearStart = $fiscalYear . '/01/01';
+        $yearEnd = $fiscalYear . '/12/29';
+        $desks = $this->pdo->prepare('SELECT id, number, usage_type FROM desks WHERE team_id = :team_id');
         $desks->execute(['team_id' => $teamId]);
         $deskList = $desks->fetchAll();
         if ($deskList === []) {
             return [];
         }
-        $contract = $this->contractForYear($teamId, $this->currentFiscalYear());
-        $fallbackFrom = $contract ? (string) ($contract['contract_start'] ?? '') : JalaliDate::todayParts()['formatted'];
-        $fallbackUntil = $contract ? (string) ($contract['contract_end'] ?? '') : '';
 
-        return array_map(static fn (array $desk): array => [
-            'desk_number' => (int) $desk['number'],
-            'usage_type' => (string) ($desk['usage_type'] ?? 'formal'),
-            'assigned_from' => $fallbackFrom,
-            'assigned_until' => $fallbackUntil,
-        ], $deskList);
+        $assignmentStatement = $this->pdo->prepare(
+            'SELECT assigned_from, assigned_until
+             FROM desk_assignments
+             WHERE desk_id = :desk_id
+               AND team_id = :team_id
+               AND assigned_from <= :year_end
+               AND (assigned_until IS NULL OR assigned_until = \'\' OR assigned_until >= :year_start)
+             ORDER BY assigned_from DESC, id DESC
+             LIMIT 1'
+        );
+
+        $assignments = [];
+        foreach ($deskList as $desk) {
+            $assignmentStatement->execute([
+                'desk_id' => (int) ($desk['id'] ?? 0),
+                'team_id' => $teamId,
+                'year_start' => $yearStart,
+                'year_end' => $yearEnd,
+            ]);
+            $assignment = $assignmentStatement->fetch();
+            if ($assignment === false) {
+                continue;
+            }
+
+            $assignments[] = [
+                'desk_number' => (int) ($desk['number'] ?? 0),
+                'usage_type' => (string) ($desk['usage_type'] ?? 'formal'),
+                'assigned_from' => (string) ($assignment['assigned_from'] ?? ''),
+                'assigned_until' => (string) ($assignment['assigned_until'] ?? ''),
+            ];
+        }
+
+        return $assignments;
+    }
+
+    private function legacyContractsMigrated(): bool
+    {
+        if (!$this->centerSettingsColumnExists('legacy_team_contracts_migrated')) {
+            return false;
+        }
+
+        return (int) $this->pdo->query(
+            'SELECT legacy_team_contracts_migrated FROM center_settings WHERE id = 1'
+        )->fetchColumn() === 1;
+    }
+
+    private function markLegacyContractsMigrated(): void
+    {
+        if (!$this->centerSettingsColumnExists('legacy_team_contracts_migrated')) {
+            return;
+        }
+
+        $this->pdo->exec('UPDATE center_settings SET legacy_team_contracts_migrated = 1 WHERE id = 1');
+    }
+
+    private function centerSettingsColumnExists(string $column): bool
+    {
+        try {
+            $driver = $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
+            if ($driver === 'sqlite') {
+                $rows = $this->pdo->query('PRAGMA table_info(center_settings)')->fetchAll();
+                foreach ($rows as $row) {
+                    if (($row['name'] ?? '') === $column) {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+
+            $statement = $this->pdo->prepare(
+                'SELECT COUNT(*) FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table AND COLUMN_NAME = :column'
+            );
+            $statement->execute(['table' => 'center_settings', 'column' => $column]);
+
+            return (int) $statement->fetchColumn() > 0;
+        } catch (Throwable) {
+            return false;
+        }
     }
 
     /**

@@ -1,16 +1,14 @@
-/* global fetchJson, fetchResource, postJson, showToast, escapeHtml, formatMoney, formatPlain, canWrite, createSmsEditor, buildRecipientFilterBar, SMS_EDITOR_VARS */
+/* global fetchJson, fetchResource, postJson, showToast, escapeHtml, formatMoney, formatPlain, canWrite, createSmsEditor, buildRecipientFilterBar, SMS_CHARGE_VARS */
 
 const smsState = {
   recipients: [],
   selected: new Set(),
-  chargeItems: [],
-  selectedChargeTeams: new Set(),
+  chargeRecipients: 0,
+  chargeTemplate: "",
+  configured: false,
   page: 1,
   perPage: 25,
   filters: { q: "", teamId: "", entityType: "", isLeader: "", wantsAccess: "" },
-  chargeTemplate: "",
-  configured: false,
-  chargeDiagnostics: null,
 };
 
 let announcementEditor = null;
@@ -29,7 +27,7 @@ const renderSmsSetupBanner = (settings = null) => {
   host.innerHTML = `
     <article class="panel panel--accent">
       <h2>تنظیمات پیامک ناقص است</h2>
-      <p class="hint">برای ارسال پیامک، ابتدا نام کاربری، رمز API و خط ارسال ملی‌پیامک را در بخش تنظیمات وارد کنید. تا قبل از آن، فقط فهرست گیرنده‌ها و نهادهای بدهکار نمایش داده می‌شود.</p>
+      <p class="hint">برای ارسال پیامک، ابتدا نام کاربری، رمز API و خط ارسال ملی‌پیامک را در بخش تنظیمات وارد کنید.</p>
       <button type="button" class="button" data-go="sms-settings">رفتن به تنظیمات پیامک</button>
     </article>`;
 };
@@ -46,10 +44,7 @@ window.initSmsPanel = () => {
     const tbody = document.querySelector("#smsHistoryTable tbody");
     if (tbody) tbody.innerHTML = `<tr><td colspan="10">خطا: ${escapeHtml(error.message)}</td></tr>`;
   });
-  loadChargeReminderPanel().catch((error) => {
-    const host = document.getElementById("smsChargeDebtorList");
-    if (host) host.innerHTML = `<div class="empty">خطا در بارگذاری: ${escapeHtml(error.message)}</div>`;
-  });
+  loadChargeReminderPanel().catch((error) => showToast(error.message, "error"));
 };
 
 const initSmsEditors = () => {
@@ -68,10 +63,10 @@ const initSmsEditors = () => {
   if (templateHost && !templateHost.dataset.ready) {
     templateHost.dataset.ready = "1";
     chargeTemplateEditor = createSmsEditor(templateHost, {
-      label: "الگوی یادآور (برای ارسال دسته‌ای)",
-      placeholder: "الگو با متغیرها…",
+      label: "الگوی یادآور پرداخت",
+      placeholder: "متن یادآوری ورود به سامانه…",
       readonly: !canWrite,
-      variables: SMS_EDITOR_VARS || [],
+      variables: SMS_CHARGE_VARS || [],
       rows: 7,
       showPreview: true,
     });
@@ -225,72 +220,24 @@ const loadSmsHistory = async () => {
   </tr>`).join("") || `<tr><td colspan="10">تاریخچه‌ای ثبت نشده است.</td></tr>`;
 };
 
-const renderChargeReminderPanel = () => {
-  const host = document.getElementById("smsChargeDebtorList");
+const renderChargeRecipientInfo = () => {
+  const host = document.getElementById("smsChargeRecipientInfo");
   if (!host) return;
-  host.innerHTML = smsState.chargeItems.map((item) => {
-    const teamId = Number(item.team_id);
-    const canSend = item.can_send !== false && !item.leader_missing;
-    const checked = canSend && smsState.selectedChargeTeams.has(teamId) ? "checked" : "";
-    const warning = item.leader_missing
-      ? " — بدون مسئول تأیید‌شده"
-      : !item.phone
-        ? " — بدون شماره تماس"
-        : "";
-    return `<label class="charge-debtor-row${canSend ? "" : " charge-debtor-row--disabled"}">
-      <input type="checkbox" data-charge-team="${teamId}" ${checked} ${canWrite && canSend ? "" : "disabled"} />
-      <span class="charge-debtor-name">
-        <span>${escapeHtml(item.team_name)} — ${escapeHtml(item.leader_name || "—")}${escapeHtml(warning)}</span>
-        ${item.debt_summary ? `<span class="charge-debtor-months">${escapeHtml(item.debt_summary)}</span>` : ""}
-      </span>
-      <span class="charge-debtor-amount">${formatMoney(item.debt_total)}</span>
-    </label>`;
-  }).join("") || (() => {
-    const diag = smsState.chargeDiagnostics;
-    const diagLine = diag
-      ? `<p class="hint">تشخیص: سال‌های مالی ${escapeHtml((diag.fiscal_years || []).join("، ") || "—")} — بدهکار از کلاژ: ${Number(diag.matrix_teams || 0)}، از ردیف شارژ: ${Number(diag.charge_row_teams || 0)}، از محاسبه قرارداد: ${Number(diag.breakdown_teams || 0)}</p>`
-      : "";
-    return `<div class="empty">نهاد بدهکاری برای یادآور یافت نشد. اگر در کلاژ شارژ وضعیت «بدهکار» می‌بینید، صفحه را رفرش کنید و مطمئن شوید فایل‌های PHP سرور به‌روز شده‌اند.${diagLine}</div>`;
-  })();
-
-  host.querySelectorAll("[data-charge-team]").forEach((input) => {
-    input.addEventListener("change", () => {
-      const teamId = Number(input.dataset.chargeTeam);
-      if (input.checked) smsState.selectedChargeTeams.add(teamId);
-      else smsState.selectedChargeTeams.delete(teamId);
-      updateChargePreview();
-    });
-  });
-  updateChargePreview();
-};
-
-const updateChargePreview = () => {
-  const preview = document.getElementById("smsChargePreview");
-  if (!preview) return;
-  const template = chargeTemplateEditor?.getValue() || smsState.chargeTemplate;
-  const first = smsState.chargeItems.find(
-    (item) => smsState.selectedChargeTeams.has(Number(item.team_id)) && item.can_send !== false
-  );
-  preview.textContent = first
-    ? first.message || template || "—"
-    : smsState.chargeItems.length
-      ? "برای پیش‌نمایش، حداقل یک نهاد بدهکار انتخاب کنید."
-      : "نهاد بدهکاری یافت نشد.";
+  if (smsState.chargeRecipients <= 0) {
+    host.textContent = "نهاد دارای قرارداد سال جاری با مسئول قابل ارسال یافت نشد.";
+    return;
+  }
+  host.textContent = `ارسال به ${smsState.chargeRecipients.toLocaleString("fa-IR")} مسئول نهاد دارای قرارداد سال جاری.`;
 };
 
 const loadChargeReminderPanel = async () => {
-  const host = document.getElementById("smsChargeDebtorList");
   try {
     const data = await fetchJson("api.php?resource=sms-charge-preview");
-    smsState.chargeItems = data.items || [];
-    smsState.chargeDiagnostics = data.diagnostics || null;
-    smsState.selectedChargeTeams = new Set(
-      smsState.chargeItems
-        .filter((item) => item.can_send !== false && !item.leader_missing)
-        .map((item) => Number(item.team_id))
-    );
+    smsState.chargeRecipients = Number(data.recipient_count || 0);
+    renderChargeRecipientInfo();
   } catch (error) {
-    if (host) host.innerHTML = `<div class="empty">خطا در بارگذاری نهادهای بدهکار: ${escapeHtml(error.message)}</div>`;
+    const host = document.getElementById("smsChargeRecipientInfo");
+    if (host) host.textContent = `خطا در بارگذاری: ${error.message}`;
     return;
   }
 
@@ -305,10 +252,7 @@ const loadChargeReminderPanel = async () => {
 
   if (chargeTemplateEditor) {
     chargeTemplateEditor.setValue(smsState.chargeTemplate);
-    chargeTemplateEditor.onChange(() => updateChargePreview());
   }
-
-  renderChargeReminderPanel();
 
   const sendBtn = document.getElementById("smsSendChargeReminders");
   if (!sendBtn || sendBtn.dataset.ready) return;
@@ -321,13 +265,12 @@ const loadChargeReminderPanel = async () => {
 const sendChargeReminders = async () => {
   if (!canWrite) throw new Error("دسترسی ارسال ندارید.");
   if (!smsState.configured) throw new Error("ابتدا تنظیمات ملی‌پیامک را کامل کنید.");
-  const teamIds = [...smsState.selectedChargeTeams];
-  if (!teamIds.length) throw new Error("حداقل یک نهاد بدهکار انتخاب کنید.");
+  if (smsState.chargeRecipients <= 0) throw new Error("نهاد دارای قرارداد با مسئول قابل ارسال یافت نشد.");
   const template = chargeTemplateEditor?.getValue() || smsState.chargeTemplate;
   if (!template) throw new Error("الگوی یادآور خالی است.");
-  if (!window.confirm(`یادآور شارژ برای ${teamIds.length} نهاد ارسال شود؟`)) return;
+  if (!window.confirm(`یادآور پرداخت برای ${smsState.chargeRecipients} مسئول نهاد ارسال شود؟`)) return;
   const result = await postJson("api.php?resource=sms-send-charge-reminders", {
-    team_ids: teamIds,
+    team_ids: [],
     template,
   });
   showToast(`یادآور ارسال شد — موفق: ${result.result?.sent || 0}، ناموفق: ${result.result?.failed || 0}`, "success");

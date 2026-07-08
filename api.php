@@ -176,11 +176,10 @@ try {
             $teamId = null;
         }
         $items = (new SmsService($pdo))->chargeReminderPreview($teamId);
-        $payload = ['items' => $items];
-        if ($items === [] && Access::isAdmin()) {
-            $payload['diagnostics'] = $repository->debtorTeamsSmsDiagnostics();
-        }
-        json_response($payload);
+        json_response(['items' => $items, 'recipient_count' => count(array_filter(
+            $items,
+            static fn (array $item): bool => ($item['can_send'] ?? false) === true
+        ))]);
     }
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && $resource === 'sms-send') {

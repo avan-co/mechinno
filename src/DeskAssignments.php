@@ -17,11 +17,16 @@ final class DeskAssignments
         $today = JalaliDate::todayParts()['formatted'];
         $assignedFrom = JalaliDate::tryNormalize($desk['assignment_from'] ?? '');
         $assignedUntil = JalaliDate::tryNormalize($desk['assignment_until'] ?? '');
-        $active = $this->findActiveAssignment($deskId);
+        $current = $this->findCurrentAssignment($deskId);
 
         if ($teamId <= 0) {
-            if ($active !== null) {
-                $this->closeAssignment((int) $active['id'], $today);
+            if ($current !== null) {
+                $this->closeAssignment((int) $current['id'], $today);
+            } else {
+                $open = $this->findOpenAssignment($deskId);
+                if ($open !== null) {
+                    $this->closeAssignment((int) $open['id'], $today);
+                }
             }
 
             return;
@@ -41,32 +46,31 @@ final class DeskAssignments
             'notes' => $desk['notes'] ?? null,
         ];
 
-        if ($active === null) {
+        if ($current === null) {
             $this->insertAssignment($payload);
 
             return;
         }
 
-        $activeTeamId = (int) ($active['team_id'] ?? 0);
-        $activeFrom = (string) ($active['assigned_from'] ?? '');
-        $activeOpen = $this->isOpenEnded((string) ($active['assigned_until'] ?? ''));
+        $currentTeamId = (int) ($current['team_id'] ?? 0);
+        $currentFrom = (string) ($current['assigned_from'] ?? '');
 
-        if ($activeTeamId === $teamId) {
+        if ($currentTeamId === $teamId) {
             $newYear = $this->fiscalYearFrom($assignedFrom);
-            $activeYear = $this->fiscalYearFrom($activeFrom);
-            if ($activeOpen && $newYear !== '' && $activeYear !== '' && $newYear !== $activeYear) {
-                $this->closeAssignment((int) $active['id'], $this->handoverDate($assignedFrom));
+            $currentYear = $this->fiscalYearFrom($currentFrom);
+            if ($newYear !== '' && $currentYear !== '' && $newYear !== $currentYear) {
+                $this->closeAssignment((int) $current['id'], $this->handoverDate($assignedFrom));
                 $this->insertAssignment($payload);
 
                 return;
             }
-            $this->updateAssignment((int) $active['id'], $payload);
+            $this->updateAssignment((int) $current['id'], $payload);
 
             return;
         }
 
         $closeDate = $assignedFrom !== '' ? $this->handoverDate($assignedFrom) : $today;
-        $this->closeAssignment((int) $active['id'], $closeDate);
+        $this->closeAssignment((int) $current['id'], $closeDate);
         $this->insertAssignment($payload);
     }
 
@@ -89,10 +93,18 @@ final class DeskAssignments
         );
 
         if (!$this->isOpenEnded((string) ($record['assigned_until'] ?? ''))) {
-            $active = $this->findActiveAssignment($deskId);
-            if ($active !== null && (int) ($active['id'] ?? 0) === $assignmentId) {
-                $this->clearDeskIfMatches($deskId, (int) ($record['team_id'] ?? 0));
+            $until = JalaliDate::tryNormalize((string) ($record['assigned_until'] ?? ''));
+            $today = JalaliDate::todayParts()['formatted'];
+            if ($until !== '' && JalaliDate::compare($until, $today) < 0) {
+                $current = $this->findCurrentAssignment($deskId);
+                if ($current !== null && (int) ($current['id'] ?? 0) === $assignmentId) {
+                    $this->clearDeskIfMatches($deskId, (int) ($record['team_id'] ?? 0));
+                }
+
+                return;
             }
+
+            $this->syncDeskFromAssignment($deskId, $record);
 
             return;
         }
@@ -126,7 +138,55 @@ final class DeskAssignments
     /**
      * @return array<string, mixed>|null
      */
-    private function findActiveAssignment(int $deskId): ?array
+    public function assignmentForDeskForm(int $deskId, ?int $teamId = null): ?array
+    {
+        $current = $this->findCurrentAssignment($deskId);
+        if ($current !== null) {
+            return $current;
+        }
+
+        if ($teamId !== null && $teamId > 0) {
+            $statement = $this->pdo->prepare(
+                'SELECT assigned_from, assigned_until, usage_type, notes
+                 FROM desk_assignments
+                 WHERE desk_id = :desk_id AND team_id = :team_id
+                 ORDER BY assigned_from DESC, id DESC
+                 LIMIT 1'
+            );
+            $statement->execute(['desk_id' => $deskId, 'team_id' => $teamId]);
+            $row = $statement->fetch();
+
+            return $row === false ? null : $row;
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function findCurrentAssignment(int $deskId): ?array
+    {
+        $today = JalaliDate::todayParts()['formatted'];
+        $statement = $this->pdo->prepare(
+            'SELECT id, desk_id, desk_number, team_id, usage_type, assigned_from, assigned_until, notes
+             FROM desk_assignments
+             WHERE desk_id = :desk_id
+               AND assigned_from <= :today
+               AND (assigned_until IS NULL OR assigned_until = \'\' OR assigned_until >= :today)
+             ORDER BY assigned_from DESC, id DESC
+             LIMIT 1'
+        );
+        $statement->execute(['desk_id' => $deskId, 'today' => $today]);
+        $row = $statement->fetch();
+
+        return $row === false ? null : $row;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function findOpenAssignment(int $deskId): ?array
     {
         $statement = $this->pdo->prepare(
             'SELECT id, desk_id, desk_number, team_id, usage_type, assigned_from, assigned_until, notes
@@ -140,6 +200,14 @@ final class DeskAssignments
         $row = $statement->fetch();
 
         return $row === false ? null : $row;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function findActiveAssignment(int $deskId): ?array
+    {
+        return $this->findOpenAssignment($deskId);
     }
 
     /**

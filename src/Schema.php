@@ -286,6 +286,7 @@ final class Schema
                 'sms_history_synced_at' => 'VARCHAR(32) NULL',
                 'sms_panel_credit' => 'BIGINT NULL',
                 'sms_live_synced_at' => 'VARCHAR(32) NULL',
+                'legacy_team_contracts_migrated' => 'TINYINT NOT NULL DEFAULT 0',
             ],
             'lockers' => [
                 'team_id' => 'INT NULL',
@@ -357,35 +358,10 @@ final class Schema
 
         self::seedCenterSettings($pdo);
         self::ensureSmsTables($pdo);
-        self::backfillTeamContracts($pdo);
         (new TeamContracts($pdo))->migrateFromLegacyTeamDates();
         (new TeamContracts($pdo))->syncAllTeamActiveStatuses();
         TeamLeaders::backfillAll($pdo);
         CenterLedger::purgeAccrualMirrorEntries($pdo);
-    }
-
-    private static function backfillTeamContracts(PDO $pdo): void
-    {
-        if (!self::columnExists($pdo, 'teams', 'contract_start')) {
-            return;
-        }
-        $today = JalaliDate::todayParts();
-        $yearStart = sprintf('%04d/01/01', $today['year']);
-        $teams = $pdo->query('SELECT id, joined_at, contract_start, contract_end FROM teams')->fetchAll();
-        foreach ($teams as $team) {
-            $start = JalaliDate::tryNormalize((string) ($team['contract_start'] ?? ''));
-            if ($start === '') {
-                $joined = JalaliDate::tryNormalize((string) ($team['joined_at'] ?? ''));
-                $start = $joined !== '' ? $joined : $yearStart;
-            }
-            $end = JalaliDate::tryNormalize((string) ($team['contract_end'] ?? ''));
-            if ($end === '') {
-                $endYear = (int) substr($start, 0, 4);
-                $end = sprintf('%04d/12/29', $endYear);
-            }
-            $pdo->prepare('UPDATE teams SET contract_start = :start, contract_end = :end WHERE id = :id')
-                ->execute(['start' => $start, 'end' => $end, 'id' => (int) $team['id']]);
-        }
     }
 
     private static function ensureTeamContractsTable(PDO $pdo): void
