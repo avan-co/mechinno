@@ -405,6 +405,41 @@ $assert(str_contains((string) ($partial['sms_charge_template'] ?? ''), 'الگو
 
 $chargePreview = $smsService->chargeReminderPreview();
 $assert(is_array($chargePreview), 'sms: charge preview returns array');
+$debtors = $repo->debtorTeamsForSms();
+$teamDebtor = null;
+foreach ($debtors as $debtorRow) {
+    if ((int) ($debtorRow['team_id'] ?? 0) === $teamId) {
+        $teamDebtor = $debtorRow;
+        break;
+    }
+}
+$assert($teamDebtor !== null, 'sms: debtor list includes team with unpaid charges');
+$assert((int) ($teamDebtor['debt_total'] ?? 0) > 0, 'sms: debtor total is positive after partial payment');
+$assert(($teamDebtor['debt_summary'] ?? '') !== '', 'sms: debtor summary lists unpaid months');
+$matrixAfterPay = $repo->chargesMatrix('1405');
+$matrixDebt = 0;
+foreach ($matrixAfterPay['rows'] ?? [] as $matrixRow) {
+    if ((int) ($matrixRow['team']['id'] ?? 0) !== $teamId) {
+        continue;
+    }
+    foreach ($matrixRow['cells'] ?? [] as $cell) {
+        $status = (string) ($cell['status'] ?? '');
+        if ($status === 'بدهکار به مرکز' || $status === 'ناقص') {
+            $matrixDebt += max(0, (int) ($cell['amount_due'] ?? 0) - (int) ($cell['amount_paid'] ?? 0));
+        }
+    }
+}
+$assert((int) ($teamDebtor['debt_total'] ?? 0) === $matrixDebt, 'sms: debtor total matches charges collage');
+$teamChargePreview = null;
+foreach ($chargePreview as $previewRow) {
+    if ((int) ($previewRow['team_id'] ?? 0) === $teamId) {
+        $teamChargePreview = $previewRow;
+        break;
+    }
+}
+$assert($teamChargePreview !== null, 'sms: charge preview includes indebted team');
+$assert(($teamChargePreview['can_send'] ?? false) === true, 'sms: charge preview can send to approved leader');
+$assert((int) ($teamChargePreview['debt_total'] ?? 0) === (int) ($teamDebtor['debt_total'] ?? 0), 'sms: preview debt matches debtor list');
 
 $_SESSION = [
     'mechinno_authenticated' => true,

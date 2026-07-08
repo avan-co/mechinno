@@ -238,7 +238,10 @@ const renderChargeReminderPanel = () => {
         : "";
     return `<label class="charge-debtor-row${canSend ? "" : " charge-debtor-row--disabled"}">
       <input type="checkbox" data-charge-team="${teamId}" ${checked} ${canWrite && canSend ? "" : "disabled"} />
-      <span class="charge-debtor-name">${escapeHtml(item.team_name)} — ${escapeHtml(item.leader_name || "—")}${escapeHtml(warning)}</span>
+      <span class="charge-debtor-name">
+        <span>${escapeHtml(item.team_name)} — ${escapeHtml(item.leader_name || "—")}${escapeHtml(warning)}</span>
+        ${item.debt_summary ? `<span class="charge-debtor-months">${escapeHtml(item.debt_summary)}</span>` : ""}
+      </span>
       <span class="charge-debtor-amount">${formatMoney(item.debt_total)}</span>
     </label>`;
   }).join("") || `<div class="empty">نهاد بدهکاری برای یادآور یافت نشد.</div>`;

@@ -7,9 +7,6 @@ final class Repository
     /** @var list<string> Legacy DB columns that must never appear in API/UI. */
     private const LEGACY_COLUMNS = ['row_number', 'lockers', 'power_strips', 'rent_rate'];
 
-    /** @var array<int, array<string, int>>|null */
-    private ?array $paymentAllocationCache = null;
-
     public function __construct(private readonly PDO $pdo)
     {
     }
@@ -797,7 +794,7 @@ final class Repository
             ['team_id' => $teamId, 'year' => $year, 'month' => $month]
         );
         $allocation = $this->allocatedPaymentsForTeam($teamId);
-        $paidTotal = (int) ($allocation['by_month'][$year . '-' . $month] ?? 0);
+        $paidTotal = (int) ($allocation['by_month'][JalaliDate::normalizeDigits($year) . '-' . $month] ?? 0);
 
         return [
             'fiscal_year' => $year,
@@ -1337,40 +1334,14 @@ final class Repository
             return 0;
         }
         $allocation = $this->allocatedPaymentsForTeam($teamId);
-        $paidTotal = (int) ($allocation['by_month'][$year . '-' . $month] ?? 0);
+        $paidTotal = (int) ($allocation['by_month'][JalaliDate::normalizeDigits($year) . '-' . $month] ?? 0);
 
         return max(0, $chargeTotal - $paidTotal);
     }
 
     private function contractDebtForTeamInYear(int $teamId, string $fiscalYear): int
     {
-        $contracts = $this->contracts();
-        $dates = $contracts->contractDatesForYear($teamId, $fiscalYear);
-        if ($dates['start'] === '' && $dates['end'] === '') {
-            return 0;
-        }
-        $allocation = $this->allocatedPaymentsForTeam($teamId);
-        $chargeByMonth = [];
-        foreach ($this->preparedRows(
-            'SELECT month_index, amount FROM charges WHERE team_id = :id AND fiscal_year = :year ORDER BY month_index',
-            ['id' => $teamId, 'year' => $fiscalYear]
-        ) as $row) {
-            $monthIndex = (int) ($row['month_index'] ?? 0);
-            $chargeByMonth[$monthIndex] = ($chargeByMonth[$monthIndex] ?? 0) + (int) ($row['amount'] ?? 0);
-        }
-        $debt = 0;
-        foreach ($chargeByMonth as $monthIndex => $due) {
-            if (!JalaliDate::monthInContract($fiscalYear, $monthIndex, $dates['start'], $dates['end'])) {
-                continue;
-            }
-            if ($contracts->deskCountForMonth($teamId, $fiscalYear, $monthIndex) <= 0) {
-                continue;
-            }
-            $paid = (int) ($allocation['by_month'][$fiscalYear . '-' . $monthIndex] ?? 0);
-            $debt += max(0, $due - $paid);
-        }
-
-        return $debt;
+        return $this->contractDebtBreakdown($teamId, $fiscalYear)['debt_total'];
     }
 
     /**
@@ -1501,7 +1472,52 @@ final class Repository
 
     private function contractDebtForTeam(int $teamId): int
     {
-        return max(0, $this->contractChargeTotalForTeam($teamId) - $this->contractPaidTotalForTeam($teamId));
+        return $this->contractDebtBreakdown($teamId)['debt_total'];
+    }
+
+    /**
+     * @return array{debt_total: int, unpaid_labels: list<string>}
+     */
+    private function contractDebtBreakdown(int $teamId, ?string $fiscalYear = null): array
+    {
+        $contracts = $this->contracts();
+        $allocation = $this->allocatedPaymentsForTeam($teamId);
+        $chargeByMonth = [];
+        $sql = 'SELECT fiscal_year, month_index, amount FROM charges WHERE team_id = :id';
+        $params = ['id' => $teamId];
+        if ($fiscalYear !== null) {
+            $sql .= ' AND fiscal_year = :year';
+            $params['year'] = JalaliDate::normalizeDigits($fiscalYear);
+        }
+        $sql .= ' ORDER BY fiscal_year, month_index';
+        foreach ($this->preparedRows($sql, $params) as $row) {
+            $fy = JalaliDate::normalizeDigits((string) ($row['fiscal_year'] ?? ''));
+            $mi = (int) ($row['month_index'] ?? 0);
+            $dates = $contracts->contractDatesForYear($teamId, $fy);
+            if (!JalaliDate::monthInContract($fy, $mi, $dates['start'], $dates['end'])) {
+                continue;
+            }
+            if ($contracts->deskCountForMonth($teamId, $fy, $mi) <= 0) {
+                continue;
+            }
+            $key = $fy . '-' . $mi;
+            $chargeByMonth[$key] = ($chargeByMonth[$key] ?? 0) + (int) ($row['amount'] ?? 0);
+        }
+
+        $debt = 0;
+        $labels = [];
+        foreach ($chargeByMonth as $key => $due) {
+            $paid = (int) ($allocation['by_month'][$key] ?? 0);
+            $remaining = max(0, $due - $paid);
+            if ($remaining <= 0) {
+                continue;
+            }
+            $debt += $remaining;
+            [$fy, $mi] = explode('-', (string) $key, 2);
+            $labels[] = $this->monthName((int) $mi) . ' ' . $fy;
+        }
+
+        return ['debt_total' => $debt, 'unpaid_labels' => $labels];
     }
 
     private function contractChargeTotalForTeam(int $teamId): int
@@ -1512,7 +1528,7 @@ final class Repository
             'SELECT fiscal_year, month_index, amount FROM charges WHERE team_id = :id',
             ['id' => $teamId]
         ) as $row) {
-            $fy = (string) ($row['fiscal_year'] ?? '');
+            $fy = JalaliDate::normalizeDigits((string) ($row['fiscal_year'] ?? ''));
             $mi = (int) ($row['month_index'] ?? 0);
             $dates = $contracts->contractDatesForYear($teamId, $fy);
             if (!JalaliDate::monthInContract($fy, $mi, $dates['start'], $dates['end'])) {
@@ -1548,7 +1564,7 @@ final class Repository
             'SELECT fiscal_year, month_index, amount FROM charges WHERE team_id = :id ORDER BY fiscal_year, month_index',
             ['id' => $teamId]
         ) as $row) {
-            $fy = (string) ($row['fiscal_year'] ?? '');
+            $fy = JalaliDate::normalizeDigits((string) ($row['fiscal_year'] ?? ''));
             $mi = (int) ($row['month_index'] ?? 0);
             $dates = $contracts->contractDatesForYear($teamId, $fy);
             if (!JalaliDate::monthInContract($fy, $mi, $dates['start'], $dates['end'])) {
@@ -1778,32 +1794,19 @@ final class Repository
         $rows = [];
         foreach ($this->rows('SELECT id, name FROM teams ORDER BY name') as $team) {
             $teamId = (int) ($team['id'] ?? 0);
-            $debt = $this->contractDebtForTeam($teamId);
-            if ($debt <= 0) {
+            $breakdown = $this->contractDebtBreakdown($teamId);
+            if ($breakdown['debt_total'] <= 0) {
                 continue;
-            }
-            $summaryParts = [];
-            $allocation = $this->allocatedPaymentsForTeam($teamId);
-            foreach ($this->preparedRows(
-                'SELECT fiscal_year, month_index, amount FROM charges WHERE team_id = :id ORDER BY fiscal_year, month_index',
-                ['id' => $teamId]
-            ) as $charge) {
-                $fy = JalaliDate::normalizeDigits((string) ($charge['fiscal_year'] ?? ''));
-                $mi = (int) ($charge['month_index'] ?? 0);
-                $key = $fy . '-' . $mi;
-                $due = (int) ($charge['amount'] ?? 0);
-                $paid = (int) ($allocation['by_month'][$key] ?? 0);
-                if ($due > $paid) {
-                    $summaryParts[] = ($this->monthName($mi) . ' ' . $fy);
-                }
             }
             $rows[] = [
                 'team_id' => $teamId,
                 'team_name' => (string) ($team['name'] ?? ''),
-                'debt_total' => $debt,
-                'debt_summary' => implode('، ', array_slice($summaryParts, 0, 6)),
+                'debt_total' => $breakdown['debt_total'],
+                'debt_summary' => implode('، ', array_slice($breakdown['unpaid_labels'], 0, 6)),
             ];
         }
+
+        usort($rows, static fn (array $a, array $b): int => ($b['debt_total'] ?? 0) <=> ($a['debt_total'] ?? 0));
 
         return $rows;
     }
@@ -1828,18 +1831,12 @@ final class Repository
      */
     private function paymentAllocationByTeamMonth(): array
     {
-        if ($this->paymentAllocationCache !== null) {
-            return $this->paymentAllocationCache;
-        }
-
         $map = [];
         foreach ($this->pdo->query('SELECT id, contract_start, contract_end FROM teams')->fetchAll() as $team) {
             $teamId = (int) $team['id'];
             $allocation = $this->allocatedPaymentsForTeam($teamId);
             $map[$teamId] = $allocation['by_month'];
         }
-
-        $this->paymentAllocationCache = $map;
 
         return $map;
     }
