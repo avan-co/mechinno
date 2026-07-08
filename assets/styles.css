@@ -509,6 +509,10 @@ button.nav-item {
   background: var(--surface);
 }
 
+.charge-debtor-row--disabled {
+  opacity: 0.65;
+}
+
 .charge-debtor-amount {
   font-weight: 700;
   white-space: nowrap;

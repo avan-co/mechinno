@@ -533,7 +533,11 @@ const activateSection = (id, options = {}) => {
       history.replaceState(null, "", `${location.pathname}${location.search}${nextHash}`);
     }
   }
-  reloadSectionTables(id);
+  if (id === "members" && panelMode === "admin") {
+    initMemberFilters().catch(() => {});
+  } else {
+    reloadSectionTables(id);
+  }
 
   if (id === "desks" && panelMode === "admin") {
     loadDeskGrid().catch((error) => showToast(error.message, "error"));
@@ -548,7 +552,6 @@ const activateSection = (id, options = {}) => {
     loadPaymentGuide().catch(() => {});
     loadTeamPaymentWizard().catch((error) => showToast(error.message, "error"));
   }
-  if (id === "members" && panelMode === "admin") initMemberFilters().catch(() => {});
   if (id === "sms" && panelMode === "admin") {
     window.initSmsPanel?.();
   }
@@ -2183,7 +2186,7 @@ const initMemberFilters = async () => {
   const table = document.getElementById("membersTable");
   if (!bar || !table) return;
 
-  const state = {
+  const initial = {
     q: table.filter || "",
     teamId: table.memberTeamFilter || "",
     entityType: table.memberEntityTypeFilter || "",
@@ -2191,19 +2194,22 @@ const initMemberFilters = async () => {
     wantsAccess: table.memberAccessFilter || "",
   };
 
-  await buildRecipientFilterBar(bar, state, () => {
-    table.memberTeamFilter = state.teamId;
-    table.memberEntityTypeFilter = state.entityType;
-    table.memberLeaderFilter = state.isLeader;
-    table.memberAccessFilter = state.wantsAccess;
-    table.filter = state.q;
-    table.setAttribute("data-member-team", state.teamId);
-    table.setAttribute("data-member-entity-type", state.entityType);
-    table.setAttribute("data-member-leader", state.isLeader);
-    table.setAttribute("data-member-access", state.wantsAccess);
+  const applyMemberFilters = (filters) => {
+    table.memberTeamFilter = filters.teamId;
+    table.memberEntityTypeFilter = filters.entityType;
+    table.memberLeaderFilter = filters.isLeader;
+    table.memberAccessFilter = filters.wantsAccess;
+    table.filter = filters.q;
+    table.setAttribute("data-member-team", filters.teamId);
+    table.setAttribute("data-member-entity-type", filters.entityType);
+    table.setAttribute("data-member-leader", filters.isLeader);
+    table.setAttribute("data-member-access", filters.wantsAccess);
     table.page = 1;
     table.load?.();
-  });
+  };
+
+  await buildRecipientFilterBar(bar, initial, applyMemberFilters);
+  applyMemberFilters(initial);
 
   const search = table.querySelector(".search");
   if (search) {
@@ -2211,8 +2217,17 @@ const initMemberFilters = async () => {
   }
 };
 
+const readRecipientFilters = (container) => ({
+  q: container.querySelector('[data-filter="q"]')?.value.trim() || "",
+  teamId: container.querySelector('[data-filter="teamId"]')?.value || "",
+  entityType: container.querySelector('[data-filter="entityType"]')?.value || "",
+  isLeader: container.querySelector('[data-filter="isLeader"]')?.value || "",
+  wantsAccess: container.querySelector('[data-filter="wantsAccess"]')?.value || "",
+});
+
 window.buildRecipientFilterBar = async (container, state, onApply) => {
   if (!container) return;
+  container._filterOnApply = onApply;
   const meta = await loadCrudMeta();
   const teamOptions = meta.resources?.members?.fields?.team_id?.options || {};
   const teamEntries = Object.entries(teamOptions);
@@ -2256,12 +2271,7 @@ window.buildRecipientFilterBar = async (container, state, onApply) => {
     ).join("")}`;
 
     const apply = () => {
-      state.q = container.querySelector('[data-filter="q"]')?.value.trim() || "";
-      state.teamId = container.querySelector('[data-filter="teamId"]')?.value || "";
-      state.entityType = container.querySelector('[data-filter="entityType"]')?.value || "";
-      state.isLeader = container.querySelector('[data-filter="isLeader"]')?.value || "";
-      state.wantsAccess = container.querySelector('[data-filter="wantsAccess"]')?.value || "";
-      onApply?.();
+      container._filterOnApply?.(readRecipientFilters(container));
     };
 
     container.querySelector('[data-filter="q"]')?.addEventListener("input", () => {

@@ -385,6 +385,22 @@ $assert(str_contains($rendered, $teamName), 'sms: charge template renders team n
 $assert(str_contains($rendered, '1,200,000'), 'sms: charge template renders debt total');
 $assert(MelliPayamak::deliveryLabel(4) === 'رسیده به گوشی', 'sms: delivery label mapping');
 
+$smsCenter = new CenterSettings($pdo);
+$smsCenter->updateSms([
+    'sms_username' => 'testuser',
+    'sms_password' => 'testpass',
+    'sms_from_number' => '30001234',
+]);
+$smsCenter->updateSms(['sms_charge_template' => 'الگوی تست {team_name}']);
+$partial = $smsCenter->smsSettings();
+$assert(($partial['sms_username'] ?? '') === 'testuser', 'sms: partial update preserves username');
+$sendSettings = $smsCenter->smsSettingsForSend();
+$assert(($sendSettings['sms_password'] ?? '') === 'testpass', 'sms: partial update preserves password');
+$assert(str_contains((string) ($partial['sms_charge_template'] ?? ''), 'الگوی تست'), 'sms: template section updates template only');
+
+$chargePreview = $smsService->chargeReminderPreview();
+$assert(is_array($chargePreview), 'sms: charge preview returns array');
+
 $_SESSION = [
     'mechinno_authenticated' => true,
     'mechinno_role' => Access::ROLE_ADMIN_EDITOR,

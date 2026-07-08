@@ -321,10 +321,14 @@ $assetVer = (string) max(
             </section>
 
             <section id="sms-settings" class="section">
-              <p class="hint">اتصال REST ملی‌پیامک. خطوط ارسال در اولین ذخیره استعلام می‌شوند؛ بعداً می‌توانید دستی استعلام بگیرید. هزینه هر پیامک از API خوانده می‌شود.</p>
+              <p class="hint">اتصال REST ملی‌پیامک. حساب API و خط ارسال جداگانه ذخیره می‌شوند. پس از ذخیره حساب، خطوط به‌صورت خودکار استعلام می‌شوند.</p>
               <article class="panel">
-                <div class="panel-head"><h2>حساب و خط ارسال</h2></div>
-                <form id="smsSettingsForm" class="payment-settings-form">در حال بارگذاری…</form>
+                <div class="panel-head"><h2>حساب API ملی‌پیامک</h2></div>
+                <form id="smsCredentialsForm" class="payment-settings-form">در حال بارگذاری…</form>
+              </article>
+              <article class="panel">
+                <div class="panel-head"><h2>خط ارسال و محدودیت روزانه</h2></div>
+                <form id="smsLineForm" class="payment-settings-form">در حال بارگذاری…</form>
               </article>
               <article class="panel">
                 <div class="panel-head"><h2>الگوی یادآور شارژ</h2></div>
