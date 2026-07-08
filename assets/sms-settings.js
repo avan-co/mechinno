@@ -21,7 +21,7 @@ const renderSmsCredentialsForm = (data) => {
       <label><span>نام کاربری ملی‌پیامک</span><input name="sms_username" value="${escapeHtml(data.sms_username || "")}" ${canWrite ? "" : "readonly"} required /></label>
       <label><span>رمز عبور API</span><input name="sms_password" type="password" placeholder="${data.sms_password_set ? "برای تغییر وارد کنید" : "رمز API"}" ${canWrite ? "" : "readonly"} /></label>
     </div>
-    <p class="hint">پس از ذخیره، خطوط ارسال به‌صورت خودکار از API استعلام می‌شوند.</p>
+    <p class="hint">نام کاربری و رمز REST پنل ملی‌پیامک (نه رمز ورود وب‌سایت).</p>
     ${canWrite ? `<div class="modal-actions"><button class="button" type="submit">ذخیره حساب API</button></div>` : `<p class="hint">فقط مشاهده</p>`}`;
 
   if (!canWrite) return;
@@ -48,25 +48,16 @@ const renderSmsCredentialsForm = (data) => {
 const renderSmsLineForm = (data) => {
   const host = document.getElementById("smsLineForm");
   if (!host) return;
-  const lines = Array.isArray(data.sms_line_numbers) ? data.sms_line_numbers : [];
-  const lineOptions = lines.map((line) =>
-    `<option value="${escapeHtml(line)}" ${line === data.sms_from_number ? "selected" : ""}>${escapeHtml(line)}</option>`
-  ).join("");
-  const hasCredentials = Boolean((data.sms_username || "").trim() && data.sms_password_set);
   host.innerHTML = `
     <div class="crud-grid">
-      <label><span>خط ارسال</span>
-        <select name="sms_from_number" ${canWrite ? "" : "disabled"}>
-          <option value="">انتخاب خط…</option>
-          ${lineOptions}
-          ${data.sms_from_number && !lines.includes(data.sms_from_number) ? `<option value="${escapeHtml(data.sms_from_number)}" selected>${escapeHtml(data.sms_from_number)} (فعلی)</option>` : ""}
-        </select>
+      <label><span>شماره خط ارسال</span>
+        <input name="sms_from_number" type="text" inputmode="numeric" placeholder="مثلاً 3000xxxx یا 5000xxxx" value="${escapeHtml(data.sms_from_number || "")}" ${canWrite ? "" : "readonly"} />
       </label>
       <label><span>سقف ارسال روزانه (پنل)</span><input name="sms_daily_limit" type="number" min="1" value="${escapeHtml(data.sms_daily_limit || 500)}" ${canWrite ? "" : "readonly"} /></label>
       <label><span>هزینه هر پیامک (ریال — از API)</span><input name="sms_unit_cost" type="number" value="${escapeHtml(data.sms_base_price || data.sms_unit_cost || 0)}" readonly /></label>
     </div>
-    <p class="hint">${data.sms_lines_queried_at ? `آخرین استعلام خطوط: ${escapeHtml(data.sms_lines_queried_at)}` : hasCredentials ? "خطی یافت نشد — دکمه «استعلام مجدد خطوط» را بزنید." : "ابتدا حساب API را ذخیره کنید."}</p>
-    ${!data.sms_configured && hasCredentials ? `<p class="hint">برای تکمیل تنظیمات، یک خط ارسال انتخاب و ذخیره کنید.</p>` : ""}
+    <p class="hint">شماره خط را از پنل ملی‌پیامک کپی و اینجا دستی وارد کنید. بدون خط ذخیره‌شده، وضعیت اتصال «ناقص» می‌ماند.</p>
+    ${!data.sms_configured ? `<p class="hint">پس از وارد کردن خط، دکمه «ذخیره خط و محدودیت» را بزنید.</p>` : ""}
     ${canWrite ? `<div class="modal-actions"><button class="button" type="submit">ذخیره خط و محدودیت</button></div>` : `<p class="hint">فقط مشاهده</p>`}`;
 
   if (!canWrite) return;
@@ -89,14 +80,21 @@ const renderSmsLineForm = (data) => {
   };
 };
 
+const formatCredit = (value) => {
+  if (value === null || value === undefined || value === "") return "—";
+  return Number(value).toLocaleString("fa-IR");
+};
+
 const renderSmsSettingsStats = (data) => {
   const host = document.getElementById("smsSettingsStats");
   if (!host) return;
+  const price = Number(data.sms_base_price ?? data.sms_unit_cost ?? 0);
   host.innerHTML = `
     <div class="month-stats">
       <div class="month-stat"><span>وضعیت اتصال</span><strong>${data.sms_configured ? "آماده ارسال" : "ناقص"}</strong></div>
-      <div class="month-stat"><span>موجودی پنل</span><strong>${data.sms_credit != null ? Number(data.sms_credit).toLocaleString("fa-IR") : "—"}</strong></div>
-      <div class="month-stat"><span>تعرفه پایه</span><strong>${formatMoney(data.sms_base_price || data.sms_unit_cost || 0)}</strong></div>
+      <div class="month-stat"><span>موجودی پنل</span><strong>${formatCredit(data.sms_credit)}</strong></div>
+      <div class="month-stat"><span>تعرفه پایه</span><strong>${price > 0 ? formatMoney(price) : "—"}</strong></div>
+      <div class="month-stat"><span>آخرین بروزرسانی زنده</span><strong>${escapeHtml(data.sms_live_synced_at || "—")}</strong></div>
       <div class="month-stat"><span>آخرین همگام‌سازی تاریخچه</span><strong>${escapeHtml(data.sms_history_synced_at || "—")}</strong></div>
     </div>`;
 };
@@ -139,13 +137,11 @@ const bindSmsSettingsActions = () => {
     try {
       const result = await postJson("api.php?resource=sms-test", {});
       const checks = result.result?.checks || {};
-      const lines = (checks.lines?.value || []).length;
       const credit = checks.credit?.value;
       const price = checks.base_price?.value;
       const details = [
-        credit != null ? `موجودی: ${Number(credit).toLocaleString("fa-IR")}` : null,
+        credit != null ? `موجودی: ${formatCredit(credit)}` : null,
         price != null ? `تعرفه: ${formatMoney(price)}` : null,
-        lines ? `خطوط: ${lines}` : null,
       ].filter(Boolean).join(" — ");
       showToast(details ? `${result.result?.message || "اتصال OK"} (${details})` : (result.result?.message || "تست انجام شد."), result.result?.ok ? "success" : "error");
       if (result.result?.ok) await loadSmsSettingsPage(true);
@@ -165,17 +161,6 @@ const bindSmsSettingsActions = () => {
         return;
       }
       showToast("آمار زنده از API بروز شد.", "success");
-    } catch (error) {
-      showToast(error.message, "error");
-    }
-  });
-
-  document.getElementById("smsManualQueryLines")?.addEventListener("click", async () => {
-    if (!canWrite) return;
-    try {
-      const result = await postJson("api.php?resource=sms-query-lines", {});
-      showToast(`خطوط به‌روز شد — ${(result.result?.numbers || []).length} خط`, "success");
-      await loadSmsSettingsPage();
     } catch (error) {
       showToast(error.message, "error");
     }

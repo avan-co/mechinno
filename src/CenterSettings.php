@@ -85,7 +85,8 @@ final class CenterSettings
         try {
             $statement = $this->pdo->query(
                 'SELECT sms_username, sms_password, sms_from_number, sms_daily_limit, sms_unit_cost, sms_updated_at,
-                        sms_line_numbers, sms_lines_queried_at, sms_charge_template, sms_history_synced_at
+                        sms_line_numbers, sms_lines_queried_at, sms_charge_template, sms_history_synced_at,
+                        sms_panel_credit, sms_live_synced_at
                  FROM center_settings WHERE id = 1'
             );
             $row = $statement->fetch() ?: [];
@@ -99,6 +100,8 @@ final class CenterSettings
             $row['sms_lines_queried_at'] = '';
             $row['sms_charge_template'] = '';
             $row['sms_history_synced_at'] = '';
+            $row['sms_panel_credit'] = null;
+            $row['sms_live_synced_at'] = '';
         }
 
         return [
@@ -114,6 +117,10 @@ final class CenterSettings
                 ? (string) $row['sms_charge_template']
                 : self::DEFAULT_CHARGE_TEMPLATE,
             'sms_history_synced_at' => (string) ($row['sms_history_synced_at'] ?? ''),
+            'sms_panel_credit' => isset($row['sms_panel_credit']) && $row['sms_panel_credit'] !== null
+                ? (int) $row['sms_panel_credit']
+                : null,
+            'sms_live_synced_at' => (string) ($row['sms_live_synced_at'] ?? ''),
         ];
     }
 
@@ -253,6 +260,23 @@ final class CenterSettings
         $this->ensureRow();
         $this->pdo->prepare('UPDATE center_settings SET sms_unit_cost = :price WHERE id = 1')
             ->execute(['price' => max(0, $price)]);
+    }
+
+    public function storeSmsLiveStats(?int $credit, ?int $price): void
+    {
+        $this->ensureRow();
+        $sets = ['sms_live_synced_at = :synced_at'];
+        $params = ['synced_at' => JalaliDate::todayParts()['formatted']];
+        if ($credit !== null) {
+            $sets[] = 'sms_panel_credit = :credit';
+            $params['credit'] = max(0, $credit);
+        }
+        if ($price !== null) {
+            $sets[] = 'sms_unit_cost = :price';
+            $params['price'] = max(0, $price);
+        }
+        $this->pdo->prepare('UPDATE center_settings SET ' . implode(', ', $sets) . ' WHERE id = 1')
+            ->execute($params);
     }
 
     public function markSmsHistorySynced(): void
