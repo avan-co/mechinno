@@ -73,7 +73,7 @@
         return `<button type="button" class="year-tab${active ? " active" : ""}${String(year) === String(currentFiscalYear()) ? " is-current" : ""}"
           data-year-tab="${S().escapeHtml(year)}" role="tab" aria-selected="${active ? "true" : "false"}">${S().escapeHtml(year)}</button>`;
       }).join("")}
-      ${canAdd ? `<button type="button" class="year-tab year-tab-add" data-year-add data-team-id="${teamId}">+ ثبت سال</button>` : ""}
+      ${writable ? "" : ""}
     </div>`;
 
   const renderContractPanel = (profile, year, summary, teamId, writable) => {
@@ -113,39 +113,31 @@
     </article>`;
   };
 
-  const renderDeskPanel = (profile, year, teamId, writable) => {
+  const renderDeskPanel = (profile, year) => {
     const desks = desksForYear(profile, year);
-    const isCurrent = String(year) === String(currentFiscalYear());
     const rows = desks.length
       ? desks.map((row) => `
         <tr>
           <td>${S().deskLink ? S().deskLink(row.desk_number) : S().escapeHtml(row.desk_number)}</td>
           <td>${S().escapeHtml(S().usageLabels[row.usage_type] || row.usage_type || "—")}</td>
-          <td>${S().escapeHtml(S().formatPlain(row.assigned_from))}</td>
-          <td>${S().escapeHtml(S().formatPlain(row.assigned_until || "—"))}</td>
+          <td>${S().escapeHtml(row.assignment_period || S().formatMonthRange?.(row.assigned_from, row.assigned_until) || S().formatPlain(row.assigned_from))}</td>
           <td>${S().escapeHtml(row.notes || "—")}</td>
-          ${writable ? `<td class="row-actions">
-            <button class="mini-button" type="button" data-edit-assignment data-id="${row.id}">ویرایش</button>
-            <button class="mini-button danger" type="button" data-delete-assignment data-id="${row.id}">حذف</button>
-          </td>` : ""}
         </tr>`).join("")
-      : `<tr><td colspan="${writable ? 6 : 5}">میزی برای این سال ثبت نشده است.</td></tr>`;
+      : `<tr><td colspan="4">میزی برای این سال ثبت نشده است. از بخش <strong>تاریخچه تخصیص</strong> ثبت کنید.</td></tr>`;
 
     return `<article class="year-panel">
       <div class="year-panel-head">
         <h3>میزهای سال ${S().escapeHtml(year)}</h3>
-        ${isCurrent && writable ? `<button type="button" class="button ghost" data-go-desks-map>نقشه میز (سال جاری)</button>` : ""}
+        <button type="button" class="button ghost" data-go-desk-history>ثبت / ویرایش در تاریخچه تخصیص</button>
       </div>
-      ${!isCurrent && writable ? `<p class="hint warning-text">ویرایش میز سال گذشته فقط روی تاریخچه اثر می‌گذارد و وضعیت فعلی میزها را عوض نمی‌کند.</p>` : ""}
       <div class="table-wrap">
         <table class="data-table year-desk-table">
           <thead><tr>
-            <th>میز</th><th>نوع</th><th>از</th><th>تا</th><th>یادداشت</th>${writable ? "<th>عملیات</th>" : ""}
+            <th>میز</th><th>نوع</th><th>بازه</th><th>یادداشت</th>
           </tr></thead>
           <tbody>${rows}</tbody>
         </table>
       </div>
-      ${writable ? `<button type="button" class="button ghost" data-add-assignment data-team-id="${teamId}" data-year="${S().escapeHtml(year)}">+ افزودن میز به این سال</button>` : ""}
     </article>`;
   };
 
@@ -192,7 +184,7 @@
           </div>
           ${writable ? `<div class="profile-actions team-year-top-actions">
             <button type="button" class="button" data-profile-action="add-member">افزودن عضو</button>
-            <button type="button" class="button ghost" data-year-wizard data-team-id="${teamId}" data-year="${S().escapeHtml(year)}">ویزارد ثبت سابقه</button>
+            <button type="button" class="button ghost" data-go-desk-history>تاریخچه تخصیص میز</button>
             <button type="button" class="button ghost" data-profile-action="charges">شارژ</button>
           </div>` : ""}
         </div>
@@ -200,7 +192,7 @@
         ${renderYearChecklist(summary)}
         <div class="year-workspace-panels">
           ${renderContractPanel(profile, year, summary, teamId, writable)}
-          ${renderDeskPanel(profile, year, teamId, writable)}
+          ${renderDeskPanel(profile, year)}
           ${renderChargesPanel(profile, year, teamId, writable)}
         </div>
         <details class="year-extra-section">
@@ -284,39 +276,10 @@
       }
     });
 
-    container.querySelector("[data-add-assignment]")?.addEventListener("click", async (event) => {
-      const button = event.currentTarget;
-      await openAssignmentEditor({
-        teamId: Number(button.dataset.teamId),
-        year: button.dataset.year,
-        onSaved: () => reloadFn(container, teamId, button.dataset.year),
-      });
-    });
-
-    container.querySelectorAll("[data-edit-assignment]").forEach((button) => {
-      button.addEventListener("click", async () => {
-        const year = container.dataset.selectedYear;
-        await openAssignmentEditor({
-          assignmentId: Number(button.dataset.id),
-          teamId,
-          year,
-          onSaved: () => reloadFn(container, teamId, year),
-        });
-      });
-    });
-
-    container.querySelectorAll("[data-delete-assignment]").forEach((button) => {
-      button.addEventListener("click", async () => {
-        if (!window.confirm("این رکورد تخصیص میز حذف شود؟")) return;
-        const year = container.dataset.selectedYear;
-        try {
-          await S().postJson("api.php?resource=desk-assignments&action=delete", { id: Number(button.dataset.id) });
-          S().showToast("حذف شد.", "success");
-          await reloadFn(container, teamId, year);
-          await S().refreshAfterMutation("desks");
-        } catch (error) {
-          S().showToast(error.message, "error");
-        }
+    container.querySelectorAll("[data-go-desk-history]").forEach((button) => {
+      button.addEventListener("click", () => {
+        S().closeModal();
+        S().activateSection("desk-history");
       });
     });
 
@@ -324,7 +287,7 @@
       const button = event.currentTarget;
       const year = button.dataset.year;
       const tid = Number(button.dataset.teamId);
-      if (!window.confirm(`شهریه خودکار سال ${year} برای این نهاد محاسبه شود؟`)) return;
+      if (!window.confirm(`شهریه خودکار سال ${year} محاسبه شود؟ ماه‌هایی که دستی ویرایش کرده‌اید حفظ می‌شوند.`)) return;
       button.disabled = true;
       try {
         await S().postJson("api.php?resource=recalculate-charges", { fiscal_year: year, team_id: tid });
@@ -336,18 +299,6 @@
       } finally {
         button.disabled = false;
       }
-    });
-
-    container.querySelector("[data-year-wizard]")?.addEventListener("click", () => {
-      openYearWizard(Number(container.querySelector("[data-year-wizard]")?.dataset.teamId || teamId), container.dataset.selectedYear)
-        .then(() => reloadFn(container, teamId, container.dataset.selectedYear))
-        .catch((error) => S().showToast(error.message, "error"));
-    });
-
-    container.querySelector("[data-year-add]")?.addEventListener("click", () => {
-      openYearWizard(teamId, "")
-        .then((year) => reloadFn(container, teamId, year || container.dataset.selectedYear))
-        .catch((error) => { if (error.message !== "cancelled") S().showToast(error.message, "error"); });
     });
 
     container.querySelector("[data-go-desks-map]")?.addEventListener("click", () => {
@@ -396,173 +347,6 @@
       S().activateSection("charges");
     });
   };
-
-  const openAssignmentEditor = async ({ assignmentId = 0, teamId, year, onSaved }) => {
-    const meta = await S().loadCrudMeta();
-    const definition = meta.resources.desk_assignments;
-    let record = {
-      team_id: String(teamId),
-      usage_type: "formal",
-      assigned_from: `${year}/01/01`,
-      assigned_until: `${year}/12/29`,
-    };
-    if (assignmentId > 0) {
-      const { rows } = await S().fetchResource("api.php?resource=desk-assignments", { page: 1, perPage: 200 });
-      const existing = rows.find((row) => Number(row.id) === assignmentId);
-      if (existing) record = { ...existing };
-    }
-    const isPast = String(year) !== String(currentFiscalYear());
-    if (isPast && assignmentId > 0 && !window.confirm("ویرایش میز سال گذشته ممکن است شهریه را تغییر دهد. ادامه می‌دهید؟")) {
-      throw new Error("cancelled");
-    }
-    S().openRecordModal({
-      resource: "desk-assignments",
-      definition,
-      title: `${assignmentId ? "ویرایش" : "افزودن"} میز — سال ${year}`,
-      record,
-      onSaved: async () => {
-        await onSaved?.();
-        await S().refreshAfterMutation("desks");
-        S().showToast("تخصیص میز ذخیره شد.", "success");
-      },
-    });
-  };
-
-  const openYearWizard = (teamId, prefillYear = "") => new Promise((resolve, reject) => {
-    const modal = S().ensureModal();
-    const form = modal.querySelector("#crudForm");
-    modal.querySelector("#crudModalTitle").textContent = "ویزارد ثبت سال / سابقه";
-    const state = {
-      step: 1,
-      year: prefillYear || "",
-      contractStart: "",
-      contractEnd: "",
-      notes: "",
-      desksText: "",
-      recalculate: true,
-    };
-
-    const renderStep = () => {
-      if (state.step === 1) {
-        form.innerHTML = `
-          <p class="hint">برای ورود یک‌باره قرارداد و میزهای یک سال (جاری یا گذشته).</p>
-          <div class="crud-grid">
-            <label><span>سال مالی</span><input id="wizardYear" type="text" required value="${S().escapeHtml(state.year)}" placeholder="1403" /></label>
-          </div>
-          <div class="modal-actions">
-            <button type="button" class="button ghost" data-wizard-cancel>انصراف</button>
-            <button type="button" class="button" data-wizard-next>بعدی</button>
-          </div>`;
-      } else if (state.step === 2) {
-        form.innerHTML = `
-          <p class="hint">قرارداد سال <strong>${S().escapeHtml(state.year)}</strong></p>
-          <div class="crud-grid">
-            <label><span>شروع</span><input id="wizardStart" type="text" value="${S().escapeHtml(state.contractStart || `${state.year}/01/01`)}" /></label>
-            <label><span>پایان</span><input id="wizardEnd" type="text" value="${S().escapeHtml(state.contractEnd || `${state.year}/12/29`)}" /></label>
-            <label class="wide"><span>یادداشت</span><textarea id="wizardNotes" rows="2">${S().escapeHtml(state.notes)}</textarea></label>
-          </div>
-          <div class="modal-actions">
-            <button type="button" class="button ghost" data-wizard-back>قبلی</button>
-            <button type="button" class="button" data-wizard-next>بعدی</button>
-          </div>`;
-      } else if (state.step === 3) {
-        form.innerHTML = `
-          <p class="hint">میزهای سال ${S().escapeHtml(state.year)} — هر خط: <code>شماره میز,نوع,از تاریخ,تا تاریخ</code></p>
-          <label class="wide"><span>ردیف‌های میز</span>
-            <textarea id="wizardDesks" rows="8" placeholder="3,formal,${S().escapeHtml(state.year)}/01/01,${S().escapeHtml(state.year)}/12/29">${S().escapeHtml(state.desksText)}</textarea>
-          </label>
-          <div class="modal-actions">
-            <button type="button" class="button ghost" data-wizard-back>قبلی</button>
-            <button type="button" class="button" data-wizard-next>بعدی</button>
-          </div>`;
-      } else {
-        const deskLines = state.desksText.trim().split("\n").filter(Boolean);
-        form.innerHTML = `
-          <div class="year-wizard-preview">
-            <h3>خلاصه قبل از ذخیره</h3>
-            <ul>
-              <li>سال: <strong>${S().escapeHtml(state.year)}</strong></li>
-              <li>قرارداد: ${S().escapeHtml(state.contractStart)} تا ${S().escapeHtml(state.contractEnd)}</li>
-              <li>تعداد میز: <strong>${deskLines.length}</strong></li>
-            </ul>
-            <label><input type="checkbox" id="wizardRecalc" ${state.recalculate ? "checked" : ""} /> محاسبه خودکار شهریه پس از ذخیره</label>
-            ${String(state.year) !== String(currentFiscalYear()) ? `<p class="hint warning-text">سال گذشته — وضعیت فعلی نقشه میز تغییر نمی‌کند مگر میزهای باز تا امروز باشند.</p>` : ""}
-          </div>
-          <div class="modal-actions">
-            <button type="button" class="button ghost" data-wizard-back>قبلی</button>
-            <button type="button" class="button" data-wizard-save>ذخیره</button>
-          </div>`;
-      }
-
-      form.querySelector("[data-wizard-cancel]")?.addEventListener("click", () => {
-        S().closeModal();
-        reject(new Error("cancelled"));
-      });
-      form.querySelector("[data-wizard-back]")?.addEventListener("click", () => {
-        if (state.step === 3) {
-          state.desksText = form.querySelector("#wizardDesks")?.value || state.desksText;
-        }
-        state.step -= 1;
-        renderStep();
-      });
-      form.querySelector("[data-wizard-next]")?.addEventListener("click", () => {
-        if (state.step === 1) {
-          state.year = form.querySelector("#wizardYear").value.trim();
-          if (!state.year) return;
-          state.contractStart = `${state.year}/01/01`;
-          state.contractEnd = `${state.year}/12/29`;
-        }
-        if (state.step === 2) {
-          state.contractStart = form.querySelector("#wizardStart").value;
-          state.contractEnd = form.querySelector("#wizardEnd").value;
-          state.notes = form.querySelector("#wizardNotes").value;
-        }
-        if (state.step === 3) {
-          state.desksText = form.querySelector("#wizardDesks").value;
-        }
-        state.step += 1;
-        renderStep();
-      });
-      form.querySelector("[data-wizard-save]")?.addEventListener("click", async () => {
-        state.recalculate = form.querySelector("#wizardRecalc")?.checked !== false;
-        const desks = state.desksText.trim().split("\n").filter(Boolean).map((line) => {
-          const [deskNumber, usageType, assignedFrom, assignedUntil] = line.split(",").map((part) => part.trim());
-          return {
-            desk_number: deskNumber,
-            usage_type: usageType || "formal",
-            assigned_from: assignedFrom || `${state.year}/01/01`,
-            assigned_until: assignedUntil || `${state.year}/12/29`,
-          };
-        });
-        const saveButton = form.querySelector("[data-wizard-save]");
-        saveButton.disabled = true;
-        try {
-          await S().postJson("api.php?resource=bulk-year-import", {
-            fiscal_year: state.year,
-            recalculate: state.recalculate,
-            rows: [{
-              team_id: teamId,
-              contract_start: state.contractStart,
-              contract_end: state.contractEnd,
-              notes: state.notes,
-              desks,
-            }],
-          });
-          S().showToast("سال با موفقیت ثبت شد.", "success");
-          S().closeModal();
-          resolve(state.year);
-        } catch (error) {
-          S().showToast(error.message, "error");
-        } finally {
-          saveButton.disabled = false;
-        }
-      });
-    };
-
-    renderStep();
-    modal.hidden = false;
-    S().trapFocus(modal);
-  });
 
   const openBulkImportModal = () => {
     const modal = S().ensureModal();
@@ -631,17 +415,34 @@
     }
     const meta = await S().loadCrudMeta();
     const year = currentFiscalYear();
-    const today = S().MECHINNO?.today || `${year}/01/01`;
+    let fromMonth = S().monthIndexFromDate?.(desk.assignment_from_month || desk.assignment_from) || "1";
+    let untilMonth = S().monthIndexFromDate?.(desk.assignment_until_month || desk.assignment_until) || "12";
+    if (desk.team_id) {
+      try {
+        const { rows: contracts } = await S().fetchResource("api.php?resource=team_contracts", {
+          page: 1,
+          perPage: 50,
+          teamId: desk.team_id,
+        });
+        const contract = contracts.find((row) => String(row.fiscal_year) === String(year));
+        if (contract) {
+          fromMonth = String(S().monthIndexFromDate?.(contract.contract_start) || fromMonth);
+          untilMonth = String(S().monthIndexFromDate?.(contract.contract_end) || untilMonth);
+        }
+      } catch (error) {
+        // ignore contract lookup errors
+      }
+    }
     S().openRecordModal({
       resource: "desks",
       definition: meta.resources.desks,
-      title: `تخصیص میز ${desk.number} — سال جاری`,
+      title: `تخصیص میز ${desk.number} — سال ${year}`,
       record: {
         id: String(desk.id),
         team_id: desk.team_id ? String(desk.team_id) : "",
         usage_type: desk.usage_type || "formal",
-        assignment_from: desk.assignment_from || today,
-        assignment_until: desk.assignment_until || "",
+        assignment_from_month: fromMonth,
+        assignment_until_month: untilMonth,
         notes: desk.notes || "",
       },
       onSaved: async () => {
@@ -685,7 +486,6 @@
   window.TeamYearWorkspace = {
     openModal,
     mountInline,
-    openYearWizard,
     openBulkImportModal,
     openDeskAssignModal,
     renderTeamStatusChecklist,

@@ -366,9 +366,17 @@ $assetVer = (string) max(
             </section>
 
             <section id="desk-history" class="section">
-              <p class="hint">تاریخچه کامل تخصیص میزها — تخصیص‌های <strong>جاری</strong> در بالای لیست هستند. می‌توانید بر اساس نهاد فیلتر کنید.</p>
-              <div class="member-filters" id="deskHistoryFilters"></div>
-              <data-table id="deskAssignmentsTable" title="تاریخچه تخصیص میزها" endpoint="api.php?resource=desk-assignments" data-no-add></data-table>
+              <article class="panel desk-history-panel">
+                <div class="panel-head">
+                  <h2>تاریخچه تخصیص میزها</h2>
+                  <?php if (Access::canWrite()): ?>
+                  <button id="deskHistoryAddButton" class="button" type="button">ثبت تخصیص میز</button>
+                  <?php endif; ?>
+                </div>
+                <p class="hint">تخصیص میز فقط برای نهادهایی با <strong>قرارداد ثبت‌شده</strong> امکان‌پذیر است. بازه‌ها به‌صورت ماه نمایش داده می‌شوند (مثلاً از فروردین تا مرداد).</p>
+                <div id="deskHistoryFilters"></div>
+                <data-table id="deskAssignmentsTable" title="" endpoint="api.php?resource=desk-assignments" data-no-add></data-table>
+              </article>
             </section>
 
             <section id="lockers" class="section">
@@ -379,7 +387,7 @@ $assetVer = (string) max(
             </section>
 
             <section id="charges" class="section">
-              <p class="hint">نرخ شارژ و اجاره <strong>به ازای هر میز</strong> است. فقط نهادهایی که در آن سال <strong>قرارداد</strong> و <strong>میز فعال</strong> دارند در کلاژ می‌آیند. اجاره غیررسمی فقط برای میزهای غیررسمی/ترکیبی محاسبه می‌شود.</p>
+              <p class="hint">نرخ شارژ و اجاره <strong>به ازای هر میز</strong> است. ماه‌های شارژ از <strong>بازه تخصیص میز</strong> محاسبه می‌شود (نه فقط تاریخ قرارداد). ویرایش دستی شارژ در محاسبه خودکار حفظ می‌شود.</p>
               <data-table title="نرخ‌های سالانه" endpoint="api.php?resource=rate_settings"></data-table>
               <article class="panel">
                 <div class="panel-head">

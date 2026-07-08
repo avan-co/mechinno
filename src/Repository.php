@@ -462,8 +462,8 @@ final class Repository
                         t.name AS team_name, t.entity_type, t.is_active AS team_is_active
                  FROM team_contracts tc
                  INNER JOIN teams t ON t.id = tc.team_id"
-                . ($teamId !== null ? " WHERE tc.team_id = {$teamId}" : '')
-                . $this->searchClause('team_contracts', $filters, $teamId !== null)
+                . $this->teamContractsAdminWhereClause($filters, $teamId)
+                . $this->searchClause('team_contracts', $filters, $teamId !== null || (int) ($filters['team_id'] ?? 0) > 0)
                 . ' ORDER BY
                     CASE
                         WHEN tc.contract_start <= ' . $this->pdo->quote(JalaliDate::todayParts()['formatted']) . '
@@ -905,17 +905,6 @@ final class Repository
             $teamAllocations = $allocationMap[$tid] ?? [];
             foreach ($months as $month) {
                 $idx = (int) $month['index'];
-                if (!JalaliDate::monthInContract($fiscalYear, $idx, $dates['start'], $dates['end'])) {
-                    $cells[] = [
-                        'month_index' => $idx,
-                        'charge_amount' => 0,
-                        'rent_amount' => 0,
-                        'amount_due' => 0,
-                        'amount_paid' => 0,
-                        'status' => 'خارج از قرارداد',
-                    ];
-                    continue;
-                }
                 if ($contracts->deskCountForMonth($tid, $fiscalYear, $idx) <= 0) {
                     $cells[] = [
                         'month_index' => $idx,
@@ -994,13 +983,6 @@ final class Repository
         foreach ($chargeMap as $charge) {
             $fy = (string) ($charge['fiscal_year'] ?? '');
             $mi = (int) ($charge['month_index'] ?? 0);
-            $dates = $contracts->contractDatesForYear($teamId, $fy);
-            if (!JalaliDate::monthInContract($fy, $mi, $dates['start'], $dates['end'])) {
-                continue;
-            }
-            if ($contracts->deskCountForMonth($teamId, $fy, $mi) <= 0) {
-                continue;
-            }
             $key = $fy . '-' . $mi;
             $due = (int) ($charge['amount'] ?? 0);
             $paid = (int) ($byMonth[$key] ?? 0);
@@ -1091,10 +1073,6 @@ final class Repository
             $teamId = (int) ($row['team_id'] ?? 0);
             $fiscalYear = (string) ($row['fiscal_year'] ?? '');
             $monthIndex = (int) ($row['month_index'] ?? 0);
-            $dates = $contracts->contractDatesForYear($teamId, $fiscalYear);
-            if (!JalaliDate::monthInContract($fiscalYear, $monthIndex, $dates['start'], $dates['end'])) {
-                continue;
-            }
             $key = $fiscalYear . '-' . $monthIndex;
             $paid = (int) ($allocationMap[$teamId][$key] ?? 0);
             $due = (int) ($row['amount_due'] ?? 0);
@@ -1336,9 +1314,35 @@ final class Repository
         return array_map(function (array $row) use ($today): array {
             $until = (string) ($row['assigned_until'] ?? '');
             $row['assignment_status'] = ($until === '' || JalaliDate::compare($until, $today) >= 0) ? 'active' : 'expired';
+            $row['assignment_period'] = JalaliDate::monthRangeLabel(
+                (string) ($row['assigned_from'] ?? ''),
+                $until
+            );
+            $row['assigned_from_month'] = (string) JalaliDate::monthIndexFromDate((string) ($row['assigned_from'] ?? ''));
+            $row['assigned_until_month'] = (string) JalaliDate::monthIndexFromDate($until);
+            if (empty($row['fiscal_year'])) {
+                $row['fiscal_year'] = JalaliDate::fiscalYearFromDate((string) ($row['assigned_from'] ?? ''));
+            }
 
             return $row;
         }, $rows);
+    }
+
+    /**
+     * @param array<string, string> $filters
+     */
+    private function teamContractsAdminWhereClause(array $filters, ?int $scopedTeamId): string
+    {
+        if ($scopedTeamId !== null) {
+            return " WHERE tc.team_id = {$scopedTeamId}";
+        }
+
+        $teamFilter = (int) ($filters['team_id'] ?? 0);
+        if ($teamFilter > 0) {
+            return " WHERE tc.team_id = {$teamFilter}";
+        }
+
+        return '';
     }
 
     /**
@@ -1362,6 +1366,14 @@ final class Repository
             $yearEnd = $this->pdo->quote($year . '/12/29');
             $clauses[] = "da.assigned_from <= {$yearEnd}";
             $clauses[] = "(da.assigned_until IS NULL OR da.assigned_until = '' OR da.assigned_until >= {$yearStart})";
+        }
+
+        $status = trim((string) ($filters['assignment_status'] ?? ''));
+        $today = $this->pdo->quote(JalaliDate::todayParts()['formatted']);
+        if ($status === 'active') {
+            $clauses[] = "(da.assigned_until IS NULL OR da.assigned_until = '' OR da.assigned_until >= {$today})";
+        } elseif ($status === 'expired') {
+            $clauses[] = "(da.assigned_until IS NOT NULL AND da.assigned_until <> '' AND da.assigned_until < {$today})";
         }
 
         if ($clauses === []) {
@@ -1720,10 +1732,6 @@ final class Repository
             if ($due <= 0) {
                 continue;
             }
-            $dates = $contracts->contractDatesForYear($teamId, $fy);
-            if (!JalaliDate::monthInContract($fy, $mi, $dates['start'], $dates['end'])) {
-                continue;
-            }
             $key = $fy . '-' . $mi;
             $chargeByMonth[$key] = ($chargeByMonth[$key] ?? 0) + $due;
         }
@@ -1764,10 +1772,6 @@ final class Repository
             if ($due <= 0) {
                 continue;
             }
-            $dates = $contracts->contractDatesForYear($teamId, $fy);
-            if (!JalaliDate::monthInContract($fy, $mi, $dates['start'], $dates['end'])) {
-                continue;
-            }
             $total += $due;
         }
 
@@ -1805,10 +1809,6 @@ final class Repository
             }
             $due = $this->chargeRowDueAmount($row);
             if ($due <= 0) {
-                continue;
-            }
-            $dates = $contracts->contractDatesForYear($teamId, $fy);
-            if (!JalaliDate::monthInContract($fy, $mi, $dates['start'], $dates['end'])) {
                 continue;
             }
             $key = $fy . '-' . $mi;

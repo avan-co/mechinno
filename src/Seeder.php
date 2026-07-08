@@ -40,12 +40,27 @@ final class Seeder
         );
 
         $contracts = new TeamContracts($this->pdo);
-        $dates = $contracts->contractDatesForYear($teamId, $fiscalYear);
         if (!$contracts->hasContractInYear($teamId, $fiscalYear) || !$contracts->hasDeskInFiscalYear($teamId, $fiscalYear)) {
             return;
         }
 
-        $amounts = $this->monthlyAmountsForTeam($teamId, $fiscalYear, $dates['start'], $dates['end']);
+        $amounts = $this->monthlyAmountsForTeam($teamId, $fiscalYear);
+        $existingSystem = $this->pdo->prepare(
+            'SELECT id, month_index FROM charges
+             WHERE team_id = :team_id AND fiscal_year = :fiscal_year AND source_file = :source'
+        );
+        $existingSystem->execute(['team_id' => $teamId, 'fiscal_year' => $fiscalYear, 'source' => 'system']);
+        $systemByMonth = [];
+        foreach ($existingSystem->fetchAll() as $row) {
+            $systemByMonth[(int) ($row['month_index'] ?? 0)] = (int) ($row['id'] ?? 0);
+        }
+
+        $updateSystem = $this->pdo->prepare(
+            'UPDATE charges
+             SET month_name = :month_name, charge_amount = :charge_amount, rent_amount = :rent_amount, amount = :amount
+             WHERE id = :id'
+        );
+
         foreach ($amounts as $monthIndex => $parts) {
             if (($parts['amount'] ?? 0) <= 0) {
                 continue;
@@ -59,41 +74,52 @@ final class Seeder
             if ($manualCheck->fetchColumn() !== false) {
                 continue;
             }
-            $this->insert('charges', [
-                'team_id' => $teamId,
-                'fiscal_year' => $fiscalYear,
-                'month_index' => $monthIndex,
+            $payload = [
                 'month_name' => JalaliDate::monthName($monthIndex),
                 'charge_amount' => $parts['charge_amount'],
                 'rent_amount' => $parts['rent_amount'],
                 'amount' => $parts['amount'],
+            ];
+            if (isset($systemByMonth[$monthIndex])) {
+                $updateSystem->execute($payload + ['id' => $systemByMonth[$monthIndex]]);
+                unset($systemByMonth[$monthIndex]);
+                continue;
+            }
+            $this->insert('charges', [
+                'team_id' => $teamId,
+                'fiscal_year' => $fiscalYear,
+                'month_index' => $monthIndex,
+                'month_name' => $payload['month_name'],
+                'charge_amount' => $payload['charge_amount'],
+                'rent_amount' => $payload['rent_amount'],
+                'amount' => $payload['amount'],
                 'note' => '',
                 'source_file' => 'system',
                 'source_sheet' => 'auto',
             ]);
+        }
+
+        if ($systemByMonth !== []) {
+            $deleteStale = $this->pdo->prepare('DELETE FROM charges WHERE id = :id');
+            foreach ($systemByMonth as $systemId) {
+                $deleteStale->execute(['id' => $systemId]);
+            }
         }
     }
 
     /**
      * @return array<int, array{charge_amount:int, rent_amount:int, amount:int}>
      */
-    public function monthlyAmountsForTeam(
-        int $teamId,
-        string $fiscalYear,
-        ?string $contractStart = null,
-        ?string $contractEnd = null
-    ): array {
+    public function monthlyAmountsForTeam(int $teamId, string $fiscalYear): array
+    {
         $contracts = new TeamContracts($this->pdo);
         $rows = $contracts->deskAssignmentsForTeamInYear($teamId, $fiscalYear);
-        if ($rows === [] && $contractStart === null && $contractEnd === null) {
+        if ($rows === []) {
             return [];
         }
 
         $months = [];
         for ($month = 1; $month <= 12; $month++) {
-            if (!JalaliDate::monthInContract($fiscalYear, $month, $contractStart, $contractEnd)) {
-                continue;
-            }
             $deskCount = 0;
             $informalDeskCount = 0;
             foreach ($rows as $assignment) {

@@ -129,8 +129,8 @@ final class Crud
                         'required' => true,
                     ],
                     'notes' => ['label' => 'توضیحات', 'type' => 'textarea'],
-                    'assignment_from' => ['label' => 'تاریخ شروع تخصیص (سال جاری)', 'type' => 'date', 'placeholder' => '1405/01/01'],
-                    'assignment_until' => ['label' => 'تاریخ تحویل / پایان', 'type' => 'date', 'placeholder' => '1405/12/29'],
+                    'assignment_from_month' => ['label' => 'از ماه', 'type' => 'select', 'options' => self::monthOptions(), 'required' => true],
+                    'assignment_until_month' => ['label' => 'تا ماه', 'type' => 'select', 'options' => self::monthOptions()],
                 ],
             ],
             'desk_assignments' => [
@@ -148,8 +148,9 @@ final class Crud
                         'options' => ['formal' => 'رسمی', 'informal' => 'غیررسمی', 'mixed' => 'ترکیبی'],
                         'required' => true,
                     ],
-                    'assigned_from' => ['label' => 'تاریخ شروع تخصیص', 'type' => 'date', 'required' => true, 'placeholder' => '1404/01/01'],
-                    'assigned_until' => ['label' => 'تاریخ تحویل / پایان', 'type' => 'date', 'placeholder' => '1404/12/29'],
+                    'fiscal_year' => ['label' => 'سال مالی', 'type' => 'text', 'required' => true],
+                    'assigned_from_month' => ['label' => 'از ماه', 'type' => 'select', 'options' => self::monthOptions(), 'required' => true],
+                    'assigned_until_month' => ['label' => 'تا ماه', 'type' => 'select', 'options' => self::monthOptions()],
                     'notes' => ['label' => 'توضیحات', 'type' => 'textarea'],
                 ],
             ],
@@ -671,11 +672,20 @@ final class Crud
         if ($resource !== 'desks') {
             return [];
         }
+        $contracts = new TeamContracts($this->pdo);
+        $fiscalYear = $contracts->currentFiscalYear();
         $dates = [];
-        foreach (['assignment_from', 'assignment_until'] as $field) {
-            if (array_key_exists($field, $payload)) {
-                $dates[$field] = $payload[$field];
-            }
+        $fromMonth = (int) ($payload['assignment_from_month'] ?? 0);
+        $untilMonth = (int) ($payload['assignment_until_month'] ?? 0);
+        if ($fromMonth >= 1 && $fromMonth <= 12) {
+            $dates['assignment_from'] = JalaliDate::monthStart($fiscalYear, $fromMonth);
+        } elseif (array_key_exists('assignment_from', $payload)) {
+            $dates['assignment_from'] = $payload['assignment_from'];
+        }
+        if ($untilMonth >= 1 && $untilMonth <= 12) {
+            $dates['assignment_until'] = JalaliDate::monthEnd($fiscalYear, $untilMonth);
+        } elseif (array_key_exists('assignment_until', $payload)) {
+            $dates['assignment_until'] = $payload['assignment_until'];
         }
 
         return $dates;
@@ -689,7 +699,7 @@ final class Crud
         if ($resource !== 'desks') {
             return;
         }
-        unset($data['assignment_from'], $data['assignment_until']);
+        unset($data['assignment_from'], $data['assignment_until'], $data['assignment_from_month'], $data['assignment_until_month']);
     }
 
     /**
@@ -708,6 +718,9 @@ final class Crud
             $row['assignment_from'] = '';
             $row['assignment_until'] = '';
         }
+        $row['assignment_from_month'] = (string) JalaliDate::monthIndexFromDate($row['assignment_from']);
+        $row['assignment_until_month'] = (string) JalaliDate::monthIndexFromDate($row['assignment_until']);
+        $row['assignment_period'] = JalaliDate::monthRangeLabel($row['assignment_from'], $row['assignment_until']);
 
         return $row;
     }
@@ -1070,13 +1083,49 @@ final class Crud
                 throw new InvalidArgumentException('میز یافت نشد.');
             }
             $data['desk_number'] = (int) $deskNumber;
-            if (isset($data['assigned_from'])) {
-                $data['assigned_from'] = JalaliDate::normalizeDigits((string) $data['assigned_from']);
+
+            $fiscalYear = JalaliDate::normalizeDigits((string) ($data['fiscal_year'] ?? ''));
+            $existing = null;
+            if ($recordId > 0) {
+                $existing = $this->find($resource, $recordId);
             }
-            if (isset($data['assigned_until']) && $this->blank($data['assigned_until'])) {
+            if ($fiscalYear === '' && $existing !== null) {
+                $fiscalYear = JalaliDate::fiscalYearFromDate((string) ($existing['assigned_from'] ?? ''));
+            }
+            if ($fiscalYear === '') {
+                throw new InvalidArgumentException('سال مالی الزامی است.');
+            }
+
+            $fromMonth = (int) ($data['assigned_from_month'] ?? 0);
+            $untilMonth = (int) ($data['assigned_until_month'] ?? 0);
+            if ($fromMonth < 1 && $existing !== null) {
+                $fromMonth = JalaliDate::monthIndexFromDate((string) ($existing['assigned_from'] ?? ''));
+            }
+            if ($untilMonth < 1 && $existing !== null && array_key_exists('assigned_until_month', $data)) {
+                $untilMonth = 0;
+            } elseif ($untilMonth < 1 && $existing !== null) {
+                $untilMonth = JalaliDate::monthIndexFromDate((string) ($existing['assigned_until'] ?? ''));
+            }
+            if ($fromMonth < 1 || $fromMonth > 12) {
+                throw new InvalidArgumentException('ماه شروع تخصیص معتبر نیست.');
+            }
+            $data['assigned_from'] = JalaliDate::monthStart($fiscalYear, $fromMonth);
+            if ($untilMonth >= 1 && $untilMonth <= 12) {
+                if ($untilMonth < $fromMonth) {
+                    throw new InvalidArgumentException('ماه پایان نمی‌تواند قبل از ماه شروع باشد.');
+                }
+                $data['assigned_until'] = JalaliDate::monthEnd($fiscalYear, $untilMonth);
+            } else {
                 $data['assigned_until'] = null;
-            } elseif (isset($data['assigned_until'])) {
-                $data['assigned_until'] = JalaliDate::normalizeDigits((string) $data['assigned_until']);
+            }
+            unset($data['assigned_from_month'], $data['assigned_until_month'], $data['fiscal_year']);
+
+            $teamId = (int) ($data['team_id'] ?? 0);
+            if ($teamId <= 0 && $existing !== null) {
+                $teamId = (int) ($existing['team_id'] ?? 0);
+            }
+            if ($teamId > 0) {
+                (new TeamContracts($this->pdo))->assertCanAssignDeskForYear($teamId, $fiscalYear);
             }
         }
         if ($resource === 'panel_users') {
