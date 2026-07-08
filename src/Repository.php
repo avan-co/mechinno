@@ -291,6 +291,12 @@ final class Repository
         if ($name === 'teams' && Access::isAdmin()) {
             $rows = $this->enrichTeamStatusRows($rows);
         }
+        if ($name === 'team_contracts') {
+            $rows = $this->enrichContractStatusRows($rows);
+        }
+        if ($name === 'desk-assignments') {
+            $rows = $this->enrichDeskAssignmentStatusRows($rows);
+        }
 
         return [
             'rows' => $rows,
@@ -453,12 +459,19 @@ final class Repository
                 . $this->searchClause('teams', $filters)
                 . ' ORDER BY t.is_active DESC, t.entity_type, t.name',
             'team_contracts' => "SELECT tc.id, tc.team_id, tc.fiscal_year, tc.contract_start, tc.contract_end, tc.notes, tc.created_at,
-                        t.name AS team_name, t.entity_type
+                        t.name AS team_name, t.entity_type, t.is_active AS team_is_active
                  FROM team_contracts tc
                  INNER JOIN teams t ON t.id = tc.team_id"
                 . ($teamId !== null ? " WHERE tc.team_id = {$teamId}" : '')
                 . $this->searchClause('team_contracts', $filters, $teamId !== null)
-                . ' ORDER BY tc.fiscal_year DESC, t.name',
+                . ' ORDER BY
+                    CASE
+                        WHEN tc.contract_start <= ' . $this->pdo->quote(JalaliDate::todayParts()['formatted']) . '
+                         AND tc.contract_end >= ' . $this->pdo->quote(JalaliDate::todayParts()['formatted']) . '
+                        THEN 0 ELSE 1
+                    END,
+                    tc.fiscal_year DESC,
+                    t.name',
             'members' => "SELECT m.id, m.member_code, m.team_id, m.access_code, m.full_name, m.phone, m.national_id, m.notes,
                         m.approval_status, m.submitted_at, m.reviewed_at, m.rejection_reason, m.wants_access, m.is_leader,
                         t.name AS team_label, t.entity_type,
@@ -575,13 +588,18 @@ final class Repository
                 . ' ORDER BY lr.submitted_at DESC, lr.id DESC',
             'desk-assignments' => "SELECT da.id, da.desk_id, da.desk_number, da.team_id, da.usage_type,
                         da.assigned_from, da.assigned_until, da.notes,
-                        SUBSTR(da.assigned_from, 1, 4) AS fiscal_year, t.name AS team_name
+                        SUBSTR(da.assigned_from, 1, 4) AS fiscal_year, t.name AS team_name, t.is_active AS team_is_active
                  FROM desk_assignments da
                  LEFT JOIN teams t ON t.id = da.team_id"
-                . ($teamId !== null
-                    ? " WHERE da.team_id = {$teamId}"
-                    : $this->deskAssignmentYearClause($filters))
-                . ' ORDER BY da.assigned_from DESC, da.desk_number',
+                . $this->deskAssignmentAdminWhereClause($filters, $teamId)
+                . ' ORDER BY
+                    CASE
+                        WHEN da.assigned_until IS NULL OR da.assigned_until = \'\' OR da.assigned_until >= '
+                    . $this->pdo->quote(JalaliDate::todayParts()['formatted'])
+                    . ' THEN 0 ELSE 1
+                    END,
+                    da.assigned_from DESC,
+                    da.desk_number',
             'payment-history' => "SELECT t.id, t.tx_date, t.amount, t.description, t.payment_reference, t.payment_status, t.notes,
                         t.fiscal_year, t.month_index, t.confirmed, t.announced_at, t.reviewed_at,
                         tm.name AS team_name,
@@ -1282,6 +1300,75 @@ final class Repository
             'SELECT COALESCE(SUM(amount), 0) FROM charges WHERE team_id = :team_id AND fiscal_year = :year',
             ['team_id' => $teamId, 'year' => JalaliDate::normalizeDigits($fiscalYear)]
         );
+    }
+
+    /**
+     * @param list<array<string, mixed>> $rows
+     * @return list<array<string, mixed>>
+     */
+    private function enrichContractStatusRows(array $rows): array
+    {
+        $today = JalaliDate::todayParts()['formatted'];
+
+        return array_map(function (array $row) use ($today): array {
+            $start = (string) ($row['contract_start'] ?? '');
+            $end = (string) ($row['contract_end'] ?? '');
+            if ($start !== '' && $end !== '' && JalaliDate::compare($start, $today) <= 0 && JalaliDate::compare($end, $today) >= 0) {
+                $row['contract_status'] = 'active';
+            } elseif ($end !== '' && JalaliDate::compare($end, $today) < 0) {
+                $row['contract_status'] = 'expired';
+            } else {
+                $row['contract_status'] = 'inactive';
+            }
+
+            return $row;
+        }, $rows);
+    }
+
+    /**
+     * @param list<array<string, mixed>> $rows
+     * @return list<array<string, mixed>>
+     */
+    private function enrichDeskAssignmentStatusRows(array $rows): array
+    {
+        $today = JalaliDate::todayParts()['formatted'];
+
+        return array_map(function (array $row) use ($today): array {
+            $until = (string) ($row['assigned_until'] ?? '');
+            $row['assignment_status'] = ($until === '' || JalaliDate::compare($until, $today) >= 0) ? 'active' : 'expired';
+
+            return $row;
+        }, $rows);
+    }
+
+    /**
+     * @param array<string, string> $filters
+     */
+    private function deskAssignmentAdminWhereClause(array $filters, ?int $scopedTeamId): string
+    {
+        if ($scopedTeamId !== null) {
+            return " WHERE da.team_id = {$scopedTeamId}";
+        }
+
+        $clauses = [];
+        $teamFilter = (int) ($filters['team_id'] ?? 0);
+        if ($teamFilter > 0) {
+            $clauses[] = "da.team_id = {$teamFilter}";
+        }
+
+        $year = JalaliDate::normalizeDigits(trim((string) ($filters['fiscal_year'] ?? '')));
+        if ($year !== '') {
+            $yearStart = $this->pdo->quote($year . '/01/01');
+            $yearEnd = $this->pdo->quote($year . '/12/29');
+            $clauses[] = "da.assigned_from <= {$yearEnd}";
+            $clauses[] = "(da.assigned_until IS NULL OR da.assigned_until = '' OR da.assigned_until >= {$yearStart})";
+        }
+
+        if ($clauses === []) {
+            return '';
+        }
+
+        return ' WHERE ' . implode(' AND ', $clauses);
     }
 
     /**

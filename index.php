@@ -110,6 +110,12 @@ $assetVer = (string) max(
               <span class="nav-icon nav-icon--purple"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm-7 8a7 7 0 0 1 14 0Z" fill="currentColor"/></svg></span>
               نهادها
             </button>
+            <?php if (Access::isAdmin()): ?>
+            <button class="nav-item nav-item--sub" data-section="team-contracts" type="button">
+              <span class="nav-icon nav-icon--purple"><svg viewBox="0 0 24 24"><path d="M7 3h10a2 2 0 0 1 2 2v14l-7-3-7 3V5a2 2 0 0 1 2-2Z" fill="currentColor"/></svg></span>
+              قراردادها
+            </button>
+            <?php endif; ?>
             <button class="nav-item" data-section="members" type="button">
               <span class="nav-icon nav-icon--teal"><svg viewBox="0 0 24 24"><path d="M16 11c1.7 0 3-1.3 3-3S17.7 5 16 5s-3 1.3-3 3 1.3 3 3 3ZM8 11c1.7 0 3-1.3 3-3S9.7 5 8 5 5 6.3 5 8s1.3 3 3 3Zm0 2c-2.7 0-8 1.3-8 4v3h10v-3c0-1.1.4-2.1 1.1-2.9C9.8 13.1 8.9 13 8 13Zm8 0c-.9 0-1.8.1-2.6.3.7.8 1.1 1.8 1.1 2.9v3h7v-3c0-2.7-5.3-4-8-4Z" fill="currentColor"/></svg></span>
               اعضا
@@ -118,6 +124,12 @@ $assetVer = (string) max(
               <span class="nav-icon nav-icon--orange"><svg viewBox="0 0 24 24"><path d="M4 5h16a1 1 0 0 1 1 1v3H3V6a1 1 0 0 1 1-1Zm17 6v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-8h18ZM8 17h2v-3H8v3Zm6 0h2v-3h-2v3Z" fill="currentColor"/></svg></span>
               میزها
             </button>
+            <?php if (Access::isAdmin()): ?>
+            <button class="nav-item nav-item--sub" data-section="desk-history" type="button">
+              <span class="nav-icon nav-icon--orange"><svg viewBox="0 0 24 24"><path d="M7 3h10v4H7V3Zm0 6h10v12H7V9Zm2 2v2h6v-2H9Zm0 4v2h4v-2H9Z" fill="currentColor"/></svg></span>
+              تاریخچه تخصیص
+            </button>
+            <?php endif; ?>
             <button class="nav-item" data-section="lockers" type="button">
               <span class="nav-icon nav-icon--green"><svg viewBox="0 0 24 24"><path d="M6 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm0 4v12h12V7H6Zm3 2h2v2H9V9Zm4 0h2v2h-2V9Z" fill="currentColor"/></svg></span>
               کمدها
@@ -147,10 +159,6 @@ $assetVer = (string) max(
             </button>
             <?php endif; ?>
             <?php if (Access::isAdmin()): ?>
-            <button class="nav-item nav-item--sub" data-section="advanced" type="button">
-              <span class="nav-icon nav-icon--orange"><svg viewBox="0 0 24 24"><path d="M12 8a1 1 0 0 1 1 1v3h3a1 1 0 1 1 0 2h-4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Zm8-3H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Z" fill="currentColor"/></svg></span>
-              تنظیمات پیشرفته
-            </button>
             <button class="nav-item" data-section="users" type="button">
               <span class="nav-icon nav-icon--purple"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm-8 9a8 8 0 0 1 16 0Z" fill="currentColor"/></svg></span>
               کاربران مدیر
@@ -244,6 +252,11 @@ $assetVer = (string) max(
               </article>
               <?php endif; ?>
               <data-table title="نهادها" endpoint="api.php?resource=teams"></data-table>
+            </section>
+
+            <section id="team-contracts" class="section">
+              <p class="hint">همه قراردادهای سال جاری و سال‌های قبل — قراردادهای <strong>فعال</strong> (در بازه امروز) در بالای لیست نمایش داده می‌شوند.</p>
+              <data-table title="قراردادهای نهادها" endpoint="api.php?resource=team_contracts"></data-table>
             </section>
 
             <section id="members" class="section">
@@ -346,9 +359,16 @@ $assetVer = (string) max(
                     <span class="legend-item legend-highlight">انتخاب‌شده</span>
                   </div>
                 </div>
-                <p class="hint">۳ ردیف × ۸ میز — <?php if (Access::canWrite()): ?>روی هر میز کلیک کنید تا تخصیص سال جاری را ویرایش کنید.<?php else: ?>میزها به نهاد تخصیص می‌یابند.<?php endif; ?> سوابق سال‌های قبل در <strong>پروفایل نهاد</strong> ثبت می‌شود.</p>
+                <p class="hint">۳ ردیف × ۸ میز — <?php if (Access::canWrite()): ?>روی هر میز کلیک کنید تا تخصیص سال جاری را ویرایش کنید.<?php else: ?>میزها به نهاد تخصیص می‌یابند.<?php endif; ?></p>
                 <div id="deskGrid" class="desk-map"></div>
               </article>
+              <data-table id="currentDesksTable" title="تخصیص سال جاری — جزئیات میزها" endpoint="api.php?resource=desks" data-no-add></data-table>
+            </section>
+
+            <section id="desk-history" class="section">
+              <p class="hint">تاریخچه کامل تخصیص میزها — تخصیص‌های <strong>جاری</strong> در بالای لیست هستند. می‌توانید بر اساس نهاد فیلتر کنید.</p>
+              <div class="member-filters" id="deskHistoryFilters"></div>
+              <data-table id="deskAssignmentsTable" title="تاریخچه تخصیص میزها" endpoint="api.php?resource=desk-assignments" data-no-add></data-table>
             </section>
 
             <section id="lockers" class="section">
@@ -483,18 +503,6 @@ $assetVer = (string) max(
             <?php endif; ?>
 
             <?php if (Access::isAdmin()): ?>
-            <section id="advanced" class="section">
-              <p class="hint">جداول خام برای اصلاح دستی — در کار روزمره از <strong>پروفایل نهاد</strong> و <strong>نقشه میز</strong> استفاده کنید.</p>
-              <data-table title="قراردادهای سالانه (جدول خام)" endpoint="api.php?resource=team_contracts"></data-table>
-              <data-table title="جزئیات میزها" endpoint="api.php?resource=desks" data-no-add></data-table>
-              <article class="panel">
-                <div class="panel-head">
-                  <h2>تاریخچه تخصیص میزها</h2>
-                  <select id="deskHistoryYear" class="year-select" aria-label="فیلتر سال"></select>
-                </div>
-                <data-table id="deskAssignmentsTable" title="" endpoint="api.php?resource=desk-assignments"></data-table>
-              </article>
-            </section>
             <section id="users" class="section">
               <p class="hint">مدیران سیستم — کاربران نهاد هنگام ثبت نهاد خودکار ساخته می‌شوند و نام کاربری/رمز در جدول نهادها نمایش داده می‌شود.</p>
               <data-table title="کاربران مدیر" endpoint="api.php?resource=panel_users"></data-table>

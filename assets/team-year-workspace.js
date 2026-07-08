@@ -647,6 +647,7 @@
       onSaved: async () => {
         await S().loadDeskGrid?.();
         await S().refreshAfterMutation("desks");
+        await S().refreshAfterMutation("desk-history");
         S().showToast("میز به‌روز شد.", "success");
       },
     });

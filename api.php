@@ -335,6 +335,9 @@ try {
         if ($resource === 'desk-assignments' && isset($_GET['fiscal_year']) && $_GET['fiscal_year'] !== '') {
             $filters['fiscal_year'] = (string) $_GET['fiscal_year'];
         }
+        if ($resource === 'desk-assignments' && isset($_GET['team_id']) && $_GET['team_id'] !== '') {
+            $filters['team_id'] = (string) $_GET['team_id'];
+        }
         json_response($repository->paginatedResource($resource, $page, $perPage, $filters));
     }
 

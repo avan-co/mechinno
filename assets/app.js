@@ -54,6 +54,8 @@ const labels = {
   effective_from: "تاریخ اثر",
   joined_at: "عضویت",
   year_status: "وضعیت سال جاری",
+  contract_status: "وضعیت قرارداد",
+  assignment_status: "وضعیت تخصیص",
   warning: "اخطار",
   portal_username: "نام کاربری نهاد",
   portal_has_password: "رمز ورود نهاد",
@@ -101,8 +103,10 @@ const usageLabels = { formal: "رسمی", informal: "غیررسمی", mixed: "ت
 const sectionMeta = {
   overview: { eyebrow: "داشبورد", title: "مدیریت مرکز نوآوری", subtitle: "خلاصه وضعیت مرکز و اقدامات پیشنهادی" },
   teams: { eyebrow: "نهادها", title: "تیم‌ها، شرکت‌ها و دانشجویان", subtitle: "ثبت و مدیریت نهادها — قرارداد و میز هر سال از پروفایل نهاد" },
+  "team-contracts": { eyebrow: "نهادها", title: "قراردادهای نهادها", subtitle: "همه قراردادهای سال جاری و سال‌های قبل با وضعیت فعال/منقضی" },
   members: { eyebrow: "اعضا", title: "اعضای نهادها", subtitle: "هر عضو به یک نهاد تعلق دارد — میزها در سطح نهاد تخصیص می‌یابند" },
-  desks: { eyebrow: "میزها", title: "نقشه و تخصیص ۲۴ میز", subtitle: "تخصیص سال جاری از نقشه — سوابق سال‌های قبل در پروفایل نهاد" },
+  desks: { eyebrow: "میزها", title: "نقشه و تخصیص ۲۴ میز", subtitle: "تخصیص سال جاری از نقشه و جدول زیر نقشه" },
+  "desk-history": { eyebrow: "میزها", title: "تاریخچه تخصیص میزها", subtitle: "سوابق تخصیص همه نهادها — جاری و منقضی" },
   lockers: { eyebrow: "کمدها", title: "مدیریت کمدها", subtitle: "شماره کمدها را خودتان تعریف و تخصیص دهید" },
   charges: { eyebrow: "شارژ", title: "نرخ و شارژ ماهانه", subtitle: "تعریف نرخ سالانه، محاسبه خودکار و پیگیری پرداخت" },
   transactions: { eyebrow: "مالی", title: "دفتر معین و موجودی نقدی", subtitle: "گردش واقعی حساب مرکز — بدون تکرار شارژ سیستمی" },
@@ -110,7 +114,6 @@ const sectionMeta = {
   users: { eyebrow: "دسترسی", title: "کاربران پنل", subtitle: "مدیریت نقش‌ها و پنل اختصاصی نهادها" },
   sms: { eyebrow: "اطلاع‌رسانی", title: "ارسال پیامک", subtitle: "ارسال اطلاعیه به اعضا و مسئولین نهادها" },
   "sms-settings": { eyebrow: "پیامک", title: "تنظیمات ملی‌پیامک", subtitle: "اتصال API، خط ارسال و همگام‌سازی" },
-  advanced: { eyebrow: "پیشرفته", title: "جداول خام و ابزار سابقه", subtitle: "قراردادها، تاریخچه میز و ورود گروهی CSV" },
 };
 
 const teamSectionMeta = {
@@ -186,10 +189,10 @@ const monthNames = ["", "فروردین", "اردیبهشت", "خرداد", "ت�
 
 const resourceColumns = {
   teams: ["entity_code", "entity_type", "name", "is_active", "year_status", "leader", "phone", "joined_at", "portal_username", "portal_has_password", "desk_count", "warning", "notes"],
-  team_contracts: ["team_name", "fiscal_year", "contract_start", "contract_end", "notes"],
+  team_contracts: ["team_name", "fiscal_year", "contract_status", "contract_start", "contract_end", "notes"],
   members: ["member_code", "full_name", "is_leader", "team_label", "entity_type", "desk_numbers", "wants_access", "access_code", "phone", "national_id", "approval_status", "rejection_reason"],
   desks: ["number", "team_name", "usage_type", "assignment_from", "assignment_until", "notes"],
-  "desk-assignments": ["fiscal_year", "desk_number", "team_name", "usage_type", "assigned_from", "assigned_until", "notes"],
+  "desk-assignments": ["assignment_status", "fiscal_year", "desk_number", "team_name", "usage_type", "assigned_from", "assigned_until", "notes"],
   lockers: ["locker_number", "status", "team_label", "delivered_at", "key_number", "spare_key"],
   "locker-requests": ["submitted_at", "status", "locker_number", "notes", "reviewed_at", "rejection_reason"],
   "member-requests": ["submitted_at", "request_type", "current_full_name", "full_name", "phone", "national_id", "status", "reviewed_at", "rejection_reason"],
@@ -491,6 +494,9 @@ const reloadSectionTables = (sectionId, resetPage = false) => {
 const refreshAfterMutation = async (sectionId = null) => {
   invalidateCrudMeta();
   if (sectionId) reloadSectionTables(sectionId, true);
+  if (sectionId === "desks" && panelMode === "admin") {
+    loadDeskGrid().catch(() => {});
+  }
   try {
     await loadDashboard();
   } catch (error) {
@@ -544,8 +550,8 @@ const activateSection = (id, options = {}) => {
   if (id === "desks" && panelMode === "admin") {
     loadDeskGrid().catch((error) => showToast(error.message, "error"));
   }
-  if (id === "advanced" && panelMode === "admin") {
-    initDeskHistoryYear().catch(() => {});
+  if (id === "desk-history" && panelMode === "admin") {
+    initDeskHistoryFilters().catch(() => {});
   }
   if (id === "desks" && panelMode === "team") loadTeamDeskAssignments().catch((error) => showToast(error.message, "error"));
   if (id === "profile" && panelMode === "team") loadTeamProfile().catch((error) => showToast(error.message, "error"));
@@ -622,6 +628,16 @@ const lockerStatusBadge = (status) => {
 };
 
 document.addEventListener("click", (event) => {
+  const deskTile = event.target.closest(".desk-tile[data-desk-number]");
+  if (deskTile && panelMode === "admin" && canWrite) {
+    if (event.target.closest("[data-team-id]")) return;
+    event.preventDefault();
+    event.stopPropagation();
+    window.TeamYearWorkspace?.openDeskAssignModal(Number(deskTile.dataset.deskNumber))
+      .catch((error) => showToast(error.message, "error"));
+    return;
+  }
+
   const link = event.target.closest(".text-link[data-nav-section], .text-link[data-team-id], .action-item, .card-clickable, .debt-link, .desk-tile");
   if (!link) return;
 
@@ -1048,22 +1064,31 @@ const loadPaymentGuide = async () => {
     </div>`;
 };
 
-const initDeskHistoryYear = async () => {
-  const select = document.getElementById("deskHistoryYear");
+const initDeskHistoryFilters = async () => {
+  const bar = document.getElementById("deskHistoryFilters");
   const table = document.getElementById("deskAssignmentsTable");
-  if (!select || !table) return;
-  const data = await fetchJson("api.php?resource=charge-fiscal-years");
-  const years = data.years?.length ? data.years : [window.MECHINNO?.fiscalYear || "1405"];
-  select.innerHTML = years.map((year) => `<option value="${escapeHtml(year)}">${escapeHtml(year)}</option>`).join("");
-  const apply = () => {
-    table.fiscalYearFilter = select.value;
-    table.load();
-  };
-  if (!select.dataset.ready) {
-    select.dataset.ready = "1";
-    select.addEventListener("change", apply);
+  if (!bar || !table) return;
+  const meta = await loadCrudMeta();
+  const teamOptions = meta.resources?.desk_assignments?.fields?.team_id?.options
+    || meta.resources?.members?.fields?.team_id?.options
+    || {};
+  if (!bar.dataset.ready) {
+    bar.dataset.ready = "1";
+    bar.innerHTML = `
+      <label><span>فیلتر نهاد</span>
+        <select data-filter="teamId"><option value="">همه نهادها</option></select>
+      </label>`;
+    const teamSelect = bar.querySelector('[data-filter="teamId"]');
+    Object.entries(teamOptions).forEach(([value, label]) => {
+      teamSelect.insertAdjacentHTML("beforeend", `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`);
+    });
+    teamSelect.addEventListener("change", () => {
+      table.memberTeamFilter = teamSelect.value;
+      table.setAttribute("data-member-team", teamSelect.value);
+      table.page = 1;
+      table.load?.();
+    });
   }
-  apply();
 };
 
 const loadDevProgramSummary = async () => {
@@ -1151,7 +1176,9 @@ const loadDeskGrid = async () => {
             }
           }
           return `<button type="button" class="desk-tile ${tileClass} ${highlighted ? "highlighted" : ""}"
-            data-nav-section="desks" data-highlight-desk="${desk.number}">
+            ${isTeamMap
+              ? `data-nav-section="desks" data-highlight-desk="${desk.number}"`
+              : (canWrite ? `data-desk-number="${desk.number}"` : `data-nav-section="desks" data-highlight-desk="${desk.number}"`)}>
             <span class="desk-num">${desk.number}</span>
             <span class="desk-status">${occupied ? "اشغال" : "آزاد"}</span>
             ${meta}
@@ -1175,17 +1202,6 @@ const loadDeskGrid = async () => {
         }
       });
     });
-    if (canWrite) {
-      container.querySelectorAll(".desk-tile").forEach((tile) => {
-        tile.addEventListener("click", (event) => {
-          if (event.target.closest("[data-team-id]")) return;
-          const deskNumber = Number(tile.dataset.highlightDesk);
-          if (!deskNumber || !window.TeamYearWorkspace) return;
-          event.preventDefault();
-          window.TeamYearWorkspace.openDeskAssignModal(deskNumber).catch((error) => showToast(error.message, "error"));
-        });
-      });
-    }
   }
 };
 
@@ -1723,6 +1739,7 @@ const openRecordModal = ({ resource, definition, record = null, onSaved, title =
     ? `<p class="hint payment-allocation-hint">ماه اعلام‌شده برای پیگیری شماست. پس از تأیید مدیر، مبلغ <strong>ابتدا به قدیمی‌ترین ماه‌های بدهکار</strong> شما تخصیص می‌یابد و ممکن است با ماهی که اعلام کردید متفاوت باشد.</p>`
     : "";
   form.innerHTML = `
+    ${isEdit ? `<input type="hidden" name="id" value="${escapeHtml(String(record.id))}" />` : ""}
     <div class="crud-grid">
       ${Object.entries(definition.fields).map(([name, meta]) => {
         if (meta.type === "hidden") {
@@ -1747,7 +1764,7 @@ const openRecordModal = ({ resource, definition, record = null, onSaved, title =
     submitButton.disabled = true;
     try {
       const payload = Object.fromEntries(new FormData(form).entries());
-      if (isEdit) payload.id = record.id;
+      if (isEdit) payload.id = payload.id || record.id;
       await postJson(`api.php?resource=${encodeURIComponent(resource)}&action=${isEdit ? "update" : "create"}`, payload);
       closeModal();
       await onSaved();
@@ -2068,6 +2085,16 @@ const formatCell = (column, value, row, resource) => {
   }
   if (column === "year_status" && resource === "teams" && window.TeamYearWorkspace) {
     return window.TeamYearWorkspace.renderTeamStatusChecklist(row);
+  }
+  if (column === "contract_status") {
+    if (value === "active") return '<span class="badge badge-paid">فعال</span>';
+    if (value === "expired") return '<span class="badge badge-debt">منقضی</span>';
+    return '<span class="badge">غیرفعال</span>';
+  }
+  if (column === "assignment_status") {
+    if (value === "active") return '<span class="badge badge-paid">جاری</span>';
+    if (value === "expired") return '<span class="badge badge-debt">منقضی</span>';
+    return '<span class="badge">—</span>';
   }
   if (column === "team_label" || column === "team_name") {
     const name = escapeHtml(value || "—");
@@ -2668,6 +2695,11 @@ class DataTable extends HTMLElement {
     if (button.dataset.action === "edit") {
       if (this.resource === "transactions" && this.txCategoryFilter) {
         openFinanceModal(this.txCategoryFilter, { ...record }).catch((error) => showToast(error.message, "error"));
+        return;
+      }
+      if (this.resource === "desks" && canWrite && window.TeamYearWorkspace) {
+        window.TeamYearWorkspace.openDeskAssignModal(Number(record.number))
+          .catch((error) => showToast(error.message, "error"));
         return;
       }
       openRecordModal({
