@@ -149,17 +149,49 @@ final class CenterSettings
     {
         $this->ensureRow();
         $current = $this->pdo->query(
-            'SELECT sms_password, sms_line_numbers, sms_lines_queried_at FROM center_settings WHERE id = 1'
+            'SELECT sms_username, sms_password, sms_from_number, sms_daily_limit, sms_unit_cost,
+                    sms_line_numbers, sms_lines_queried_at, sms_charge_template
+             FROM center_settings WHERE id = 1'
         )->fetch() ?: [];
-        $password = trim((string) ($payload['sms_password'] ?? ''));
+
+        $username = array_key_exists('sms_username', $payload)
+            ? trim((string) $payload['sms_username'])
+            : trim((string) ($current['sms_username'] ?? ''));
+
+        $password = array_key_exists('sms_password', $payload)
+            ? trim((string) $payload['sms_password'])
+            : '';
         if ($password === '') {
             $password = (string) ($current['sms_password'] ?? '');
         }
+
+        $fromNumber = array_key_exists('sms_from_number', $payload)
+            ? trim((string) $payload['sms_from_number'])
+            : trim((string) ($current['sms_from_number'] ?? ''));
+
+        $dailyLimit = array_key_exists('sms_daily_limit', $payload)
+            ? max(1, (int) $payload['sms_daily_limit'])
+            : max(1, (int) ($current['sms_daily_limit'] ?? 500));
+
+        $unitCost = array_key_exists('sms_unit_cost', $payload)
+            ? max(0, (int) $payload['sms_unit_cost'])
+            : max(0, (int) ($current['sms_unit_cost'] ?? 0));
 
         $lineNumbers = $payload['sms_line_numbers'] ?? null;
         $lineNumbersJson = is_array($lineNumbers)
             ? json_encode(array_values(array_filter(array_map('strval', $lineNumbers))), JSON_UNESCAPED_UNICODE)
             : (string) ($current['sms_line_numbers'] ?? '');
+
+        $linesQueriedAt = array_key_exists('sms_lines_queried_at', $payload)
+            ? trim((string) $payload['sms_lines_queried_at'])
+            : trim((string) ($current['sms_lines_queried_at'] ?? ''));
+
+        $chargeTemplate = array_key_exists('sms_charge_template', $payload)
+            ? trim((string) $payload['sms_charge_template'])
+            : trim((string) ($current['sms_charge_template'] ?? ''));
+        if ($chargeTemplate === '') {
+            $chargeTemplate = self::DEFAULT_CHARGE_TEMPLATE;
+        }
 
         $statement = $this->pdo->prepare(
             'UPDATE center_settings SET
@@ -175,16 +207,14 @@ final class CenterSettings
              WHERE id = 1'
         );
         $statement->execute([
-            'sms_username' => trim((string) ($payload['sms_username'] ?? '')),
+            'sms_username' => $username,
             'sms_password' => $password,
-            'sms_from_number' => trim((string) ($payload['sms_from_number'] ?? '')),
-            'sms_daily_limit' => max(1, (int) ($payload['sms_daily_limit'] ?? 500)),
-            'sms_unit_cost' => max(0, (int) ($payload['sms_unit_cost'] ?? 0)),
+            'sms_from_number' => $fromNumber,
+            'sms_daily_limit' => $dailyLimit,
+            'sms_unit_cost' => $unitCost,
             'sms_line_numbers' => $lineNumbersJson,
-            'sms_lines_queried_at' => trim((string) ($payload['sms_lines_queried_at'] ?? ($current['sms_lines_queried_at'] ?? ''))),
-            'sms_charge_template' => trim((string) ($payload['sms_charge_template'] ?? '')) !== ''
-                ? trim((string) $payload['sms_charge_template'])
-                : self::DEFAULT_CHARGE_TEMPLATE,
+            'sms_lines_queried_at' => $linesQueriedAt,
+            'sms_charge_template' => $chargeTemplate,
             'sms_updated_at' => JalaliDate::todayParts()['formatted'],
         ]);
 

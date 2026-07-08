@@ -52,14 +52,32 @@ final class SmsService
      */
     public function updateSettings(array $payload): array
     {
+        $section = trim((string) ($payload['section'] ?? ''));
         $center = new CenterSettings($this->pdo);
         $current = $center->smsSettings();
-        $settings = $center->updateSms($payload);
+
+        $updatePayload = match ($section) {
+            'credentials' => [
+                'sms_username' => $payload['sms_username'] ?? '',
+                'sms_password' => $payload['sms_password'] ?? '',
+            ],
+            'line' => [
+                'sms_from_number' => $payload['sms_from_number'] ?? '',
+                'sms_daily_limit' => $payload['sms_daily_limit'] ?? $current['sms_daily_limit'] ?? 500,
+            ],
+            'template' => [
+                'sms_charge_template' => $payload['sms_charge_template'] ?? '',
+            ],
+            default => $payload,
+        };
+
+        $settings = $center->updateSms($updatePayload);
 
         $username = trim((string) ($settings['sms_username'] ?? ''));
         $passwordPayload = trim((string) ($payload['sms_password'] ?? ''));
         $send = $center->smsSettingsForSend();
-        $shouldQueryLines = $username !== '' && $send['sms_password'] !== ''
+        $shouldQueryLines = in_array($section, ['credentials', ''], true)
+            && $username !== '' && $send['sms_password'] !== ''
             && (
                 ($current['sms_lines_queried_at'] ?? '') === ''
                 || $passwordPayload !== ''
@@ -151,19 +169,29 @@ final class SmsService
     public function refreshPricing(?array $send = null): array
     {
         $send ??= (new CenterSettings($this->pdo))->smsSettingsForSend();
+        if ($send['sms_username'] === '' || $send['sms_password'] === '') {
+            throw new InvalidArgumentException('نام کاربری و رمز API را ابتدا ذخیره کنید.');
+        }
+
         $client = new MelliPayamak();
         $credit = null;
         $price = null;
-        if ($send['sms_username'] !== '' && $send['sms_password'] !== '') {
-            $creditResult = $client->getCredit((string) $send['sms_username'], (string) $send['sms_password']);
-            if ($creditResult['ok']) {
-                $credit = $creditResult['credit'];
-            }
-            $priceResult = $client->getBasePrice((string) $send['sms_username'], (string) $send['sms_password']);
-            if ($priceResult['ok'] && $priceResult['price'] !== null) {
-                $price = (int) $priceResult['price'];
-                (new CenterSettings($this->pdo))->updateSmsUnitCost($price);
-            }
+        $errors = [];
+        $creditResult = $client->getCredit((string) $send['sms_username'], (string) $send['sms_password']);
+        if ($creditResult['ok']) {
+            $credit = $creditResult['credit'];
+        } elseif (trim((string) ($creditResult['error'] ?? '')) !== '') {
+            $errors[] = (string) $creditResult['error'];
+        }
+        $priceResult = $client->getBasePrice((string) $send['sms_username'], (string) $send['sms_password']);
+        if ($priceResult['ok'] && $priceResult['price'] !== null) {
+            $price = (int) $priceResult['price'];
+            (new CenterSettings($this->pdo))->updateSmsUnitCost($price);
+        } elseif (trim((string) ($priceResult['error'] ?? '')) !== '') {
+            $errors[] = (string) $priceResult['error'];
+        }
+        if ($credit === null && $price === null && $errors !== []) {
+            throw new RuntimeException($errors[0]);
         }
 
         return ['credit' => $credit, 'base_price' => $price];
@@ -194,18 +222,23 @@ final class SmsService
                 continue;
             }
             $leader = $this->leaderRecipient((int) $row['team_id']);
-            if ($leader === null) {
-                continue;
-            }
+            $displayLeader = $this->teamLeaderDisplay((int) $row['team_id']);
+            $leaderMissing = $leader === null;
+            $leaderData = $displayLeader ?? [];
+            $phone = trim((string) ($leaderData['phone'] ?? ''));
             $items[] = [
                 'team_id' => (int) $row['team_id'],
                 'team_name' => (string) ($row['team_name'] ?? ''),
                 'debt_total' => (int) ($row['debt_total'] ?? 0),
                 'debt_summary' => (string) ($row['debt_summary'] ?? ''),
-                'member_id' => (int) $leader['id'],
-                'leader_name' => (string) $leader['full_name'],
-                'phone' => (string) ($leader['phone'] ?? ''),
-                'message' => $this->renderChargeTemplate($template, $row, $settings, $leader),
+                'member_id' => (int) ($leader['id'] ?? 0),
+                'leader_name' => (string) ($leaderData['full_name'] ?? ''),
+                'phone' => $phone,
+                'leader_missing' => $leaderMissing,
+                'can_send' => !$leaderMissing && $phone !== '',
+                'message' => $leaderMissing
+                    ? ''
+                    : $this->renderChargeTemplate($template, $row, $settings, $leader ?? $leaderData),
             ];
         }
 
@@ -321,7 +354,10 @@ final class SmsService
     {
         $send = (new CenterSettings($this->pdo))->smsSettingsForSend();
         if ($send['sms_username'] === '' || $send['sms_password'] === '') {
-            return ['synced' => 0, 'confirmed' => 0];
+            throw new InvalidArgumentException('نام کاربری و رمز API را ابتدا ذخیره کنید.');
+        }
+        if (trim((string) ($send['sms_from_number'] ?? '')) === '') {
+            throw new InvalidArgumentException('خط ارسال را انتخاب و ذخیره کنید.');
         }
 
         $client = new MelliPayamak();
@@ -659,6 +695,38 @@ final class SmsService
         $row = $statement->fetch();
 
         return $row === false ? null : $row;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function teamLeaderDisplay(int $teamId): ?array
+    {
+        $leader = $this->leaderRecipient($teamId);
+        if ($leader !== null) {
+            return $leader;
+        }
+
+        $teamStatement = $this->pdo->prepare('SELECT leader, phone FROM teams WHERE id = :team_id');
+        $teamStatement->execute(['team_id' => $teamId]);
+        $team = $teamStatement->fetch();
+        if ($team === false) {
+            return null;
+        }
+        $name = trim((string) ($team['leader'] ?? ''));
+        $phone = TeamLeaders::normalizePhone((string) ($team['phone'] ?? ''));
+        if ($name === '' && $phone === '') {
+            return null;
+        }
+
+        return [
+            'id' => 0,
+            'full_name' => $name !== '' ? $name : 'مسئول نهاد',
+            'phone' => $phone,
+            'team_id' => $teamId,
+            'team_label' => '',
+            'is_leader' => 1,
+        ];
     }
 
     /**

@@ -91,7 +91,8 @@ const initSmsFilters = async () => {
   const root = document.getElementById("smsRecipientsPanel");
   const mount = document.getElementById("smsFilterBar");
   if (!root || !mount) return;
-  await buildRecipientFilterBar(mount, smsState.filters, () => {
+  await buildRecipientFilterBar(mount, smsState.filters, (filters) => {
+    Object.assign(smsState.filters, filters);
     smsState.page = 1;
     loadSmsRecipients().catch((error) => showToast(error.message, "error"));
   });
@@ -225,10 +226,17 @@ const renderChargeReminderPanel = () => {
   const host = document.getElementById("smsChargeDebtorList");
   if (!host) return;
   host.innerHTML = smsState.chargeItems.map((item) => {
-    const checked = smsState.selectedChargeTeams.has(item.team_id) ? "checked" : "";
-    return `<label class="charge-debtor-row">
-      <input type="checkbox" data-charge-team="${item.team_id}" ${checked} ${canWrite ? "" : "disabled"} />
-      <span class="charge-debtor-name">${escapeHtml(item.team_name)} — ${escapeHtml(item.leader_name || "—")}</span>
+    const teamId = Number(item.team_id);
+    const canSend = item.can_send !== false && !item.leader_missing;
+    const checked = canSend && smsState.selectedChargeTeams.has(teamId) ? "checked" : "";
+    const warning = item.leader_missing
+      ? " — بدون مسئول تأیید‌شده"
+      : !item.phone
+        ? " — بدون شماره تماس"
+        : "";
+    return `<label class="charge-debtor-row${canSend ? "" : " charge-debtor-row--disabled"}">
+      <input type="checkbox" data-charge-team="${teamId}" ${checked} ${canWrite && canSend ? "" : "disabled"} />
+      <span class="charge-debtor-name">${escapeHtml(item.team_name)} — ${escapeHtml(item.leader_name || "—")}${escapeHtml(warning)}</span>
       <span class="charge-debtor-amount">${formatMoney(item.debt_total)}</span>
     </label>`;
   }).join("") || `<div class="empty">نهاد بدهکاری برای یادآور یافت نشد.</div>`;
@@ -248,7 +256,9 @@ const updateChargePreview = () => {
   const preview = document.getElementById("smsChargePreview");
   if (!preview) return;
   const template = chargeTemplateEditor?.getValue() || smsState.chargeTemplate;
-  const first = smsState.chargeItems.find((item) => smsState.selectedChargeTeams.has(Number(item.team_id)));
+  const first = smsState.chargeItems.find(
+    (item) => smsState.selectedChargeTeams.has(Number(item.team_id)) && item.can_send !== false
+  );
   preview.textContent = first
     ? first.message || template || "—"
     : smsState.chargeItems.length
@@ -261,7 +271,11 @@ const loadChargeReminderPanel = async () => {
   try {
     const data = await fetchJson("api.php?resource=sms-charge-preview");
     smsState.chargeItems = data.items || [];
-    smsState.selectedChargeTeams = new Set(smsState.chargeItems.map((item) => Number(item.team_id)));
+    smsState.selectedChargeTeams = new Set(
+      smsState.chargeItems
+        .filter((item) => item.can_send !== false && !item.leader_missing)
+        .map((item) => Number(item.team_id))
+    );
   } catch (error) {
     if (host) host.innerHTML = `<div class="empty">خطا در بارگذاری نهادهای بدهکار: ${escapeHtml(error.message)}</div>`;
     return;
