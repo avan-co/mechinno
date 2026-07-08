@@ -438,8 +438,8 @@
       usage_type: desk.usage_type || "formal",
       notes: desk.notes || "",
       lockDesk: true,
-      assigned_from_month: monthFromRecord(desk, "assignment_from_month", "assignment_from") || "1",
-      assigned_until_month: monthFromRecord(desk, "assignment_until_month", "assignment_until") || "12",
+      assigned_from_month: monthFromRecord(desk, "assignment_from_month", "assignment_from"),
+      assigned_until_month: monthFromRecord(desk, "assignment_until_month", "assignment_until"),
     };
 
     if (existing) {
@@ -451,10 +451,13 @@
         usage_type: existing.usage_type || "formal",
         notes: existing.notes || "",
         lockDesk: true,
-        assigned_from_month: monthFromRecord(existing, "assigned_from_month", "assigned_from") || "1",
-        assigned_until_month: monthFromRecord(existing, "assigned_until_month", "assigned_until") || "12",
+        assigned_from_month: monthFromRecord(existing, "assigned_from_month", "assigned_from"),
+        assigned_until_month: monthFromRecord(existing, "assigned_until_month", "assigned_until"),
       };
     }
+
+    if (!prefill.assigned_from_month) prefill.assigned_from_month = "1";
+    if (!prefill.assigned_until_month) prefill.assigned_until_month = "12";
 
     console.log("[mechinno:desk-map:prefill]", { desk, existing, prefill });
     await S().openDeskHistoryAssignModal(prefill);

@@ -449,6 +449,17 @@ final class Crud
                 return $this->update($resource, $existingId, $payload);
             }
         }
+        if ($resource === 'desk_assignments') {
+            $deskAssignments = new DeskAssignments($this->pdo);
+            $existingId = $deskAssignments->findExistingRecordId(
+                (int) ($data['desk_id'] ?? 0),
+                JalaliDate::fiscalYearFromDate((string) ($data['assigned_from'] ?? '')),
+                (int) ($data['team_id'] ?? 0)
+            );
+            if ($existingId !== null) {
+                return $this->update($resource, $existingId, $payload);
+            }
+        }
 
         $columns = array_keys($data);
         $statement = $this->pdo->prepare(sprintf(

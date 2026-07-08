@@ -240,6 +240,23 @@ $assert($deskListAfterAssign !== null, 'desks: list after desk-assignments updat
 $assert(($deskListAfterAssign['assignment_from'] ?? '') === $fromMonth5, 'desks: list shows updated assignment_from');
 $assert(($deskListAfterAssign['assignment_until'] ?? '') === $untilMonth7, 'desks: list shows updated assignment_until');
 
+$upsertFrom = JalaliDate::monthStart('1405', 3);
+$upsertUntil = JalaliDate::monthEnd('1405', 6);
+$upserted = $crud->create('desk_assignments', [
+    'team_id' => (string) $teamId,
+    'desk_id' => '1',
+    'usage_type' => 'formal',
+    'fiscal_year' => '1405',
+    'assigned_from_month' => '3',
+    'assigned_until_month' => '6',
+    'notes' => 'upsert',
+]);
+$assert((int) ($upserted['id'] ?? 0) === $assignmentId, 'desk-assignments: create upserts existing desk-year row');
+$assert(($upserted['assigned_from'] ?? '') === $upsertFrom, 'desk-assignments: upsert saves from month');
+$assert(($upserted['assigned_until'] ?? '') === $upsertUntil, 'desk-assignments: upsert saves until month');
+$duplicateCount = (int) $pdo->query('SELECT COUNT(*) FROM desk_assignments WHERE desk_id = 1 AND team_id = ' . $teamId)->fetchColumn();
+$assert($duplicateCount === 1, 'desk-assignments: reconcile removes duplicate rows for desk-year');
+
 $pdo->prepare(
     'INSERT INTO desk_assignments (desk_id, desk_number, team_id, usage_type, assigned_from, assigned_until)
      VALUES (1, 1, :team_id, :usage_type, :assigned_from, :assigned_until)'

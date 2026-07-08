@@ -282,7 +282,7 @@ final class TeamContracts
              WHERE team_id = :team_id
                AND assigned_from <= :year_end
                AND (assigned_until IS NULL OR assigned_until = \'\' OR assigned_until >= :year_start)
-             ORDER BY assigned_from DESC'
+             ORDER BY assigned_from DESC, CASE WHEN assigned_until IS NULL OR assigned_until = '' THEN 1 ELSE 0 END, assigned_until DESC'
         );
         $assignments->execute([
             'team_id' => $teamId,
@@ -291,7 +291,7 @@ final class TeamContracts
         ]);
         $rows = $assignments->fetchAll();
         if ($rows !== []) {
-            return $rows;
+            return $this->dedupeAssignmentsByDesk($rows);
         }
 
         if ($fiscalYear !== $this->currentFiscalYear()) {
@@ -323,7 +323,7 @@ final class TeamContracts
                AND team_id = :team_id
                AND assigned_from <= :year_end
                AND (assigned_until IS NULL OR assigned_until = \'\' OR assigned_until >= :year_start)
-             ORDER BY assigned_from DESC, id DESC
+             ORDER BY CASE WHEN assigned_until IS NULL OR assigned_until = '' THEN 1 ELSE 0 END, assigned_from DESC, id DESC
              LIMIT 1'
         );
 
@@ -415,6 +415,61 @@ final class TeamContracts
         }
 
         return true;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $rows
+     * @return list<array<string, mixed>>
+     */
+    private function dedupeAssignmentsByDesk(array $rows): array
+    {
+        $byDesk = [];
+        foreach ($rows as $row) {
+            $deskNumber = (int) ($row['desk_number'] ?? 0);
+            if ($deskNumber <= 0) {
+                continue;
+            }
+            $key = (string) $deskNumber;
+            if (!isset($byDesk[$key])) {
+                $byDesk[$key] = $row;
+                continue;
+            }
+            $byDesk[$key] = $this->preferAssignmentRow($byDesk[$key], $row);
+        }
+
+        return array_values($byDesk);
+    }
+
+    /**
+     * @param array<string, mixed> $left
+     * @param array<string, mixed> $right
+     * @return array<string, mixed>
+     */
+    private function preferAssignmentRow(array $left, array $right): array
+    {
+        $leftOpen = $this->isOpenEndedAssignment($left);
+        $rightOpen = $this->isOpenEndedAssignment($right);
+        if ($leftOpen !== $rightOpen) {
+            return $leftOpen ? $right : $left;
+        }
+
+        $leftFrom = JalaliDate::tryNormalize((string) ($left['assigned_from'] ?? ''));
+        $rightFrom = JalaliDate::tryNormalize((string) ($right['assigned_from'] ?? ''));
+        if ($leftFrom !== $rightFrom) {
+            return JalaliDate::compare($rightFrom, $leftFrom) > 0 ? $right : $left;
+        }
+
+        return $right;
+    }
+
+    /**
+     * @param array<string, mixed> $assignment
+     */
+    private function isOpenEndedAssignment(array $assignment): bool
+    {
+        $until = JalaliDate::tryNormalize((string) ($assignment['assigned_until'] ?? ''));
+
+        return $until === '';
     }
 
     private function tableExists(): bool

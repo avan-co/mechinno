@@ -128,6 +128,7 @@ final class DeskAssignments
                 $this->handoverDate((string) ($record['assigned_from'] ?? ''))
             );
             $this->syncDeskFromAssignment($deskId, $record);
+            $this->reconcileDeskYearAssignments($record);
 
             return;
         }
@@ -138,6 +139,7 @@ final class DeskAssignments
             $this->handoverDate((string) ($record['assigned_from'] ?? ''))
         );
         $this->syncDeskFromAssignment($deskId, $record);
+        $this->reconcileDeskYearAssignments($record);
     }
 
     /**
@@ -182,6 +184,45 @@ final class DeskAssignments
         }
 
         return null;
+    }
+
+    public function findExistingRecordId(int $deskId, string $fiscalYear, int $teamId): ?int
+    {
+        $record = $this->findAssignmentForYear($deskId, $fiscalYear, $teamId > 0 ? $teamId : null);
+        if ($record === null) {
+            return null;
+        }
+
+        $id = (int) ($record['id'] ?? 0);
+
+        return $id > 0 ? $id : null;
+    }
+
+    /**
+     * @param array<string, mixed> $record
+     */
+    public function reconcileDeskYearAssignments(array $record): void
+    {
+        $deskId = (int) ($record['desk_id'] ?? 0);
+        $keepId = (int) ($record['id'] ?? 0);
+        $fiscalYear = $this->fiscalYearFrom((string) ($record['assigned_from'] ?? ''));
+        if ($deskId <= 0 || $keepId <= 0 || $fiscalYear === '') {
+            return;
+        }
+
+        $yearStart = $fiscalYear . '/01/01';
+        $yearEnd = $fiscalYear . '/12/29';
+        $this->pdo->prepare(
+            'DELETE FROM desk_assignments
+             WHERE desk_id = :desk_id AND id <> :keep_id
+               AND assigned_from <= :year_end
+               AND (assigned_until IS NULL OR assigned_until = \'\' OR assigned_until >= :year_start)'
+        )->execute([
+            'desk_id' => $deskId,
+            'keep_id' => $keepId,
+            'year_start' => $yearStart,
+            'year_end' => $yearEnd,
+        ]);
     }
 
     /**
