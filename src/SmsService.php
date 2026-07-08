@@ -269,26 +269,36 @@ final class SmsService
      */
     public function chargeReminderPreview(?int $teamId = null): array
     {
-        $repo = new Repository($this->pdo);
+        $contracts = new TeamContracts($this->pdo);
+        $fiscalYear = $contracts->currentFiscalYear();
         $settings = (new CenterSettings($this->pdo))->get();
         $smsSettings = (new CenterSettings($this->pdo))->smsSettingsForSend();
         $template = (string) ($smsSettings['sms_charge_template'] ?? CenterSettings::DEFAULT_CHARGE_TEMPLATE);
         $items = [];
 
-        foreach ($repo->debtorTeamsForSms() as $row) {
-            if ($teamId !== null && (int) ($row['team_id'] ?? 0) !== $teamId) {
+        $teamStatement = $this->pdo->prepare('SELECT id, name FROM teams WHERE id = :id');
+        foreach ($contracts->teamIdsWithContractInYear($fiscalYear) as $contractTeamId) {
+            if ($teamId !== null && $contractTeamId !== $teamId) {
                 continue;
             }
-            $leader = $this->leaderRecipient((int) $row['team_id']);
-            $displayLeader = $this->teamLeaderDisplay((int) $row['team_id']);
+
+            $teamStatement->execute(['id' => $contractTeamId]);
+            $team = $teamStatement->fetch();
+            if ($team === false) {
+                continue;
+            }
+
+            $teamName = (string) ($team['name'] ?? '');
+            $leader = $this->leaderRecipient($contractTeamId);
+            $displayLeader = $this->teamLeaderDisplay($contractTeamId);
             $leaderMissing = $leader === null;
             $leaderData = $displayLeader ?? [];
             $phone = trim((string) ($leaderData['phone'] ?? ''));
+            $row = ['team_id' => $contractTeamId, 'team_name' => $teamName];
             $items[] = [
-                'team_id' => (int) $row['team_id'],
-                'team_name' => (string) ($row['team_name'] ?? ''),
-                'debt_total' => (int) ($row['debt_total'] ?? 0),
-                'debt_summary' => (string) ($row['debt_summary'] ?? ''),
+                'team_id' => $contractTeamId,
+                'team_name' => $teamName,
+                'fiscal_year' => $fiscalYear,
                 'member_id' => (int) ($leader['id'] ?? 0),
                 'leader_name' => (string) ($leaderData['full_name'] ?? ''),
                 'phone' => $phone,
@@ -332,9 +342,6 @@ final class SmsService
     public function sendChargeReminders(array $items, ?string $template = null): array
     {
         Access::requireWriteJson();
-        if ($items === []) {
-            throw new InvalidArgumentException('حداقل یک نهاد بدهکار انتخاب کنید.');
-        }
 
         $batchUid = $this->newBatchUid();
         $centerSettings = (new CenterSettings($this->pdo))->get();
@@ -344,10 +351,25 @@ final class SmsService
             throw new InvalidArgumentException('الگوی یادآور شارژ خالی است.');
         }
 
-        $repo = new Repository($this->pdo);
-        $debtors = [];
-        foreach ($repo->debtorTeamsForSms() as $row) {
-            $debtors[(int) ($row['team_id'] ?? 0)] = $row;
+        if ($items === []) {
+            foreach ($this->chargeReminderPreview() as $preview) {
+                if (($preview['can_send'] ?? false) !== true) {
+                    continue;
+                }
+                $items[] = [
+                    'team_id' => (int) ($preview['team_id'] ?? 0),
+                    'member_id' => (int) ($preview['member_id'] ?? 0),
+                ];
+            }
+        }
+
+        if ($items === []) {
+            throw new InvalidArgumentException('نهاد دارای قرارداد با مسئول قابل ارسال یافت نشد.');
+        }
+
+        $previewByTeam = [];
+        foreach ($this->chargeReminderPreview() as $preview) {
+            $previewByTeam[(int) ($preview['team_id'] ?? 0)] = $preview;
         }
 
         $recipients = [];
@@ -365,9 +387,14 @@ final class SmsService
             $customMessage = trim((string) ($item['message'] ?? ''));
             if ($customMessage !== '') {
                 $messages[$memberId] = $customMessage;
-            } elseif ($teamId > 0 && isset($debtors[$teamId])) {
+            } elseif ($teamId > 0 && isset($previewByTeam[$teamId])) {
+                $preview = $previewByTeam[$teamId];
                 $leader = $this->leaderRecipient($teamId);
-                $messages[$memberId] = $this->renderChargeTemplate($template, $debtors[$teamId], $centerSettings, $leader ?? []);
+                $row = [
+                    'team_id' => $teamId,
+                    'team_name' => (string) ($preview['team_name'] ?? ''),
+                ];
+                $messages[$memberId] = $this->renderChargeTemplate($template, $row, $centerSettings, $leader ?? []);
             } else {
                 $messages[$memberId] = $template;
             }

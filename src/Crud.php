@@ -466,9 +466,12 @@ final class Crud
                 $id,
                 array_merge($this->find($resource, $id), $deskAssignmentDates)
             );
+            $this->syncChargesForTeam((int) ($data['team_id'] ?? 0), $deskAssignmentDates);
         }
         if ($resource === 'desk_assignments') {
-            (new DeskAssignments($this->pdo))->applyAssignmentRecord($this->find($resource, $id));
+            $record = $this->find($resource, $id);
+            (new DeskAssignments($this->pdo))->applyAssignmentRecord($record);
+            $this->syncChargesForTeam((int) ($record['team_id'] ?? 0), $record);
         }
         if ($resource === 'teams') {
             $record = $this->find($resource, $id);
@@ -481,7 +484,14 @@ final class Crud
             (new TeamLeaders($this->pdo))->ensureLeaderMember($id);
         }
         if ($resource === 'team_contracts') {
+            $record = $this->find($resource, $id);
             (new TeamContracts($this->pdo))->syncTeamContractCache((int) ($data['team_id'] ?? 0));
+            $this->syncChargesForTeam(
+                (int) ($record['team_id'] ?? $data['team_id'] ?? 0),
+                [
+                    'fiscal_year' => (string) ($record['fiscal_year'] ?? $data['fiscal_year'] ?? ''),
+                ]
+            );
         }
 
         return $this->find($resource, $id);
@@ -532,13 +542,23 @@ final class Crud
             $this->syncTeamDepositIncome($id);
         }
         if ($resource === 'desks') {
+            $existingDesk = $this->find($resource, $id);
             (new DeskAssignments($this->pdo))->syncDeskAssignment(
                 $id,
-                array_merge($this->find($resource, $id), $deskAssignmentDates)
+                array_merge($existingDesk, $deskAssignmentDates)
             );
+            $teamIds = array_filter([
+                (int) ($existingDesk['team_id'] ?? 0),
+                (int) ($data['team_id'] ?? $existingDesk['team_id'] ?? 0),
+            ]);
+            foreach (array_unique($teamIds) as $teamId) {
+                $this->syncChargesForTeam($teamId, array_merge($existingDesk, $deskAssignmentDates, $data));
+            }
         }
         if ($resource === 'desk_assignments') {
-            (new DeskAssignments($this->pdo))->applyAssignmentRecord($this->find($resource, $id), $id);
+            $record = $this->find($resource, $id);
+            (new DeskAssignments($this->pdo))->applyAssignmentRecord($record, $id);
+            $this->syncChargesForTeam((int) ($record['team_id'] ?? 0), $record);
         }
         if ($resource === 'teams' && isset($data['leader'])) {
             EntityAccounts::syncLeaderName($this->pdo, $id, (string) $data['leader']);
@@ -549,6 +569,12 @@ final class Crud
         if ($resource === 'team_contracts') {
             $record = $this->find($resource, $id);
             (new TeamContracts($this->pdo))->syncTeamContractCache((int) ($record['team_id'] ?? $data['team_id'] ?? 0));
+            $this->syncChargesForTeam(
+                (int) ($record['team_id'] ?? $data['team_id'] ?? 0),
+                [
+                    'fiscal_year' => (string) ($record['fiscal_year'] ?? $data['fiscal_year'] ?? ''),
+                ]
+            );
         }
 
         return $this->find($resource, $id);
@@ -576,9 +602,11 @@ final class Crud
         if ($resource === 'team_contracts') {
             $record = $this->find($resource, $id);
             $teamId = (int) ($record['team_id'] ?? 0);
+            $fiscalYear = (string) ($record['fiscal_year'] ?? '');
             $this->pdo->prepare(sprintf('DELETE FROM %s WHERE id = :id', $definition['table']))->execute(['id' => $id]);
             if ($teamId > 0) {
                 (new TeamContracts($this->pdo))->syncTeamContractCache($teamId);
+                $this->syncChargesForTeam($teamId, ['fiscal_year' => $fiscalYear]);
             }
 
             return;
@@ -596,6 +624,7 @@ final class Crud
             $record = $this->find($resource, $id);
             $this->pdo->prepare(sprintf('DELETE FROM %s WHERE id = :id', $definition['table']))->execute(['id' => $id]);
             (new DeskAssignments($this->pdo))->handleAssignmentDeleted($record);
+            $this->syncChargesForTeam((int) ($record['team_id'] ?? 0), $record);
 
             return;
         }
@@ -1470,5 +1499,29 @@ final class Crud
             'آب و برق' => 'آب، برق، اینترنت',
             'سایر' => 'سایر هزینه',
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     */
+    private function syncChargesForTeam(int $teamId, array $context = []): void
+    {
+        if ($teamId <= 0) {
+            return;
+        }
+
+        $contracts = new TeamContracts($this->pdo);
+        $years = [$contracts->currentFiscalYear()];
+        foreach (['fiscal_year', 'assigned_from', 'assigned_until', 'assignment_from', 'assignment_until'] as $field) {
+            $value = JalaliDate::tryNormalize((string) ($context[$field] ?? ''));
+            if ($value !== '') {
+                $years[] = substr($value, 0, 4);
+            }
+        }
+
+        $seeder = new Seeder($this->pdo);
+        foreach (array_unique(array_filter($years)) as $year) {
+            $seeder->recalculateChargesForTeam($teamId, $year);
+        }
     }
 }

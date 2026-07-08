@@ -13,7 +13,7 @@ final class CenterSettings
         'payment_guide' => "پس از واریز شارژ، مبلغ، تاریخ، سال مالی و ماه را در بخش «اعلام واریز» ثبت کنید تا مدیر مرکز تأیید کند.",
     ];
 
-    public const DEFAULT_CHARGE_TEMPLATE = "{team_name} گرامی؛\nمانده شارژ: {debt_total} ریال\n{debt_summary}\nلطفاً در اسرع وقت نسبت به تسویه اقدام فرمایید.\n{bank_info}\nمرکز نوآوری مکانیک";
+    public const DEFAULT_CHARGE_TEMPLATE = "{team_name} گرامی؛\nلطفاً وارد سامانه شوید و وضعیت پرداخت شارژ خود را بررسی کنید.\n{bank_info}\nمرکز نوآوری مکانیک";
 
     public function __construct(private readonly PDO $pdo)
     {

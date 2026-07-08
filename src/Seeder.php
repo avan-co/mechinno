@@ -14,6 +14,25 @@ final class Seeder
         $this->pdo->prepare('DELETE FROM charges WHERE fiscal_year = :fiscal_year AND source_file = :source')
             ->execute(['fiscal_year' => $fiscalYear, 'source' => 'system']);
 
+        $contracts = new TeamContracts($this->pdo);
+        foreach ($contracts->teamIdsWithContractInYear($fiscalYear) as $teamId) {
+            $this->recalculateChargesForTeam($teamId, $fiscalYear, false);
+        }
+    }
+
+    public function recalculateChargesForTeam(int $teamId, string $fiscalYear, bool $deleteExisting = true): void
+    {
+        if ($teamId <= 0) {
+            return;
+        }
+
+        $fiscalYear = JalaliDate::normalizeDigits($fiscalYear);
+        if ($deleteExisting) {
+            $this->pdo->prepare(
+                'DELETE FROM charges WHERE team_id = :team_id AND fiscal_year = :fiscal_year AND source_file = :source'
+            )->execute(['team_id' => $teamId, 'fiscal_year' => $fiscalYear, 'source' => 'system']);
+        }
+
         $manualCheck = $this->pdo->prepare(
             'SELECT id FROM charges
              WHERE team_id = :team_id AND fiscal_year = :fiscal_year AND month_index = :month_index
@@ -21,39 +40,37 @@ final class Seeder
         );
 
         $contracts = new TeamContracts($this->pdo);
-        $teams = $contracts->teamIdsWithContractInYear($fiscalYear);
-        foreach ($teams as $teamId) {
-            $dates = $contracts->contractDatesForYear($teamId, $fiscalYear);
-            if (!$contracts->hasDeskInFiscalYear($teamId, $fiscalYear)) {
+        $dates = $contracts->contractDatesForYear($teamId, $fiscalYear);
+        if (!$contracts->hasContractInYear($teamId, $fiscalYear) || !$contracts->hasDeskInFiscalYear($teamId, $fiscalYear)) {
+            return;
+        }
+
+        $amounts = $this->monthlyAmountsForTeam($teamId, $fiscalYear, $dates['start'], $dates['end']);
+        foreach ($amounts as $monthIndex => $parts) {
+            if (($parts['amount'] ?? 0) <= 0) {
                 continue;
             }
-            $amounts = $this->monthlyAmountsForTeam($teamId, $fiscalYear, $dates['start'], $dates['end']);
-            foreach ($amounts as $monthIndex => $parts) {
-                if (($parts['amount'] ?? 0) <= 0) {
-                    continue;
-                }
-                $manualCheck->execute([
-                    'team_id' => $teamId,
-                    'fiscal_year' => $fiscalYear,
-                    'month_index' => $monthIndex,
-                    'source' => 'manual',
-                ]);
-                if ($manualCheck->fetchColumn() !== false) {
-                    continue;
-                }
-                $this->insert('charges', [
-                    'team_id' => $teamId,
-                    'fiscal_year' => $fiscalYear,
-                    'month_index' => $monthIndex,
-                    'month_name' => JalaliDate::monthName($monthIndex),
-                    'charge_amount' => $parts['charge_amount'],
-                    'rent_amount' => $parts['rent_amount'],
-                    'amount' => $parts['amount'],
-                    'note' => '',
-                    'source_file' => 'system',
-                    'source_sheet' => 'auto',
-                ]);
+            $manualCheck->execute([
+                'team_id' => $teamId,
+                'fiscal_year' => $fiscalYear,
+                'month_index' => $monthIndex,
+                'source' => 'manual',
+            ]);
+            if ($manualCheck->fetchColumn() !== false) {
+                continue;
             }
+            $this->insert('charges', [
+                'team_id' => $teamId,
+                'fiscal_year' => $fiscalYear,
+                'month_index' => $monthIndex,
+                'month_name' => JalaliDate::monthName($monthIndex),
+                'charge_amount' => $parts['charge_amount'],
+                'rent_amount' => $parts['rent_amount'],
+                'amount' => $parts['amount'],
+                'note' => '',
+                'source_file' => 'system',
+                'source_sheet' => 'auto',
+            ]);
         }
     }
 
