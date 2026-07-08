@@ -30,8 +30,25 @@ try {
             $payload = $_POST;
         }
         $fiscalYear = JalaliDate::normalizeDigits((string) ($payload['fiscal_year'] ?? $_GET['fiscal_year'] ?? '1404'));
-        (new Seeder($pdo))->recalculateCharges($fiscalYear);
-        json_response(['ok' => true, 'fiscal_year' => $fiscalYear]);
+        $teamId = (int) ($payload['team_id'] ?? 0);
+        $seeder = new Seeder($pdo);
+        if ($teamId > 0) {
+            $seeder->recalculateChargesForTeam($teamId, $fiscalYear);
+        } else {
+            $seeder->recalculateCharges($fiscalYear);
+        }
+        json_response(['ok' => true, 'fiscal_year' => $fiscalYear, 'team_id' => $teamId > 0 ? $teamId : null]);
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && $resource === 'bulk-year-import') {
+        require_csrf_json();
+        Access::requireWriteJson();
+        $payload = json_decode((string) file_get_contents('php://input'), true);
+        if (!is_array($payload)) {
+            $payload = $_POST;
+        }
+        $result = (new YearBackfill($pdo, $crud))->import($payload);
+        json_response(['ok' => true] + $result);
     }
 
     if ($resource === 'crud-meta') {

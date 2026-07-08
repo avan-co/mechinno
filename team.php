@@ -23,7 +23,8 @@ if ($teamId > 0 && $pdo) {
 $today = JalaliDate::todayParts();
 $assetVer = (string) max(
     filemtime(__DIR__ . '/assets/styles.css'),
-    filemtime(__DIR__ . '/assets/app.js')
+    filemtime(__DIR__ . '/assets/app.js'),
+    filemtime(__DIR__ . '/assets/team-year-workspace.js')
 );
 $authContext = Access::clientContext();
 $entityLabels = ['team' => 'تیم', 'company' => 'شرکت', 'student' => 'دانشجو'];
@@ -191,7 +192,8 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
 
             <section id="profile" class="section">
               <article class="panel">
-                <div class="panel-head"><h2>اطلاعات تکمیلی نهاد</h2></div>
+                <div class="panel-head"><h2>پروفایل و سوابق سالانه</h2></div>
+                <p class="hint">قرارداد، میزها و بدهی هر سال — با تب سال می‌توانید سوابق گذشته را هم ببینید.</p>
                 <div id="teamProfileContent" class="team-profile-content">در حال بارگذاری…</div>
               </article>
             </section>
@@ -266,6 +268,7 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
         };
       </script>
       <script src="assets/app.js?v=<?= e($assetVer) ?>"></script>
+      <script src="assets/team-year-workspace.js?v=<?= e($assetVer) ?>"></script>
     <?php endif; ?>
   </body>
 </html>

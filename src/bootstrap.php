@@ -21,6 +21,7 @@ require_once __DIR__ . '/Schema.php';
 require_once __DIR__ . '/Installer.php';
 require_once __DIR__ . '/Seeder.php';
 require_once __DIR__ . '/Crud.php';
+require_once __DIR__ . '/YearBackfill.php';
 require_once __DIR__ . '/Repository.php';
 require_once __DIR__ . '/ExcelExporter.php';
 require_once __DIR__ . '/ReportData.php';

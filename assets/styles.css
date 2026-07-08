@@ -1410,7 +1410,123 @@ body.is-mobile .table-wrap { display: none; }
 .profile-table table { width: 100%; border-collapse: collapse; font-size: 12px; }
 .profile-table th, .profile-table td { padding: 8px; border: 1px solid var(--line); text-align: right; }
 
-.toast-host {
+.team-year-workspace { display: grid; gap: 16px; }
+.team-year-header { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; align-items: flex-start; }
+.team-year-title { margin: 0; font-size: 20px; }
+.team-year-top-actions { margin: 0; }
+
+.year-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 4px 0;
+}
+.year-tab {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font: inherit;
+  cursor: pointer;
+}
+.year-tab.active {
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+  font-weight: 700;
+}
+.year-tab.is-current::after {
+  content: "●";
+  color: var(--accent);
+  margin-inline-start: 6px;
+  font-size: 10px;
+}
+.year-tab-add {
+  border-style: dashed;
+  color: var(--muted);
+}
+
+.year-checklist {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.year-checklist--compact { gap: 6px; }
+.year-check-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  font-size: 12px;
+  background: var(--surface);
+}
+.year-check-ok { border-color: color-mix(in srgb, var(--success, #16a34a) 35%, var(--line)); }
+.year-check-miss { border-color: color-mix(in srgb, var(--warning, #d97706) 35%, var(--line)); color: var(--muted); }
+.year-check-icon { font-weight: 700; }
+
+.year-workspace-panels {
+  display: grid;
+  gap: 14px;
+}
+.year-panel {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  background: var(--surface);
+}
+.year-panel h3 { margin: 0; font-size: 15px; }
+.year-panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.year-panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.year-form-grid { margin-top: 8px; }
+.year-contract-readonly {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+.year-finance-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+.year-extra-section,
+.year-charge-details {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  background: var(--surface);
+}
+.year-extra-section summary,
+.year-charge-details summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.year-wizard-preview ul {
+  margin: 0 0 12px;
+  padding-inline-start: 18px;
+}
+
+.modal-card:has(.team-year-workspace) {
+  width: min(960px, calc(100vw - 24px));
+  max-height: calc(100vh - 24px);
+  overflow: auto;
+}
+
+.desk-tile { cursor: pointer; }
+
   position: fixed;
   top: 16px;
   inset-inline-start: 16px;

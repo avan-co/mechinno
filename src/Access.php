@@ -58,6 +58,7 @@ final class Access
         'center-settings',
         'crud-meta',
         'recalculate-charges',
+        'bulk-year-import',
         'ledger',
         'sms-settings',
         'sms-stats',

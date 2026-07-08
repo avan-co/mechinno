@@ -14,6 +14,7 @@ $today = JalaliDate::todayParts();
 $assetVer = (string) max(
     filemtime(__DIR__ . '/assets/styles.css'),
     filemtime(__DIR__ . '/assets/app.js'),
+    filemtime(__DIR__ . '/assets/team-year-workspace.js'),
     filemtime(__DIR__ . '/assets/sms-panel.js'),
     filemtime(__DIR__ . '/assets/sms-editor.js'),
     filemtime(__DIR__ . '/assets/sms-settings.js')
@@ -146,6 +147,10 @@ $assetVer = (string) max(
             </button>
             <?php endif; ?>
             <?php if (Access::isAdmin()): ?>
+            <button class="nav-item nav-item--sub" data-section="advanced" type="button">
+              <span class="nav-icon nav-icon--orange"><svg viewBox="0 0 24 24"><path d="M12 8a1 1 0 0 1 1 1v3h3a1 1 0 1 1 0 2h-4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Zm8-3H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Z" fill="currentColor"/></svg></span>
+              تنظیمات پیشرفته
+            </button>
             <button class="nav-item" data-section="users" type="button">
               <span class="nav-icon nav-icon--purple"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm-8 9a8 8 0 0 1 16 0Z" fill="currentColor"/></svg></span>
               کاربران مدیر
@@ -228,9 +233,17 @@ $assetVer = (string) max(
             </section>
 
             <section id="teams" class="section">
-              <p class="hint">با ثبت هر نهاد، حساب ورود خودکار ساخته می‌شود. <strong>وضعیت فعال/غیرفعال</strong> بر اساس قرارداد سال جاری به‌روز می‌شود. قرارداد هر سال را جداگانه ثبت کنید.</p>
+              <p class="hint">هر نهاد را از دکمه <strong>پروفایل</strong> باز کنید — قرارداد، میز و بدهی هر سال در یکجا مدیریت می‌شود. ستون «وضعیت سال جاری» خلاصه قرارداد، میز و بدهی را نشان می‌دهد.</p>
+              <?php if (Access::canWrite()): ?>
+              <article class="panel">
+                <div class="panel-head">
+                  <h2>ورود گروهی سابقه</h2>
+                  <button type="button" class="button ghost" id="bulkYearImportButton">ورود CSV سال</button>
+                </div>
+                <p class="hint">برای ثبت یک‌باره چند نهاد در یک سال — فرمت: <code>نام نهاد,شروع,پایان,میزها</code></p>
+              </article>
+              <?php endif; ?>
               <data-table title="نهادها" endpoint="api.php?resource=teams"></data-table>
-              <data-table title="قراردادهای سالانه نهادها" endpoint="api.php?resource=team_contracts"></data-table>
             </section>
 
             <section id="members" class="section">
@@ -347,24 +360,15 @@ $assetVer = (string) max(
             <section id="desks" class="section">
               <article class="panel">
                 <div class="panel-head">
-                  <h2>نقشه ۲۴ میز</h2>
+                  <h2>نقشه ۲۴ میز — سال جاری</h2>
                   <div class="desk-legend">
                     <span class="legend-item legend-free">آزاد</span>
                     <span class="legend-item legend-occupied">اشغال</span>
                     <span class="legend-item legend-highlight">انتخاب‌شده</span>
                   </div>
                 </div>
-                <p class="hint">۳ ردیف × ۸ میز — میزها به <strong>نهاد</strong> تخصیص می‌یابند، نه به هر عضو جداگانه.</p>
+                <p class="hint">۳ ردیف × ۸ میز — <?php if (Access::canWrite()): ?>روی هر میز کلیک کنید تا تخصیص سال جاری را ویرایش کنید.<?php else: ?>میزها به نهاد تخصیص می‌یابند.<?php endif; ?> سوابق سال‌های قبل در <strong>پروفایل نهاد</strong> ثبت می‌شود.</p>
                 <div id="deskGrid" class="desk-map"></div>
-              </article>
-              <data-table title="جزئیات میزها" endpoint="api.php?resource=desks" data-no-add></data-table>
-              <article class="panel">
-                <div class="panel-head">
-                  <h2>تاریخچه تخصیص میزها</h2>
-                  <select id="deskHistoryYear" class="year-select" aria-label="فیلتر سال"></select>
-                </div>
-                <p class="hint">برای هر سال، رکورد جداگانه با تاریخ شروع و تحویل ثبت کنید. میزهای سال جاری از جدول «جزئیات میزها» یا با افزودن رکورد جدید قابل تخصیص هستند.</p>
-                <data-table id="deskAssignmentsTable" title="" endpoint="api.php?resource=desk-assignments"></data-table>
               </article>
             </section>
 
@@ -500,6 +504,18 @@ $assetVer = (string) max(
             <?php endif; ?>
 
             <?php if (Access::isAdmin()): ?>
+            <section id="advanced" class="section">
+              <p class="hint">جداول خام برای اصلاح دستی — در کار روزمره از <strong>پروفایل نهاد</strong> و <strong>نقشه میز</strong> استفاده کنید.</p>
+              <data-table title="قراردادهای سالانه (جدول خام)" endpoint="api.php?resource=team_contracts"></data-table>
+              <data-table title="جزئیات میزها" endpoint="api.php?resource=desks" data-no-add></data-table>
+              <article class="panel">
+                <div class="panel-head">
+                  <h2>تاریخچه تخصیص میزها</h2>
+                  <select id="deskHistoryYear" class="year-select" aria-label="فیلتر سال"></select>
+                </div>
+                <data-table id="deskAssignmentsTable" title="" endpoint="api.php?resource=desk-assignments"></data-table>
+              </article>
+            </section>
             <section id="users" class="section">
               <p class="hint">مدیران سیستم — کاربران نهاد هنگام ثبت نهاد خودکار ساخته می‌شوند و نام کاربری/رمز در جدول نهادها نمایش داده می‌شود.</p>
               <data-table title="کاربران مدیر" endpoint="api.php?resource=panel_users"></data-table>
@@ -530,6 +546,7 @@ $assetVer = (string) max(
         };
       </script>
       <script src="assets/app.js?v=<?= e($assetVer) ?>"></script>
+      <script src="assets/team-year-workspace.js?v=<?= e($assetVer) ?>"></script>
       <script src="assets/sms-editor.js?v=<?= e($assetVer) ?>"></script>
       <script src="assets/sms-panel.js?v=<?= e($assetVer) ?>"></script>
       <script src="assets/sms-settings.js?v=<?= e($assetVer) ?>"></script>

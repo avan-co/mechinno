@@ -53,6 +53,7 @@ const labels = {
   informal_rent_rate: "نرخ اجاره غیررسمی",
   effective_from: "تاریخ اثر",
   joined_at: "عضویت",
+  year_status: "وضعیت سال جاری",
   warning: "اخطار",
   portal_username: "نام کاربری نهاد",
   portal_has_password: "رمز ورود نهاد",
@@ -99,9 +100,9 @@ const usageLabels = { formal: "رسمی", informal: "غیررسمی", mixed: "ت
 
 const sectionMeta = {
   overview: { eyebrow: "داشبورد", title: "مدیریت مرکز نوآوری", subtitle: "خلاصه وضعیت مرکز و اقدامات پیشنهادی" },
-  teams: { eyebrow: "نهادها", title: "تیم‌ها، شرکت‌ها و دانشجویان", subtitle: "ثبت و مدیریت نهادهای مستقر در مرکز" },
+  teams: { eyebrow: "نهادها", title: "تیم‌ها، شرکت‌ها و دانشجویان", subtitle: "ثبت و مدیریت نهادها — قرارداد و میز هر سال از پروفایل نهاد" },
   members: { eyebrow: "اعضا", title: "اعضای نهادها", subtitle: "هر عضو به یک نهاد تعلق دارد — میزها در سطح نهاد تخصیص می‌یابند" },
-  desks: { eyebrow: "میزها", title: "نقشه و تخصیص ۲۴ میز", subtitle: "میزها را به نهادها اختصاص دهید" },
+  desks: { eyebrow: "میزها", title: "نقشه و تخصیص ۲۴ میز", subtitle: "تخصیص سال جاری از نقشه — سوابق سال‌های قبل در پروفایل نهاد" },
   lockers: { eyebrow: "کمدها", title: "مدیریت کمدها", subtitle: "شماره کمدها را خودتان تعریف و تخصیص دهید" },
   charges: { eyebrow: "شارژ", title: "نرخ و شارژ ماهانه", subtitle: "تعریف نرخ سالانه، محاسبه خودکار و پیگیری پرداخت" },
   transactions: { eyebrow: "مالی", title: "دفتر معین و موجودی نقدی", subtitle: "گردش واقعی حساب مرکز — بدون تکرار شارژ سیستمی" },
@@ -109,6 +110,7 @@ const sectionMeta = {
   users: { eyebrow: "دسترسی", title: "کاربران پنل", subtitle: "مدیریت نقش‌ها و پنل اختصاصی نهادها" },
   sms: { eyebrow: "اطلاع‌رسانی", title: "ارسال پیامک", subtitle: "ارسال اطلاعیه و یادآور شارژ به اعضا و مسئولین نهادها" },
   "sms-settings": { eyebrow: "پیامک", title: "تنظیمات ملی‌پیامک", subtitle: "اتصال API، خط ارسال، الگوی یادآور و همگام‌سازی" },
+  advanced: { eyebrow: "پیشرفته", title: "جداول خام و ابزار سابقه", subtitle: "قراردادها، تاریخچه میز و ورود گروهی CSV" },
 };
 
 const teamSectionMeta = {
@@ -116,7 +118,7 @@ const teamSectionMeta = {
   members: { eyebrow: "اعضا", title: "اعضای نهاد", subtitle: "لیست اعضای ثبت‌شده در نهاد شما" },
   desks: { eyebrow: "میزها", title: "میزهای نهاد", subtitle: "میزهای تخصیص‌یافته به نهاد" },
   lockers: { eyebrow: "کمدها", title: "کمدهای نهاد", subtitle: "درخواست کمد و کمدهای تخصیص‌یافته" },
-  profile: { eyebrow: "پروفایل", title: "پروفایل نهاد", subtitle: "اطلاعات تکمیلی قرارداد و وضعیت نهاد" },
+  profile: { eyebrow: "پروفایل", title: "پروفایل نهاد", subtitle: "قرارداد، میز و بدهی هر سال مالی" },
   charges: { eyebrow: "شارژ", title: "شارژ و پرداخت", subtitle: "لیست شارژ سالانه و وضعیت پرداخت" },
   payments: { eyebrow: "واریز", title: "اعلام واریز", subtitle: "ثبت واریز شارژ و پیگیری تأیید مدیر" },
 };
@@ -183,7 +185,7 @@ const moneyCards = new Set(["income_year", "income_month", "expense_year", "expe
 const monthNames = ["", "فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور", "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"];
 
 const resourceColumns = {
-  teams: ["entity_code", "entity_type", "name", "is_active", "leader", "phone", "joined_at", "portal_username", "portal_has_password", "desk_count", "warning", "notes"],
+  teams: ["entity_code", "entity_type", "name", "is_active", "year_status", "leader", "phone", "joined_at", "portal_username", "portal_has_password", "desk_count", "warning", "notes"],
   team_contracts: ["team_name", "fiscal_year", "contract_start", "contract_end", "notes"],
   members: ["member_code", "full_name", "is_leader", "team_label", "entity_type", "desk_numbers", "wants_access", "access_code", "phone", "national_id", "approval_status", "rejection_reason"],
   desks: ["number", "team_name", "usage_type", "assignment_from", "assignment_until", "notes"],
@@ -541,6 +543,8 @@ const activateSection = (id, options = {}) => {
 
   if (id === "desks" && panelMode === "admin") {
     loadDeskGrid().catch((error) => showToast(error.message, "error"));
+  }
+  if (id === "advanced" && panelMode === "admin") {
     initDeskHistoryYear().catch(() => {});
   }
   if (id === "desks" && panelMode === "team") loadTeamDeskAssignments().catch((error) => showToast(error.message, "error"));
@@ -900,6 +904,10 @@ const loadTeamDeskAssignments = async () => {
 const loadTeamProfile = async () => {
   const host = document.getElementById("teamProfileContent");
   if (!host || !window.MECHINNO?.teamId) return;
+  if (window.TeamYearWorkspace) {
+    await window.TeamYearWorkspace.mountInline(host, window.MECHINNO.teamId);
+    return;
+  }
   const data = await fetchJson(`api.php?resource=team-profile&id=${encodeURIComponent(window.MECHINNO.teamId)}`);
   const team = data.team || {};
   host.innerHTML = `
@@ -1167,6 +1175,17 @@ const loadDeskGrid = async () => {
         }
       });
     });
+    if (canWrite) {
+      container.querySelectorAll(".desk-tile").forEach((tile) => {
+        tile.addEventListener("click", (event) => {
+          if (event.target.closest("[data-team-id]")) return;
+          const deskNumber = Number(tile.dataset.highlightDesk);
+          if (!deskNumber || !window.TeamYearWorkspace) return;
+          event.preventDefault();
+          window.TeamYearWorkspace.openDeskAssignModal(deskNumber).catch((error) => showToast(error.message, "error"));
+        });
+      });
+    }
   }
 };
 
@@ -1357,7 +1376,11 @@ const profileSection = (title, rows, cols, cellRenderer = null) => `
     </table>
   </div>`;
 
-const openTeamProfile = async (teamId) => {
+const openTeamProfile = async (teamId, options = {}) => {
+  if (window.TeamYearWorkspace) {
+    await window.TeamYearWorkspace.openModal(teamId, options);
+    return;
+  }
   const data = await fetchJson(`api.php?resource=team-profile&id=${encodeURIComponent(teamId)}`);
   const modal = ensureModal();
   const form = modal.querySelector("#crudForm");
@@ -2042,6 +2065,9 @@ const formatCell = (column, value, row, resource) => {
     return Number(value) === 1
       ? '<span class="badge badge-paid">فعال</span>'
       : '<span class="badge badge-debt">غیرفعال — بدون قرارداد سال جاری</span>';
+  }
+  if (column === "year_status" && resource === "teams" && window.TeamYearWorkspace) {
+    return window.TeamYearWorkspace.renderTeamStatusChecklist(row);
   }
   if (column === "team_label" || column === "team_name") {
     const name = escapeHtml(value || "—");
@@ -2760,3 +2786,40 @@ loadDashboard().catch((error) => {
   const cards = document.getElementById("cards");
   if (cards) cards.innerHTML = `<article class="stat-card"><span class="stat-label">خطا</span><strong>${escapeHtml(error.message)}</strong></article>`;
 });
+
+document.getElementById("bulkYearImportButton")?.addEventListener("click", () => {
+  window.TeamYearWorkspace?.openBulkImportModal();
+});
+
+window.MechinnoShared = {
+  fetchJson,
+  fetchResource,
+  postJson,
+  escapeHtml,
+  formatMoney,
+  formatPlain,
+  formatNumber,
+  showToast,
+  canWrite,
+  panelMode,
+  loadCrudMeta,
+  openRecordModal,
+  refreshAfterMutation,
+  closeModal,
+  ensureModal,
+  trapFocus,
+  releaseFocusTrap,
+  activateSection,
+  entityBadge,
+  teamActiveBadge,
+  usageLabels,
+  labels,
+  monthNames,
+  profileSection,
+  entityTypeLabels,
+  openDepositModal,
+  openChargeModal,
+  loadDeskGrid,
+  deskLink,
+  MECHINNO: window.MECHINNO,
+};

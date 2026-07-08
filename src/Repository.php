@@ -288,6 +288,9 @@ final class Repository
         if ($name === 'desks') {
             $rows = $this->enrichDeskAssignmentRows($rows);
         }
+        if ($name === 'teams' && Access::isAdmin()) {
+            $rows = $this->enrichTeamStatusRows($rows);
+        }
 
         return [
             'rows' => $rows,
@@ -1187,8 +1190,98 @@ final class Repository
                 'paid_total' => $this->contractPaidTotalForTeam($teamId),
                 'debt_total' => $this->contractDebtForTeam($teamId),
             ], $this->paymentOverpaymentForTeam($teamId)),
+            'year_summaries' => $this->yearSummariesForTeam($teamId),
             'current_month' => $this->currentMonthSummaryForTeam($teamId),
         ];
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    public function yearSummariesForTeam(int $teamId): array
+    {
+        $years = [];
+        foreach ($this->preparedRows(
+            'SELECT DISTINCT fiscal_year FROM team_contracts WHERE team_id = :id',
+            ['id' => $teamId]
+        ) as $row) {
+            $year = JalaliDate::normalizeDigits((string) ($row['fiscal_year'] ?? ''));
+            if ($year !== '') {
+                $years[$year] = true;
+            }
+        }
+        foreach ($this->preparedRows(
+            'SELECT DISTINCT SUBSTR(assigned_from, 1, 4) AS fiscal_year
+             FROM desk_assignments WHERE team_id = :id AND assigned_from IS NOT NULL AND assigned_from <> \'\'',
+            ['id' => $teamId]
+        ) as $row) {
+            $year = JalaliDate::normalizeDigits((string) ($row['fiscal_year'] ?? ''));
+            if ($year !== '') {
+                $years[$year] = true;
+            }
+        }
+        $currentYear = $this->currentFiscalYear();
+        $years[$currentYear] = true;
+
+        $summaries = [];
+        $contracts = $this->contracts();
+        foreach (array_keys($years) as $year) {
+            $year = JalaliDate::normalizeDigits($year);
+            $contract = $contracts->contractForYear($teamId, $year);
+            $deskAssignments = $contracts->deskAssignmentsForTeamInYear($teamId, $year);
+            $summaries[] = [
+                'fiscal_year' => $year,
+                'has_contract' => $contract !== null,
+                'contract_id' => $contract ? (int) ($contract['id'] ?? 0) : null,
+                'contract_start' => $contract['contract_start'] ?? null,
+                'contract_end' => $contract['contract_end'] ?? null,
+                'contract_notes' => $contract['notes'] ?? null,
+                'desk_count' => count($deskAssignments),
+                'charge_total' => $this->contractChargeTotalForTeamInYear($teamId, $year),
+                'paid_total' => $this->contractPaidAllocatedForTeamInYear($teamId, $year),
+                'debt_total' => $this->contractDebtForTeamInYear($teamId, $year),
+                'is_current_year' => $year === $currentYear,
+            ];
+        }
+
+        usort($summaries, static fn (array $a, array $b): int => (int) ($b['fiscal_year'] ?? 0) <=> (int) ($a['fiscal_year'] ?? 0));
+
+        return $summaries;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $rows
+     * @return list<array<string, mixed>>
+     */
+    private function enrichTeamStatusRows(array $rows): array
+    {
+        $currentYear = $this->currentFiscalYear();
+        $contracts = $this->contracts();
+
+        return array_map(function (array $row) use ($currentYear, $contracts): array {
+            $teamId = (int) ($row['id'] ?? 0);
+            if ($teamId <= 0) {
+                return $row;
+            }
+
+            $contract = $contracts->contractForYear($teamId, $currentYear);
+            $deskCount = count($contracts->deskAssignmentsForTeamInYear($teamId, $currentYear));
+            $debt = $this->contractDebtForTeamInYear($teamId, $currentYear);
+
+            $row['has_contract_year'] = $contract !== null ? 1 : 0;
+            $row['year_desk_count'] = $deskCount;
+            $row['year_debt'] = $debt;
+
+            return $row;
+        }, $rows);
+    }
+
+    private function contractChargeTotalForTeamInYear(int $teamId, string $fiscalYear): int
+    {
+        return (int) $this->preparedScalar(
+            'SELECT COALESCE(SUM(amount), 0) FROM charges WHERE team_id = :team_id AND fiscal_year = :year',
+            ['team_id' => $teamId, 'year' => JalaliDate::normalizeDigits($fiscalYear)]
+        );
     }
 
     /**
