@@ -41,6 +41,7 @@ final class DeskAssignments
             $fiscalYear = (new TeamContracts($this->pdo))->currentFiscalYear();
         }
 
+        $includesUntil = $this->deskPayloadIncludesUntil($desk);
         $payload = [
             'desk_id' => $deskId,
             'desk_number' => $this->deskNumber($deskId, $desk),
@@ -53,7 +54,10 @@ final class DeskAssignments
 
         $yearRecord = $this->findAssignmentForYear($deskId, $fiscalYear, $teamId);
         if ($yearRecord !== null) {
-            $this->updateAssignment((int) $yearRecord['id'], $payload);
+            $this->updateAssignment(
+                (int) $yearRecord['id'],
+                $this->mergeUntilFromExisting($payload, $yearRecord, $includesUntil)
+            );
 
             return;
         }
@@ -77,7 +81,10 @@ final class DeskAssignments
                 return;
             }
 
-            $this->updateAssignment((int) $current['id'], $payload);
+            $this->updateAssignment(
+                (int) $current['id'],
+                $this->mergeUntilFromExisting($payload, $current, $includesUntil)
+            );
 
             return;
         }
@@ -115,6 +122,11 @@ final class DeskAssignments
                 return;
             }
 
+            $this->closeOtherActiveAssignments(
+                $deskId,
+                $assignmentId,
+                $this->handoverDate((string) ($record['assigned_from'] ?? ''))
+            );
             $this->syncDeskFromAssignment($deskId, $record);
 
             return;
@@ -194,7 +206,7 @@ final class DeskAssignments
             $sql .= ' AND team_id = :team_id';
             $params['team_id'] = $teamId;
         }
-        $sql .= ' ORDER BY assigned_from DESC, id DESC LIMIT 1';
+        $sql .= ' ORDER BY CASE WHEN assigned_until IS NULL OR assigned_until = \'\' THEN 1 ELSE 0 END, assigned_from DESC, id DESC LIMIT 1';
         $statement = $this->pdo->prepare($sql);
         $statement->execute($params);
         $row = $statement->fetch();
@@ -437,6 +449,35 @@ final class DeskAssignments
             'usage_type' => (string) ($row['usage_type'] ?? 'formal'),
             'notes' => $row['notes'] ?? null,
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $desk
+     */
+    private function deskPayloadIncludesUntil(array $desk): bool
+    {
+        return array_key_exists('assignment_until', $desk)
+            || array_key_exists('assigned_until', $desk)
+            || array_key_exists('assignment_until_month', $desk);
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @param array<string, mixed> $existing
+     * @return array<string, mixed>
+     */
+    private function mergeUntilFromExisting(array $payload, array $existing, bool $includesUntil): array
+    {
+        if ($includesUntil || $payload['assigned_until'] !== null) {
+            return $payload;
+        }
+
+        $existingUntil = JalaliDate::tryNormalize((string) ($existing['assigned_until'] ?? ''));
+        if ($existingUntil !== '') {
+            $payload['assigned_until'] = $existingUntil;
+        }
+
+        return $payload;
     }
 
     /**
