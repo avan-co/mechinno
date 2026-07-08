@@ -341,7 +341,8 @@ code { color: var(--primary); font-size: 0.9em; }
 
 .member-filters,
 .sms-filters,
-.recipient-filter-bar {
+.recipient-filter-bar,
+.desk-history-filter-bar {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
@@ -355,6 +356,7 @@ code { color: var(--primary); font-size: 0.9em; }
 .member-filters label,
 .sms-filters label,
 .recipient-filter-bar label,
+.desk-history-filter-bar label,
 .sms-filters input,
 .sms-filters select,
 .recipient-filter-bar input,
@@ -1140,6 +1142,20 @@ textarea[dir="ltr"] {
   body.panel-admin .collage-table th, body.panel-admin .collage-table td { padding: 6px 4px; }
   .charges-collage { -webkit-overflow-scrolling: touch; }
 }
+
+.desk-history-panel .panel-head { margin-bottom: 8px; }
+.desk-history-filter-bar { margin-bottom: 16px; }
+.desk-assign-form { margin-bottom: 12px; }
+.desk-assign-rows { display: grid; gap: 12px; margin: 12px 0; }
+.desk-assign-row {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+}
+.desk-assign-contract-hint { color: var(--muted); font-size: 13px; }
 
 .filter-bar {
   margin-bottom: 10px;

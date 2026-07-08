@@ -128,10 +128,15 @@ final class TeamContracts
 
     public function assertCanAssignDesk(int $teamId): void
     {
-        $year = $this->currentFiscalYear();
-        if (!$this->hasContractInYear($teamId, $year)) {
+        $this->assertCanAssignDeskForYear($teamId, $this->currentFiscalYear());
+    }
+
+    public function assertCanAssignDeskForYear(int $teamId, string $fiscalYear): void
+    {
+        $fiscalYear = JalaliDate::normalizeDigits($fiscalYear);
+        if (!$this->hasContractInYear($teamId, $fiscalYear)) {
             throw new InvalidArgumentException(
-                'برای تخصیص میز، نهاد باید قرارداد سال جاری (' . $year . ') داشته باشد.'
+                'برای تخصیص میز، نهاد باید قرارداد سال ' . $fiscalYear . ' داشته باشد.'
             );
         }
     }

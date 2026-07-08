@@ -171,8 +171,8 @@ $assert(($deskAfterAssign['assignment_until'] ?? '') === $partialUntil, 'desks: 
 $deskAfterUpdate = $crud->update('desks', 1, [
     'team_id' => (string) $teamId,
     'usage_type' => 'formal',
-    'assignment_from' => '1405/01/01',
-    'assignment_until' => $partialUntil,
+    'assignment_from_month' => '1',
+    'assignment_until_month' => '7',
 ]);
 $assert(($deskAfterUpdate['assignment_until'] ?? '') === $partialUntil, 'desks: assignment_until persists after save');
 $deskListRow = null;
@@ -369,12 +369,20 @@ $income = $crud->create('transactions', [
 ]);
 $assert((int) ($income['amount'] ?? 0) === 100000, 'finance: income stored as positive');
 
+$crud->create('team_contracts', [
+    'team_id' => (string) $teamId,
+    'fiscal_year' => '1404',
+    'contract_start' => '1404/01/01',
+    'contract_end' => '1404/12/29',
+]);
+
 $deskAssign = $crud->create('desk_assignments', [
     'desk_id' => '1',
     'team_id' => (string) $teamId,
     'usage_type' => 'formal',
-    'assigned_from' => '1404/01/01',
-    'assigned_until' => '1404/12/29',
+    'fiscal_year' => '1404',
+    'assigned_from_month' => '1',
+    'assigned_until_month' => '12',
     'notes' => 'سال قبل',
 ]);
 $assert((int) ($deskAssign['desk_number'] ?? 0) === 1, 'desk_assignments: historical record created');
@@ -383,14 +391,15 @@ $activeAssign = $crud->create('desk_assignments', [
     'desk_id' => '3',
     'team_id' => (string) $teamId,
     'usage_type' => 'formal',
-    'assigned_from' => '1405/01/01',
+    'fiscal_year' => '1405',
+    'assigned_from_month' => '1',
     'notes' => 'فعال بدون تحویل',
 ]);
 $deskThree = $crud->find('desks', 3);
 $assert((int) ($deskThree['team_id'] ?? 0) === $teamId, 'desk_assignments: open assignment syncs desks table');
 
 $crud->update('desk_assignments', (int) $activeAssign['id'], [
-    'assigned_until' => '1405/12/29',
+    'assigned_until_month' => '12',
 ]);
 
 (new DeskAssignments($pdo))->syncDeskAssignment(3, [

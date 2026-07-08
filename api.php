@@ -338,6 +338,12 @@ try {
         if ($resource === 'desk-assignments' && isset($_GET['team_id']) && $_GET['team_id'] !== '') {
             $filters['team_id'] = (string) $_GET['team_id'];
         }
+        if ($resource === 'team_contracts' && isset($_GET['team_id']) && $_GET['team_id'] !== '') {
+            $filters['team_id'] = (string) $_GET['team_id'];
+        }
+        if ($resource === 'desk-assignments' && isset($_GET['assignment_status']) && $_GET['assignment_status'] !== '') {
+            $filters['assignment_status'] = (string) $_GET['assignment_status'];
+        }
         json_response($repository->paginatedResource($resource, $page, $perPage, $filters));
     }
 

@@ -21,10 +21,11 @@ const labels = {
   phone: "تماس",
   desk_count: "تعداد میز",
   informal_seats: "صندلی غیررسمی",
-  assigned_from: "تاریخ شروع تخصیص",
-  assigned_until: "تاریخ پایان تخصیص",
-  assignment_from: "تاریخ شروع تخصیص",
-  assignment_until: "تاریخ پایان تخصیص",
+  assigned_from: "از ماه",
+  assigned_until: "تا ماه",
+  assignment_period: "بازه تخصیص",
+  assignment_from: "از ماه",
+  assignment_until: "تا ماه",
   desk_number: "شماره میز",
   desk_numbers: "میزهای نهاد",
   number: "شماره میز",
@@ -187,12 +188,38 @@ const moneyCards = new Set(["income_year", "income_month", "expense_year", "expe
 
 const monthNames = ["", "فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور", "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"];
 
+const formatMonthRange = (from, until) => {
+  const fromMonth = Number(String(from || "").slice(5, 7)) || Number(from);
+  const untilMonth = Number(String(until || "").slice(5, 7)) || Number(until);
+  if (!fromMonth && !untilMonth) return "—";
+  if (fromMonth && (!untilMonth || untilMonth === fromMonth)) return monthNames[fromMonth] || String(fromMonth);
+  if (fromMonth && untilMonth) {
+    return fromMonth === untilMonth
+      ? (monthNames[fromMonth] || String(fromMonth))
+      : `از ${monthNames[fromMonth] || fromMonth} تا ${monthNames[untilMonth] || untilMonth}`;
+  }
+  return monthNames[untilMonth] || String(untilMonth);
+};
+
+const monthIndexFromDate = (value) => {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  if (/^\d{1,2}$/.test(text)) return text;
+  const parts = text.split("/");
+  return parts.length >= 2 ? String(Number(parts[1]) || "") : "";
+};
+
+const fiscalYearFromDate = (value) => {
+  const text = String(value || "").trim();
+  return text.length >= 4 ? text.slice(0, 4) : "";
+};
+
 const resourceColumns = {
   teams: ["entity_code", "entity_type", "name", "is_active", "year_status", "leader", "phone", "joined_at", "portal_username", "portal_has_password", "desk_count", "warning", "notes"],
   team_contracts: ["team_name", "fiscal_year", "contract_status", "contract_start", "contract_end", "notes"],
   members: ["member_code", "full_name", "is_leader", "team_label", "entity_type", "desk_numbers", "wants_access", "access_code", "phone", "national_id", "approval_status", "rejection_reason"],
-  desks: ["number", "team_name", "usage_type", "assignment_from", "assignment_until", "notes"],
-  "desk-assignments": ["assignment_status", "fiscal_year", "desk_number", "team_name", "usage_type", "assigned_from", "assigned_until", "notes"],
+  desks: ["number", "team_name", "usage_type", "assignment_period", "notes"],
+  "desk-assignments": ["assignment_status", "fiscal_year", "desk_number", "team_name", "usage_type", "assignment_period", "notes"],
   lockers: ["locker_number", "status", "team_label", "delivered_at", "key_number", "spare_key"],
   "locker-requests": ["submitted_at", "status", "locker_number", "notes", "reviewed_at", "rejection_reason"],
   "member-requests": ["submitted_at", "request_type", "current_full_name", "full_name", "phone", "national_id", "status", "reviewed_at", "rejection_reason"],
@@ -224,8 +251,9 @@ const createDefaults = {
   desk_assignments: () => {
     const year = window.MECHINNO?.fiscalYear || "1405";
     return {
-      assigned_from: `${year}/01/01`,
-      assigned_until: `${year}/12/29`,
+      fiscal_year: year,
+      assigned_from_month: "1",
+      assigned_until_month: "12",
       usage_type: "formal",
     };
   },
@@ -431,6 +459,7 @@ const fetchResource = async (endpoint, {
   wantsAccess = "",
   messageType = "",
   status = "",
+  assignmentStatus = "",
   q = "",
 } = {}) => {
   const url = new URL(endpoint, window.location.href);
@@ -446,6 +475,7 @@ const fetchResource = async (endpoint, {
   if (wantsAccess !== "") url.searchParams.set("wants_access", wantsAccess);
   if (messageType) url.searchParams.set("message_type", messageType);
   if (status) url.searchParams.set("status", status);
+  if (assignmentStatus) url.searchParams.set("assignment_status", assignmentStatus);
   if (q) url.searchParams.set("q", q);
   const data = await fetchJson(url.toString());
   if (Array.isArray(data)) {
@@ -893,8 +923,8 @@ const loadTeamDeskAssignments = async () => {
       </div>
       <span class="badge">${escapeHtml(usageLabels[row.usage_type] || row.usage_type || "—")}</span>
       <div class="desk-assignment-dates">
-        <span>شروع: ${escapeHtml(formatPlain(row.assigned_from))}</span>
-        <span>${row.assigned_until ? `تحویل: ${escapeHtml(formatPlain(row.assigned_until))}` : "فعال — بدون تاریخ تحویل"}</span>
+        <span>${escapeHtml(row.assignment_period || formatMonthRange(row.assigned_from, row.assigned_until))}</span>
+        ${!row.assigned_until ? `<span class="hint">فعال — بدون تاریخ تحویل</span>` : ""}
       </div>
       ${row.notes ? `<p class="hint">${escapeHtml(row.notes)}</p>` : ""}
     </article>`;
@@ -943,7 +973,7 @@ const loadTeamProfile = async () => {
     </div>
     ${team.warning ? `<p class="hint warning-text">اخطار: ${escapeHtml(team.warning)}</p>` : ""}
     ${team.notes ? `<p class="hint">${escapeHtml(team.notes)}</p>` : ""}
-    ${profileSection("میزها و تاریخ تخصیص", data.desk_assignments || [], ["fiscal_year", "desk_number", "usage_type", "assigned_from", "assigned_until", "notes"])}
+    ${profileSection("میزها و تاریخ تخصیص", data.desk_assignments || [], ["fiscal_year", "desk_number", "usage_type", "assignment_period", "notes"])}
     ${profileSection("اعضا", data.members || [], ["full_name", "wants_access", "phone", "national_id", "approval_status"])}
     ${profileSection("کمدهای تخصیص‌یافته", data.lockers || [], ["locker_number", "status", "delivered_at"])}
     ${profileSection("درخواست‌های کمد", data.locker_requests || [], ["submitted_at", "status", "locker_number", "notes"])}`;
@@ -1064,6 +1094,235 @@ const loadPaymentGuide = async () => {
     </div>`;
 };
 
+const openDeskHistoryAssignModal = async (prefill = {}) => {
+  const meta = await loadCrudMeta();
+  const teamOptions = meta.resources?.desk_assignments?.fields?.team_id?.options || {};
+  const deskOptions = meta.resources?.desk_assignments?.fields?.desk_id?.options || {};
+  const usageOptions = meta.resources?.desk_assignments?.fields?.usage_type?.options || {};
+  const monthOptionsHtml = monthNames.slice(1).map((name, index) => {
+    const value = index + 1;
+    return `<option value="${value}">${escapeHtml(name)}</option>`;
+  }).join("");
+
+  const modal = ensureModal();
+  const form = modal.querySelector("#crudForm");
+  modal.querySelector("#crudModalTitle").textContent = prefill.id ? "ویرایش تخصیص میز" : "ثبت تخصیص میز";
+  const state = {
+    teamId: prefill.team_id ? String(prefill.team_id) : "",
+    contractId: "",
+    fiscalYear: prefill.fiscal_year ? String(prefill.fiscal_year) : "",
+    contractStartMonth: 1,
+    contractEndMonth: 12,
+    desks: [{
+      desk_id: prefill.desk_id ? String(prefill.desk_id) : "",
+      usage_type: prefill.usage_type || "formal",
+      assigned_from_month: prefill.assigned_from_month || "1",
+      assigned_until_month: prefill.assigned_until_month || "12",
+      notes: prefill.notes || "",
+    }],
+  };
+
+  const teamOptionsHtml = Object.entries(teamOptions).map(([value, label]) =>
+    `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`
+  ).join("");
+  const deskOptionsHtml = Object.entries(deskOptions).map(([value, label]) =>
+    `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`
+  ).join("");
+  const usageOptionsHtml = Object.entries(usageOptions).map(([value, label]) =>
+    `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`
+  ).join("");
+
+  const renderDeskRows = () => state.desks.map((desk, index) => `
+    <div class="desk-assign-row" data-desk-row="${index}">
+      <label><span>میز</span>
+        <select data-field="desk_id" data-index="${index}" required>
+          <option value="">انتخاب میز</option>
+          ${deskOptionsHtml}
+        </select>
+      </label>
+      <label><span>نوع</span>
+        <select data-field="usage_type" data-index="${index}">
+          ${usageOptionsHtml}
+        </select>
+      </label>
+      <label><span>از ماه</span>
+        <select data-field="assigned_from_month" data-index="${index}">${monthOptionsHtml}</select>
+      </label>
+      <label><span>تا ماه</span>
+        <select data-field="assigned_until_month" data-index="${index}">${monthOptionsHtml}</select>
+      </label>
+      <label class="wide"><span>یادداشت</span>
+        <input data-field="notes" data-index="${index}" type="text" value="${escapeHtml(desk.notes || "")}" />
+      </label>
+      ${state.desks.length > 1 ? `<button type="button" class="mini-button danger" data-remove-desk="${index}">حذف ردیف</button>` : ""}
+    </div>`).join("");
+
+  const render = () => {
+    form.innerHTML = `
+      <p class="hint">ابتدا نهاد و قرارداد سال را انتخاب کنید. بازه ماه‌ها پیش‌فرض از قرارداد پر می‌شود و قابل تغییر است.</p>
+      <div class="crud-grid desk-assign-form">
+        <label><span>نهاد *</span>
+          <select id="deskAssignTeam" required ${prefill.id ? "disabled" : ""}>
+            <option value="">انتخاب نهاد</option>
+            ${teamOptionsHtml}
+          </select>
+        </label>
+        <label><span>قرارداد (سال) *</span>
+          <select id="deskAssignContract" required ${prefill.id ? "disabled" : ""}>
+            <option value="">ابتدا نهاد را انتخاب کنید</option>
+          </select>
+        </label>
+        <div class="wide desk-assign-contract-hint" id="deskAssignContractHint"></div>
+      </div>
+      <div class="desk-assign-rows">${renderDeskRows()}</div>
+      ${!prefill.id ? `<button type="button" class="button ghost" id="deskAssignAddRow">+ میز دیگر</button>` : ""}
+      <div class="modal-actions">
+        <button class="button" type="submit">${prefill.id ? "ذخیره" : "ثبت تخصیص"}</button>
+        <button class="button ghost" type="button" data-close-modal>انصراف</button>
+      </div>`;
+
+    const teamSelect = form.querySelector("#deskAssignTeam");
+    const contractSelect = form.querySelector("#deskAssignContract");
+    teamSelect.value = state.teamId;
+    state.desks.forEach((desk, index) => {
+      form.querySelectorAll(`[data-index="${index}"]`).forEach((input) => {
+        const field = input.dataset.field;
+        if (field && desk[field] !== undefined) input.value = desk[field];
+      });
+    });
+
+    const loadContracts = async () => {
+      const teamId = teamSelect.value;
+      state.teamId = teamId;
+      contractSelect.innerHTML = `<option value="">انتخاب قرارداد</option>`;
+      form.querySelector("#deskAssignContractHint").textContent = "";
+      if (!teamId) return;
+      const { rows } = await fetchResource("api.php?resource=team_contracts", { page: 1, perPage: 100, teamId });
+      if (!rows.length) {
+        contractSelect.innerHTML = `<option value="">قراردادی ثبت نشده</option>`;
+        return;
+      }
+      contractSelect.innerHTML = `<option value="">انتخاب قرارداد</option>${rows.map((row) =>
+        `<option value="${escapeHtml(row.id)}" data-year="${escapeHtml(row.fiscal_year)}"
+          data-start="${escapeHtml(row.contract_start || "")}" data-end="${escapeHtml(row.contract_end || "")}">
+          سال ${escapeHtml(row.fiscal_year)} — ${escapeHtml(formatMonthRange(row.contract_start, row.contract_end))}
+        </option>`
+      ).join("")}`;
+      if (state.contractId) contractSelect.value = state.contractId;
+      else if (state.fiscalYear) {
+        const match = [...contractSelect.options].find((opt) => opt.dataset.year === state.fiscalYear);
+        if (match) contractSelect.value = match.value;
+      }
+      applyContractDefaults();
+    };
+
+    const applyContractDefaults = () => {
+      const option = contractSelect.selectedOptions[0];
+      if (!option || !option.dataset.year) return;
+      state.contractId = contractSelect.value;
+      state.fiscalYear = option.dataset.year;
+      state.contractStartMonth = Number(monthIndexFromDate(option.dataset.start)) || 1;
+      state.contractEndMonth = Number(monthIndexFromDate(option.dataset.end)) || 12;
+      form.querySelector("#deskAssignContractHint").textContent =
+        `قرارداد: ${formatMonthRange(option.dataset.start, option.dataset.end)} — می‌توانید بازه تخصیص را تغییر دهید.`;
+      if (!prefill.id) {
+        state.desks = state.desks.map((desk) => ({
+          ...desk,
+          assigned_from_month: String(state.contractStartMonth),
+          assigned_until_month: String(state.contractEndMonth),
+        }));
+        form.querySelector(".desk-assign-rows").innerHTML = renderDeskRows();
+        bindDeskRowInputs();
+      }
+    };
+
+    const bindDeskRowInputs = () => {
+      form.querySelectorAll("[data-field]").forEach((input) => {
+        input.addEventListener("change", () => {
+          const index = Number(input.dataset.index);
+          const field = input.dataset.field;
+          if (!state.desks[index] || !field) return;
+          state.desks[index][field] = input.value;
+        });
+      });
+      form.querySelectorAll("[data-remove-desk]").forEach((button) => {
+        button.addEventListener("click", () => {
+          state.desks.splice(Number(button.dataset.removeDesk), 1);
+          form.querySelector(".desk-assign-rows").innerHTML = renderDeskRows();
+          bindDeskRowInputs();
+        });
+      });
+    };
+
+    teamSelect.addEventListener("change", () => loadContracts().catch((error) => showToast(error.message, "error")));
+    contractSelect.addEventListener("change", applyContractDefaults);
+    form.querySelector("#deskAssignAddRow")?.addEventListener("click", () => {
+      state.desks.push({
+        desk_id: "",
+        usage_type: "formal",
+        assigned_from_month: String(state.contractStartMonth || 1),
+        assigned_until_month: String(state.contractEndMonth || 12),
+        notes: "",
+      });
+      form.querySelector(".desk-assign-rows").innerHTML = renderDeskRows();
+      bindDeskRowInputs();
+    });
+    form.querySelector("[data-close-modal]").addEventListener("click", closeModal);
+    bindDeskRowInputs();
+    if (state.teamId) loadContracts().catch((error) => showToast(error.message, "error"));
+
+    form.onsubmit = async (event) => {
+      event.preventDefault();
+      if (!state.teamId || !state.fiscalYear) {
+        showToast("نهاد و قرارداد سال را انتخاب کنید.", "error");
+        return;
+      }
+      const submitButton = form.querySelector('button[type="submit"]');
+      submitButton.disabled = true;
+      try {
+        if (prefill.id) {
+          const desk = state.desks[0];
+          await postJson("api.php?resource=desk-assignments&action=update", {
+            id: prefill.id,
+            team_id: state.teamId,
+            desk_id: desk.desk_id,
+            usage_type: desk.usage_type,
+            fiscal_year: state.fiscalYear,
+            assigned_from_month: desk.assigned_from_month,
+            assigned_until_month: desk.assigned_until_month,
+            notes: desk.notes || "",
+          });
+        } else {
+          for (const desk of state.desks) {
+            if (!desk.desk_id) continue;
+            await postJson("api.php?resource=desk-assignments&action=create", {
+              team_id: state.teamId,
+              desk_id: desk.desk_id,
+              usage_type: desk.usage_type,
+              fiscal_year: state.fiscalYear,
+              assigned_from_month: desk.assigned_from_month,
+              assigned_until_month: desk.assigned_until_month,
+              notes: desk.notes || "",
+            });
+          }
+        }
+        closeModal();
+        await refreshAfterMutation("desk-history");
+        await refreshAfterMutation("desks");
+        showToast("تخصیص میز ذخیره شد.", "success");
+      } catch (error) {
+        showToast(error.message, "error");
+      } finally {
+        submitButton.disabled = false;
+      }
+    };
+  };
+
+  render();
+  modal.hidden = false;
+  trapFocus(modal);
+};
+
 const initDeskHistoryFilters = async () => {
   const bar = document.getElementById("deskHistoryFilters");
   const table = document.getElementById("deskAssignmentsTable");
@@ -1072,21 +1331,61 @@ const initDeskHistoryFilters = async () => {
   const teamOptions = meta.resources?.desk_assignments?.fields?.team_id?.options
     || meta.resources?.members?.fields?.team_id?.options
     || {};
+  const teamEntries = Object.entries(teamOptions);
+  let years = [];
+  try {
+    years = (await fetchJson("api.php?resource=charge-fiscal-years")).years || [];
+  } catch (error) {
+    years = [window.MECHINNO?.fiscalYear || "1405"];
+  }
+  years = [...new Set(years.filter(Boolean))].sort((a, b) => Number(b) - Number(a));
+
+  const applyFilters = () => {
+    const teamId = bar.querySelector('[data-filter="teamId"]')?.value || "";
+    const fiscalYear = bar.querySelector('[data-filter="fiscalYear"]')?.value || "";
+    const status = bar.querySelector('[data-filter="status"]')?.value || "";
+    table.memberTeamFilter = teamId;
+    table.fiscalYearFilter = fiscalYear;
+    table.assignmentStatusFilter = status;
+    table.setAttribute("data-member-team", teamId);
+    table.setAttribute("data-fiscal-year", fiscalYear);
+    table.setAttribute("data-assignment-status", status);
+    table.page = 1;
+    table.load?.();
+  };
+
   if (!bar.dataset.ready) {
     bar.dataset.ready = "1";
+    bar.className = "filter-bar desk-history-filter-bar";
     bar.innerHTML = `
-      <label><span>فیلتر نهاد</span>
+      <label>نهاد
         <select data-filter="teamId"><option value="">همه نهادها</option></select>
-      </label>`;
+      </label>
+      <label>سال مالی
+        <select data-filter="fiscalYear"><option value="">همه سال‌ها</option></select>
+      </label>
+      <label>وضعیت
+        <select data-filter="status">
+          <option value="">همه</option>
+          <option value="active">جاری</option>
+          <option value="expired">منقضی</option>
+        </select>
+      </label>
+      <button type="button" class="button ghost" data-filter-reset>پاک کردن فیلترها</button>`;
     const teamSelect = bar.querySelector('[data-filter="teamId"]');
-    Object.entries(teamOptions).forEach(([value, label]) => {
-      teamSelect.insertAdjacentHTML("beforeend", `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`);
-    });
-    teamSelect.addEventListener("change", () => {
-      table.memberTeamFilter = teamSelect.value;
-      table.setAttribute("data-member-team", teamSelect.value);
-      table.page = 1;
-      table.load?.();
+    teamSelect.innerHTML = `<option value="">همه نهادها</option>${teamEntries.map(([value, label]) =>
+      `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`
+    ).join("")}`;
+    const yearSelect = bar.querySelector('[data-filter="fiscalYear"]');
+    yearSelect.innerHTML = `<option value="">همه سال‌ها</option>${years.map((year) =>
+      `<option value="${escapeHtml(year)}">${escapeHtml(year)}</option>`
+    ).join("")}`;
+    bar.querySelectorAll("select").forEach((select) => select.addEventListener("change", applyFilters));
+    bar.querySelector("[data-filter-reset]")?.addEventListener("click", () => {
+      bar.querySelector('[data-filter="teamId"]').value = "";
+      bar.querySelector('[data-filter="fiscalYear"]').value = "";
+      bar.querySelector('[data-filter="status"]').value = "";
+      applyFilters();
     });
   }
 };
@@ -2148,6 +2447,17 @@ const formatCell = (column, value, row, resource) => {
   if (column === "month_index") {
     return formatPlain(monthNames[Number(value)] || value);
   }
+  if (column === "assignment_period") {
+    return escapeHtml(row.assignment_period || formatMonthRange(row.assigned_from || row.assignment_from, row.assigned_until || row.assignment_until));
+  }
+  if (["assigned_from", "assignment_from"].includes(column)) {
+    const idx = monthIndexFromDate(value || row.assigned_from || row.assignment_from);
+    return formatPlain(monthNames[Number(idx)] || value || "—");
+  }
+  if (["assigned_until", "assignment_until"].includes(column)) {
+    const idx = monthIndexFromDate(value || row.assigned_until || row.assignment_until);
+    return formatPlain(monthNames[Number(idx)] || value || "—");
+  }
   if (column === "role") {
     const map = { admin_editor: "مدیر — ویرایش", admin_viewer: "مدیر — مشاهده", team: "نهاد" };
     return escapeHtml(map[value] || value || "—");
@@ -2357,6 +2667,7 @@ class DataTable extends HTMLElement {
     this.memberEntityTypeFilter = this.getAttribute("data-member-entity-type") || "";
     this.memberLeaderFilter = this.getAttribute("data-member-leader") || "";
     this.memberAccessFilter = this.getAttribute("data-member-access") || "";
+    this.assignmentStatusFilter = this.getAttribute("data-assignment-status") || "";
     this.tableKey = this.getAttribute("data-table-key") || "";
     this.readOnly = tableSuppressesAdd(this);
     this.definition = null;
@@ -2457,6 +2768,7 @@ class DataTable extends HTMLElement {
         entityType: this.memberEntityTypeFilter,
         isLeader: this.memberLeaderFilter,
         wantsAccess: this.memberAccessFilter,
+        assignmentStatus: this.assignmentStatusFilter,
         q: this.filter.trim(),
       });
       this.rows = result.rows;
@@ -2702,6 +3014,19 @@ class DataTable extends HTMLElement {
           .catch((error) => showToast(error.message, "error"));
         return;
       }
+      if (this.resource === "desk-assignments" && canWrite) {
+        openDeskHistoryAssignModal({
+          id: record.id,
+          team_id: record.team_id,
+          desk_id: record.desk_id,
+          usage_type: record.usage_type,
+          fiscal_year: record.fiscal_year,
+          assigned_from_month: record.assigned_from_month || monthIndexFromDate(record.assigned_from),
+          assigned_until_month: record.assigned_until_month || monthIndexFromDate(record.assigned_until),
+          notes: record.notes,
+        }).catch((error) => showToast(error.message, "error"));
+        return;
+      }
       openRecordModal({
         resource: this.resource,
         definition: this.definition,
@@ -2746,7 +3071,7 @@ const recalcChargesButton = document.getElementById("recalcChargesButton");
 if (recalcChargesButton && canWrite) {
   recalcChargesButton.addEventListener("click", async () => {
     const year = document.getElementById("chargesYear")?.value || "1404";
-    if (!window.confirm(`شارژهای محاسبه‌شده خودکار سال ${year} از نرخ‌ها بازمحاسبه شود؟`)) return;
+    if (!window.confirm(`شارژهای محاسبه‌شده خودکار سال ${year} از نرخ‌ها بازمحاسبه شود؟ ماه‌هایی که دستی ویرایش کرده‌اید حفظ می‌شوند.`)) return;
     recalcChargesButton.disabled = true;
     recalcChargesButton.classList.add("is-loading");
     recalcChargesButton.textContent = "در حال محاسبه…";
@@ -2823,6 +3148,10 @@ document.getElementById("bulkYearImportButton")?.addEventListener("click", () =>
   window.TeamYearWorkspace?.openBulkImportModal();
 });
 
+document.getElementById("deskHistoryAddButton")?.addEventListener("click", () => {
+  openDeskHistoryAssignModal().catch((error) => showToast(error.message, "error"));
+});
+
 window.MechinnoShared = {
   fetchJson,
   fetchResource,
@@ -2847,6 +3176,10 @@ window.MechinnoShared = {
   usageLabels,
   labels,
   monthNames,
+  formatMonthRange,
+  monthIndexFromDate,
+  fiscalYearFromDate,
+  openDeskHistoryAssignModal,
   profileSection,
   entityTypeLabels,
   openDepositModal,

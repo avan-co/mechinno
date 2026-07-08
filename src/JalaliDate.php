@@ -129,6 +129,47 @@ final class JalaliDate
         return $months[$index] ?? '';
     }
 
+    public static function monthIndexFromDate(?string $date): int
+    {
+        $normalized = self::tryNormalize($date ?? '');
+        if ($normalized === '' || !preg_match('/^(\d{4})\/(\d{2})\/\d{2}$/', $normalized, $matches)) {
+            return 0;
+        }
+
+        $month = (int) $matches[2];
+
+        return ($month >= 1 && $month <= 12) ? $month : 0;
+    }
+
+    public static function fiscalYearFromDate(?string $date): string
+    {
+        $normalized = self::tryNormalize($date ?? '');
+
+        return strlen($normalized) >= 4 ? substr($normalized, 0, 4) : '';
+    }
+
+    /** Human label such as «از فروردین تا مرداد» or «فروردین». */
+    public static function monthRangeLabel(?string $from, ?string $until): string
+    {
+        $fromMonth = self::monthIndexFromDate($from);
+        $untilMonth = self::monthIndexFromDate($until);
+        if ($fromMonth <= 0 && $untilMonth <= 0) {
+            return '—';
+        }
+        if ($fromMonth > 0 && ($untilMonth <= 0 || $untilMonth === $fromMonth)) {
+            return self::monthName($fromMonth);
+        }
+        if ($fromMonth > 0 && $untilMonth > 0) {
+            if ($fromMonth === $untilMonth) {
+                return self::monthName($fromMonth);
+            }
+
+            return 'از ' . self::monthName($fromMonth) . ' تا ' . self::monthName($untilMonth);
+        }
+
+        return self::monthName($untilMonth);
+    }
+
     /** Compare two Jalali dates (YYYY/MM/DD). Returns -1, 0, or 1. */
     public static function compare(string $left, string $right): int
     {
