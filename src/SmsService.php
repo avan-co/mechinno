@@ -672,7 +672,7 @@ final class SmsService
                 'provider_response' => is_string($response['raw']) ? $response['raw'] : json_encode($response['raw'], JSON_UNESCAPED_UNICODE),
                 'cost_rial' => $response['ok'] ? $unitCost : 0,
                 'delivery_status' => $response['ok'] ? 'در حال ارسال' : null,
-                'api_confirmed' => 0,
+                'api_confirmed' => $response['ok'] && trim((string) ($response['rec_id'] ?? '')) !== '' ? 1 : 0,
             ]);
 
             if ($response['ok']) {

@@ -177,12 +177,14 @@ const loadSmsRecipients = async () => {
 
 const scheduleDeliveryCheck = (batchUid, logIds = []) => {
   if (!batchUid && logIds.length === 0) return;
-  setTimeout(() => {
-    postJson("api.php?resource=sms-check-deliveries", {
-      batch_uid: batchUid || "",
-      log_ids: logIds,
-    }).then(() => loadSmsHistory()).catch(() => {});
-  }, 60000);
+  [8000, 30000, 90000].forEach((delay) => {
+    setTimeout(() => {
+      postJson("api.php?resource=sms-check-deliveries", {
+        batch_uid: batchUid || "",
+        log_ids: logIds,
+      }).then(() => loadSmsHistory()).catch(() => {});
+    }, delay);
+  });
 };
 
 const sendSmsAnnouncement = async () => {

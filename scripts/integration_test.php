@@ -384,6 +384,8 @@ $rendered = $smsService->renderChargeTemplate(
 $assert(str_contains($rendered, $teamName), 'sms: charge template renders team name');
 $assert(str_contains($rendered, '1,200,000'), 'sms: charge template renders debt total');
 $assert(MelliPayamak::deliveryLabel(4) === 'رسیده به گوشی', 'sms: delivery label mapping');
+$assert(MelliPayamak::deliveryLabel(0) === 'ارسال شده به مخابرات', 'sms: delivery code 0 label');
+$assert(MelliPayamak::deliveryLabel(-2) === 'شناسه پیامک نامعتبر یا هنوز ثبت نشده', 'sms: delivery error code label');
 $adminAllowed = Access::allowedResources();
 $assert(in_array('sms-send', $adminAllowed, true), 'access: admin can send sms announcements');
 $assert(in_array('sms-send-charge-reminders', $adminAllowed, true), 'access: admin can send charge reminders');
