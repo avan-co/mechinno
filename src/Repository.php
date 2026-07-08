@@ -890,6 +890,7 @@ final class Repository
             $chargeMap[$teamKey][$monthKey]['rent_amount'] += (int) ($row['rent_amount'] ?? 0);
             $chargeMap[$teamKey][$monthKey]['amount'] += $dueAmount;
         }
+        $seeder = new Seeder($this->pdo);
         $rows = [];
         foreach ($teams as $team) {
             $tid = (int) $team['id'];
@@ -898,6 +899,18 @@ final class Repository
             }
             if (!$contracts->hasDeskInFiscalYear($tid, $fiscalYear)) {
                 continue;
+            }
+            if (!isset($chargeMap[$tid]) || $chargeMap[$tid] === []) {
+                $seeder->recalculateChargesForTeam($tid, $fiscalYear);
+                foreach ($this->chargesForFiscalYear($fiscalYear, $tid) as $row) {
+                    $monthKey = (int) $row['month_index'];
+                    $dueAmount = $this->chargeRowDueAmount($row);
+                    $chargeMap[$tid][$monthKey] = [
+                        'charge_amount' => (int) ($row['charge_amount'] ?? 0),
+                        'rent_amount' => (int) ($row['rent_amount'] ?? 0),
+                        'amount' => $dueAmount,
+                    ];
+                }
             }
             $dates = $contracts->contractDatesForYear($tid, $fiscalYear);
             $hasInformal = $contracts->hasInformalDeskInYear($tid, $fiscalYear);
@@ -1145,14 +1158,26 @@ final class Repository
                  FROM lockers l WHERE l.team_id = :id ORDER BY l.locker_number',
                 ['id' => $teamId]
             ),
-            'desk_assignments' => $this->preparedRows(
+            'desk_assignments' => array_map(
+                static function (array $row): array {
+                    $until = (string) ($row['assigned_until'] ?? '');
+                    $row['assignment_period'] = JalaliDate::monthRangeLabel(
+                        (string) ($row['assigned_from'] ?? ''),
+                        $until
+                    );
+                    $row['assigned_from_month'] = (string) JalaliDate::monthIndexFromDate((string) ($row['assigned_from'] ?? ''));
+                    $row['assigned_until_month'] = (string) JalaliDate::monthIndexFromDate($until);
+
+                    return $row;
+                },
+                $this->preparedRows(
                 'SELECT da.id, da.desk_id, da.desk_number, da.usage_type, da.assigned_from, da.assigned_until, da.notes,
                         SUBSTR(da.assigned_from, 1, 4) AS fiscal_year
                  FROM desk_assignments da
                  WHERE da.team_id = :id
                  ORDER BY da.assigned_from DESC, da.desk_number',
                 ['id' => $teamId]
-            ),
+            )),
             'locker_requests' => $this->preparedRows(
                 'SELECT lr.id, lr.notes, lr.status, lr.submitted_at, lr.reviewed_at, lr.rejection_reason, l.locker_number
                  FROM locker_requests lr
@@ -1188,6 +1213,31 @@ final class Repository
             ], $this->paymentOverpaymentForTeam($teamId)),
             'year_summaries' => $this->yearSummariesForTeam($teamId),
             'current_month' => $this->currentMonthSummaryForTeam($teamId),
+            'current_year_rates' => $this->currentYearRatesSummary(),
+        ];
+    }
+
+    /**
+     * @return array{charge_rate:int, informal_rent_rate:int, fiscal_year:string, title:string}
+     */
+    public function currentYearRatesSummary(): array
+    {
+        $fiscalYear = $this->currentFiscalYear();
+        $monthIndex = $this->currentMonthIndex();
+        $applicable = (new Seeder($this->pdo))->ratesForMonth($fiscalYear, $monthIndex);
+        $row = $this->preparedRow(
+            'SELECT title FROM rate_settings
+             WHERE fiscal_year = :year
+             ORDER BY COALESCE(effective_from, :year_start) DESC, id DESC
+             LIMIT 1',
+            ['year' => $fiscalYear, 'year_start' => $fiscalYear . '/01/01']
+        );
+
+        return [
+            'fiscal_year' => $fiscalYear,
+            'title' => (string) ($row['title'] ?? 'نرخ سال جاری'),
+            'charge_rate' => (int) ($applicable['charge_rate'] ?? 0),
+            'informal_rent_rate' => (int) ($applicable['informal_rent_rate'] ?? 0),
         ];
     }
 

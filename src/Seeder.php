@@ -135,7 +135,7 @@ final class Seeder
             if ($deskCount === 0) {
                 continue;
             }
-            $rates = $this->ratesForMonth($fiscalYear, $month);
+            $rates = $this->ratesForMonthInternal($fiscalYear, $month);
             $chargeRate = (int) ($rates['charge_rate'] ?? 0);
             $rentRate = (int) ($rates['informal_rent_rate'] ?? 0);
             $monthlyCharge = $deskCount * $chargeRate;
@@ -172,7 +172,15 @@ final class Seeder
     /**
      * @return array{charge_rate:int, informal_rent_rate:int}
      */
-    private function ratesForMonth(string $fiscalYear, int $monthIndex): array
+    public function ratesForMonth(string $fiscalYear, int $monthIndex): array
+    {
+        return $this->ratesForMonthInternal($fiscalYear, $monthIndex);
+    }
+
+    /**
+     * @return array{charge_rate:int, informal_rent_rate:int}
+     */
+    private function ratesForMonthInternal(string $fiscalYear, int $monthIndex): array
     {
         $fiscalYear = JalaliDate::normalizeDigits($fiscalYear);
         $statement = $this->pdo->prepare(

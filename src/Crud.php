@@ -129,8 +129,8 @@ final class Crud
                         'required' => true,
                     ],
                     'notes' => ['label' => 'توضیحات', 'type' => 'textarea'],
-                    'assignment_from_month' => ['label' => 'از ماه', 'type' => 'select', 'options' => self::monthOptions(), 'required' => true],
-                    'assignment_until_month' => ['label' => 'تا ماه', 'type' => 'select', 'options' => self::monthOptions()],
+                    'assignment_from_month' => ['label' => 'از ماه', 'type' => 'select', 'options' => self::monthOptionsRequired(), 'required' => true],
+                    'assignment_until_month' => ['label' => 'تا ماه', 'type' => 'select', 'options' => self::monthOptionsRequired(), 'required' => true],
                 ],
             ],
             'desk_assignments' => [
@@ -718,8 +718,10 @@ final class Crud
             $row['assignment_from'] = '';
             $row['assignment_until'] = '';
         }
-        $row['assignment_from_month'] = (string) JalaliDate::monthIndexFromDate($row['assignment_from']);
-        $row['assignment_until_month'] = (string) JalaliDate::monthIndexFromDate($row['assignment_until']);
+        $fromMonth = JalaliDate::monthIndexFromDate($row['assignment_from']);
+        $untilMonth = JalaliDate::monthIndexFromDate($row['assignment_until']);
+        $row['assignment_from_month'] = $fromMonth > 0 ? (string) $fromMonth : '';
+        $row['assignment_until_month'] = $untilMonth > 0 ? (string) $untilMonth : '';
         $row['assignment_period'] = JalaliDate::monthRangeLabel($row['assignment_from'], $row['assignment_until']);
 
         return $row;
@@ -1353,6 +1355,19 @@ final class Crud
     private static function monthOptions(): array
     {
         $options = ['' => '—'];
+        foreach (self::months() as $index => $name) {
+            $options[(string) $index] = $name;
+        }
+
+        return $options;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private static function monthOptionsRequired(): array
+    {
+        $options = [];
         foreach (self::months() as $index => $name) {
             $options[(string) $index] = $name;
         }

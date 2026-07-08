@@ -15,8 +15,8 @@ final class DeskAssignments
     {
         $teamId = (int) ($desk['team_id'] ?? 0);
         $today = JalaliDate::todayParts()['formatted'];
-        $assignedFrom = JalaliDate::tryNormalize($desk['assignment_from'] ?? '');
-        $assignedUntil = JalaliDate::tryNormalize($desk['assignment_until'] ?? '');
+        $assignedFrom = JalaliDate::tryNormalize($desk['assignment_from'] ?? $desk['assigned_from'] ?? '');
+        $assignedUntil = JalaliDate::tryNormalize($desk['assignment_until'] ?? $desk['assigned_until'] ?? '');
         $current = $this->findCurrentAssignment($deskId);
 
         if ($teamId <= 0) {
@@ -141,25 +141,29 @@ final class DeskAssignments
     public function assignmentForDeskForm(int $deskId, ?int $teamId = null): ?array
     {
         $current = $this->findCurrentAssignment($deskId);
-        if ($current !== null) {
+        if ($current !== null && ($teamId === null || $teamId <= 0 || (int) ($current['team_id'] ?? 0) === $teamId)) {
             return $current;
         }
 
+        $fiscalYear = (new TeamContracts($this->pdo))->currentFiscalYear();
+        $yearStart = $fiscalYear . '/01/01';
+        $yearEnd = $fiscalYear . '/12/29';
+        $sql = 'SELECT assigned_from, assigned_until, usage_type, notes
+                FROM desk_assignments
+                WHERE desk_id = :desk_id
+                  AND assigned_from <= :year_end
+                  AND (assigned_until IS NULL OR assigned_until = \'\' OR assigned_until >= :year_start)';
+        $params = ['desk_id' => $deskId, 'year_start' => $yearStart, 'year_end' => $yearEnd];
         if ($teamId !== null && $teamId > 0) {
-            $statement = $this->pdo->prepare(
-                'SELECT assigned_from, assigned_until, usage_type, notes
-                 FROM desk_assignments
-                 WHERE desk_id = :desk_id AND team_id = :team_id
-                 ORDER BY assigned_from DESC, id DESC
-                 LIMIT 1'
-            );
-            $statement->execute(['desk_id' => $deskId, 'team_id' => $teamId]);
-            $row = $statement->fetch();
-
-            return $row === false ? null : $row;
+            $sql .= ' AND team_id = :team_id';
+            $params['team_id'] = $teamId;
         }
+        $sql .= ' ORDER BY assigned_from DESC, id DESC LIMIT 1';
+        $statement = $this->pdo->prepare($sql);
+        $statement->execute($params);
+        $row = $statement->fetch();
 
-        return null;
+        return $row === false ? null : $row;
     }
 
     /**
