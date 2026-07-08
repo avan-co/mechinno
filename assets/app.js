@@ -2032,8 +2032,11 @@ const fieldInput = (name, meta, value) => {
   if (type === "select") {
     const options = meta.options || {};
     const entries = Array.isArray(options) ? options.map((o) => [o, o]) : Object.entries(options);
+    const placeholder = meta.required
+      ? ""
+      : `<option value="">انتخاب کنید</option>`;
     return `<select name="${escapeHtml(name)}" ${required}>
-      <option value="">انتخاب کنید</option>
+      ${placeholder}
       ${entries.map(([optionValue, optionLabel]) => {
         const selected = String(optionValue) === String(safeValue) ? "selected" : "";
         return `<option value="${escapeHtml(optionValue)}" ${selected}>${escapeHtml(optionLabel)}</option>`;

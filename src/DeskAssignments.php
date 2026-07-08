@@ -17,9 +17,9 @@ final class DeskAssignments
         $today = JalaliDate::todayParts()['formatted'];
         $assignedFrom = JalaliDate::tryNormalize($desk['assignment_from'] ?? $desk['assigned_from'] ?? '');
         $assignedUntil = JalaliDate::tryNormalize($desk['assignment_until'] ?? $desk['assigned_until'] ?? '');
-        $current = $this->findCurrentAssignment($deskId);
 
         if ($teamId <= 0) {
+            $current = $this->findCurrentAssignment($deskId);
             if ($current !== null) {
                 $this->closeAssignment((int) $current['id'], $today);
             } else {
@@ -36,6 +36,11 @@ final class DeskAssignments
             $assignedFrom = $today;
         }
 
+        $fiscalYear = $this->fiscalYearFrom($assignedFrom);
+        if ($fiscalYear === '') {
+            $fiscalYear = (new TeamContracts($this->pdo))->currentFiscalYear();
+        }
+
         $payload = [
             'desk_id' => $deskId,
             'desk_number' => $this->deskNumber($deskId, $desk),
@@ -46,31 +51,37 @@ final class DeskAssignments
             'notes' => $desk['notes'] ?? null,
         ];
 
-        if ($current === null) {
-            $this->insertAssignment($payload);
+        $yearRecord = $this->findAssignmentForYear($deskId, $fiscalYear, $teamId);
+        if ($yearRecord !== null) {
+            $this->updateAssignment((int) $yearRecord['id'], $payload);
 
             return;
         }
 
-        $currentTeamId = (int) ($current['team_id'] ?? 0);
-        $currentFrom = (string) ($current['assigned_from'] ?? '');
+        $current = $this->findCurrentAssignment($deskId);
+        if ($current !== null) {
+            $currentTeamId = (int) ($current['team_id'] ?? 0);
+            if ($currentTeamId !== $teamId) {
+                $closeDate = $this->handoverDate($assignedFrom);
+                $this->closeAssignment((int) $current['id'], $closeDate);
+                $this->insertAssignment($payload);
 
-        if ($currentTeamId === $teamId) {
-            $newYear = $this->fiscalYearFrom($assignedFrom);
-            $currentYear = $this->fiscalYearFrom($currentFrom);
-            if ($newYear !== '' && $currentYear !== '' && $newYear !== $currentYear) {
+                return;
+            }
+
+            $currentYear = $this->fiscalYearFrom((string) ($current['assigned_from'] ?? ''));
+            if ($currentYear !== '' && $currentYear !== $fiscalYear) {
                 $this->closeAssignment((int) $current['id'], $this->handoverDate($assignedFrom));
                 $this->insertAssignment($payload);
 
                 return;
             }
+
             $this->updateAssignment((int) $current['id'], $payload);
 
             return;
         }
 
-        $closeDate = $assignedFrom !== '' ? $this->handoverDate($assignedFrom) : $today;
-        $this->closeAssignment((int) $current['id'], $closeDate);
         $this->insertAssignment($payload);
     }
 
@@ -140,15 +151,37 @@ final class DeskAssignments
      */
     public function assignmentForDeskForm(int $deskId, ?int $teamId = null): ?array
     {
-        $current = $this->findCurrentAssignment($deskId);
-        if ($current !== null && ($teamId === null || $teamId <= 0 || (int) ($current['team_id'] ?? 0) === $teamId)) {
-            return $current;
+        $fiscalYear = (new TeamContracts($this->pdo))->currentFiscalYear();
+        $yearRecord = $this->findAssignmentForYear(
+            $deskId,
+            $fiscalYear,
+            $teamId !== null && $teamId > 0 ? $teamId : null
+        );
+        if ($yearRecord !== null) {
+            return $this->assignmentFormFields($yearRecord);
         }
 
-        $fiscalYear = (new TeamContracts($this->pdo))->currentFiscalYear();
+        $current = $this->findCurrentAssignment($deskId);
+        if ($current !== null && ($teamId === null || $teamId <= 0 || (int) ($current['team_id'] ?? 0) === $teamId)) {
+            return $this->assignmentFormFields($current);
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function findAssignmentForYear(int $deskId, string $fiscalYear, ?int $teamId = null): ?array
+    {
+        $fiscalYear = JalaliDate::normalizeDigits($fiscalYear);
+        if ($fiscalYear === '') {
+            return null;
+        }
+
         $yearStart = $fiscalYear . '/01/01';
         $yearEnd = $fiscalYear . '/12/29';
-        $sql = 'SELECT assigned_from, assigned_until, usage_type, notes
+        $sql = 'SELECT id, desk_id, desk_number, team_id, usage_type, assigned_from, assigned_until, notes
                 FROM desk_assignments
                 WHERE desk_id = :desk_id
                   AND assigned_from <= :year_end
@@ -219,6 +252,13 @@ final class DeskAssignments
      */
     private function insertAssignment(array $payload): void
     {
+        $this->assertNoOverlap(
+            (int) $payload['desk_id'],
+            (string) $payload['assigned_from'],
+            $payload['assigned_until'],
+            null
+        );
+
         $this->pdo->prepare(
             'INSERT INTO desk_assignments (desk_id, desk_number, team_id, usage_type, assigned_from, assigned_until, notes)
              VALUES (:desk_id, :desk_number, :team_id, :usage_type, :assigned_from, :assigned_until, :notes)'
@@ -235,7 +275,7 @@ final class DeskAssignments
         if ($id > 0) {
             $record = $this->findAssignment($id);
             if ($record !== null) {
-                $this->applyAssignmentRecord($record);
+                $this->applyAssignmentRecord($record, $id);
             }
         }
     }
@@ -245,6 +285,13 @@ final class DeskAssignments
      */
     private function updateAssignment(int $id, array $payload): void
     {
+        $this->assertNoOverlap(
+            (int) $payload['desk_id'],
+            (string) $payload['assigned_from'],
+            $payload['assigned_until'],
+            $id
+        );
+
         $this->pdo->prepare(
             'UPDATE desk_assignments
              SET team_id = :team_id, usage_type = :usage_type, notes = :notes,
@@ -261,7 +308,7 @@ final class DeskAssignments
         ]);
         $record = $this->findAssignment($id);
         if ($record !== null) {
-            $this->applyAssignmentRecord($record);
+            $this->applyAssignmentRecord($record, $id);
         }
     }
 
@@ -373,6 +420,20 @@ final class DeskAssignments
         $row = $statement->fetch();
 
         return $row === false ? null : $row;
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     * @return array{assigned_from:string, assigned_until:string, usage_type:string, notes:?string}
+     */
+    private function assignmentFormFields(array $row): array
+    {
+        return [
+            'assigned_from' => (string) ($row['assigned_from'] ?? ''),
+            'assigned_until' => (string) ($row['assigned_until'] ?? ''),
+            'usage_type' => (string) ($row['usage_type'] ?? 'formal'),
+            'notes' => $row['notes'] ?? null,
+        ];
     }
 
     /**

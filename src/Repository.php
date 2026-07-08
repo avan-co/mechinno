@@ -2305,8 +2305,15 @@ final class Repository
                 (int) ($row['id'] ?? 0),
                 $teamId > 0 ? $teamId : null
             );
-            $row['assignment_from'] = (string) ($assignment['assigned_from'] ?? '');
-            $row['assignment_until'] = (string) ($assignment['assigned_until'] ?? '');
+            $from = (string) ($assignment['assigned_from'] ?? '');
+            $until = (string) ($assignment['assigned_until'] ?? '');
+            $row['assignment_from'] = $from;
+            $row['assignment_until'] = $until;
+            $fromMonth = JalaliDate::monthIndexFromDate($from);
+            $untilMonth = JalaliDate::monthIndexFromDate($until);
+            $row['assignment_from_month'] = $fromMonth > 0 ? (string) $fromMonth : '';
+            $row['assignment_until_month'] = $untilMonth > 0 ? (string) $untilMonth : '';
+            $row['assignment_period'] = JalaliDate::monthRangeLabel($from, $until);
 
             return $row;
         }, $rows);
