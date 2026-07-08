@@ -8,6 +8,7 @@ $configured = is_file(__DIR__ . '/config.php');
 $result = null;
 $error = null;
 $hasExistingData = false;
+$action = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $configured) {
     try {
@@ -19,11 +20,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $configured) {
         if ($csrfError !== null) {
             throw new RuntimeException($csrfError);
         }
-        if (($_POST['confirm_import'] ?? '') !== '1') {
-            throw new RuntimeException('برای ادامه، گزینه تأیید را فعال کنید.');
-        }
+
+        $action = (string) ($_POST['action'] ?? 'reset');
         $pdo = Database::connect();
-        $result = (new Installer($pdo))->installFresh();
+        $installer = new Installer($pdo);
+
+        if ($action === 'sync') {
+            $result = $installer->syncDatabase();
+        } else {
+            if (($_POST['confirm_import'] ?? '') !== '1') {
+                throw new RuntimeException('برای بازنشانی کامل، گزینه تأیید را فعال کنید.');
+            }
+            $result = $installer->installFresh();
+        }
     } catch (Throwable $exception) {
         $error = $exception instanceof RuntimeException ? $exception->getMessage() : safe_error_message($exception);
     }
@@ -54,14 +63,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $configured) {
       <section class="setup-card wide">
         <span class="brand-mark">M</span>
         <h1>راه‌اندازی پنل</h1>
-        <p>پنل با دیتابیس <strong>خالی</strong> نصب می‌شود — فقط ۲۴ میز آماده است. نهادها، اعضا، کمدها و مبالغ را خودتان وارد کنید.</p>
+        <p>دو حالت دارید: <strong>همگام‌سازی دیتابیس</strong> (بدون حذف داده) یا <strong>بازنشانی کامل</strong> (پنل خالی با ۲۴ میز).</p>
 
         <?php if (!$configured): ?>
           <div class="notice danger">ابتدا <code>config.sample.php</code> را به <code>config.php</code> کپی کنید.</div>
         <?php endif; ?>
 
         <?php if ($configured && $hasExistingData && !$result): ?>
-          <div class="notice warn">داده قبلی پیدا شد. با نصب مجدد، همه رکوردها پاک و پنل خالی می‌شود.</div>
+          <div class="notice warn">داده قبلی پیدا شد. برای همگام‌سازی، داده‌ها حفظ می‌شوند. برای بازنشانی کامل، همه رکوردها پاک می‌شود.</div>
         <?php endif; ?>
 
         <?php if ($error): ?>
@@ -70,23 +79,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $configured) {
 
         <?php if ($result): ?>
           <div class="notice success">
-            پنل خالی آماده است:
+            <?= $action === 'sync'
+              ? 'دیتابیس با نسخه فعلی کد همگام شد (جداول، تخصیص میزها، حذف ردیف‌های تکراری).'
+              : 'پنل خالی آماده است:' ?>
             <pre><?= htmlspecialchars(json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8') ?></pre>
           </div>
           <p><a class="button" href="index.php">ورود به پنل</a></p>
         <?php endif; ?>
 
-        <form method="post">
-          <?php if ($configured && !$result): ?>
+        <?php if ($configured && !$result): ?>
+          <form method="post" class="install-actions">
             <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>" />
+            <input type="hidden" name="action" value="sync" />
+            <p class="hint">همگام‌سازی: جداول جدید ساخته می‌شود، تاریخ پایان تخصیص‌های قدیمی پر می‌شود و ردیف‌های تکراری میز حذف می‌شود.</p>
+            <button class="button" type="submit">همگام‌سازی دیتابیس با کد</button>
+          </form>
+
+          <form method="post" class="install-actions">
+            <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>" />
+            <input type="hidden" name="action" value="reset" />
             <label class="check-row">
               <input type="checkbox" name="confirm_import" value="1" />
               <span>تأیید می‌کنم داده‌های فعلی پاک شود و پنل خالی ساخته شود.</span>
             </label>
-            <button class="button" type="submit">نصب / بازنشانی پنل خالی</button>
-          <?php endif; ?>
-          <a class="button ghost" href="index.php">بازگشت</a>
-        </form>
+            <button class="button danger" type="submit">بازنشانی کامل پنل</button>
+          </form>
+        <?php endif; ?>
+
+        <p><a class="button ghost" href="index.php">بازگشت</a></p>
       </section>
     </main>
   </body>

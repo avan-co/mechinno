@@ -19,6 +19,20 @@ final class Schema
         self::dropUnusedTables($pdo);
         self::seedDesks($pdo);
         self::seedDeskAssignments($pdo);
+        self::reconcileDeskAssignments($pdo);
+    }
+
+    /**
+     * Align desk_assignments with current code: fill missing end dates and remove duplicates.
+     */
+    public static function reconcileDeskAssignments(PDO $pdo): void
+    {
+        if (!self::tableExists($pdo, 'desk_assignments')) {
+            return;
+        }
+
+        self::backfillDeskAssignmentEnds($pdo);
+        self::normalizeDeskAssignments($pdo);
     }
 
     public static function reset(PDO $pdo): void
@@ -551,36 +565,108 @@ final class Schema
             return;
         }
         $today = JalaliDate::todayParts();
-        $fallbackFrom = sprintf('%04d/01/01', $today['year']);
+        $fiscalYear = (string) $today['year'];
+        $yearStart = $fiscalYear . '/01/01';
+        $yearEnd = $fiscalYear . '/12/29';
         $desks = $pdo->query(
-            'SELECT d.id, d.number, d.team_id, d.usage_type, d.notes, t.contract_end
+            'SELECT d.id, d.number, d.team_id, d.usage_type, d.notes
              FROM desks d
-             INNER JOIN teams t ON t.id = d.team_id
              WHERE d.team_id IS NOT NULL'
         )->fetchAll();
+        $contractStatement = $pdo->prepare(
+            'SELECT contract_start, contract_end
+             FROM team_contracts
+             WHERE team_id = :team_id AND fiscal_year = :fiscal_year
+             LIMIT 1'
+        );
         foreach ($desks as $desk) {
             $deskId = (int) $desk['id'];
+            $teamId = (int) $desk['team_id'];
             $exists = $pdo->prepare(
-                'SELECT id FROM desk_assignments WHERE desk_id = :desk_id AND assigned_until IS NULL LIMIT 1'
+                'SELECT id FROM desk_assignments
+                 WHERE desk_id = :desk_id
+                   AND assigned_from <= :year_end
+                   AND (assigned_until IS NULL OR assigned_until = \'\' OR assigned_until >= :year_start)
+                 LIMIT 1'
             );
-            $exists->execute(['desk_id' => $deskId]);
+            $exists->execute([
+                'desk_id' => $deskId,
+                'year_start' => $yearStart,
+                'year_end' => $yearEnd,
+            ]);
             if ($exists->fetchColumn() !== false) {
                 continue;
             }
+
+            $assignedFrom = $yearStart;
+            $assignedUntil = $yearEnd;
+            $contractStatement->execute([
+                'team_id' => $teamId,
+                'fiscal_year' => $fiscalYear,
+            ]);
+            $contract = $contractStatement->fetch();
+            if ($contract !== false) {
+                $contractStart = JalaliDate::tryNormalize((string) ($contract['contract_start'] ?? ''));
+                $contractEnd = JalaliDate::tryNormalize((string) ($contract['contract_end'] ?? ''));
+                if ($contractStart !== '') {
+                    $assignedFrom = $contractStart;
+                }
+                if ($contractEnd !== '') {
+                    $assignedUntil = $contractEnd;
+                }
+            }
+
             $pdo->prepare(
                 'INSERT INTO desk_assignments (desk_id, desk_number, team_id, usage_type, assigned_from, assigned_until, notes)
                  VALUES (:desk_id, :desk_number, :team_id, :usage_type, :assigned_from, :assigned_until, :notes)'
             )->execute([
                 'desk_id' => $deskId,
                 'desk_number' => (int) $desk['number'],
-                'team_id' => (int) $desk['team_id'],
+                'team_id' => $teamId,
                 'usage_type' => (string) ($desk['usage_type'] ?? 'formal'),
-                'assigned_from' => $fallbackFrom,
-                'assigned_until' => null,
+                'assigned_from' => $assignedFrom,
+                'assigned_until' => $assignedUntil,
                 'notes' => $desk['notes'] ?? null,
             ]);
         }
-        self::normalizeDeskAssignments($pdo);
+    }
+
+    private static function backfillDeskAssignmentEnds(PDO $pdo): void
+    {
+        $rows = $pdo->query(
+            "SELECT da.id, da.team_id, da.assigned_from
+             FROM desk_assignments da
+             WHERE da.assigned_until IS NULL OR da.assigned_until = ''"
+        )->fetchAll();
+        if ($rows === []) {
+            return;
+        }
+
+        $contractStatement = $pdo->prepare(
+            'SELECT contract_end FROM team_contracts
+             WHERE team_id = :team_id AND fiscal_year = :fiscal_year
+             LIMIT 1'
+        );
+        $update = $pdo->prepare('UPDATE desk_assignments SET assigned_until = :until WHERE id = :id');
+        foreach ($rows as $row) {
+            $fiscalYear = JalaliDate::fiscalYearFromDate((string) ($row['assigned_from'] ?? ''));
+            if ($fiscalYear === '') {
+                continue;
+            }
+            $contractStatement->execute([
+                'team_id' => (int) ($row['team_id'] ?? 0),
+                'fiscal_year' => $fiscalYear,
+            ]);
+            $contractEnd = $contractStatement->fetchColumn();
+            $until = JalaliDate::tryNormalize((string) ($contractEnd !== false ? $contractEnd : ''));
+            if ($until === '') {
+                $until = JalaliDate::monthEnd($fiscalYear, 12);
+            }
+            $update->execute([
+                'until' => $until,
+                'id' => (int) ($row['id'] ?? 0),
+            ]);
+        }
     }
 
     private static function normalizeDeskAssignments(PDO $pdo): void
@@ -588,21 +674,80 @@ final class Schema
         if (!self::tableExists($pdo, 'desk_assignments')) {
             return;
         }
-        $duplicates = $pdo->query(
-            'SELECT desk_id, MAX(id) AS keep_id
+
+        $rows = $pdo->query(
+            'SELECT id, desk_id, assigned_from, assigned_until
              FROM desk_assignments
-             GROUP BY desk_id
-             HAVING COUNT(*) > 1'
+             ORDER BY desk_id, assigned_from, id'
         )->fetchAll();
-        foreach ($duplicates as $row) {
-            $statement = $pdo->prepare(
-                'DELETE FROM desk_assignments WHERE desk_id = :desk_id AND id <> :keep_id'
-            );
-            $statement->execute([
-                'desk_id' => (int) $row['desk_id'],
-                'keep_id' => (int) $row['keep_id'],
-            ]);
+        $groups = [];
+        foreach ($rows as $row) {
+            $deskId = (int) ($row['desk_id'] ?? 0);
+            $fiscalYear = JalaliDate::fiscalYearFromDate((string) ($row['assigned_from'] ?? ''));
+            if ($deskId <= 0 || $fiscalYear === '') {
+                continue;
+            }
+            $groups[$deskId . ':' . $fiscalYear][] = $row;
         }
+
+        $delete = $pdo->prepare('DELETE FROM desk_assignments WHERE id = :id');
+        foreach ($groups as $group) {
+            if (count($group) <= 1) {
+                continue;
+            }
+            $keep = self::preferDeskAssignmentRow($group);
+            $keepId = (int) ($keep['id'] ?? 0);
+            foreach ($group as $row) {
+                $rowId = (int) ($row['id'] ?? 0);
+                if ($rowId > 0 && $rowId !== $keepId) {
+                    $delete->execute(['id' => $rowId]);
+                }
+            }
+        }
+    }
+
+    /**
+     * @param list<array<string, mixed>> $rows
+     * @return array<string, mixed>
+     */
+    private static function preferDeskAssignmentRow(array $rows): array
+    {
+        $best = $rows[0];
+        foreach (array_slice($rows, 1) as $row) {
+            $best = self::preferDeskAssignmentPair($best, $row);
+        }
+
+        return $best;
+    }
+
+    /**
+     * @param array<string, mixed> $left
+     * @param array<string, mixed> $right
+     * @return array<string, mixed>
+     */
+    private static function preferDeskAssignmentPair(array $left, array $right): array
+    {
+        $leftOpen = self::isOpenEndedDeskAssignment($left);
+        $rightOpen = self::isOpenEndedDeskAssignment($right);
+        if ($leftOpen !== $rightOpen) {
+            return $leftOpen ? $right : $left;
+        }
+
+        $leftFrom = JalaliDate::tryNormalize((string) ($left['assigned_from'] ?? ''));
+        $rightFrom = JalaliDate::tryNormalize((string) ($right['assigned_from'] ?? ''));
+        if ($leftFrom !== $rightFrom) {
+            return JalaliDate::compare($rightFrom, $leftFrom) > 0 ? $right : $left;
+        }
+
+        return (int) ($right['id'] ?? 0) > (int) ($left['id'] ?? 0) ? $right : $left;
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     */
+    private static function isOpenEndedDeskAssignment(array $row): bool
+    {
+        return JalaliDate::tryNormalize((string) ($row['assigned_until'] ?? '')) === '';
     }
 
     private static function ensureSmsTables(PDO $pdo): void
