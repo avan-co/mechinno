@@ -384,6 +384,9 @@ $rendered = $smsService->renderChargeTemplate(
 $assert(str_contains($rendered, $teamName), 'sms: charge template renders team name');
 $assert(str_contains($rendered, '1,200,000'), 'sms: charge template renders debt total');
 $assert(MelliPayamak::deliveryLabel(4) === 'رسیده به گوشی', 'sms: delivery label mapping');
+$adminAllowed = Access::allowedResources();
+$assert(in_array('sms-send', $adminAllowed, true), 'access: admin can send sms announcements');
+$assert(in_array('sms-send-charge-reminders', $adminAllowed, true), 'access: admin can send charge reminders');
 
 $smsCenter = new CenterSettings($pdo);
 $smsCenter->updateSms([

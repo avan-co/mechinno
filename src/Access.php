@@ -68,6 +68,8 @@ final class Access
         'sms-sync-history',
         'sms-check-deliveries',
         'sms-test',
+        'sms-send',
+        'sms-send-charge-reminders',
     ];
 
     public static function role(): string
