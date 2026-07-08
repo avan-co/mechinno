@@ -313,7 +313,7 @@ $assetVer = (string) max(
                 <div class="panel-head"><h2>تاریخچه پیامک‌ها</h2></div>
                 <div class="table-wrap table-scroll">
                   <table id="smsHistoryTable" class="data-table data-table--wide">
-                    <thead><tr><th>زمان</th><th>نوع</th><th>گیرنده</th><th>موبایل</th><th>نهاد</th><th>وضعیت</th><th>دلیوری</th><th>تایید API</th><th>هزینه</th><th>متن</th></tr></thead>
+                    <thead><tr><th>زمان</th><th>نوع</th><th>گیرنده</th><th>موبایل</th><th>نهاد</th><th>وضعیت</th><th>دلیوری</th><th>پذیرش API</th><th>هزینه</th><th>متن</th></tr></thead>
                     <tbody></tbody>
                   </table>
                 </div>

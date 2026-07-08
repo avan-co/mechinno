@@ -101,19 +101,28 @@ final class MelliPayamak
         }
 
         $response = $this->request('GetDeliveries2', array_merge($this->authFields($username, $password, true), [
-            'recID' => $recId,
+            'recId' => $recId,
         ]));
         if (!$response['ok']) {
             return ['ok' => false, 'status' => null, 'status_code' => null, 'error' => $response['error'], 'raw' => $response['raw']];
         }
 
         $code = self::extractDeliveryCode($response['data']);
+        if ($code !== null && $code < 0) {
+            return [
+                'ok' => false,
+                'status' => null,
+                'status_code' => $code,
+                'error' => self::deliveryLabel($code),
+                'raw' => $response['raw'],
+            ];
+        }
 
         return [
-            'ok' => true,
+            'ok' => $code !== null,
             'status' => self::deliveryLabel($code),
             'status_code' => $code,
-            'error' => null,
+            'error' => $code === null ? 'وضعیت دلیوری نامشخص است.' : null,
             'raw' => $response['raw'],
         ];
     }
@@ -390,14 +399,24 @@ final class MelliPayamak
     public static function deliveryLabel(?int $code): string
     {
         return match ($code) {
-            1 => 'رسیده به مخابرات',
-            2 => 'نرسیده به مخابرات',
+            0 => 'ارسال شده به مخابرات',
+            1 => 'رسیده به گوشی',
+            2 => 'نرسیده به گوشی',
             3 => 'خطای مخابراتی',
             4 => 'رسیده به گوشی',
-            5 => 'نرسیده به گوشی',
+            5 => 'خطای نامشخص',
             6 => 'ناموفق',
             7 => 'در حال ارسال',
-            8 => 'نامشخص',
+            8 => 'رسیده به مخابرات',
+            16 => 'نرسیده به مخابرات',
+            35 => 'لیست سیاه',
+            100 => 'نامشخص',
+            200 => 'ارسال شده',
+            300 => 'فیلتر شده',
+            400 => 'در صف ارسال',
+            500 => 'عدم پذیرش',
+            -1 => 'خطای API',
+            -2 => 'شناسه پیامک نامعتبر یا هنوز ثبت نشده',
             default => $code === null ? 'نامشخص' : 'کد ' . $code,
         };
     }
