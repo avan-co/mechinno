@@ -321,7 +321,7 @@ $assetVer = (string) max(
             </section>
 
             <section id="sms-settings" class="section">
-              <p class="hint">اتصال REST ملی‌پیامک. حساب API و خط ارسال جداگانه ذخیره می‌شوند. پس از ذخیره حساب، خطوط به‌صورت خودکار استعلام می‌شوند.</p>
+              <p class="hint">اتصال REST ملی‌پیامک. حساب API و شماره خط ارسال را جداگانه وارد و ذخیره کنید.</p>
               <article class="panel">
                 <div class="panel-head"><h2>حساب API ملی‌پیامک</h2></div>
                 <form id="smsCredentialsForm" class="payment-settings-form">در حال بارگذاری…</form>
@@ -347,7 +347,6 @@ $assetVer = (string) max(
                   <?php if (Access::canWrite()): ?>
                   <button class="button ghost" type="button" id="smsTestConnection">تست اتصال API</button>
                   <button class="button ghost" type="button" id="smsRefreshLiveStats">بروزرسانی موجودی و تعرفه از API</button>
-                  <button class="button ghost" type="button" id="smsManualQueryLines">استعلام مجدد خطوط</button>
                   <button class="button ghost" type="button" id="smsSyncHistory">همگام‌سازی تاریخچه از API</button>
                   <?php endif; ?>
                 </div>

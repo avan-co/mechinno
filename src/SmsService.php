@@ -14,15 +14,15 @@ final class SmsService
     public function settings(bool $withLive = false): array
     {
         $settings = (new CenterSettings($this->pdo))->smsSettings();
-        $configured = $this->isApiConfigured($settings);
+        $configured = $this->isApiConfigured();
 
         $result = array_merge($settings, [
             'sms_configured' => $configured,
-            'sms_credit' => null,
+            'sms_credit' => isset($settings['sms_panel_credit']) ? (int) $settings['sms_panel_credit'] : null,
             'sms_base_price' => (int) ($settings['sms_unit_cost'] ?? 0),
         ]);
 
-        if ($withLive && $this->hasApiCredentials($settings)) {
+        if ($withLive && $this->hasApiCredentials()) {
             try {
                 $live = $this->refreshPricing();
                 $result['sms_credit'] = $live['credit'];
@@ -30,6 +30,7 @@ final class SmsService
                     $result['sms_base_price'] = (int) $live['base_price'];
                     $result['sms_unit_cost'] = (int) $live['base_price'];
                 }
+                $result['sms_live_synced_at'] = JalaliDate::todayParts()['formatted'];
             } catch (InvalidArgumentException $exception) {
                 $result['live_error'] = $exception->getMessage();
             }
@@ -43,11 +44,12 @@ final class SmsService
      */
     public function isApiConfigured(?array $settings = null): bool
     {
-        $settings ??= (new CenterSettings($this->pdo))->smsSettingsForSend();
+        $send = (new CenterSettings($this->pdo))->smsSettingsForSend();
+        $fromNumber = $settings !== null
+            ? trim((string) ($settings['sms_from_number'] ?? $send['sms_from_number'] ?? ''))
+            : trim((string) ($send['sms_from_number'] ?? ''));
 
-        return trim((string) ($settings['sms_username'] ?? '')) !== ''
-            && trim((string) ($settings['sms_password'] ?? '')) !== ''
-            && trim((string) ($settings['sms_from_number'] ?? '')) !== '';
+        return $this->hasApiCredentials($send) && $fromNumber !== '';
     }
 
     /**
@@ -55,10 +57,18 @@ final class SmsService
      */
     public function hasApiCredentials(?array $settings = null): bool
     {
-        $settings ??= (new CenterSettings($this->pdo))->smsSettingsForSend();
+        if ($settings === null) {
+            $settings = (new CenterSettings($this->pdo))->smsSettingsForSend();
+        }
 
-        return trim((string) ($settings['sms_username'] ?? '')) !== ''
-            && trim((string) ($settings['sms_password'] ?? '')) !== '';
+        if (trim((string) ($settings['sms_username'] ?? '')) === '') {
+            return false;
+        }
+        if (trim((string) ($settings['sms_password'] ?? '')) !== '') {
+            return true;
+        }
+
+        return (bool) ($settings['sms_password_set'] ?? false);
     }
 
     /**
@@ -98,9 +108,7 @@ final class SmsService
             'error' => $linesResult['error'],
         ];
 
-        $ok = ($checks['credit']['ok'] ?? false)
-            || ($checks['base_price']['ok'] ?? false)
-            || ($checks['lines']['ok'] ?? false);
+        $ok = ($checks['credit']['ok'] ?? false) || ($checks['base_price']['ok'] ?? false);
 
         return [
             'ok' => $ok,
@@ -138,27 +146,9 @@ final class SmsService
 
         $settings = $center->updateSms($updatePayload);
 
-        $username = trim((string) ($settings['sms_username'] ?? ''));
-        $passwordPayload = trim((string) ($payload['sms_password'] ?? ''));
         $send = $center->smsSettingsForSend();
-        $shouldQueryLines = in_array($section, ['credentials', ''], true)
-            && $username !== '' && $send['sms_password'] !== ''
-            && (
-                ($current['sms_lines_queried_at'] ?? '') === ''
-                || $passwordPayload !== ''
-                || ($payload['query_lines'] ?? false)
-            );
 
-        if ($shouldQueryLines) {
-            try {
-                $this->refreshLineNumbers($send, true);
-            } catch (Throwable) {
-                // خطوط بعداً با دکمه استعلام دستی قابل دریافت است.
-            }
-            $settings = $center->smsSettings();
-        }
-
-        if ($this->isApiConfigured($send)) {
+        if ($this->hasApiCredentials($send)) {
             try {
                 $this->refreshPricing($send);
             } catch (Throwable) {
@@ -166,7 +156,7 @@ final class SmsService
             }
         }
 
-        return $this->settings(withLive: $this->isApiConfigured($send));
+        return $this->settings(withLive: $this->hasApiCredentials($send));
     }
 
     /**
@@ -191,9 +181,9 @@ final class SmsService
 
         $credit = null;
         $basePrice = (int) ($settings['sms_unit_cost'] ?? 0);
-        if ($withLive && $this->isApiConfigured($settings)) {
+        if ($withLive && $this->hasApiCredentials()) {
             try {
-                $live = $this->refreshPricing($settings);
+                $live = $this->refreshPricing();
                 $credit = $live['credit'];
                 if ($live['base_price'] !== null) {
                     $basePrice = (int) $live['base_price'];
@@ -254,6 +244,9 @@ final class SmsService
             (new CenterSettings($this->pdo))->updateSmsUnitCost($price);
         } elseif (trim((string) ($priceResult['error'] ?? '')) !== '') {
             $errors[] = (string) $priceResult['error'];
+        }
+        if ($credit !== null || $price !== null) {
+            (new CenterSettings($this->pdo))->storeSmsLiveStats($credit, $price);
         }
         if ($credit === null && $price === null && $errors !== []) {
             throw new InvalidArgumentException($errors[0]);
