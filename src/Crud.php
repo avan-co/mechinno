@@ -129,8 +129,8 @@ final class Crud
                         'required' => true,
                     ],
                     'notes' => ['label' => 'توضیحات', 'type' => 'textarea'],
-                    'assignment_from' => ['label' => 'تاریخ شروع تخصیص', 'type' => 'date', 'placeholder' => '1404/01/01'],
-                    'assignment_until' => ['label' => 'تاریخ پایان تخصیص', 'type' => 'date', 'placeholder' => '1404/12/29'],
+                    'assignment_from' => ['label' => 'تاریخ شروع تخصیص (سال جاری)', 'type' => 'date', 'placeholder' => '1405/01/01'],
+                    'assignment_until' => ['label' => 'تاریخ تحویل / پایان', 'type' => 'date', 'placeholder' => '1405/12/29'],
                 ],
             ],
             'desk_assignments' => [
@@ -148,8 +148,8 @@ final class Crud
                         'options' => ['formal' => 'رسمی', 'informal' => 'غیررسمی', 'mixed' => 'ترکیبی'],
                         'required' => true,
                     ],
-                    'assigned_from' => ['label' => 'تاریخ شروع', 'type' => 'date', 'required' => true, 'placeholder' => '1404/01/01'],
-                    'assigned_until' => ['label' => 'تاریخ پایان', 'type' => 'date', 'placeholder' => '1404/12/29'],
+                    'assigned_from' => ['label' => 'تاریخ شروع تخصیص', 'type' => 'date', 'required' => true, 'placeholder' => '1404/01/01'],
+                    'assigned_until' => ['label' => 'تاریخ تحویل / پایان', 'type' => 'date', 'placeholder' => '1404/12/29'],
                     'notes' => ['label' => 'توضیحات', 'type' => 'textarea'],
                 ],
             ],
@@ -467,6 +467,9 @@ final class Crud
                 array_merge($this->find($resource, $id), $deskAssignmentDates)
             );
         }
+        if ($resource === 'desk_assignments') {
+            (new DeskAssignments($this->pdo))->applyAssignmentRecord($this->find($resource, $id));
+        }
         if ($resource === 'teams') {
             $record = $this->find($resource, $id);
             EntityAccounts::provisionForTeam(
@@ -533,6 +536,9 @@ final class Crud
                 array_merge($this->find($resource, $id), $deskAssignmentDates)
             );
         }
+        if ($resource === 'desk_assignments') {
+            (new DeskAssignments($this->pdo))->applyAssignmentRecord($this->find($resource, $id), $id);
+        }
         if ($resource === 'teams' && isset($data['leader'])) {
             EntityAccounts::syncLeaderName($this->pdo, $id, (string) $data['leader']);
         }
@@ -575,6 +581,13 @@ final class Crud
             if (CenterLedger::isSystemSource($row['source_file'] ?? null)) {
                 throw new InvalidArgumentException('این ردیف سیستمی منسوخ است و قابل حذف نیست.');
             }
+        }
+        if ($resource === 'desk_assignments') {
+            $record = $this->find($resource, $id);
+            $this->pdo->prepare(sprintf('DELETE FROM %s WHERE id = :id', $definition['table']))->execute(['id' => $id]);
+            (new DeskAssignments($this->pdo))->handleAssignmentDeleted($record);
+
+            return;
         }
         $this->pdo->prepare(sprintf('DELETE FROM %s WHERE id = :id', $definition['table']))->execute(['id' => $id]);
     }
@@ -650,7 +663,8 @@ final class Crud
         $statement = $this->pdo->prepare(
             'SELECT assigned_from, assigned_until FROM desk_assignments
              WHERE desk_id = :desk_id
-             ORDER BY CASE WHEN assigned_until IS NULL THEN 0 ELSE 1 END, id DESC
+               AND (assigned_until IS NULL OR assigned_until = \'\')
+             ORDER BY assigned_from DESC, id DESC
              LIMIT 1'
         );
         $statement->execute(['desk_id' => (int) ($row['id'] ?? 0)]);
@@ -1007,6 +1021,13 @@ final class Crud
         }
         if ($resource === 'desk_assignments') {
             $deskId = (int) ($data['desk_id'] ?? 0);
+            if ($deskId <= 0 && $recordId > 0) {
+                $existing = $this->find($resource, $recordId);
+                $deskId = (int) ($existing['desk_id'] ?? 0);
+                if ($deskId > 0 && !isset($data['desk_id'])) {
+                    $data['desk_id'] = $deskId;
+                }
+            }
             if ($deskId <= 0) {
                 throw new InvalidArgumentException('میز را انتخاب کنید.');
             }

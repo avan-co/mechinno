@@ -205,7 +205,7 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
             <section id="desks" class="section">
               <article class="panel">
                 <div class="panel-head"><h2>میزهای اختصاص‌یافته</h2></div>
-                <p class="hint">میزهای فعال نهاد — برای سابقه کامل به پروفایل نهاد مراجعه کنید.</p>
+                <p class="hint">میزهای فعال و سوابق سال‌های قبل — تاریخ شروع و تحویل هر سال در کارت‌ها نمایش داده می‌شود.</p>
                 <div id="teamDeskAssignments" class="desk-assignment-list">در حال بارگذاری…</div>
               </article>
             </section>

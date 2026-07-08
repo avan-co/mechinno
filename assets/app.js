@@ -184,7 +184,7 @@ const resourceColumns = {
   team_contracts: ["team_name", "fiscal_year", "contract_start", "contract_end", "notes"],
   members: ["member_code", "full_name", "team_label", "entity_type", "desk_numbers", "wants_access", "access_code", "phone", "national_id", "approval_status", "rejection_reason"],
   desks: ["number", "team_name", "usage_type", "assignment_from", "assignment_until", "notes"],
-  "desk-assignments": ["desk_number", "team_name", "usage_type", "assigned_from", "assigned_until", "notes"],
+  "desk-assignments": ["fiscal_year", "desk_number", "team_name", "usage_type", "assigned_from", "assigned_until", "notes"],
   lockers: ["locker_number", "status", "team_label", "delivered_at", "key_number", "spare_key"],
   "locker-requests": ["submitted_at", "status", "locker_number", "notes", "reviewed_at", "rejection_reason"],
   "member-requests": ["submitted_at", "request_type", "current_full_name", "full_name", "phone", "national_id", "status", "reviewed_at", "rejection_reason"],
@@ -213,10 +213,14 @@ const teamPanelHiddenColumns = {
 
 const createDefaults = {
   teams: () => ({ is_active: "1" }),
-  desk_assignments: () => ({
-    assigned_from: window.MECHINNO?.today || "",
-    usage_type: "formal",
-  }),
+  desk_assignments: () => {
+    const year = window.MECHINNO?.fiscalYear || "1405";
+    return {
+      assigned_from: `${year}/01/01`,
+      assigned_until: `${year}/12/29`,
+      usage_type: "formal",
+    };
+  },
   charges: () => ({ fiscal_year: window.MECHINNO?.fiscalYear || "" }),
   rate_settings: () => ({ fiscal_year: window.MECHINNO?.fiscalYear || "" }),
   transactions: () => ({
@@ -804,23 +808,45 @@ const loadLedger = async () => {
 const loadTeamDeskAssignments = async () => {
   const host = document.getElementById("teamDeskAssignments");
   if (!host) return;
-  const { rows } = await fetchResource("api.php?resource=desk-assignments", { page: 1, perPage: 100 });
+  const { rows } = await fetchResource("api.php?resource=desk-assignments", { page: 1, perPage: 200 });
   if (!rows.length) {
     host.classList.add("is-ready");
-    host.innerHTML = `<div class="empty">هنوز میزی به نهاد شما تخصیص داده نشده است.</div>`;
+    host.innerHTML = `<div class="empty">هنوز سابقه تخصیص میزی برای نهاد شما ثبت نشده است.</div>`;
     return;
   }
-  host.classList.add("is-ready");
-  host.innerHTML = `<div class="desk-assignment-grid">${rows.map((row) => `
-    <article class="desk-assignment-card">
-      <strong>میز ${escapeHtml(row.desk_number)}</strong>
+
+  const activeRows = rows.filter((row) => !row.assigned_until);
+  const historyRows = rows.filter((row) => row.assigned_until);
+  const renderCard = (row, isActive = false) => `
+    <article class="desk-assignment-card${isActive ? " is-active" : ""}">
+      <div class="desk-assignment-card-head">
+        <strong>میز ${escapeHtml(row.desk_number)}</strong>
+        <span class="badge">${escapeHtml(row.fiscal_year || "—")}</span>
+      </div>
       <span class="badge">${escapeHtml(usageLabels[row.usage_type] || row.usage_type || "—")}</span>
       <div class="desk-assignment-dates">
-        <span>از ${escapeHtml(formatPlain(row.assigned_from))}</span>
-        <span>${row.assigned_until ? `تا ${escapeHtml(formatPlain(row.assigned_until))}` : "فعال"}</span>
+        <span>شروع: ${escapeHtml(formatPlain(row.assigned_from))}</span>
+        <span>${row.assigned_until ? `تحویل: ${escapeHtml(formatPlain(row.assigned_until))}` : "فعال — بدون تاریخ تحویل"}</span>
       </div>
       ${row.notes ? `<p class="hint">${escapeHtml(row.notes)}</p>` : ""}
-    </article>`).join("")}</div>`;
+    </article>`;
+
+  const activeHtml = activeRows.length
+    ? `<div class="desk-assignment-section">
+        <h3>میزهای فعال سال جاری</h3>
+        <div class="desk-assignment-grid">${activeRows.map((row) => renderCard(row, true)).join("")}</div>
+      </div>`
+    : `<div class="desk-assignment-section"><h3>میزهای فعال</h3><div class="empty">در حال حاضر میز فعالی ثبت نشده است.</div></div>`;
+
+  const historyHtml = historyRows.length
+    ? `<div class="desk-assignment-section">
+        <h3>سوابق سال‌های قبل</h3>
+        <div class="desk-assignment-grid">${historyRows.map((row) => renderCard(row)).join("")}</div>
+      </div>`
+    : "";
+
+  host.classList.add("is-ready");
+  host.innerHTML = `${activeHtml}${historyHtml}`;
 };
 
 const loadTeamProfile = async () => {
@@ -841,11 +867,11 @@ const loadTeamProfile = async () => {
       <div><span>مانده بدهی قرارداد</span><strong class="debt-value">${escapeHtml(formatMoney(data.summary?.debt_total || 0))}</strong></div>
       <div><span>پرداخت‌شده</span><strong>${escapeHtml(formatMoney(data.summary?.paid_total || 0))}</strong></div>
       ${Number(data.summary?.overpayment_total || 0) > 0
-        ? `<div><span>پیش‌پرداخت (مازاد FIFO)</span><strong>${escapeHtml(formatMoney(data.summary.overpayment_total))}</strong></div>` : ""}
+        ? `<div><span>پیش‌پرداخت (مازاد واریز)</span><strong>${escapeHtml(formatMoney(data.summary.overpayment_total))}</strong></div>` : ""}
     </div>
     ${team.warning ? `<p class="hint warning-text">اخطار: ${escapeHtml(team.warning)}</p>` : ""}
     ${team.notes ? `<p class="hint">${escapeHtml(team.notes)}</p>` : ""}
-    ${profileSection("میزها و تاریخ تخصیص", data.desk_assignments || [], ["desk_number", "usage_type", "assigned_from", "assigned_until", "notes"])}
+    ${profileSection("میزها و تاریخ تخصیص", data.desk_assignments || [], ["fiscal_year", "desk_number", "usage_type", "assigned_from", "assigned_until", "notes"])}
     ${profileSection("اعضا", data.members || [], ["full_name", "wants_access", "phone", "national_id", "approval_status"])}
     ${profileSection("کمدهای تخصیص‌یافته", data.lockers || [], ["locker_number", "status", "delivered_at"])}
     ${profileSection("درخواست‌های کمد", data.locker_requests || [], ["submitted_at", "status", "locker_number", "notes"])}`;
@@ -1309,7 +1335,7 @@ const openTeamProfile = async (teamId) => {
     </div>`}
     ${profileSection("قراردادهای سالانه", data.contracts || [], ["fiscal_year", "contract_start", "contract_end", "notes"])}
     ${profileSection("میزهای نهاد", data.desks, ["number", "usage_type", "notes"])}
-    ${profileSection("تاریخچه تخصیص میز", data.desk_assignments || [], ["desk_number", "usage_type", "assigned_from", "assigned_until", "notes"])}
+    ${profileSection("تاریخچه تخصیص میز", data.desk_assignments || [], ["fiscal_year", "desk_number", "usage_type", "assigned_from", "assigned_until", "notes"])}
     ${profileSection("اعضا", data.members, ["member_code", "full_name", "access_code", "phone", "national_id"])}
     ${profileSection("کمدها", data.lockers, ["locker_number", "status", "delivered_at", "key_number"], (column, row) => {
       if (column === "locker_number") return lockerLink(row.locker_number);
@@ -1622,8 +1648,8 @@ const openRecordModal = ({ resource, definition, record = null, onSaved, title =
     Object.assign(formRecord, createDefaults[crudResourceKey(resource)]());
   }
   modal.querySelector("#crudModalTitle").textContent = title || `${isEdit ? "ویرایش" : "افزودن"} ${definition.title}`;
-  const fifoHint = resource === "transactions" && panelMode === "team"
-    ? `<p class="hint fifo-hint">ماه اعلام‌شده برای پیگیری شماست. پس از تأیید مدیر، مبلغ به‌ترتیب <strong>FIFO</strong> به قدیمی‌ترین ماه‌های دارای مانده تخصیص می‌یابد (ممکن است با ماه اعلام‌شده متفاوت باشد).</p>`
+  const paymentHint = resource === "transactions" && panelMode === "team"
+    ? `<p class="hint payment-allocation-hint">ماه اعلام‌شده برای پیگیری شماست. پس از تأیید مدیر، مبلغ <strong>ابتدا به قدیمی‌ترین ماه‌های بدهکار</strong> شما تخصیص می‌یابد و ممکن است با ماهی که اعلام کردید متفاوت باشد.</p>`
     : "";
   form.innerHTML = `
     <div class="crud-grid">
@@ -1638,7 +1664,7 @@ const openRecordModal = ({ resource, definition, record = null, onSaved, title =
         </label>`;
       }).join("")}
     </div>
-    ${fifoHint}
+    ${paymentHint}
     <div class="modal-actions">
       <button class="button" type="submit">${isEdit ? "ذخیره" : "ثبت"}</button>
       <button class="button ghost" type="button" data-close-modal>انصراف</button>

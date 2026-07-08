@@ -547,11 +547,12 @@ final class Repository
                 . ($teamId !== null ? " WHERE lr.team_id = {$teamId}" : '')
                 . ' ORDER BY lr.submitted_at DESC, lr.id DESC',
             'desk-assignments' => "SELECT da.id, da.desk_id, da.desk_number, da.team_id, da.usage_type,
-                        da.assigned_from, da.assigned_until, da.notes, t.name AS team_name
+                        da.assigned_from, da.assigned_until, da.notes,
+                        SUBSTR(da.assigned_from, 1, 4) AS fiscal_year, t.name AS team_name
                  FROM desk_assignments da
                  LEFT JOIN teams t ON t.id = da.team_id"
                 . ($teamId !== null
-                    ? " WHERE da.team_id = {$teamId} AND (da.assigned_until IS NULL OR da.assigned_until = '')"
+                    ? " WHERE da.team_id = {$teamId}"
                     : $this->deskAssignmentYearClause($filters))
                 . ' ORDER BY da.assigned_from DESC, da.desk_number',
             'payment-history' => "SELECT t.id, t.tx_date, t.amount, t.description, t.payment_reference, t.payment_status, t.notes,
@@ -1123,21 +1124,14 @@ final class Repository
                  FROM lockers l WHERE l.team_id = :id ORDER BY l.locker_number',
                 ['id' => $teamId]
             ),
-            'desk_assignments' => Access::canWrite()
-                ? $this->preparedRows(
-                    'SELECT da.id, da.desk_id, da.desk_number, da.usage_type, da.assigned_from, da.assigned_until, da.notes
-                     FROM desk_assignments da
-                     WHERE da.team_id = :id
-                     ORDER BY da.assigned_from DESC, da.desk_number',
-                    ['id' => $teamId]
-                )
-                : $this->preparedRows(
-                    'SELECT da.id, da.desk_id, da.desk_number, da.usage_type, da.assigned_from, da.assigned_until, da.notes
-                     FROM desk_assignments da
-                     WHERE da.team_id = :id AND (da.assigned_until IS NULL OR da.assigned_until = \'\')
-                     ORDER BY da.desk_number, da.assigned_from DESC',
-                    ['id' => $teamId]
-                ),
+            'desk_assignments' => $this->preparedRows(
+                'SELECT da.id, da.desk_id, da.desk_number, da.usage_type, da.assigned_from, da.assigned_until, da.notes,
+                        SUBSTR(da.assigned_from, 1, 4) AS fiscal_year
+                 FROM desk_assignments da
+                 WHERE da.team_id = :id
+                 ORDER BY da.assigned_from DESC, da.desk_number',
+                ['id' => $teamId]
+            ),
             'locker_requests' => $this->preparedRows(
                 'SELECT lr.id, lr.notes, lr.status, lr.submitted_at, lr.reviewed_at, lr.rejection_reason, l.locker_number
                  FROM locker_requests lr
@@ -1383,7 +1377,7 @@ final class Repository
             $items[] = [
                 'type' => 'debt',
                 'label' => 'مانده پرداخت ' . ($month['month_name'] ?? ''),
-                'detail' => number_format((int) $month['debt_total']) . ' ریال — بر اساس تخصیص FIFO',
+                'detail' => number_format((int) $month['debt_total']) . ' ریال — پس از کسر واریزهای تأییدشده',
                 'section' => 'charges',
             ];
         }

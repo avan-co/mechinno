@@ -71,7 +71,7 @@ $statusClass = static function (?string $status): string {
           <div class="kpi"><span class="kpi-label">واریز تأییدشده نهادها (ریال)</span><span class="kpi-value"><?= ReportData::money($cards['paid_total']) ?></span></div>
           <div class="kpi kpi--danger"><span class="kpi-label">طلب کل از نهادها (ریال)</span><span class="kpi-value"><?= ReportData::money($cards['debt_total']) ?></span></div>
           <div class="kpi"><span class="kpi-label">شارژ ماه جاری</span><span class="kpi-value"><?= ReportData::money($month['charge_total'] ?? 0) ?></span></div>
-          <div class="kpi"><span class="kpi-label">تخصیص FIFO ماه جاری</span><span class="kpi-value"><?= ReportData::money($month['paid_total'] ?? 0) ?></span></div>
+          <div class="kpi"><span class="kpi-label">واریز تخصیص‌یافته ماه جاری</span><span class="kpi-value"><?= ReportData::money($month['paid_total'] ?? 0) ?></span></div>
           <div class="kpi kpi--danger"><span class="kpi-label">مانده طلب ماه جاری</span><span class="kpi-value"><?= ReportData::money($month['debt_total'] ?? 0) ?></span></div>
         </div>
       </section>
@@ -165,11 +165,11 @@ $statusClass = static function (?string $status): string {
 
       <section class="report-section report-section--break">
         <h2 class="section-title">شارژ ماهانه — خلاصه نهادها</h2>
-        <p class="section-note">تخصیص FIFO سال جاری، مانده بدهی سال و مانده کل قرارداد هر نهاد</p>
+        <p class="section-note">واریز تخصیص‌یافته سال جاری، مانده بدهی سال و مانده کل قرارداد هر نهاد</p>
         <div class="table-scroll">
         <table class="data-table data-table--wide">
           <thead>
-            <tr><th>نهاد</th><th>تخصیص FIFO سال جاری (ریال)</th><th>مانده بدهی سال (ریال)</th><th>مانده کل قرارداد (ریال)</th></tr>
+            <tr><th>نهاد</th><th>واریز تخصیص‌یافته سال جاری (ریال)</th><th>مانده بدهی سال (ریال)</th><th>مانده کل قرارداد (ریال)</th></tr>
           </thead>
           <tbody>
             <?php if ($data['debts'] === []): ?>
