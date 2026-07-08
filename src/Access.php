@@ -67,6 +67,7 @@ final class Access
         'sms-query-lines',
         'sms-sync-history',
         'sms-check-deliveries',
+        'sms-test',
     ];
 
     public static function role(): string

@@ -345,6 +345,7 @@ $assetVer = (string) max(
                 <div id="smsSettingsStats">در حال بارگذاری…</div>
                 <div class="modal-actions">
                   <?php if (Access::canWrite()): ?>
+                  <button class="button ghost" type="button" id="smsTestConnection">تست اتصال API</button>
                   <button class="button ghost" type="button" id="smsRefreshLiveStats">بروزرسانی موجودی و تعرفه از API</button>
                   <button class="button ghost" type="button" id="smsManualQueryLines">استعلام مجدد خطوط</button>
                   <button class="button ghost" type="button" id="smsSyncHistory">همگام‌سازی تاریخچه از API</button>

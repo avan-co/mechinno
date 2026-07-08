@@ -135,9 +135,35 @@ const bindSmsSettingsActions = () => {
     }
   });
 
+  document.getElementById("smsTestConnection")?.addEventListener("click", async () => {
+    try {
+      const result = await postJson("api.php?resource=sms-test", {});
+      const checks = result.result?.checks || {};
+      const lines = (checks.lines?.value || []).length;
+      const credit = checks.credit?.value;
+      const price = checks.base_price?.value;
+      const details = [
+        credit != null ? `موجودی: ${Number(credit).toLocaleString("fa-IR")}` : null,
+        price != null ? `تعرفه: ${formatMoney(price)}` : null,
+        lines ? `خطوط: ${lines}` : null,
+      ].filter(Boolean).join(" — ");
+      showToast(details ? `${result.result?.message || "اتصال OK"} (${details})` : (result.result?.message || "تست انجام شد."), result.result?.ok ? "success" : "error");
+      if (result.result?.ok) await loadSmsSettingsPage(true);
+    } catch (error) {
+      showToast(error.message, "error");
+    }
+  });
+
   document.getElementById("smsRefreshLiveStats")?.addEventListener("click", async () => {
     try {
-      await loadSmsSettingsPage(true);
+      const data = await fetchJson("api.php?resource=sms-settings&live=1");
+      smsSettingsState = data;
+      renderSmsLineForm(data);
+      renderSmsSettingsStats(data);
+      if (data.live_error) {
+        showToast(data.live_error, "error");
+        return;
+      }
       showToast("آمار زنده از API بروز شد.", "success");
     } catch (error) {
       showToast(error.message, "error");
