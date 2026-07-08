@@ -1161,6 +1161,7 @@ const openDeskHistoryAssignModal = async (prefill = {}) => {
     contractStartMonth: 1,
     contractEndMonth: 12,
     lockDesk: Boolean(prefill.lockDesk),
+    monthsTouched: Boolean(prefill.id),
     desks: [{
       desk_id: prefill.desk_id ? String(prefill.desk_id) : "",
       usage_type: prefill.usage_type || "formal",
@@ -1262,7 +1263,7 @@ const openDeskHistoryAssignModal = async (prefill = {}) => {
         const match = [...contractSelect.options].find((opt) => opt.dataset.year === state.fiscalYear);
         if (match) contractSelect.value = match.value;
       }
-      applyContractDefaults();
+      syncContractSelection();
     };
 
     const syncDeskInputsFromState = () => {
@@ -1283,7 +1284,21 @@ const openDeskHistoryAssignModal = async (prefill = {}) => {
       });
     };
 
-    const applyContractDefaults = () => {
+    const readDeskMonthsFromForm = (index) => {
+      const fromEl = form.querySelector(`[data-field="assigned_from_month"][data-index="${index}"]`);
+      const untilEl = form.querySelector(`[data-field="assigned_until_month"][data-index="${index}"]`);
+      const assigned_from_month = validAssignmentMonth(fromEl?.value, "");
+      const assigned_until_month = validAssignmentMonth(untilEl?.value, "");
+      if (!assigned_from_month || !assigned_until_month) {
+        throw new Error("ماه شروع و پایان تخصیص را انتخاب کنید.");
+      }
+      if (Number(assigned_until_month) < Number(assigned_from_month)) {
+        throw new Error("ماه پایان نمی‌تواند قبل از ماه شروع باشد.");
+      }
+      return { assigned_from_month, assigned_until_month };
+    };
+
+    const syncContractSelection = () => {
       const option = contractSelect.selectedOptions[0];
       if (!option || !option.dataset.year) return;
       state.contractId = contractSelect.value;
@@ -1292,16 +1307,19 @@ const openDeskHistoryAssignModal = async (prefill = {}) => {
       state.contractEndMonth = Number(monthIndexFromDate(option.dataset.end)) || 12;
       form.querySelector("#deskAssignContractHint").textContent =
         `قرارداد: ${formatMonthRange(option.dataset.start, option.dataset.end)} — می‌توانید بازه تخصیص را تغییر دهید.`;
-      if (!prefill.id) {
-        state.desks = state.desks.map((desk) => ({
-          ...desk,
-          assigned_from_month: validAssignmentMonth(desk.assigned_from_month, String(state.contractStartMonth)),
-          assigned_until_month: validAssignmentMonth(desk.assigned_until_month, String(state.contractEndMonth)),
-        }));
-        form.querySelector(".desk-assign-rows").innerHTML = renderDeskRows();
-        bindDeskRowInputs();
-        syncDeskInputsFromState();
-      }
+    };
+
+    const applyContractDefaults = () => {
+      syncContractSelection();
+      if (prefill.id || state.monthsTouched) return;
+      state.desks = state.desks.map((desk) => ({
+        ...desk,
+        assigned_from_month: String(state.contractStartMonth),
+        assigned_until_month: String(state.contractEndMonth),
+      }));
+      form.querySelector(".desk-assign-rows").innerHTML = renderDeskRows();
+      bindDeskRowInputs();
+      syncDeskInputsFromState();
     };
 
     const bindDeskRowInputs = () => {
@@ -1311,6 +1329,9 @@ const openDeskHistoryAssignModal = async (prefill = {}) => {
           const field = input.dataset.field;
           if (!state.desks[index] || !field) return;
           state.desks[index][field] = input.value;
+          if (field === "assigned_from_month" || field === "assigned_until_month") {
+            state.monthsTouched = true;
+          }
         });
       });
       form.querySelectorAll("[data-remove-desk]").forEach((button) => {
@@ -1352,6 +1373,7 @@ const openDeskHistoryAssignModal = async (prefill = {}) => {
       try {
         syncDeskStateFromForm();
         const desk = state.desks[0];
+        const months = readDeskMonthsFromForm(0);
         const payload = prefill.id
           ? {
             id: prefill.id,
@@ -1359,8 +1381,8 @@ const openDeskHistoryAssignModal = async (prefill = {}) => {
             desk_id: desk.desk_id,
             usage_type: desk.usage_type,
             fiscal_year: state.fiscalYear,
-            assigned_from_month: desk.assigned_from_month,
-            assigned_until_month: desk.assigned_until_month,
+            assigned_from_month: months.assigned_from_month,
+            assigned_until_month: months.assigned_until_month,
             notes: desk.notes || "",
           }
           : null;
@@ -1369,15 +1391,17 @@ const openDeskHistoryAssignModal = async (prefill = {}) => {
           const result = await postJson("api.php?resource=desk-assignments&action=update", payload);
           debugLog("desk-assign:update:ok", result?.record);
         } else {
-          for (const deskRow of state.desks) {
+          for (let index = 0; index < state.desks.length; index += 1) {
+            const deskRow = state.desks[index];
             if (!deskRow.desk_id) continue;
+            const rowMonths = readDeskMonthsFromForm(index);
             const createPayload = {
               team_id: state.teamId,
               desk_id: deskRow.desk_id,
               usage_type: deskRow.usage_type,
               fiscal_year: state.fiscalYear,
-              assigned_from_month: deskRow.assigned_from_month,
-              assigned_until_month: deskRow.assigned_until_month,
+              assigned_from_month: rowMonths.assigned_from_month,
+              assigned_until_month: rowMonths.assigned_until_month,
               notes: deskRow.notes || "",
             };
             debugLog("desk-assign:create", createPayload);
