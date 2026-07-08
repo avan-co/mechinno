@@ -406,8 +406,8 @@
   };
 
   const monthFromRecord = (row, monthKey, dateKey) => {
-    const month = S().monthIndexFromDate?.(row[monthKey] || row[dateKey]);
-    return month ? String(month) : "";
+    const month = Number(S().validAssignmentMonth?.(row[monthKey] || row[dateKey]));
+    return month >= 1 && month <= 12 ? String(month) : "";
   };
 
   const openDeskAssignModal = async (deskNumber) => {

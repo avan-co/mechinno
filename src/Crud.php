@@ -1099,26 +1099,25 @@ final class Crud
 
             $fromMonth = (int) ($data['assigned_from_month'] ?? 0);
             $untilMonth = (int) ($data['assigned_until_month'] ?? 0);
-            if ($fromMonth < 1 && $existing !== null) {
+            $hasFromMonth = array_key_exists('assigned_from_month', $data);
+            $hasUntilMonth = array_key_exists('assigned_until_month', $data);
+            if ($fromMonth < 1 && $existing !== null && !$hasFromMonth) {
                 $fromMonth = JalaliDate::monthIndexFromDate((string) ($existing['assigned_from'] ?? ''));
             }
-            if ($untilMonth < 1 && $existing !== null && array_key_exists('assigned_until_month', $data)) {
-                $untilMonth = 0;
-            } elseif ($untilMonth < 1 && $existing !== null) {
+            if ($untilMonth < 1 && $existing !== null && !$hasUntilMonth) {
                 $untilMonth = JalaliDate::monthIndexFromDate((string) ($existing['assigned_until'] ?? ''));
             }
             if ($fromMonth < 1 || $fromMonth > 12) {
                 throw new InvalidArgumentException('ماه شروع تخصیص معتبر نیست.');
             }
-            $data['assigned_from'] = JalaliDate::monthStart($fiscalYear, $fromMonth);
-            if ($untilMonth >= 1 && $untilMonth <= 12) {
-                if ($untilMonth < $fromMonth) {
-                    throw new InvalidArgumentException('ماه پایان نمی‌تواند قبل از ماه شروع باشد.');
-                }
-                $data['assigned_until'] = JalaliDate::monthEnd($fiscalYear, $untilMonth);
-            } else {
-                $data['assigned_until'] = null;
+            if ($untilMonth < 1 || $untilMonth > 12) {
+                throw new InvalidArgumentException('ماه پایان تخصیص معتبر نیست.');
             }
+            if ($untilMonth < $fromMonth) {
+                throw new InvalidArgumentException('ماه پایان نمی‌تواند قبل از ماه شروع باشد.');
+            }
+            $data['assigned_from'] = JalaliDate::monthStart($fiscalYear, $fromMonth);
+            $data['assigned_until'] = JalaliDate::monthEnd($fiscalYear, $untilMonth);
             unset($data['assigned_from_month'], $data['assigned_until_month'], $data['fiscal_year']);
 
             $teamId = (int) ($data['team_id'] ?? 0);

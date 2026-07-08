@@ -209,6 +209,11 @@ const monthIndexFromDate = (value) => {
   return parts.length >= 2 ? String(Number(parts[1]) || "") : "";
 };
 
+const validAssignmentMonth = (value, fallback = "") => {
+  const month = Number(monthIndexFromDate(value));
+  return month >= 1 && month <= 12 ? String(month) : fallback;
+};
+
 const fiscalYearFromDate = (value) => {
   const text = String(value || "").trim();
   return text.length >= 4 ? text.slice(0, 4) : "";
@@ -1159,8 +1164,8 @@ const openDeskHistoryAssignModal = async (prefill = {}) => {
     desks: [{
       desk_id: prefill.desk_id ? String(prefill.desk_id) : "",
       usage_type: prefill.usage_type || "formal",
-      assigned_from_month: prefill.assigned_from_month || "1",
-      assigned_until_month: prefill.assigned_until_month || "12",
+      assigned_from_month: validAssignmentMonth(prefill.assigned_from_month, "1"),
+      assigned_until_month: validAssignmentMonth(prefill.assigned_until_month, "12"),
       notes: prefill.notes || "",
     }],
   };
@@ -1260,6 +1265,24 @@ const openDeskHistoryAssignModal = async (prefill = {}) => {
       applyContractDefaults();
     };
 
+    const syncDeskInputsFromState = () => {
+      state.desks.forEach((desk, index) => {
+        form.querySelectorAll(`[data-index="${index}"]`).forEach((input) => {
+          const field = input.dataset.field;
+          if (field && desk[field] !== undefined) input.value = desk[field];
+        });
+      });
+    };
+
+    const syncDeskStateFromForm = () => {
+      form.querySelectorAll("[data-field][data-index]").forEach((input) => {
+        const index = Number(input.dataset.index);
+        const field = input.dataset.field;
+        if (!state.desks[index] || !field) return;
+        state.desks[index][field] = input.value;
+      });
+    };
+
     const applyContractDefaults = () => {
       const option = contractSelect.selectedOptions[0];
       if (!option || !option.dataset.year) return;
@@ -1272,11 +1295,12 @@ const openDeskHistoryAssignModal = async (prefill = {}) => {
       if (!prefill.id) {
         state.desks = state.desks.map((desk) => ({
           ...desk,
-          assigned_from_month: desk.assigned_from_month || String(state.contractStartMonth),
-          assigned_until_month: desk.assigned_until_month || String(state.contractEndMonth),
+          assigned_from_month: validAssignmentMonth(desk.assigned_from_month, String(state.contractStartMonth)),
+          assigned_until_month: validAssignmentMonth(desk.assigned_until_month, String(state.contractEndMonth)),
         }));
         form.querySelector(".desk-assign-rows").innerHTML = renderDeskRows();
         bindDeskRowInputs();
+        syncDeskInputsFromState();
       }
     };
 
@@ -1294,6 +1318,7 @@ const openDeskHistoryAssignModal = async (prefill = {}) => {
           state.desks.splice(Number(button.dataset.removeDesk), 1);
           form.querySelector(".desk-assign-rows").innerHTML = renderDeskRows();
           bindDeskRowInputs();
+          syncDeskInputsFromState();
         });
       });
     };
@@ -1310,6 +1335,7 @@ const openDeskHistoryAssignModal = async (prefill = {}) => {
       });
       form.querySelector(".desk-assign-rows").innerHTML = renderDeskRows();
       bindDeskRowInputs();
+      syncDeskInputsFromState();
     });
     form.querySelector("[data-close-modal]").addEventListener("click", closeModal);
     bindDeskRowInputs();
@@ -1324,6 +1350,7 @@ const openDeskHistoryAssignModal = async (prefill = {}) => {
       const submitButton = form.querySelector('button[type="submit"]');
       submitButton.disabled = true;
       try {
+        syncDeskStateFromForm();
         const desk = state.desks[0];
         const payload = prefill.id
           ? {
@@ -3099,8 +3126,8 @@ class DataTable extends HTMLElement {
           desk_id: record.desk_id,
           usage_type: record.usage_type,
           fiscal_year: record.fiscal_year,
-          assigned_from_month: record.assigned_from_month || monthIndexFromDate(record.assigned_from),
-          assigned_until_month: record.assigned_until_month || monthIndexFromDate(record.assigned_until),
+          assigned_from_month: validAssignmentMonth(record.assigned_from_month || monthIndexFromDate(record.assigned_from), "1"),
+          assigned_until_month: validAssignmentMonth(record.assigned_until_month || monthIndexFromDate(record.assigned_until), "12"),
           notes: record.notes,
         }).catch((error) => showToast(error.message, "error"));
         return;
@@ -3256,6 +3283,7 @@ window.MechinnoShared = {
   monthNames,
   formatMonthRange,
   monthIndexFromDate,
+  validAssignmentMonth,
   fiscalYearFromDate,
   openDeskHistoryAssignModal,
   debugLog,

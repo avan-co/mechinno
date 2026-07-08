@@ -228,6 +228,7 @@ $updatedAssign = $crud->update('desk_assignments', $assignmentId, [
     'notes' => '',
 ]);
 $assert(($updatedAssign['assigned_from'] ?? '') === $fromMonth5, 'desk-assignments: update persists from month');
+$assert(($updatedAssign['assigned_until'] ?? '') === $untilMonth7, 'desk-assignments: update persists until month');
 $deskListAfterAssign = null;
 foreach ($repo->paginatedResource('desks', 1, 100)['rows'] as $deskRow) {
     if ((int) ($deskRow['number'] ?? 0) === 1) {

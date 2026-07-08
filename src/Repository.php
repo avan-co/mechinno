@@ -1152,8 +1152,10 @@ final class Repository
                         (string) ($row['assigned_from'] ?? ''),
                         $until
                     );
-                    $row['assigned_from_month'] = (string) JalaliDate::monthIndexFromDate((string) ($row['assigned_from'] ?? ''));
-                    $row['assigned_until_month'] = (string) JalaliDate::monthIndexFromDate($until);
+                    $fromMonth = JalaliDate::monthIndexFromDate((string) ($row['assigned_from'] ?? ''));
+                    $untilMonth = JalaliDate::monthIndexFromDate($until);
+                    $row['assigned_from_month'] = $fromMonth > 0 ? (string) $fromMonth : '';
+                    $row['assigned_until_month'] = $untilMonth > 0 ? (string) $untilMonth : '';
 
                     return $row;
                 },
