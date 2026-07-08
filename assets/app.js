@@ -585,7 +585,10 @@ const activateSection = (id, options = {}) => {
   }
   if (id === "desks" && panelMode === "team") loadTeamDeskAssignments().catch((error) => showToast(error.message, "error"));
   if (id === "profile" && panelMode === "team") loadTeamProfile().catch((error) => showToast(error.message, "error"));
-  if (id === "charges") loadChargesCollage().catch((error) => showToast(error.message, "error"));
+  if (id === "charges") {
+    loadChargesCollage().catch((error) => showToast(error.message, "error"));
+    if (panelMode === "team") loadTeamChargeRates().catch(() => {});
+  }
   if (id === "transactions" && canWrite) loadPaymentSettings().catch(() => {});
   if (id === "transactions" && panelMode === "admin") loadLedger().catch((error) => showToast(error.message, "error"));
   if (id === "payments" && panelMode === "team") {
@@ -1578,6 +1581,27 @@ const bindCollageCells = (container) => {
       }
     });
   });
+};
+
+const loadTeamChargeRates = async () => {
+  const host = document.getElementById("teamChargeRates");
+  if (!host || panelMode !== "team" || !window.MECHINNO?.teamId) return;
+  try {
+    const profile = await fetchJson(`api.php?resource=team-profile&id=${encodeURIComponent(window.MECHINNO.teamId)}`);
+    const rates = profile.current_year_rates || {};
+    const year = rates.fiscal_year || window.MECHINNO?.fiscalYear || "—";
+    host.innerHTML = `
+      <div class="team-charge-rates-grid">
+        <div class="month-stat"><span>سال</span><strong>${escapeHtml(year)}</strong></div>
+        <div class="month-stat"><span>شارژ هر میز (ماهانه)</span><strong>${escapeHtml(formatMoney(rates.charge_rate || 0))}</strong></div>
+        ${profile.has_informal_desk
+          ? `<div class="month-stat"><span>اجاره غیررسمی هر میز</span><strong>${escapeHtml(formatMoney(rates.informal_rent_rate || 0))}</strong></div>`
+          : ""}
+      </div>
+      <p class="hint">نرخ‌های سال‌های گذشته در کلاژ همان سال نمایش داده می‌شود. بدهی هر ماه فقط برای ماه‌هایی که میز فعال دارید محاسبه می‌شود.</p>`;
+  } catch (error) {
+    host.innerHTML = `<div class="empty">نرخ سال جاری در دسترس نیست.</div>`;
+  }
 };
 
 const loadChargesCollage = async () => {

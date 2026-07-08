@@ -1157,6 +1157,13 @@ textarea[dir="ltr"] {
 }
 .desk-assign-contract-hint { color: var(--muted); font-size: 13px; }
 
+.team-charge-rates-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
 .filter-bar {
   margin-bottom: 10px;
   padding: 10px 14px;

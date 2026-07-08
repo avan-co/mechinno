@@ -73,7 +73,6 @@
         return `<button type="button" class="year-tab${active ? " active" : ""}${String(year) === String(currentFiscalYear()) ? " is-current" : ""}"
           data-year-tab="${S().escapeHtml(year)}" role="tab" aria-selected="${active ? "true" : "false"}">${S().escapeHtml(year)}</button>`;
       }).join("")}
-      ${writable ? "" : ""}
     </div>`;
 
   const renderContractPanel = (profile, year, summary, teamId, writable) => {
@@ -205,12 +204,18 @@
   };
 
   const reloadWorkspace = async (container, teamId, selectedYear) => {
-    const profile = await S().fetchJson(`api.php?resource=team-profile&id=${encodeURIComponent(teamId)}`);
-    const writable = S().canWrite && S().panelMode === "admin";
-    container.innerHTML = renderWorkspace(profile, teamId, selectedYear, { writable });
-    bindWorkspace(container, teamId, reloadWorkspace);
-    container.classList.add("is-ready");
-    return profile;
+    try {
+      const profile = await S().fetchJson(`api.php?resource=team-profile&id=${encodeURIComponent(teamId)}`);
+      const writable = S().canWrite && S().panelMode === "admin";
+      container.innerHTML = renderWorkspace(profile, teamId, selectedYear, { writable });
+      bindWorkspace(container, teamId, reloadWorkspace);
+      container.classList.add("is-ready");
+      return profile;
+    } catch (error) {
+      container.innerHTML = `<div class="empty">خطا در بارگذاری پروفایل: ${S().escapeHtml(error.message)}</div>`;
+      container.classList.add("is-ready");
+      throw error;
+    }
   };
 
   const saveContractForm = async (form) => {
@@ -415,9 +420,12 @@
     }
     const meta = await S().loadCrudMeta();
     const year = currentFiscalYear();
-    let fromMonth = S().monthIndexFromDate?.(desk.assignment_from_month || desk.assignment_from) || "1";
-    let untilMonth = S().monthIndexFromDate?.(desk.assignment_until_month || desk.assignment_until) || "12";
-    if (desk.team_id) {
+    let fromMonth = S().monthIndexFromDate?.(desk.assignment_from_month || desk.assignment_from) || "";
+    let untilMonth = S().monthIndexFromDate?.(desk.assignment_until_month || desk.assignment_until) || "";
+    const hasSavedAssignment = Boolean(
+      fromMonth || untilMonth || desk.assignment_from || desk.assignment_until
+    );
+    if (desk.team_id && !hasSavedAssignment) {
       try {
         const { rows: contracts } = await S().fetchResource("api.php?resource=team_contracts", {
           page: 1,
@@ -426,13 +434,15 @@
         });
         const contract = contracts.find((row) => String(row.fiscal_year) === String(year));
         if (contract) {
-          fromMonth = String(S().monthIndexFromDate?.(contract.contract_start) || fromMonth);
-          untilMonth = String(S().monthIndexFromDate?.(contract.contract_end) || untilMonth);
+          fromMonth = String(S().monthIndexFromDate?.(contract.contract_start) || fromMonth || "1");
+          untilMonth = String(S().monthIndexFromDate?.(contract.contract_end) || untilMonth || "12");
         }
       } catch (error) {
         // ignore contract lookup errors
       }
     }
+    if (!fromMonth) fromMonth = "1";
+    if (!untilMonth) untilMonth = "12";
     S().openRecordModal({
       resource: "desks",
       definition: meta.resources.desks,
@@ -480,7 +490,13 @@
     if (!host) return;
     host.innerHTML = `<div class="team-year-workspace-host">در حال بارگذاری…</div>`;
     const inner = host.querySelector(".team-year-workspace-host");
-    await reloadWorkspace(inner, teamId, currentFiscalYear());
+    try {
+      await reloadWorkspace(inner, teamId, currentFiscalYear());
+    } catch (error) {
+      inner.innerHTML = `<div class="empty">خطا در بارگذاری پروفایل: ${S().escapeHtml(error.message)}</div>`;
+      inner.classList.add("is-ready");
+      throw error;
+    }
   };
 
   window.TeamYearWorkspace = {

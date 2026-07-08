@@ -219,6 +219,10 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
             </section>
 
             <section id="charges" class="section">
+              <article class="panel" id="teamChargeRatesPanel">
+                <div class="panel-head"><h2>نرخ شارژ سال جاری</h2></div>
+                <div id="teamChargeRates" class="team-charge-rates">در حال بارگذاری…</div>
+              </article>
               <article class="panel">
                 <div class="panel-head">
                   <h2>کلاژ شارژ و پرداخت</h2>
