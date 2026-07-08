@@ -10,6 +10,7 @@ const smsState = {
   filters: { q: "", teamId: "", entityType: "", isLeader: "", wantsAccess: "" },
   chargeTemplate: "",
   configured: false,
+  chargeDiagnostics: null,
 };
 
 let announcementEditor = null;
@@ -244,7 +245,13 @@ const renderChargeReminderPanel = () => {
       </span>
       <span class="charge-debtor-amount">${formatMoney(item.debt_total)}</span>
     </label>`;
-  }).join("") || `<div class="empty">نهاد بدهکاری برای یادآور یافت نشد. اگر در کلاژ شارژ وضعیت «بدهکار» می‌بینید، سال مالی همان کلاژ را بررسی کنید و مطمئن شوید برای نهاد قرارداد و شارژ ماهانه ثبت شده است.</div>`;
+  }).join("") || (() => {
+    const diag = smsState.chargeDiagnostics;
+    const diagLine = diag
+      ? `<p class="hint">تشخیص: سال‌های مالی ${escapeHtml((diag.fiscal_years || []).join("، ") || "—")} — بدهکار از کلاژ: ${Number(diag.matrix_teams || 0)}، از ردیف شارژ: ${Number(diag.charge_row_teams || 0)}، از محاسبه قرارداد: ${Number(diag.breakdown_teams || 0)}</p>`
+      : "";
+    return `<div class="empty">نهاد بدهکاری برای یادآور یافت نشد. اگر در کلاژ شارژ وضعیت «بدهکار» می‌بینید، صفحه را رفرش کنید و مطمئن شوید فایل‌های PHP سرور به‌روز شده‌اند.${diagLine}</div>`;
+  })();
 
   host.querySelectorAll("[data-charge-team]").forEach((input) => {
     input.addEventListener("change", () => {
@@ -276,6 +283,7 @@ const loadChargeReminderPanel = async () => {
   try {
     const data = await fetchJson("api.php?resource=sms-charge-preview");
     smsState.chargeItems = data.items || [];
+    smsState.chargeDiagnostics = data.diagnostics || null;
     smsState.selectedChargeTeams = new Set(
       smsState.chargeItems
         .filter((item) => item.can_send !== false && !item.leader_missing)
