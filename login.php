@@ -39,7 +39,10 @@ if ($configured) {
     }
 }
 
-$assetVer = (string) filemtime(__DIR__ . '/assets/styles.css');
+$assetVer = (string) max(
+    filemtime(__DIR__ . '/assets/styles.css'),
+    (int) Brand::version()
+);
 ?>
 <!doctype html>
 <html lang="fa" dir="rtl" data-theme="light">
@@ -47,6 +50,7 @@ $assetVer = (string) filemtime(__DIR__ . '/assets/styles.css');
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>ورود — Mechinno</title>
+    <?= Brand::headTags() ?>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
@@ -69,7 +73,7 @@ $assetVer = (string) filemtime(__DIR__ . '/assets/styles.css');
     <main class="login-screen">
       <section class="login-card">
         <div class="login-brand">
-          <span class="brand-mark">M</span>
+          <?= Brand::mark() ?>
           <div>
             <strong>Mechinno</strong>
             <small>مرکز نوآوری مکانیک</small>

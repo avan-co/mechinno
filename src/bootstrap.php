@@ -26,6 +26,7 @@ require_once __DIR__ . '/Repository.php';
 require_once __DIR__ . '/ExcelExporter.php';
 require_once __DIR__ . '/ReportData.php';
 require_once __DIR__ . '/CenterLedger.php';
+require_once __DIR__ . '/Brand.php';
 
 function app_base_path(): string
 {

@@ -17,7 +17,8 @@ $assetVer = (string) max(
     filemtime(__DIR__ . '/assets/team-year-workspace.js'),
     filemtime(__DIR__ . '/assets/sms-panel.js'),
     filemtime(__DIR__ . '/assets/sms-editor.js'),
-    filemtime(__DIR__ . '/assets/sms-settings.js')
+    filemtime(__DIR__ . '/assets/sms-settings.js'),
+    (int) Brand::version()
 );
 ?>
 <!doctype html>
@@ -26,6 +27,7 @@ $assetVer = (string) max(
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>پنل مرکز نوآوری — Mechinno</title>
+    <?= Brand::headTags() ?>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
@@ -44,7 +46,7 @@ $assetVer = (string) max(
       <main class="setup-screen">
         <section class="setup-card">
           <div class="brand">
-            <span class="brand-mark">M</span>
+            <?= Brand::mark() ?>
             <div>
               <strong>Mechinno</strong>
               <small>مرکز نوآوری مکانیک</small>
@@ -94,7 +96,7 @@ $assetVer = (string) max(
       <div class="shell">
         <aside class="sidebar" id="sidebar">
           <div class="brand">
-            <span class="brand-mark">M</span>
+            <?= Brand::mark() ?>
             <div>
               <strong>Mechinno</strong>
               <small>مرکز نوآوری مکانیک</small>

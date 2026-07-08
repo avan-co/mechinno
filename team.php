@@ -24,7 +24,8 @@ $today = JalaliDate::todayParts();
 $assetVer = (string) max(
     filemtime(__DIR__ . '/assets/styles.css'),
     filemtime(__DIR__ . '/assets/app.js'),
-    filemtime(__DIR__ . '/assets/team-year-workspace.js')
+    filemtime(__DIR__ . '/assets/team-year-workspace.js'),
+    (int) Brand::version()
 );
 $authContext = Access::clientContext();
 $entityLabels = ['team' => 'تیم', 'company' => 'شرکت', 'student' => 'دانشجو'];
@@ -36,6 +37,7 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>پنل <?= e($team['name'] ?? 'نهاد') ?> — Mechinno</title>
+    <?= Brand::headTags() ?>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
@@ -96,7 +98,7 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
       <div class="shell">
         <aside class="sidebar" id="sidebar">
           <div class="brand">
-            <span class="brand-mark">M</span>
+            <?= Brand::mark() ?>
             <div>
               <strong><?= e($team['name']) ?></strong>
               <small><?= e($entityLabel) ?> — <?= e($team['entity_code'] ?? '') ?></small>

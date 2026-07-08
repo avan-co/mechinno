@@ -1,0 +1,23 @@
+{
+  "name": "Mechinno — مرکز نوآوری مکانیک",
+  "short_name": "ICAUT",
+  "description": "پنل مدیریت مرکز نوآوری دانشکده مهندسی مکانیک",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#101012",
+  "theme_color": "#101012",
+  "lang": "fa",
+  "dir": "rtl",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

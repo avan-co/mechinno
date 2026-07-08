@@ -90,14 +90,26 @@ body {
 
 .report-brand-mark {
   display: grid;
-  width: 52px;
-  height: 52px;
+  width: 56px;
+  height: 56px;
   place-items: center;
-  border-radius: 14px;
-  background: linear-gradient(135deg, #2563eb, #7c3aed);
-  color: #fff;
-  font-size: 22px;
-  font-weight: 800;
+  flex-shrink: 0;
+  border-radius: 12px;
+  border: 1px solid #c5d7ef;
+  background: #fff;
+  padding: 4px;
+  overflow: hidden;
+}
+
+.report-brand-mark .brand-logo {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.report-brand-mark .brand-logo--dark {
+  display: none;
 }
 
 .report-brand-text strong {

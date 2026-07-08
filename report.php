@@ -12,7 +12,10 @@ $meta = $data['meta'];
 $summary = $data['summary'];
 $cards = $summary['cards'];
 $month = $summary['current_month'];
-$assetVer = (string) filemtime(__DIR__ . '/assets/report.css');
+$assetVer = (string) max(
+    filemtime(__DIR__ . '/assets/report.css'),
+    (int) Brand::version()
+);
 
 $statusClass = static function (?string $status): string {
     return match ($status) {
@@ -29,6 +32,7 @@ $statusClass = static function (?string $status): string {
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title><?= e($meta['title']) ?></title>
+    <?= Brand::headTags() ?>
     <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;600;700;800&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="assets/report.css?v=<?= e($assetVer) ?>" />
   </head>
@@ -49,7 +53,7 @@ $statusClass = static function (?string $status): string {
             <strong><?= e($meta['title']) ?></strong>
             <small><?= e($meta['subtitle']) ?></small>
           </div>
-          <span class="report-brand-mark">M</span>
+          <?= Brand::mark('report-brand-mark') ?>
         </div>
         <div class="report-meta">
           <span>تاریخ گزارش: <?= e($meta['generated_at']) ?></span>

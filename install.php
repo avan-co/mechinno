@@ -55,13 +55,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $configured) {
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>نصب پنل Mechinno</title>
+    <?= Brand::headTags() ?>
     <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="assets/styles.css?v=<?= e((string) filemtime(__DIR__ . '/assets/styles.css')) ?>" />
   </head>
   <body>
     <main class="setup-screen">
       <section class="setup-card wide">
-        <span class="brand-mark">M</span>
+        <?= Brand::mark() ?>
         <h1>راه‌اندازی پنل</h1>
         <p>دو حالت دارید: <strong>همگام‌سازی دیتابیس</strong> (بدون حذف داده) یا <strong>بازنشانی کامل</strong> (پنل خالی با ۲۴ میز).</p>
 
