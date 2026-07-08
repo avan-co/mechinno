@@ -13,6 +13,7 @@ final class Schema
         }
         self::ensureColumns($pdo);
         self::ensureWorkflowTables($pdo);
+        self::ensureMemberRequestsTable($pdo);
         self::ensureTeamContractsTable($pdo);
         self::dropLegacyColumns($pdo);
         self::dropUnusedTables($pdo);
@@ -259,6 +260,7 @@ final class Schema
                 'entity_type' => "VARCHAR(32) NOT NULL DEFAULT 'team'",
                 'contract_start' => 'VARCHAR(32) NULL',
                 'contract_end' => 'VARCHAR(32) NULL',
+                'is_active' => 'TINYINT NOT NULL DEFAULT 1',
             ],
             'members' => [
                 'member_code' => 'VARCHAR(32) NULL',
@@ -298,6 +300,7 @@ final class Schema
                 'announced_at' => 'VARCHAR(32) NULL',
                 'reviewed_at' => 'VARCHAR(32) NULL',
                 'payment_plan' => 'TEXT NULL',
+                'finance_subtype' => 'VARCHAR(64) NULL',
             ],
             'panel_users' => [
                 'password_plain' => 'VARCHAR(64) NULL',
@@ -328,6 +331,9 @@ final class Schema
         if (self::columnExists($pdo, 'members', 'approval_status')) {
             $pdo->exec("UPDATE members SET approval_status = 'approved' WHERE approval_status IS NULL OR approval_status = ''");
         }
+        if (self::columnExists($pdo, 'teams', 'is_active')) {
+            $pdo->exec('UPDATE teams SET is_active = 1 WHERE is_active IS NULL');
+        }
         if (self::columnExists($pdo, 'transactions', 'payment_status')) {
             $pdo->exec("UPDATE transactions SET payment_status = 'approved' WHERE payment_status IS NULL OR payment_status = ''");
             $pdo->exec("UPDATE transactions SET payment_status = 'pending', confirmed = 0 WHERE category = 'واریز تیم' AND confirmed = 0");
@@ -337,6 +343,7 @@ final class Schema
         self::seedCenterSettings($pdo);
         self::backfillTeamContracts($pdo);
         (new TeamContracts($pdo))->migrateFromLegacyTeamDates();
+        (new TeamContracts($pdo))->syncAllTeamActiveStatuses();
         CenterLedger::purgeAccrualMirrorEntries($pdo);
     }
 
@@ -422,6 +429,21 @@ final class Schema
                     assigned_from TEXT NOT NULL,
                     assigned_until TEXT,
                     notes TEXT
+                );
+                CREATE TABLE IF NOT EXISTS member_requests (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    team_id INTEGER NOT NULL,
+                    member_id INTEGER NOT NULL,
+                    request_type TEXT NOT NULL,
+                    full_name TEXT,
+                    phone TEXT,
+                    national_id TEXT,
+                    wants_access INTEGER,
+                    notes TEXT,
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    submitted_at TEXT,
+                    reviewed_at TEXT,
+                    rejection_reason TEXT
                 );"
             );
         } else {
@@ -454,7 +476,74 @@ final class Schema
                     INDEX idx_desk_assignments_team (team_id)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
             );
+            $pdo->exec(
+                "CREATE TABLE IF NOT EXISTS member_requests (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    team_id INT NOT NULL,
+                    member_id INT NOT NULL,
+                    request_type VARCHAR(16) NOT NULL,
+                    full_name VARCHAR(255) NULL,
+                    phone VARCHAR(64) NULL,
+                    national_id VARCHAR(32) NULL,
+                    wants_access TINYINT NULL,
+                    notes TEXT NULL,
+                    status VARCHAR(32) NOT NULL DEFAULT 'pending',
+                    submitted_at VARCHAR(32) NULL,
+                    reviewed_at VARCHAR(32) NULL,
+                    rejection_reason TEXT NULL,
+                    INDEX idx_member_requests_team (team_id),
+                    INDEX idx_member_requests_status (status)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+            );
         }
+    }
+
+    private static function ensureMemberRequestsTable(PDO $pdo): void
+    {
+        if (self::tableExists($pdo, 'member_requests')) {
+            return;
+        }
+        $isSqlite = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite';
+        if ($isSqlite) {
+            $pdo->exec(
+                "CREATE TABLE IF NOT EXISTS member_requests (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    team_id INTEGER NOT NULL,
+                    member_id INTEGER NOT NULL,
+                    request_type TEXT NOT NULL,
+                    full_name TEXT,
+                    phone TEXT,
+                    national_id TEXT,
+                    wants_access INTEGER,
+                    notes TEXT,
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    submitted_at TEXT,
+                    reviewed_at TEXT,
+                    rejection_reason TEXT
+                )"
+            );
+
+            return;
+        }
+        $pdo->exec(
+            "CREATE TABLE IF NOT EXISTS member_requests (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                team_id INT NOT NULL,
+                member_id INT NOT NULL,
+                request_type VARCHAR(16) NOT NULL,
+                full_name VARCHAR(255) NULL,
+                phone VARCHAR(64) NULL,
+                national_id VARCHAR(32) NULL,
+                wants_access TINYINT NULL,
+                notes TEXT NULL,
+                status VARCHAR(32) NOT NULL DEFAULT 'pending',
+                submitted_at VARCHAR(32) NULL,
+                reviewed_at VARCHAR(32) NULL,
+                rejection_reason TEXT NULL,
+                INDEX idx_member_requests_team (team_id),
+                INDEX idx_member_requests_status (status)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+        );
     }
 
     private static function seedDeskAssignments(PDO $pdo): void

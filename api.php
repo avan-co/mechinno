@@ -132,6 +132,8 @@ try {
             'transactions:reject', 'pending-payments:reject' => $workflow->rejectPayment($id, $reason),
             'pending-locker-requests:approve', 'locker-requests:approve' => $workflow->approveLockerRequest($id, $lockerNumber),
             'pending-locker-requests:reject', 'locker-requests:reject' => $workflow->rejectLockerRequest($id, $reason),
+            'pending-member-requests:approve', 'member-requests:approve' => $workflow->approveMemberRequest($id),
+            'pending-member-requests:reject', 'member-requests:reject' => $workflow->rejectMemberRequest($id, $reason),
             default => throw new InvalidArgumentException('عملیات تأیید/رد برای این بخش تعریف نشده است.'),
         };
 
@@ -140,12 +142,12 @@ try {
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($action, ['create', 'update', 'delete', 'status'], true)) {
         require_csrf_json();
-        if (in_array($resource, ['members', 'transactions', 'locker-requests'], true) && $action === 'create') {
+        if (in_array($resource, ['members', 'transactions', 'locker-requests', 'member-requests'], true) && $action === 'create') {
             Access::requireWriteOrTeamSubmitJson();
         } elseif (
             Access::isTeam()
             && in_array($action, ['update', 'delete'], true)
-            && in_array($resource, ['transactions', 'locker-requests', 'members'], true)
+            && in_array($resource, ['transactions', 'locker-requests', 'member-requests', 'members'], true)
         ) {
             Access::requireWriteOrTeamSubmitJson();
         } else {
@@ -159,7 +161,11 @@ try {
             $payload = $_POST;
         }
         $id = (int) ($payload['id'] ?? 0);
-        $crudResource = $resource === 'locker-requests' ? 'locker_requests' : $resource;
+        $crudResource = match ($resource) {
+            'locker-requests' => 'locker_requests',
+            'member-requests' => 'member_requests',
+            default => $resource,
+        };
 
         $result = match ($action) {
             'create' => $crud->create($crudResource, $payload),
@@ -176,8 +182,8 @@ try {
 
     $paginatedResources = [
         'teams', 'members', 'desks', 'lockers', 'charges', 'transactions', 'rate_settings', 'panel_users',
-        'development_plans', 'pending-members', 'pending-payments', 'pending-locker-requests',
-        'locker-requests', 'desk-assignments', 'payment-history', 'team_contracts',
+        'development_plans', 'pending-members', 'pending-member-requests', 'pending-payments', 'pending-locker-requests',
+        'locker-requests', 'member-requests', 'desk-assignments', 'payment-history', 'team_contracts',
     ];
     if (in_array($resource, $paginatedResources, true)) {
         $page = (int) ($_GET['page'] ?? 1);
@@ -197,6 +203,9 @@ try {
         }
         if ($resource === 'members' && isset($_GET['approval_status']) && $_GET['approval_status'] !== '') {
             $filters['approval_status'] = (string) $_GET['approval_status'];
+        }
+        if ($resource === 'desk-assignments' && isset($_GET['fiscal_year']) && $_GET['fiscal_year'] !== '') {
+            $filters['fiscal_year'] = (string) $_GET['fiscal_year'];
         }
         json_response($repository->paginatedResource($resource, $page, $perPage, $filters));
     }

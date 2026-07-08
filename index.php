@@ -215,7 +215,7 @@ $assetVer = (string) max(
             </section>
 
             <section id="teams" class="section">
-              <p class="hint">با ثبت هر نهاد، حساب ورود خودکار ساخته می‌شود. <strong>قرارداد هر سال</strong> را جداگانه در جدول «قراردادهای سالانه» ثبت کنید — بدون قرارداد سال جاری، تخصیص میز ممکن نیست.</p>
+              <p class="hint">با ثبت هر نهاد، حساب ورود خودکار ساخته می‌شود. <strong>وضعیت فعال/غیرفعال</strong> بر اساس قرارداد سال جاری به‌روز می‌شود. قرارداد هر سال را جداگانه ثبت کنید.</p>
               <data-table title="نهادها" endpoint="api.php?resource=teams"></data-table>
               <data-table title="قراردادهای سالانه نهادها" endpoint="api.php?resource=team_contracts"></data-table>
             </section>
@@ -224,6 +224,7 @@ $assetVer = (string) max(
               <p class="hint">اعضای تأییدشده در لیست اصلی نمایش داده می‌شوند. درخواست‌های نهادها در جدول «در انتظار تأیید» بررسی می‌شود. کد تردد پس از تأیید، به‌صورت حضوری و با تأخیر ثبت می‌شود.</p>
               <?php if (Access::isAdmin()): ?>
               <data-table title="اعضا — در انتظار تأیید نهاد" endpoint="api.php?resource=pending-members" data-workflow="members" data-workflow-type="member-approve" data-table-key="pending-members" data-readonly></data-table>
+              <data-table title="درخواست ویرایش/حذف عضو" endpoint="api.php?resource=pending-member-requests" data-workflow="members" data-workflow-type="member-request" data-table-key="pending-member-requests" data-readonly></data-table>
               <?php endif; ?>
               <div class="filter-tabs" id="memberApprovalTabs" role="tablist" aria-label="فیلتر وضعیت عضو">
                 <button type="button" class="filter-tab active" data-approval-filter="" role="tab" aria-selected="true">همه</button>
@@ -247,7 +248,14 @@ $assetVer = (string) max(
                 <div id="deskGrid" class="desk-map"></div>
               </article>
               <data-table title="جزئیات میزها" endpoint="api.php?resource=desks" data-no-add></data-table>
-              <data-table title="تاریخچه تخصیص میزها" endpoint="api.php?resource=desk-assignments" data-readonly></data-table>
+              <article class="panel">
+                <div class="panel-head">
+                  <h2>تاریخچه تخصیص میزها</h2>
+                  <select id="deskHistoryYear" class="year-select" aria-label="فیلتر سال"></select>
+                </div>
+                <p class="hint">برای ثبت یا اصلاح میزهای سال‌های قبل، رکورد جدید اضافه کنید یا رکورد موجود را ویرایش کنید.</p>
+                <data-table id="deskAssignmentsTable" title="" endpoint="api.php?resource=desk-assignments"></data-table>
+              </article>
             </section>
 
             <section id="lockers" class="section">
@@ -358,8 +366,8 @@ $assetVer = (string) max(
                     <button class="button ghost" type="button" id="addIncomeButton">+ درآمد</button>
                     <?php endif; ?>
                   </div>
-                  <p class="hint">درآمدهای غیر از شارژ نهادها (اجاره سالن، فروش خدمات و …)</p>
-                  <data-table title="" endpoint="api.php?resource=transactions" data-tx-filter="درآمد"></data-table>
+                  <p class="hint">درآمدهای غیر از شارژ و اجاره نهادها — دوره آموزشی، جریمه، اسپانسری و …</p>
+                  <data-table title="" endpoint="api.php?resource=transactions" data-tx-filter="درآمد" data-no-add></data-table>
                 </article>
                 <article class="panel">
                   <div class="panel-head">
@@ -368,21 +376,16 @@ $assetVer = (string) max(
                     <button class="button ghost" type="button" id="addExpenseButton">+ هزینه</button>
                     <?php endif; ?>
                   </div>
-                  <p class="hint">هزینه‌های جاری و سرمایه‌ای مرکز</p>
-                  <data-table title="" endpoint="api.php?resource=transactions" data-tx-filter="هزینه"></data-table>
+                  <p class="hint">هزینه‌های جاری مرکز — لوازم مصرفی، خوراکی، تعمیرات و …</p>
+                  <data-table title="" endpoint="api.php?resource=transactions" data-tx-filter="هزینه" data-no-add></data-table>
                 </article>
               </div>
             </section>
 
             <?php if (Access::canWrite()): ?>
             <section id="development" class="section">
-              <p class="hint">برنامه‌ریزی توسعه مرکز — ایده‌ها، اقدامات و کارهای برنامه‌ریزی‌شده.</p>
-              <div id="devProgramSummary" class="dev-summary"></div>
-              <article class="panel">
-                <div class="panel-head"><h2>تابلوی برنامه (Kanban)</h2></div>
-                <div id="devKanban" class="dev-kanban"></div>
-              </article>
-              <data-table title="فهرست برنامه توسعه" endpoint="api.php?resource=development_plans"></data-table>
+              <p class="hint">برنامه‌های جاری مرکز — عنوان، وضعیت، اولویت و موعد.</p>
+              <data-table title="برنامه‌های توسعه" endpoint="api.php?resource=development_plans"></data-table>
             </section>
             <?php endif; ?>
 

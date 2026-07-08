@@ -89,7 +89,7 @@ final class TeamContracts
     public function deskCountForMonth(int $teamId, string $fiscalYear, int $monthIndex): int
     {
         $count = 0;
-        foreach ($this->deskAssignmentsForTeam($teamId) as $assignment) {
+        foreach ($this->deskAssignmentsForTeamInYear($teamId, $fiscalYear) as $assignment) {
             if ($this->assignmentOverlapsMonth($assignment, $fiscalYear, $monthIndex)) {
                 $count++;
             }
@@ -101,7 +101,7 @@ final class TeamContracts
     public function informalDeskCountForMonth(int $teamId, string $fiscalYear, int $monthIndex): int
     {
         $count = 0;
-        foreach ($this->deskAssignmentsForTeam($teamId) as $assignment) {
+        foreach ($this->deskAssignmentsForTeamInYear($teamId, $fiscalYear) as $assignment) {
             if (!$this->assignmentOverlapsMonth($assignment, $fiscalYear, $monthIndex)) {
                 continue;
             }
@@ -171,6 +171,21 @@ final class TeamContracts
         $end = $contract ? (string) ($contract['contract_end'] ?? '') : '';
         $this->pdo->prepare('UPDATE teams SET contract_start = :start, contract_end = :end WHERE id = :id')
             ->execute(['start' => $start !== '' ? $start : null, 'end' => $end !== '' ? $end : null, 'id' => $teamId]);
+        $this->syncTeamActiveStatus($teamId);
+    }
+
+    public function syncTeamActiveStatus(int $teamId): void
+    {
+        $isActive = $this->hasContractInYear($teamId, $this->currentFiscalYear()) ? 1 : 0;
+        $this->pdo->prepare('UPDATE teams SET is_active = :active WHERE id = :id')
+            ->execute(['active' => $isActive, 'id' => $teamId]);
+    }
+
+    public function syncAllTeamActiveStatuses(): void
+    {
+        foreach ($this->pdo->query('SELECT id FROM teams')->fetchAll() as $row) {
+            $this->syncTeamActiveStatus((int) $row['id']);
+        }
     }
 
     public function migrateFromLegacyTeamDates(): void
@@ -234,19 +249,41 @@ final class TeamContracts
     /**
      * @return list<array<string, mixed>>
      */
-    private function deskAssignmentsForTeam(int $teamId): array
+    public function deskAssignmentsForTeamInYear(int $teamId, string $fiscalYear): array
     {
+        $fiscalYear = JalaliDate::normalizeDigits($fiscalYear);
+        $yearStart = $fiscalYear . '/01/01';
+        $yearEnd = $fiscalYear . '/12/29';
         $assignments = $this->pdo->prepare(
             'SELECT desk_number, usage_type, assigned_from, assigned_until
              FROM desk_assignments
-             WHERE team_id = :team_id AND (assigned_until IS NULL OR assigned_until = \'\')'
+             WHERE team_id = :team_id
+               AND assigned_from <= :year_end
+               AND (assigned_until IS NULL OR assigned_until = \'\' OR assigned_until >= :year_start)
+             ORDER BY assigned_from DESC'
         );
-        $assignments->execute(['team_id' => $teamId]);
+        $assignments->execute([
+            'team_id' => $teamId,
+            'year_start' => $yearStart,
+            'year_end' => $yearEnd,
+        ]);
         $rows = $assignments->fetchAll();
         if ($rows !== []) {
             return $rows;
         }
 
+        if ($fiscalYear !== $this->currentFiscalYear()) {
+            return [];
+        }
+
+        return $this->deskAssignmentsFromCurrentDesks($teamId);
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function deskAssignmentsFromCurrentDesks(int $teamId): array
+    {
         $desks = $this->pdo->prepare('SELECT number, usage_type FROM desks WHERE team_id = :team_id');
         $desks->execute(['team_id' => $teamId]);
         $deskList = $desks->fetchAll();

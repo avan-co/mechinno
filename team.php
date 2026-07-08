@@ -197,8 +197,9 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
             </section>
 
             <section id="members" class="section">
-              <p class="hint">نام، موبایل و کد ملی اجباری است. در صورت نیاز به دسترسی تردد اعلام کنید — کد دستگاه پس از تأیید، به‌صورت حضوری و با تأخیر ثبت می‌شود. اعضای «در انتظار تأیید» را می‌توانید حذف کنید.</p>
+              <p class="hint">برای افزودن عضو جدید از «+ افزودن» استفاده کنید. برای اعضای تأیید‌شده فقط می‌توانید <strong>درخواست ویرایش</strong> یا <strong>درخواست حذف</strong> ثبت کنید — تغییر پس از تأیید مرکز اعمال می‌شود.</p>
               <data-table title="اعضای نهاد" endpoint="api.php?resource=members"></data-table>
+              <data-table title="درخواست‌های تغییر عضو" endpoint="api.php?resource=member-requests" data-readonly></data-table>
             </section>
 
             <section id="desks" class="section">
