@@ -1033,13 +1033,16 @@ final class Repository
         foreach ($this->rows(
             'SELECT c.team_id, t.name AS team_name,
                     c.fiscal_year, c.month_index, c.month_name,
-                    c.charge_amount, c.rent_amount, c.amount AS amount_due
+                    c.charge_amount, c.rent_amount, c.amount
              FROM charges c
              JOIN teams t ON t.id = c.team_id
              ORDER BY c.fiscal_year, t.name, c.month_index'
         ) as $row) {
             $teamId = (int) ($row['team_id'] ?? 0);
-            $fiscalYear = (string) ($row['fiscal_year'] ?? '');
+            $fiscalYear = JalaliDate::normalizeDigits((string) ($row['fiscal_year'] ?? ''));
+            if ($fiscalYear === '') {
+                continue;
+            }
             $monthIndex = (int) ($row['month_index'] ?? 0);
             $key = $teamId . '-' . $fiscalYear . '-' . $monthIndex;
             if (!isset($aggregated[$key])) {
@@ -1056,7 +1059,7 @@ final class Repository
             }
             $aggregated[$key]['charge_amount'] += (int) ($row['charge_amount'] ?? 0);
             $aggregated[$key]['rent_amount'] += (int) ($row['rent_amount'] ?? 0);
-            $aggregated[$key]['amount_due'] += (int) ($row['amount_due'] ?? 0);
+            $aggregated[$key]['amount_due'] += $this->chargeRowDueAmount($row);
         }
 
         $rows = [];
@@ -1068,13 +1071,11 @@ final class Repository
             if (!JalaliDate::monthInContract($fiscalYear, $monthIndex, $dates['start'], $dates['end'])) {
                 continue;
             }
-            if ($contracts->deskCountForMonth($teamId, $fiscalYear, $monthIndex) <= 0) {
-                continue;
-            }
             $key = $fiscalYear . '-' . $monthIndex;
             $paid = (int) ($allocationMap[$teamId][$key] ?? 0);
             $due = (int) ($row['amount_due'] ?? 0);
             $rows[] = [
+                'team_id' => $teamId,
                 'team_name' => $row['team_name'] ?? '',
                 'fiscal_year' => $row['fiscal_year'] ?? '',
                 'month_name' => $row['month_name'] ?? '',
@@ -1470,6 +1471,16 @@ final class Repository
         return ($hasWhere ? ' AND ' : ' WHERE ') . '(' . $expr . ')';
     }
 
+    private function chargeRowDueAmount(array $row): int
+    {
+        $amount = (int) ($row['amount'] ?? 0);
+        if ($amount > 0) {
+            return $amount;
+        }
+
+        return (int) ($row['charge_amount'] ?? 0) + (int) ($row['rent_amount'] ?? 0);
+    }
+
     private function contractDebtForTeam(int $teamId): int
     {
         return $this->contractDebtBreakdown($teamId)['debt_total'];
@@ -1483,7 +1494,7 @@ final class Repository
         $contracts = $this->contracts();
         $allocation = $this->allocatedPaymentsForTeam($teamId);
         $chargeByMonth = [];
-        $sql = 'SELECT fiscal_year, month_index, amount FROM charges WHERE team_id = :id';
+        $sql = 'SELECT fiscal_year, month_index, charge_amount, rent_amount, amount FROM charges WHERE team_id = :id';
         $params = ['id' => $teamId];
         if ($fiscalYear !== null) {
             $sql .= ' AND fiscal_year = :year';
@@ -1492,16 +1503,23 @@ final class Repository
         $sql .= ' ORDER BY fiscal_year, month_index';
         foreach ($this->preparedRows($sql, $params) as $row) {
             $fy = JalaliDate::normalizeDigits((string) ($row['fiscal_year'] ?? ''));
+            if ($fy === '') {
+                continue;
+            }
             $mi = (int) ($row['month_index'] ?? 0);
+            if ($mi < 1 || $mi > 12) {
+                continue;
+            }
+            $due = $this->chargeRowDueAmount($row);
+            if ($due <= 0) {
+                continue;
+            }
             $dates = $contracts->contractDatesForYear($teamId, $fy);
             if (!JalaliDate::monthInContract($fy, $mi, $dates['start'], $dates['end'])) {
                 continue;
             }
-            if ($contracts->deskCountForMonth($teamId, $fy, $mi) <= 0) {
-                continue;
-            }
             $key = $fy . '-' . $mi;
-            $chargeByMonth[$key] = ($chargeByMonth[$key] ?? 0) + (int) ($row['amount'] ?? 0);
+            $chargeByMonth[$key] = ($chargeByMonth[$key] ?? 0) + $due;
         }
 
         $debt = 0;
@@ -1525,19 +1543,26 @@ final class Repository
         $contracts = $this->contracts();
         $total = 0;
         foreach ($this->preparedRows(
-            'SELECT fiscal_year, month_index, amount FROM charges WHERE team_id = :id',
+            'SELECT fiscal_year, month_index, charge_amount, rent_amount, amount FROM charges WHERE team_id = :id',
             ['id' => $teamId]
         ) as $row) {
             $fy = JalaliDate::normalizeDigits((string) ($row['fiscal_year'] ?? ''));
+            if ($fy === '') {
+                continue;
+            }
             $mi = (int) ($row['month_index'] ?? 0);
+            if ($mi < 1 || $mi > 12) {
+                continue;
+            }
+            $due = $this->chargeRowDueAmount($row);
+            if ($due <= 0) {
+                continue;
+            }
             $dates = $contracts->contractDatesForYear($teamId, $fy);
             if (!JalaliDate::monthInContract($fy, $mi, $dates['start'], $dates['end'])) {
                 continue;
             }
-            if ($contracts->deskCountForMonth($teamId, $fy, $mi) <= 0) {
-                continue;
-            }
-            $total += (int) ($row['amount'] ?? 0);
+            $total += $due;
         }
 
         return $total;
@@ -1561,20 +1586,27 @@ final class Repository
         $contracts = $this->contracts();
         $charges = [];
         foreach ($this->preparedRows(
-            'SELECT fiscal_year, month_index, amount FROM charges WHERE team_id = :id ORDER BY fiscal_year, month_index',
+            'SELECT fiscal_year, month_index, charge_amount, rent_amount, amount FROM charges WHERE team_id = :id ORDER BY fiscal_year, month_index',
             ['id' => $teamId]
         ) as $row) {
             $fy = JalaliDate::normalizeDigits((string) ($row['fiscal_year'] ?? ''));
+            if ($fy === '') {
+                continue;
+            }
             $mi = (int) ($row['month_index'] ?? 0);
+            if ($mi < 1 || $mi > 12) {
+                continue;
+            }
+            $due = $this->chargeRowDueAmount($row);
+            if ($due <= 0) {
+                continue;
+            }
             $dates = $contracts->contractDatesForYear($teamId, $fy);
             if (!JalaliDate::monthInContract($fy, $mi, $dates['start'], $dates['end'])) {
                 continue;
             }
-            if ($contracts->deskCountForMonth($teamId, $fy, $mi) <= 0) {
-                continue;
-            }
             $key = $fy . '-' . $mi;
-            $charges[$key] = ($charges[$key] ?? 0) + (int) ($row['amount'] ?? 0);
+            $charges[$key] = ($charges[$key] ?? 0) + $due;
         }
 
         $byMonth = [];
@@ -1791,14 +1823,14 @@ final class Repository
      */
     public function debtorTeamsForSms(): array
     {
-        $rows = [];
+        $byTeam = [];
         foreach ($this->rows('SELECT id, name FROM teams ORDER BY name') as $team) {
             $teamId = (int) ($team['id'] ?? 0);
             $breakdown = $this->contractDebtBreakdown($teamId);
             if ($breakdown['debt_total'] <= 0) {
                 continue;
             }
-            $rows[] = [
+            $byTeam[$teamId] = [
                 'team_id' => $teamId,
                 'team_name' => (string) ($team['name'] ?? ''),
                 'debt_total' => $breakdown['debt_total'],
@@ -1806,7 +1838,76 @@ final class Repository
             ];
         }
 
+        foreach ($this->debtorTeamsFromChargeMatrix() as $row) {
+            $teamId = (int) ($row['team_id'] ?? 0);
+            if ($teamId <= 0) {
+                continue;
+            }
+            if (
+                !isset($byTeam[$teamId])
+                || (int) ($row['debt_total'] ?? 0) > (int) ($byTeam[$teamId]['debt_total'] ?? 0)
+            ) {
+                $byTeam[$teamId] = $row;
+            }
+        }
+
+        $rows = array_values($byTeam);
         usort($rows, static fn (array $a, array $b): int => ($b['debt_total'] ?? 0) <=> ($a['debt_total'] ?? 0));
+
+        return $rows;
+    }
+
+    /**
+     * Fallback aligned with the charges collage when stored charge rows exist but desk history is incomplete.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function debtorTeamsFromChargeMatrix(): array
+    {
+        $years = $this->chargeFiscalYears();
+        $byTeam = [];
+        foreach ($years as $year) {
+            $matrix = $this->chargesMatrix($year);
+            foreach ($matrix['rows'] ?? [] as $matrixRow) {
+                $teamId = (int) ($matrixRow['team']['id'] ?? 0);
+                if ($teamId <= 0) {
+                    continue;
+                }
+                $labels = $byTeam[$teamId]['labels'] ?? [];
+                $debt = (int) ($byTeam[$teamId]['debt_total'] ?? 0);
+                foreach ($matrixRow['cells'] ?? [] as $cell) {
+                    $status = (string) ($cell['status'] ?? '');
+                    if ($status !== 'بدهکار به مرکز' && $status !== 'ناقص') {
+                        continue;
+                    }
+                    $remaining = max(0, (int) ($cell['amount_due'] ?? 0) - (int) ($cell['amount_paid'] ?? 0));
+                    if ($remaining <= 0) {
+                        continue;
+                    }
+                    $debt += $remaining;
+                    $labels[] = ($this->monthName((int) ($cell['month_index'] ?? 0)) . ' ' . $year);
+                }
+                if ($debt <= 0) {
+                    continue;
+                }
+                $byTeam[$teamId] = [
+                    'team_id' => $teamId,
+                    'team_name' => (string) ($matrixRow['team']['name'] ?? ''),
+                    'debt_total' => $debt,
+                    'labels' => $labels,
+                ];
+            }
+        }
+
+        $rows = [];
+        foreach ($byTeam as $teamId => $entry) {
+            $rows[] = [
+                'team_id' => $teamId,
+                'team_name' => (string) ($entry['team_name'] ?? ''),
+                'debt_total' => (int) ($entry['debt_total'] ?? 0),
+                'debt_summary' => implode('، ', array_slice(array_values(array_unique($entry['labels'] ?? [])), 0, 6)),
+            ];
+        }
 
         return $rows;
     }

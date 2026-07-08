@@ -244,7 +244,7 @@ const renderChargeReminderPanel = () => {
       </span>
       <span class="charge-debtor-amount">${formatMoney(item.debt_total)}</span>
     </label>`;
-  }).join("") || `<div class="empty">نهاد بدهکاری برای یادآور یافت نشد.</div>`;
+  }).join("") || `<div class="empty">نهاد بدهکاری برای یادآور یافت نشد. اگر در کلاژ شارژ وضعیت «بدهکار» می‌بینید، سال مالی همان کلاژ را بررسی کنید و مطمئن شوید برای نهاد قرارداد و شارژ ماهانه ثبت شده است.</div>`;
 
   host.querySelectorAll("[data-charge-team]").forEach((input) => {
     input.addEventListener("change", () => {
