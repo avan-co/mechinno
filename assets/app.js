@@ -398,9 +398,18 @@ const formatMoney = (value) => {
 
 const fetchJson = async (url, options = {}) => {
   const response = await fetch(url, options);
-  const contentType = response.headers.get("content-type") || "";
-  const data = contentType.includes("application/json") ? await response.json() : { error: await response.text() };
-  if (!response.ok) throw new Error(data.error || `Request failed: ${url}`);
+  const raw = await response.text();
+  let data = {};
+  if (raw.trim() !== "") {
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      throw new Error(raw.trim() || "پاسخ نامعتبر از سرور");
+    }
+  }
+  if (!response.ok) {
+    throw new Error(data.error || raw.trim() || `Request failed: ${url}`);
+  }
   return data;
 };
 

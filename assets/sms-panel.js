@@ -1,4 +1,4 @@
-/* global MECHINNO, fetchJson, fetchResource, postJson, showToast, escapeHtml, formatMoney, formatPlain, canWrite, csrfToken, createSmsEditor, buildRecipientFilterBar */
+/* global fetchJson, fetchResource, postJson, showToast, escapeHtml, formatMoney, formatPlain, canWrite, createSmsEditor, buildRecipientFilterBar, SMS_EDITOR_VARS */
 
 const smsState = {
   recipients: [],
@@ -9,19 +9,46 @@ const smsState = {
   perPage: 25,
   filters: { q: "", teamId: "", entityType: "", isLeader: "", wantsAccess: "" },
   chargeTemplate: "",
+  configured: false,
 };
 
 let announcementEditor = null;
 let chargeTemplateEditor = null;
 
+const renderSmsSetupBanner = (settings = null) => {
+  const host = document.getElementById("smsSetupBanner");
+  if (!host) return;
+  const configured = settings?.sms_configured ?? smsState.configured;
+  if (configured) {
+    host.hidden = true;
+    host.innerHTML = "";
+    return;
+  }
+  host.hidden = false;
+  host.innerHTML = `
+    <article class="panel panel--accent">
+      <h2>تنظیمات پیامک ناقص است</h2>
+      <p class="hint">برای ارسال پیامک، ابتدا نام کاربری، رمز API و خط ارسال ملی‌پیامک را در بخش تنظیمات وارد کنید. تا قبل از آن، فقط فهرست گیرنده‌ها و نهادهای بدهکار نمایش داده می‌شود.</p>
+      <button type="button" class="button" data-go="sms-settings">رفتن به تنظیمات پیامک</button>
+    </article>`;
+};
+
 window.initSmsPanel = () => {
   initSmsFilters().catch((error) => showToast(error.message, "error"));
   initSmsEditors();
-  loadSmsStats().catch(() => {});
+  loadSmsStats().catch((error) => {
+    const host = document.getElementById("smsStats");
+    if (host) host.innerHTML = `<div class="empty">خطا در بارگذاری آمار: ${escapeHtml(error.message)}</div>`;
+  });
   loadSmsRecipients().catch((error) => showToast(error.message, "error"));
-  loadSmsHistory().catch((error) => showToast(error.message, "error"));
-  loadChargeReminderPanel().catch((error) => showToast(error.message, "error"));
-  postJson("api.php?resource=sms-sync-history", {}).catch(() => {});
+  loadSmsHistory().catch((error) => {
+    const tbody = document.querySelector("#smsHistoryTable tbody");
+    if (tbody) tbody.innerHTML = `<tr><td colspan="10">خطا: ${escapeHtml(error.message)}</td></tr>`;
+  });
+  loadChargeReminderPanel().catch((error) => {
+    const host = document.getElementById("smsChargeDebtorList");
+    if (host) host.innerHTML = `<div class="empty">خطا در بارگذاری: ${escapeHtml(error.message)}</div>`;
+  });
 };
 
 const initSmsEditors = () => {
@@ -43,7 +70,7 @@ const initSmsEditors = () => {
       label: "الگوی یادآور (برای ارسال دسته‌ای)",
       placeholder: "الگو با متغیرها…",
       readonly: !canWrite,
-      variables: window.SMS_EDITOR_VARS || [],
+      variables: SMS_EDITOR_VARS || [],
       rows: 7,
       showPreview: true,
     });
@@ -92,6 +119,8 @@ const loadSmsStats = async () => {
   const host = document.getElementById("smsStats");
   if (!host) return;
   const stats = await fetchJson("api.php?resource=sms-stats");
+  smsState.configured = Boolean(stats.sms_configured);
+  renderSmsSetupBanner({ sms_configured: stats.sms_configured });
   host.innerHTML = `
     <div class="month-stats">
       <div class="month-stat"><span>ارسال امروز</span><strong>${Number(stats.sent_today || 0).toLocaleString("fa-IR")}</strong></div>
@@ -100,7 +129,8 @@ const loadSmsStats = async () => {
       <div class="month-stat"><span>هزینه امروز</span><strong>${formatMoney(stats.cost_today || 0)}</strong></div>
       <div class="month-stat"><span>موجودی پنل</span><strong>${stats.panel_credit != null ? Number(stats.panel_credit).toLocaleString("fa-IR") : "—"}</strong></div>
       <div class="month-stat"><span>تعرفه هر پیامک</span><strong>${formatMoney(stats.unit_cost || 0)}</strong></div>
-    </div>`;
+    </div>
+    ${stats.sms_configured ? "" : `<p class="hint">اتصال API هنوز کامل نیست — موجودی و تعرفه زنده بعد از تنظیمات نمایش داده می‌شود.</p>`}`;
 };
 
 const renderSmsRecipients = () => {
@@ -156,6 +186,7 @@ const scheduleDeliveryCheck = (batchUid, logIds = []) => {
 
 const sendSmsAnnouncement = async () => {
   if (!canWrite) throw new Error("دسترسی ارسال ندارید.");
+  if (!smsState.configured) throw new Error("ابتدا تنظیمات ملی‌پیامک را کامل کنید.");
   const message = announcementEditor?.getValue() || "";
   if (!message) throw new Error("متن پیامک را وارد کنید.");
   if (!smsState.selected.size) throw new Error("حداقل یک گیرنده انتخاب کنید.");
@@ -215,31 +246,41 @@ const renderChargeReminderPanel = () => {
 
 const updateChargePreview = () => {
   const preview = document.getElementById("smsChargePreview");
-  if (!preview || !chargeTemplateEditor) return;
-  const template = chargeTemplateEditor.getValue() || smsState.chargeTemplate;
+  if (!preview) return;
+  const template = chargeTemplateEditor?.getValue() || smsState.chargeTemplate;
   const first = smsState.chargeItems.find((item) => smsState.selectedChargeTeams.has(Number(item.team_id)));
   preview.textContent = first
-    ? first.message || template
-    : "برای پیش‌نمایش، حداقل یک نهاد بدهکار انتخاب کنید.";
+    ? first.message || template || "—"
+    : smsState.chargeItems.length
+      ? "برای پیش‌نمایش، حداقل یک نهاد بدهکار انتخاب کنید."
+      : "نهاد بدهکاری یافت نشد.";
 };
 
 const loadChargeReminderPanel = async () => {
-  const settings = await fetchJson("api.php?resource=sms-settings");
-  smsState.chargeTemplate = settings.sms_charge_template || "";
-  if (chargeTemplateEditor) {
-    chargeTemplateEditor.setValue(smsState.chargeTemplate);
-    chargeTemplateEditor.onChange(() => {
-      const first = smsState.chargeItems.find((item) => smsState.selectedChargeTeams.has(Number(item.team_id)));
-      const preview = document.getElementById("smsChargePreview");
-      if (preview) {
-        preview.textContent = first?.message || chargeTemplateEditor.getValue() || "—";
-      }
-    });
+  const host = document.getElementById("smsChargeDebtorList");
+  try {
+    const data = await fetchJson("api.php?resource=sms-charge-preview");
+    smsState.chargeItems = data.items || [];
+    smsState.selectedChargeTeams = new Set(smsState.chargeItems.map((item) => Number(item.team_id)));
+  } catch (error) {
+    if (host) host.innerHTML = `<div class="empty">خطا در بارگذاری نهادهای بدهکار: ${escapeHtml(error.message)}</div>`;
+    return;
   }
 
-  const data = await fetchJson("api.php?resource=sms-charge-preview");
-  smsState.chargeItems = data.items || [];
-  smsState.selectedChargeTeams = new Set(smsState.chargeItems.map((item) => Number(item.team_id)));
+  try {
+    const settings = await fetchJson("api.php?resource=sms-settings");
+    smsState.chargeTemplate = settings.sms_charge_template || "";
+    smsState.configured = Boolean(settings.sms_configured);
+    renderSmsSetupBanner(settings);
+  } catch {
+    smsState.chargeTemplate = "";
+  }
+
+  if (chargeTemplateEditor) {
+    chargeTemplateEditor.setValue(smsState.chargeTemplate);
+    chargeTemplateEditor.onChange(() => updateChargePreview());
+  }
+
   renderChargeReminderPanel();
 
   const sendBtn = document.getElementById("smsSendChargeReminders");
@@ -252,6 +293,7 @@ const loadChargeReminderPanel = async () => {
 
 const sendChargeReminders = async () => {
   if (!canWrite) throw new Error("دسترسی ارسال ندارید.");
+  if (!smsState.configured) throw new Error("ابتدا تنظیمات ملی‌پیامک را کامل کنید.");
   const teamIds = [...smsState.selectedChargeTeams];
   if (!teamIds.length) throw new Error("حداقل یک نهاد بدهکار انتخاب کنید.");
   const template = chargeTemplateEditor?.getValue() || smsState.chargeTemplate;

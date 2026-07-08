@@ -249,6 +249,7 @@ $assetVer = (string) max(
             </section>
 
             <section id="sms" class="section">
+              <div id="smsSetupBanner" hidden></div>
               <div class="sms-page-head">
                 <p class="hint">ارسال پیامک از طریق <strong>ملی‌پیامک</strong>. تنظیمات API در بخش <button type="button" class="text-link" data-go="sms-settings">تنظیمات پیامک</button>. مدیر مشاهده‌گر فقط آمار و تاریخچه را می‌بیند.</p>
                 <?php if (Access::canWrite()): ?>
@@ -340,6 +341,7 @@ $assetVer = (string) max(
                 <div id="smsSettingsStats">در حال بارگذاری…</div>
                 <div class="modal-actions">
                   <?php if (Access::canWrite()): ?>
+                  <button class="button ghost" type="button" id="smsRefreshLiveStats">بروزرسانی موجودی و تعرفه از API</button>
                   <button class="button ghost" type="button" id="smsManualQueryLines">استعلام مجدد خطوط</button>
                   <button class="button ghost" type="button" id="smsSyncHistory">همگام‌سازی تاریخچه از API</button>
                   <?php endif; ?>

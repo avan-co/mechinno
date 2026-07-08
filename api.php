@@ -125,11 +125,11 @@ try {
             }
             json_response(['ok' => true, 'settings' => $sms->updateSettings($payload)]);
         }
-        json_response($sms->settings());
+        json_response($sms->settings(isset($_GET['live']) && (string) $_GET['live'] === '1'));
     }
 
     if ($resource === 'sms-stats') {
-        json_response((new SmsService($pdo))->stats());
+        json_response((new SmsService($pdo))->stats(isset($_GET['live']) && (string) $_GET['live'] === '1'));
     }
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && $resource === 'sms-query-lines') {

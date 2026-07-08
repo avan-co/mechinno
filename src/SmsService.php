@@ -11,29 +11,39 @@ final class SmsService
     /**
      * @return array<string, mixed>
      */
-    public function settings(): array
+    public function settings(bool $withLive = false): array
     {
         $settings = (new CenterSettings($this->pdo))->smsSettings();
-        $client = new MelliPayamak();
-        $send = (new CenterSettings($this->pdo))->smsSettingsForSend();
-        $credit = null;
-        $basePrice = (int) ($settings['sms_unit_cost'] ?? 0);
+        $configured = $this->isApiConfigured($settings);
 
-        if ($send['sms_username'] !== '' && $send['sms_password'] !== '') {
-            $creditResult = $client->getCredit((string) $send['sms_username'], (string) $send['sms_password']);
-            if ($creditResult['ok']) {
-                $credit = $creditResult['credit'];
-            }
-            $priceResult = $client->getBasePrice((string) $send['sms_username'], (string) $send['sms_password']);
-            if ($priceResult['ok'] && $priceResult['price'] !== null) {
-                $basePrice = (int) $priceResult['price'];
+        $result = array_merge($settings, [
+            'sms_configured' => $configured,
+            'sms_credit' => null,
+            'sms_base_price' => (int) ($settings['sms_unit_cost'] ?? 0),
+        ]);
+
+        if ($withLive && $configured) {
+            $live = $this->refreshPricing();
+            $result['sms_credit'] = $live['credit'];
+            if ($live['base_price'] !== null) {
+                $result['sms_base_price'] = (int) $live['base_price'];
+                $result['sms_unit_cost'] = (int) $live['base_price'];
             }
         }
 
-        return array_merge($settings, [
-            'sms_credit' => $credit,
-            'sms_base_price' => $basePrice,
-        ]);
+        return $result;
+    }
+
+    /**
+     * @param array<string, mixed>|null $settings
+     */
+    public function isApiConfigured(?array $settings = null): bool
+    {
+        $settings ??= (new CenterSettings($this->pdo))->smsSettingsForSend();
+
+        return trim((string) ($settings['sms_username'] ?? '')) !== ''
+            && trim((string) ($settings['sms_password'] ?? '')) !== ''
+            && trim((string) ($settings['sms_from_number'] ?? '')) !== '';
     }
 
     /**
@@ -65,15 +75,21 @@ final class SmsService
             $settings = $center->smsSettings();
         }
 
-        $this->refreshPricing($send);
+        if ($this->isApiConfigured($send)) {
+            try {
+                $this->refreshPricing($send);
+            } catch (Throwable) {
+                // تعرفه و موجودی بعداً قابل بروزرسانی است.
+            }
+        }
 
-        return $this->settings();
+        return $this->settings(withLive: $this->isApiConfigured($send));
     }
 
     /**
      * @return array<string, int|string|null>
      */
-    public function stats(): array
+    public function stats(bool $withLive = false): array
     {
         $today = JalaliDate::todayParts()['formatted'];
         $settings = (new CenterSettings($this->pdo))->smsSettingsForSend();
@@ -90,18 +106,17 @@ final class SmsService
         $totalSent = (int) $this->pdo->query("SELECT COUNT(*) FROM sms_logs WHERE status = 'sent'")->fetchColumn();
         $totalCost = (int) $this->pdo->query("SELECT COALESCE(SUM(cost_rial), 0) FROM sms_logs WHERE status = 'sent'")->fetchColumn();
 
-        $client = new MelliPayamak();
         $credit = null;
         $basePrice = (int) ($settings['sms_unit_cost'] ?? 0);
-        if ($settings['sms_username'] !== '' && $settings['sms_password'] !== '') {
-            $creditResult = $client->getCredit((string) $settings['sms_username'], (string) $settings['sms_password']);
-            if ($creditResult['ok']) {
-                $credit = $creditResult['credit'];
-            }
-            $priceResult = $client->getBasePrice((string) $settings['sms_username'], (string) $settings['sms_password']);
-            if ($priceResult['ok'] && $priceResult['price'] !== null) {
-                $basePrice = (int) $priceResult['price'];
-                (new CenterSettings($this->pdo))->updateSmsUnitCost($basePrice);
+        if ($withLive && $this->isApiConfigured($settings)) {
+            try {
+                $live = $this->refreshPricing($settings);
+                $credit = $live['credit'];
+                if ($live['base_price'] !== null) {
+                    $basePrice = (int) $live['base_price'];
+                }
+            } catch (Throwable) {
+                // آمار محلی همچنان قابل نمایش است.
             }
         }
 
@@ -115,6 +130,7 @@ final class SmsService
             'total_cost' => $totalCost,
             'panel_credit' => $credit,
             'unit_cost' => $basePrice,
+            'sms_configured' => $this->isApiConfigured($settings),
         ];
     }
 
@@ -289,9 +305,11 @@ final class SmsService
      * @param array<string, string> $filters
      * @return array{rows:list<array<string,mixed>>,total:int,page:int,per_page:int,pages:int}
      */
-    public function history(int $page, int $perPage, array $filters): array
+    public function history(int $page, int $perPage, array $filters, bool $sync = false): array
     {
-        $this->syncHistoryFromApi();
+        if ($sync) {
+            $this->syncHistoryFromApi();
+        }
 
         return (new Repository($this->pdo))->paginatedResource('sms-history', $page, $perPage, $filters);
     }
@@ -471,9 +489,13 @@ final class SmsService
         $settings = (new CenterSettings($this->pdo))->smsSettingsForSend();
         $client = new MelliPayamak();
         $unitCost = (int) ($settings['sms_unit_cost'] ?? 0);
-        if ($unitCost <= 0) {
-            $pricing = $this->refreshPricing($settings);
-            $unitCost = (int) ($pricing['base_price'] ?? 0);
+        if ($unitCost <= 0 && $this->isApiConfigured($settings)) {
+            try {
+                $pricing = $this->refreshPricing($settings);
+                $unitCost = (int) ($pricing['base_price'] ?? 0);
+            } catch (Throwable) {
+                $unitCost = 0;
+            }
         }
 
         $sent = 0;
