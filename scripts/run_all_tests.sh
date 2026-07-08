@@ -8,6 +8,9 @@ php scripts/smoke_test.php
 echo "==> Integration tests"
 php scripts/integration_test.php
 
+echo "==> Frontend smoke tests"
+node scripts/frontend_smoke_test.js
+
 BASE_URL="${MECHINNO_TEST_URL:-http://127.0.0.1:8765}"
 if ! curl -sf "$BASE_URL/login.php" >/dev/null 2>&1; then
   echo "==> Starting PHP dev server on 127.0.0.1:8765"

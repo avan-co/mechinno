@@ -22,6 +22,8 @@ const labels = {
   informal_seats: "صندلی غیررسمی",
   assigned_from: "تاریخ شروع تخصیص",
   assigned_until: "تاریخ پایان تخصیص",
+  assignment_from: "تاریخ شروع تخصیص",
+  assignment_until: "تاریخ پایان تخصیص",
   desk_number: "شماره میز",
   desk_numbers: "میزهای نهاد",
   number: "شماره میز",
@@ -34,7 +36,6 @@ const labels = {
   key_number: "شماره کلید",
   spare_key: "کلید یدک",
   title: "عنوان",
-  fiscal_year: "سال مالی",
   month_index: "ماه",
   month_name: "ماه",
   charge_amount: "شارژ",
@@ -80,7 +81,10 @@ const labels = {
   card_number: "شماره کارت",
   sheba: "شماره شبا",
   payment_guide: "راهنمای پرداخت",
+  username: "نام کاربری",
 };
+
+const entityTypeLabels = { team: "تیم", company: "شرکت", student: "دانشجو" };
 
 const teamActiveBadge = (isActive) => Number(isActive) === 1
   ? '<span class="badge badge-paid">فعال</span>'
@@ -231,13 +235,17 @@ const canTeamSubmit = window.MECHINNO?.canTeamSubmit === true;
 const canMutate = canWrite || canTeamSubmit;
 const panelMode = window.MECHINNO?.panel || "admin";
 
-const editableResources = new Set(
+const crudResourceKey = (resource) => (resource || "").replace(/-/g, "_");
+
+const editableResourceKeys = new Set(
   canWrite
     ? ["members", "teams", "team_contracts", "desks", "desk_assignments", "lockers", "charges", "transactions", "rate_settings", "panel_users", "development_plans"]
-      : canTeamSubmit
-      ? ["members", "transactions", "locker-requests", "member-requests"]
-      : []
+    : canTeamSubmit
+    ? ["members", "transactions", "locker_requests", "member_requests"]
+    : []
 );
+
+const isEditableResource = (resource) => editableResourceKeys.has(crudResourceKey(resource));
 const workflowQueueResources = new Set([
   "pending-members",
   "pending-member-requests",
@@ -261,7 +269,7 @@ const tableAllowsAdd = (table, definition = null) => {
   if (!(canWrite || (canTeamSubmit && ["members", "transactions", "locker-requests"].includes(resource)))) {
     return false;
   }
-  if (!definition || !editableResources.has(resource)) return false;
+  if (!definition || !isEditableResource(resource)) return false;
   return true;
 };
 
@@ -272,11 +280,11 @@ const tableAllowsEdit = (table, definition = null) => {
   if (panelMode === "team") {
     if (teamReadOnlyResources.has(resource)) return false;
     if (canTeamSubmit && ["transactions", "locker-requests"].includes(resource)) {
-      return !!definition && editableResources.has(resource);
+      return !!definition && isEditableResource(resource);
     }
     return false;
   }
-  if (!canWrite || !definition || !editableResources.has(resource)) return false;
+  if (!canWrite || !definition || !isEditableResource(resource)) return false;
   return true;
 };
 
@@ -1610,8 +1618,8 @@ const openRecordModal = ({ resource, definition, record = null, onSaved, title =
   const form = modal.querySelector("#crudForm");
   const isEdit = Boolean(record?.id);
   const formRecord = { ...(record || {}) };
-  if (!isEdit && createDefaults[resource]) {
-    Object.assign(formRecord, createDefaults[resource]());
+  if (!isEdit && createDefaults[crudResourceKey(resource)]) {
+    Object.assign(formRecord, createDefaults[crudResourceKey(resource)]());
   }
   modal.querySelector("#crudModalTitle").textContent = title || `${isEdit ? "ویرایش" : "افزودن"} ${definition.title}`;
   const fifoHint = resource === "transactions" && panelMode === "team"
