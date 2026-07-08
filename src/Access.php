@@ -64,6 +64,9 @@ final class Access
         'sms-charge-preview',
         'sms-recipients',
         'sms-history',
+        'sms-query-lines',
+        'sms-sync-history',
+        'sms-check-deliveries',
     ];
 
     public static function role(): string

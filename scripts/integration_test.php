@@ -364,8 +364,24 @@ $_SESSION = [
 ];
 $smsStats = (new SmsService($pdo))->stats();
 $assert(isset($smsStats['daily_limit']), 'sms: stats endpoint data');
+$assert(array_key_exists('panel_credit', $smsStats), 'sms: stats include panel credit');
 $smsRecipients = $repo->paginatedResource('sms-recipients', 1, 50, ['is_leader' => '1']);
 $assert(count($smsRecipients['rows']) >= 1, 'sms: leader recipients listed');
+$allMembers = $repo->paginatedResource('members', 1, 100, []);
+$leaderMembers = $repo->paginatedResource('members', 1, 100, ['is_leader' => '1']);
+$assert($leaderMembers['total'] <= $allMembers['total'], 'members: leader filter reduces result set');
+$assert($leaderMembers['total'] >= 1, 'members: leader filter returns leaders');
+$smsService = new SmsService($pdo);
+$teamName = 'TeamAlphaTest';
+$rendered = $smsService->renderChargeTemplate(
+    '{team_name} — {debt_total}',
+    ['team_name' => $teamName, 'debt_total' => 1200000, 'debt_summary' => ''],
+    ['bank_name' => '', 'card_number' => '', 'account_number' => ''],
+    ['full_name' => 'Leader']
+);
+$assert(str_contains($rendered, $teamName), 'sms: charge template renders team name');
+$assert(str_contains($rendered, '1,200,000'), 'sms: charge template renders debt total');
+$assert(MelliPayamak::deliveryLabel(4) === 'رسیده به گوشی', 'sms: delivery label mapping');
 
 $_SESSION = [
     'mechinno_authenticated' => true,

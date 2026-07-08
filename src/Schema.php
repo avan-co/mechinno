@@ -280,6 +280,10 @@ final class Schema
                 'sms_daily_limit' => 'INT NOT NULL DEFAULT 500',
                 'sms_unit_cost' => 'BIGINT NOT NULL DEFAULT 0',
                 'sms_updated_at' => 'VARCHAR(32) NULL',
+                'sms_line_numbers' => 'TEXT NULL',
+                'sms_lines_queried_at' => 'VARCHAR(32) NULL',
+                'sms_charge_template' => 'TEXT NULL',
+                'sms_history_synced_at' => 'VARCHAR(32) NULL',
             ],
             'lockers' => [
                 'team_id' => 'INT NULL',
@@ -640,7 +644,10 @@ final class Schema
                     cost_rial INTEGER NOT NULL DEFAULT 0,
                     sent_by TEXT NULL,
                     created_at TEXT NOT NULL,
-                    sent_at TEXT NULL
+                    sent_at TEXT NULL,
+                    delivery_status TEXT NULL,
+                    delivery_checked_at TEXT NULL,
+                    api_confirmed INTEGER NOT NULL DEFAULT 0
                 )'
             );
         } else {
@@ -664,11 +671,37 @@ final class Schema
                     sent_by VARCHAR(64) NULL,
                     created_at VARCHAR(32) NOT NULL,
                     sent_at VARCHAR(32) NULL,
+                    delivery_status VARCHAR(64) NULL,
+                    delivery_checked_at VARCHAR(32) NULL,
+                    api_confirmed TINYINT NOT NULL DEFAULT 0,
                     INDEX idx_sms_logs_batch (batch_uid),
                     INDEX idx_sms_logs_created (created_at),
-                    INDEX idx_sms_logs_status (status)
+                    INDEX idx_sms_logs_status (status),
+                    INDEX idx_sms_logs_provider (provider_rec_id)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
             );
+        }
+
+        self::ensureSmsLogColumns($pdo);
+    }
+
+    private static function ensureSmsLogColumns(PDO $pdo): void
+    {
+        if (!self::tableExists($pdo, 'sms_logs')) {
+            return;
+        }
+        $columns = [
+            'delivery_status' => 'VARCHAR(64) NULL',
+            'delivery_checked_at' => 'VARCHAR(32) NULL',
+            'api_confirmed' => 'TINYINT NOT NULL DEFAULT 0',
+        ];
+        foreach ($columns as $column => $definition) {
+            if (!self::columnExists($pdo, 'sms_logs', $column)) {
+                $type = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite'
+                    ? self::sqliteType($definition)
+                    : $definition;
+                $pdo->exec('ALTER TABLE sms_logs ADD COLUMN ' . Sql::quoteIdentifier($column) . ' ' . $type);
+            }
         }
     }
 

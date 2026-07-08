@@ -340,24 +340,178 @@ code { color: var(--primary); font-size: 0.9em; }
 }
 
 .member-filters,
-.sms-filters {
+.sms-filters,
+.recipient-filter-bar {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
-  margin: 12px 0 16px;
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
 }
 
 .member-filters label,
 .sms-filters label,
+.recipient-filter-bar label,
 .sms-filters input,
-.sms-filters select {
+.sms-filters select,
+.recipient-filter-bar input,
+.recipient-filter-bar select {
   display: grid;
   gap: 6px;
   font-size: 13px;
+  color: var(--muted);
+  font-weight: 600;
 }
 
-.sms-filters input[type="search"] {
+.recipient-filter-bar input,
+.recipient-filter-bar select {
+  min-width: 150px;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+}
+
+.recipient-filter-bar input[type="search"] {
   min-width: 220px;
+}
+
+.nav-item--sub {
+  padding-right: 28px;
+  font-size: 13px;
+}
+
+.sms-page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.sms-editor {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.sms-editor-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.sms-editor-label {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.sms-editor-meta {
+  display: flex;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.sms-editor-vars {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip-button {
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.chip-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.sms-editor-input {
+  width: 100%;
+  min-height: 120px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  line-height: 1.7;
+  resize: vertical;
+}
+
+.sms-editor-preview,
+.sms-editor-preview-block {
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  padding: 10px 12px;
+  white-space: pre-wrap;
+  font: inherit;
+  line-height: 1.7;
+}
+
+.sms-editor-preview-label,
+.panel-subtitle {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.charge-reminder-layout {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 16px;
+  margin-top: 12px;
+}
+
+.charge-debtor-list {
+  display: grid;
+  gap: 8px;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.charge-debtor-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.charge-debtor-amount {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.hidden {
+  display: none !important;
+}
+
+@media (max-width: 900px) {
+  .charge-reminder-layout {
+    grid-template-columns: 1fr;
+  }
 }
 
 .charge-reminder-list {

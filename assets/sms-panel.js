@@ -1,12 +1,4 @@
-/* global MECHINNO, fetchJson, fetchResource, postJson, showToast, escapeHtml, formatMoney, formatPlain, canWrite, csrfToken */
-
-window.initSmsPanel = () => {
-  loadSmsSettings().catch((error) => showToast(error.message, "error"));
-  loadSmsStats().catch(() => {});
-  loadSmsRecipients().catch((error) => showToast(error.message, "error"));
-  loadSmsHistory().catch((error) => showToast(error.message, "error"));
-  loadChargeReminderPanel().catch((error) => showToast(error.message, "error"));
-};
+/* global MECHINNO, fetchJson, fetchResource, postJson, showToast, escapeHtml, formatMoney, formatPlain, canWrite, csrfToken, createSmsEditor, buildRecipientFilterBar */
 
 const smsState = {
   recipients: [],
@@ -16,6 +8,46 @@ const smsState = {
   page: 1,
   perPage: 25,
   filters: { q: "", teamId: "", entityType: "", isLeader: "", wantsAccess: "" },
+  chargeTemplate: "",
+};
+
+let announcementEditor = null;
+let chargeTemplateEditor = null;
+
+window.initSmsPanel = () => {
+  initSmsFilters().catch((error) => showToast(error.message, "error"));
+  initSmsEditors();
+  loadSmsStats().catch(() => {});
+  loadSmsRecipients().catch((error) => showToast(error.message, "error"));
+  loadSmsHistory().catch((error) => showToast(error.message, "error"));
+  loadChargeReminderPanel().catch((error) => showToast(error.message, "error"));
+  postJson("api.php?resource=sms-sync-history", {}).catch(() => {});
+};
+
+const initSmsEditors = () => {
+  const announcementHost = document.getElementById("smsAnnouncementEditor");
+  if (announcementHost && !announcementHost.dataset.ready) {
+    announcementHost.dataset.ready = "1";
+    announcementEditor = createSmsEditor(announcementHost, {
+      label: "متن اطلاعیه",
+      placeholder: "متن پیامک اطلاعیه را بنویسید…",
+      readonly: !canWrite,
+      rows: 6,
+    });
+  }
+
+  const templateHost = document.getElementById("smsChargeTemplateInline");
+  if (templateHost && !templateHost.dataset.ready) {
+    templateHost.dataset.ready = "1";
+    chargeTemplateEditor = createSmsEditor(templateHost, {
+      label: "الگوی یادآور (برای ارسال دسته‌ای)",
+      placeholder: "الگو با متغیرها…",
+      readonly: !canWrite,
+      variables: window.SMS_EDITOR_VARS || [],
+      rows: 7,
+      showPreview: true,
+    });
+  }
 };
 
 const smsRecipientFilters = () => ({
@@ -28,26 +60,17 @@ const smsRecipientFilters = () => ({
   wantsAccess: smsState.filters.wantsAccess,
 });
 
-const bindSmsFilterEvents = () => {
+const initSmsFilters = async () => {
   const root = document.getElementById("smsRecipientsPanel");
-  if (!root || root.dataset.ready) return;
-  root.dataset.ready = "1";
-  root.querySelector("#smsFilterSearch")?.addEventListener("input", (event) => {
-    clearTimeout(root.searchTimer);
-    root.searchTimer = setTimeout(() => {
-      smsState.filters.q = event.target.value.trim();
-      smsState.page = 1;
-      loadSmsRecipients().catch((error) => showToast(error.message, "error"));
-    }, 300);
+  const mount = document.getElementById("smsFilterBar");
+  if (!root || !mount) return;
+  await buildRecipientFilterBar(mount, smsState.filters, () => {
+    smsState.page = 1;
+    loadSmsRecipients().catch((error) => showToast(error.message, "error"));
   });
-  ["Team", "EntityType", "Leader", "Access"].forEach((suffix) => {
-    root.querySelector(`#smsFilter${suffix}`)?.addEventListener("change", (event) => {
-      const map = { Team: "teamId", EntityType: "entityType", Leader: "isLeader", Access: "wantsAccess" };
-      smsState.filters[map[suffix]] = event.target.value;
-      smsState.page = 1;
-      loadSmsRecipients().catch((error) => showToast(error.message, "error"));
-    });
-  });
+
+  if (root.dataset.actionsReady) return;
+  root.dataset.actionsReady = "1";
   root.querySelector("#smsSelectLeaders")?.addEventListener("click", () => {
     smsState.recipients.filter((row) => Number(row.is_leader) === 1).forEach((row) => smsState.selected.add(Number(row.id)));
     renderSmsRecipients();
@@ -65,30 +88,6 @@ const bindSmsFilterEvents = () => {
   });
 };
 
-const loadSmsSettings = async () => {
-  const host = document.getElementById("smsSettingsForm");
-  if (!host) return;
-  const data = await fetchJson("api.php?resource=sms-settings");
-  host.innerHTML = `
-    <div class="crud-grid">
-      <label><span>نام کاربری ملی‌پیامک</span><input name="sms_username" value="${escapeHtml(data.sms_username || "")}" ${canWrite ? "" : "readonly"} /></label>
-      <label><span>رمز عبور API</span><input name="sms_password" type="password" placeholder="${data.sms_password_set ? "برای تغییر وارد کنید" : "رمز API"}" ${canWrite ? "" : "readonly"} /></label>
-      <label><span>شماره خط ارسال</span><input name="sms_from_number" value="${escapeHtml(data.sms_from_number || "")}" ${canWrite ? "" : "readonly"} /></label>
-      <label><span>سقف ارسال روزانه</span><input name="sms_daily_limit" type="number" value="${escapeHtml(data.sms_daily_limit || 500)}" ${canWrite ? "" : "readonly"} /></label>
-      <label><span>هزینه هر پیامک (ریال)</span><input name="sms_unit_cost" type="number" value="${escapeHtml(data.sms_unit_cost || 0)}" ${canWrite ? "" : "readonly"} /></label>
-    </div>
-    ${canWrite ? `<div class="modal-actions"><button class="button" type="submit">ذخیره تنظیمات پیامک</button></div>` : `<p class="hint">فقط مشاهده — ارسال برای مدیر ویرایشگر است.</p>`}`;
-
-  if (!canWrite) return;
-  host.onsubmit = async (event) => {
-    event.preventDefault();
-    const payload = Object.fromEntries(new FormData(host).entries());
-    await postJson("api.php?resource=sms-settings", payload);
-    showToast("تنظیمات پیامک ذخیره شد.", "success");
-    loadSmsStats().catch(() => {});
-  };
-};
-
 const loadSmsStats = async () => {
   const host = document.getElementById("smsStats");
   if (!host) return;
@@ -99,8 +98,8 @@ const loadSmsStats = async () => {
       <div class="month-stat"><span>باقی‌مانده امروز</span><strong>${Number(stats.remaining_today || 0).toLocaleString("fa-IR")}</strong></div>
       <div class="month-stat"><span>ناموفق امروز</span><strong>${Number(stats.failed_today || 0).toLocaleString("fa-IR")}</strong></div>
       <div class="month-stat"><span>هزینه امروز</span><strong>${formatMoney(stats.cost_today || 0)}</strong></div>
-      <div class="month-stat"><span>کل ارسال‌ها</span><strong>${Number(stats.total_sent || 0).toLocaleString("fa-IR")}</strong></div>
-      <div class="month-stat"><span>کل هزینه</span><strong>${formatMoney(stats.total_cost || 0)}</strong></div>
+      <div class="month-stat"><span>موجودی پنل</span><strong>${stats.panel_credit != null ? Number(stats.panel_credit).toLocaleString("fa-IR") : "—"}</strong></div>
+      <div class="month-stat"><span>تعرفه هر پیامک</span><strong>${formatMoney(stats.unit_cost || 0)}</strong></div>
     </div>`;
 };
 
@@ -130,18 +129,8 @@ const renderSmsRecipients = () => {
   if (info) info.textContent = `${smsState.selected.size.toLocaleString("fa-IR")} نفر انتخاب شده`;
 };
 
-const populateSmsTeamFilter = async () => {
-  const select = document.getElementById("smsFilterTeam");
-  if (!select || select.dataset.ready) return;
-  const meta = await fetchJson("api.php?resource=crud-meta");
-  const teamOptions = meta.resources?.members?.fields?.team_id?.options || {};
-  select.innerHTML = `<option value="">همه نهادها</option>${Object.entries(teamOptions).map(([value, label]) => `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`).join("")}`;
-  select.dataset.ready = "1";
-};
-
 const loadSmsRecipients = async () => {
-  await populateSmsTeamFilter();
-  bindSmsFilterEvents();
+  await initSmsFilters();
   const result = await fetchResource("api.php?resource=sms-recipients", smsRecipientFilters());
   smsState.recipients = result.rows || [];
   smsState.page = result.page;
@@ -149,15 +138,25 @@ const loadSmsRecipients = async () => {
   renderSmsRecipients();
   const pager = document.getElementById("smsRecipientsPager");
   if (pager) {
-    pager.textContent = `صفحه ${result.page.toLocaleString("fa-IR")} از ${result.pages.toLocaleString("fa-IR")}`;
+    pager.querySelector(".pager-info").textContent = `صفحه ${result.page.toLocaleString("fa-IR")} از ${result.pages.toLocaleString("fa-IR")}`;
     pager.querySelector("[data-sms-prev]")?.toggleAttribute("disabled", result.page <= 1);
     pager.querySelector("[data-sms-next]")?.toggleAttribute("disabled", result.page >= result.pages);
   }
 };
 
+const scheduleDeliveryCheck = (batchUid, logIds = []) => {
+  if (!batchUid && logIds.length === 0) return;
+  setTimeout(() => {
+    postJson("api.php?resource=sms-check-deliveries", {
+      batch_uid: batchUid || "",
+      log_ids: logIds,
+    }).then(() => loadSmsHistory()).catch(() => {});
+  }, 60000);
+};
+
 const sendSmsAnnouncement = async () => {
   if (!canWrite) throw new Error("دسترسی ارسال ندارید.");
-  const message = document.getElementById("smsAnnouncementText")?.value?.trim();
+  const message = announcementEditor?.getValue() || "";
   if (!message) throw new Error("متن پیامک را وارد کنید.");
   if (!smsState.selected.size) throw new Error("حداقل یک گیرنده انتخاب کنید.");
   if (!window.confirm(`ارسال پیامک به ${smsState.selected.size} نفر انجام شود؟`)) return;
@@ -170,38 +169,37 @@ const sendSmsAnnouncement = async () => {
   await loadSmsStats();
   await loadSmsHistory();
   renderSmsRecipients();
+  scheduleDeliveryCheck(result.result?.batch_uid, result.result?.pending_delivery_log_ids || []);
 };
 
 const loadSmsHistory = async () => {
   const tbody = document.querySelector("#smsHistoryTable tbody");
   if (!tbody) return;
-  const result = await fetchResource("api.php?resource=sms-history", { page: 1, perPage: 50 });
+  const result = await fetchResource("api.php?resource=sms-history", { page: 1, perPage: 100 });
   tbody.innerHTML = (result.rows || []).map((row) => `<tr>
     <td>${escapeHtml(formatPlain(row.created_at))}</td>
-    <td>${row.message_type === "charge_reminder" ? "یادآور شارژ" : "اطلاعیه"}</td>
+    <td>${row.message_type === "charge_reminder" ? "یادآور شارژ" : row.message_type === "announcement" ? "اطلاعیه" : "ارسالی"}</td>
     <td>${escapeHtml(row.recipient_name || "—")}</td>
     <td>${escapeHtml(row.phone || "—")}</td>
     <td>${escapeHtml(row.team_name || "—")}</td>
     <td><span class="badge">${escapeHtml(row.status || "—")}</span></td>
+    <td>${escapeHtml(row.delivery_status || "—")}</td>
+    <td>${Number(row.api_confirmed) === 1 ? "بله" : "خیر"}</td>
     <td>${formatMoney(row.cost_rial || 0)}</td>
-    <td title="${escapeHtml(row.message_text || "")}">${escapeHtml((row.message_text || "").slice(0, 48))}${(row.message_text || "").length > 48 ? "…" : ""}</td>
-    <td>${escapeHtml(row.error_message || "—")}</td>
-  </tr>`).join("") || `<tr><td colspan="9">تاریخچه‌ای ثبت نشده است.</td></tr>`;
+    <td title="${escapeHtml(row.message_text || "")}">${escapeHtml((row.message_text || "").slice(0, 40))}${(row.message_text || "").length > 40 ? "…" : ""}</td>
+  </tr>`).join("") || `<tr><td colspan="10">تاریخچه‌ای ثبت نشده است.</td></tr>`;
 };
 
 const renderChargeReminderPanel = () => {
-  const host = document.getElementById("smsChargeReminderList");
+  const host = document.getElementById("smsChargeDebtorList");
   if (!host) return;
   host.innerHTML = smsState.chargeItems.map((item) => {
     const checked = smsState.selectedChargeTeams.has(item.team_id) ? "checked" : "";
-    return `<article class="charge-reminder-card">
-      <label class="charge-reminder-head">
-        <input type="checkbox" data-charge-team="${item.team_id}" ${checked} ${canWrite ? "" : "disabled"} />
-        <strong>${escapeHtml(item.team_name)} — ${escapeHtml(item.leader_name || "—")}</strong>
-        <span>${formatMoney(item.debt_total)}</span>
-      </label>
-      <textarea data-charge-message="${item.team_id}" rows="5" ${canWrite ? "" : "readonly"}>${escapeHtml(item.message || "")}</textarea>
-    </article>`;
+    return `<label class="charge-debtor-row">
+      <input type="checkbox" data-charge-team="${item.team_id}" ${checked} ${canWrite ? "" : "disabled"} />
+      <span class="charge-debtor-name">${escapeHtml(item.team_name)} — ${escapeHtml(item.leader_name || "—")}</span>
+      <span class="charge-debtor-amount">${formatMoney(item.debt_total)}</span>
+    </label>`;
   }).join("") || `<div class="empty">نهاد بدهکاری برای یادآور یافت نشد.</div>`;
 
   host.querySelectorAll("[data-charge-team]").forEach((input) => {
@@ -209,15 +207,41 @@ const renderChargeReminderPanel = () => {
       const teamId = Number(input.dataset.chargeTeam);
       if (input.checked) smsState.selectedChargeTeams.add(teamId);
       else smsState.selectedChargeTeams.delete(teamId);
+      updateChargePreview();
     });
   });
+  updateChargePreview();
+};
+
+const updateChargePreview = () => {
+  const preview = document.getElementById("smsChargePreview");
+  if (!preview || !chargeTemplateEditor) return;
+  const template = chargeTemplateEditor.getValue() || smsState.chargeTemplate;
+  const first = smsState.chargeItems.find((item) => smsState.selectedChargeTeams.has(Number(item.team_id)));
+  preview.textContent = first
+    ? first.message || template
+    : "برای پیش‌نمایش، حداقل یک نهاد بدهکار انتخاب کنید.";
 };
 
 const loadChargeReminderPanel = async () => {
+  const settings = await fetchJson("api.php?resource=sms-settings");
+  smsState.chargeTemplate = settings.sms_charge_template || "";
+  if (chargeTemplateEditor) {
+    chargeTemplateEditor.setValue(smsState.chargeTemplate);
+    chargeTemplateEditor.onChange(() => {
+      const first = smsState.chargeItems.find((item) => smsState.selectedChargeTeams.has(Number(item.team_id)));
+      const preview = document.getElementById("smsChargePreview");
+      if (preview) {
+        preview.textContent = first?.message || chargeTemplateEditor.getValue() || "—";
+      }
+    });
+  }
+
   const data = await fetchJson("api.php?resource=sms-charge-preview");
   smsState.chargeItems = data.items || [];
   smsState.selectedChargeTeams = new Set(smsState.chargeItems.map((item) => Number(item.team_id)));
   renderChargeReminderPanel();
+
   const sendBtn = document.getElementById("smsSendChargeReminders");
   if (!sendBtn || sendBtn.dataset.ready) return;
   sendBtn.dataset.ready = "1";
@@ -228,18 +252,19 @@ const loadChargeReminderPanel = async () => {
 
 const sendChargeReminders = async () => {
   if (!canWrite) throw new Error("دسترسی ارسال ندارید.");
-  const items = smsState.chargeItems
-    .filter((item) => smsState.selectedChargeTeams.has(Number(item.team_id)))
-    .map((item) => ({
-      member_id: item.member_id,
-      message: document.querySelector(`[data-charge-message="${item.team_id}"]`)?.value?.trim() || "",
-    }));
-  if (!items.length) throw new Error("حداقل یک نهاد بدهکار انتخاب کنید.");
-  if (!window.confirm(`یادآور شارژ برای ${items.length} مسئول ارسال شود؟`)) return;
-  const result = await postJson("api.php?resource=sms-send-charge-reminders", { items });
+  const teamIds = [...smsState.selectedChargeTeams];
+  if (!teamIds.length) throw new Error("حداقل یک نهاد بدهکار انتخاب کنید.");
+  const template = chargeTemplateEditor?.getValue() || smsState.chargeTemplate;
+  if (!template) throw new Error("الگوی یادآور خالی است.");
+  if (!window.confirm(`یادآور شارژ برای ${teamIds.length} نهاد ارسال شود؟`)) return;
+  const result = await postJson("api.php?resource=sms-send-charge-reminders", {
+    team_ids: teamIds,
+    template,
+  });
   showToast(`یادآور ارسال شد — موفق: ${result.result?.sent || 0}، ناموفق: ${result.result?.failed || 0}`, "success");
   await loadSmsStats();
   await loadSmsHistory();
+  scheduleDeliveryCheck(result.result?.batch_uid, result.result?.pending_delivery_log_ids || []);
 };
 
 document.getElementById("smsRecipientsPager")?.addEventListener("click", (event) => {

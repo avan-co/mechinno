@@ -2163,53 +2163,100 @@ const initMemberFilters = async () => {
   const bar = document.getElementById("memberFilters");
   const table = document.getElementById("membersTable");
   if (!bar || !table) return;
-  const meta = await loadCrudMeta();
-  const teamOptions = meta.resources?.teams?.fields?.team_id?.options
-    || meta.resources?.members?.fields?.team_id?.options
-    || {};
-  const teamEntries = Object.entries(teamOptions);
-  bar.innerHTML = `
-    <label>نهاد
-      <select id="memberFilterTeam">
-        <option value="">همه</option>
-        ${teamEntries.map(([value, label]) => `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`).join("")}
-      </select>
-    </label>
-    <label>نوع نهاد
-      <select id="memberFilterEntityType">
-        <option value="">همه</option>
-        <option value="team">تیم</option>
-        <option value="company">شرکت</option>
-        <option value="student">دانشجو</option>
-      </select>
-    </label>
-    <label>نقش
-      <select id="memberFilterLeader">
-        <option value="">همه</option>
-        <option value="1">مسئول</option>
-        <option value="0">عضو عادی</option>
-      </select>
-    </label>
-    <label>دسترسی تردد
-      <select id="memberFilterAccess">
-        <option value="">همه</option>
-        <option value="1">نیاز به تردد</option>
-        <option value="0">بدون تردد</option>
-      </select>
-    </label>`;
-  const apply = () => {
-    table.setAttribute("data-member-team", bar.querySelector("#memberFilterTeam").value);
-    table.setAttribute("data-member-entity-type", bar.querySelector("#memberFilterEntityType").value);
-    table.setAttribute("data-member-leader", bar.querySelector("#memberFilterLeader").value);
-    table.setAttribute("data-member-access", bar.querySelector("#memberFilterAccess").value);
-    table.memberTeamFilter = bar.querySelector("#memberFilterTeam").value;
-    table.memberEntityTypeFilter = bar.querySelector("#memberFilterEntityType").value;
-    table.memberLeaderFilter = bar.querySelector("#memberFilterLeader").value;
-    table.memberAccessFilter = bar.querySelector("#memberFilterAccess").value;
+
+  const state = {
+    q: table.filter || "",
+    teamId: table.memberTeamFilter || "",
+    entityType: table.memberEntityTypeFilter || "",
+    isLeader: table.memberLeaderFilter || "",
+    wantsAccess: table.memberAccessFilter || "",
+  };
+
+  await buildRecipientFilterBar(bar, state, () => {
+    table.memberTeamFilter = state.teamId;
+    table.memberEntityTypeFilter = state.entityType;
+    table.memberLeaderFilter = state.isLeader;
+    table.memberAccessFilter = state.wantsAccess;
+    table.filter = state.q;
+    table.setAttribute("data-member-team", state.teamId);
+    table.setAttribute("data-member-entity-type", state.entityType);
+    table.setAttribute("data-member-leader", state.isLeader);
+    table.setAttribute("data-member-access", state.wantsAccess);
     table.page = 1;
     table.load?.();
-  };
-  bar.querySelectorAll("select").forEach((select) => select.addEventListener("change", apply));
+  });
+
+  const search = table.querySelector(".search");
+  if (search) {
+    search.closest(".table-actions")?.classList.add("hidden");
+  }
+};
+
+window.buildRecipientFilterBar = async (container, state, onApply) => {
+  if (!container) return;
+  const meta = await loadCrudMeta();
+  const teamOptions = meta.resources?.members?.fields?.team_id?.options || {};
+  const teamEntries = Object.entries(teamOptions);
+
+  if (!container.dataset.ready) {
+    container.dataset.ready = "1";
+    container.className = "filter-bar recipient-filter-bar";
+    container.innerHTML = `
+      <label>جست‌وجو
+        <input type="search" data-filter="q" placeholder="نام، موبایل، نهاد…" />
+      </label>
+      <label>نهاد
+        <select data-filter="teamId"><option value="">همه</option></select>
+      </label>
+      <label>نوع نهاد
+        <select data-filter="entityType">
+          <option value="">همه</option>
+          <option value="team">تیم</option>
+          <option value="company">شرکت</option>
+          <option value="student">دانشجو</option>
+        </select>
+      </label>
+      <label>نقش
+        <select data-filter="isLeader">
+          <option value="">همه</option>
+          <option value="1">مسئول</option>
+          <option value="0">عضو عادی</option>
+        </select>
+      </label>
+      <label>دسترسی تردد
+        <select data-filter="wantsAccess">
+          <option value="">همه</option>
+          <option value="1">نیاز به تردد</option>
+          <option value="0">بدون تردد</option>
+        </select>
+      </label>`;
+
+    const teamSelect = container.querySelector('[data-filter="teamId"]');
+    teamSelect.innerHTML = `<option value="">همه</option>${teamEntries.map(([value, label]) =>
+      `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`
+    ).join("")}`;
+
+    const apply = () => {
+      state.q = container.querySelector('[data-filter="q"]')?.value.trim() || "";
+      state.teamId = container.querySelector('[data-filter="teamId"]')?.value || "";
+      state.entityType = container.querySelector('[data-filter="entityType"]')?.value || "";
+      state.isLeader = container.querySelector('[data-filter="isLeader"]')?.value || "";
+      state.wantsAccess = container.querySelector('[data-filter="wantsAccess"]')?.value || "";
+      onApply?.();
+    };
+
+    container.querySelector('[data-filter="q"]')?.addEventListener("input", () => {
+      clearTimeout(container.searchTimer);
+      container.searchTimer = setTimeout(apply, 300);
+    });
+    container.querySelectorAll("select").forEach((select) => select.addEventListener("change", apply));
+  }
+
+  container.querySelector('[data-filter="q"]').value = state.q || "";
+  container.querySelector('[data-filter="teamId"]').value = state.teamId || "";
+  container.querySelector('[data-filter="entityType"]').value = state.entityType || "";
+  container.querySelector('[data-filter="isLeader"]').value = state.isLeader || "";
+  container.querySelector('[data-filter="wantsAccess"]').value = state.wantsAccess || "";
 };
 
 class DataTable extends HTMLElement {
