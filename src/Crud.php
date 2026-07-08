@@ -699,16 +699,10 @@ final class Crud
      */
     private function enrichDeskAssignment(array $row): array
     {
-        $statement = $this->pdo->prepare(
-            'SELECT assigned_from, assigned_until FROM desk_assignments
-             WHERE desk_id = :desk_id
-               AND (assigned_until IS NULL OR assigned_until = \'\')
-             ORDER BY assigned_from DESC, id DESC
-             LIMIT 1'
-        );
-        $statement->execute(['desk_id' => (int) ($row['id'] ?? 0)]);
-        $assignment = $statement->fetch();
-        if ($assignment !== false) {
+        $deskId = (int) ($row['id'] ?? 0);
+        $teamId = (int) ($row['team_id'] ?? 0);
+        $assignment = (new DeskAssignments($this->pdo))->assignmentForDeskForm($deskId, $teamId > 0 ? $teamId : null);
+        if ($assignment !== null) {
             $row['assignment_from'] = $assignment['assigned_from'] ?? '';
             $row['assignment_until'] = $assignment['assigned_until'] ?? '';
         } else {

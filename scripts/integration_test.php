@@ -160,6 +160,16 @@ $_SESSION = [
     'mechinno_user' => 'admin',
     'mechinno_user_id' => 0,
 ];
+$deskAfterAssign = $crud->find('desks', 1);
+$assert((int) ($deskAfterAssign['team_id'] ?? 0) === $teamId, 'desks: team remains assigned when end date is set');
+$assert(($deskAfterAssign['assignment_until'] ?? '') === $partialUntil, 'desks: assignment_until is shown on desk form');
+$deskAfterUpdate = $crud->update('desks', 1, [
+    'team_id' => (string) $teamId,
+    'usage_type' => 'formal',
+    'assignment_from' => '1405/01/01',
+    'assignment_until' => $partialUntil,
+]);
+$assert(($deskAfterUpdate['assignment_until'] ?? '') === $partialUntil, 'desks: assignment_until persists after save');
 $crud->create('rate_settings', [
     'fiscal_year' => '1405',
     'title' => 'نرخ تست تیم',
