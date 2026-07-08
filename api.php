@@ -175,7 +175,12 @@ try {
         if ($teamId !== null && $teamId <= 0) {
             $teamId = null;
         }
-        json_response(['items' => (new SmsService($pdo))->chargeReminderPreview($teamId)]);
+        $items = (new SmsService($pdo))->chargeReminderPreview($teamId);
+        $payload = ['items' => $items];
+        if ($items === [] && Access::isAdmin()) {
+            $payload['diagnostics'] = $repository->debtorTeamsSmsDiagnostics();
+        }
+        json_response($payload);
     }
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && $resource === 'sms-send') {
