@@ -107,8 +107,8 @@ const sectionMeta = {
   transactions: { eyebrow: "مالی", title: "دفتر معین و موجودی نقدی", subtitle: "گردش واقعی حساب مرکز — بدون تکرار شارژ سیستمی" },
   development: { eyebrow: "برنامه‌ریزی", title: "برنامه توسعه", subtitle: "کارهای جاری مرکز — اولویت‌بندی و پیگیری ساده" },
   users: { eyebrow: "دسترسی", title: "کاربران پنل", subtitle: "مدیریت نقش‌ها و پنل اختصاصی نهادها" },
-  sms: { eyebrow: "اطلاع‌رسانی", title: "ارسال پیامک", subtitle: "ارسال اطلاعیه و یادآور شارژ به اعضا و مسئولین نهادها" },
-  "sms-settings": { eyebrow: "پیامک", title: "تنظیمات ملی‌پیامک", subtitle: "اتصال API، خط ارسال، الگوی یادآور و همگام‌سازی" },
+  sms: { eyebrow: "اطلاع‌رسانی", title: "ارسال پیامک", subtitle: "ارسال اطلاعیه به اعضا و مسئولین نهادها" },
+  "sms-settings": { eyebrow: "پیامک", title: "تنظیمات ملی‌پیامک", subtitle: "اتصال API، خط ارسال و همگام‌سازی" },
 };
 
 const teamSectionMeta = {

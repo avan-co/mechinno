@@ -61,7 +61,6 @@ final class Access
         'ledger',
         'sms-settings',
         'sms-stats',
-        'sms-charge-preview',
         'sms-recipients',
         'sms-history',
         'sms-query-lines',
@@ -69,7 +68,6 @@ final class Access
         'sms-check-deliveries',
         'sms-test',
         'sms-send',
-        'sms-send-charge-reminders',
     ];
 
     public static function role(): string

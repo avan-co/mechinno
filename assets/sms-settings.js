@@ -1,7 +1,6 @@
-/* global fetchJson, postJson, showToast, escapeHtml, formatMoney, canWrite, createSmsEditor, SMS_EDITOR_VARS */
+/* global fetchJson, postJson, showToast, escapeHtml, formatMoney, canWrite */
 
 let smsSettingsState = null;
-let templateEditor = null;
 let smsSettingsReady = false;
 
 const loadSmsSettingsPage = async (withLive = false) => {
@@ -10,7 +9,6 @@ const loadSmsSettingsPage = async (withLive = false) => {
   renderSmsCredentialsForm(data);
   renderSmsLineForm(data);
   renderSmsSettingsStats(data);
-  renderTemplateEditor(data.sms_charge_template || "");
 };
 
 const renderSmsCredentialsForm = (data) => {
@@ -99,39 +97,9 @@ const renderSmsSettingsStats = (data) => {
     </div>`;
 };
 
-const renderTemplateEditor = (value) => {
-  const host = document.getElementById("smsChargeTemplateEditor");
-  if (!host) return;
-  if (host.dataset.ready) {
-    templateEditor?.setValue(value);
-    return;
-  }
-  host.dataset.ready = "1";
-  templateEditor = createSmsEditor(host, {
-    label: "الگوی یادآور شارژ",
-    value,
-    readonly: !canWrite,
-    variables: SMS_EDITOR_VARS,
-    rows: 8,
-  });
-};
-
 const bindSmsSettingsActions = () => {
   if (smsSettingsReady) return;
   smsSettingsReady = true;
-
-  document.getElementById("smsSaveTemplate")?.addEventListener("click", async () => {
-    if (!canWrite || !templateEditor) return;
-    try {
-      await postJson("api.php?resource=sms-settings", {
-        section: "template",
-        sms_charge_template: templateEditor.getValue(),
-      });
-      showToast("الگوی یادآور ذخیره شد.", "success");
-    } catch (error) {
-      showToast(error.message, "error");
-    }
-  });
 
   document.getElementById("smsTestConnection")?.addEventListener("click", async () => {
     try {

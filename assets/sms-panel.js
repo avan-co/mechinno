@@ -1,10 +1,8 @@
-/* global fetchJson, fetchResource, postJson, showToast, escapeHtml, formatMoney, formatPlain, canWrite, createSmsEditor, buildRecipientFilterBar, SMS_CHARGE_VARS */
+/* global fetchJson, fetchResource, postJson, showToast, escapeHtml, formatMoney, formatPlain, canWrite, createSmsEditor, buildRecipientFilterBar */
 
 const smsState = {
   recipients: [],
   selected: new Set(),
-  chargeRecipients: 0,
-  chargeTemplate: "",
   configured: false,
   page: 1,
   perPage: 25,
@@ -12,7 +10,6 @@ const smsState = {
 };
 
 let announcementEditor = null;
-let chargeTemplateEditor = null;
 
 const renderSmsSetupBanner = (settings = null) => {
   const host = document.getElementById("smsSetupBanner");
@@ -44,7 +41,6 @@ window.initSmsPanel = () => {
     const tbody = document.querySelector("#smsHistoryTable tbody");
     if (tbody) tbody.innerHTML = `<tr><td colspan="10">خطا: ${escapeHtml(error.message)}</td></tr>`;
   });
-  loadChargeReminderPanel().catch((error) => showToast(error.message, "error"));
 };
 
 const initSmsEditors = () => {
@@ -56,19 +52,6 @@ const initSmsEditors = () => {
       placeholder: "متن پیامک اطلاعیه را بنویسید…",
       readonly: !canWrite,
       rows: 6,
-    });
-  }
-
-  const templateHost = document.getElementById("smsChargeTemplateInline");
-  if (templateHost && !templateHost.dataset.ready) {
-    templateHost.dataset.ready = "1";
-    chargeTemplateEditor = createSmsEditor(templateHost, {
-      label: "الگوی یادآور پرداخت",
-      placeholder: "متن یادآوری ورود به سامانه…",
-      readonly: !canWrite,
-      variables: SMS_CHARGE_VARS || [],
-      rows: 7,
-      showPreview: true,
     });
   }
 };
@@ -208,7 +191,7 @@ const loadSmsHistory = async () => {
   const result = await fetchResource("api.php?resource=sms-history", { page: 1, perPage: 100 });
   tbody.innerHTML = (result.rows || []).map((row) => `<tr>
     <td>${escapeHtml(formatPlain(row.created_at))}</td>
-    <td>${row.message_type === "charge_reminder" ? "یادآور شارژ" : row.message_type === "announcement" ? "اطلاعیه" : "ارسالی"}</td>
+    <td>${row.message_type === "announcement" ? "اطلاعیه" : "ارسالی"}</td>
     <td>${escapeHtml(row.recipient_name || "—")}</td>
     <td>${escapeHtml(row.phone || "—")}</td>
     <td>${escapeHtml(row.team_name || "—")}</td>
@@ -218,65 +201,6 @@ const loadSmsHistory = async () => {
     <td>${formatMoney(row.cost_rial || 0)}</td>
     <td title="${escapeHtml(row.message_text || "")}">${escapeHtml((row.message_text || "").slice(0, 40))}${(row.message_text || "").length > 40 ? "…" : ""}</td>
   </tr>`).join("") || `<tr><td colspan="10">تاریخچه‌ای ثبت نشده است.</td></tr>`;
-};
-
-const renderChargeRecipientInfo = () => {
-  const host = document.getElementById("smsChargeRecipientInfo");
-  if (!host) return;
-  if (smsState.chargeRecipients <= 0) {
-    host.textContent = "نهاد دارای قرارداد سال جاری با مسئول قابل ارسال یافت نشد.";
-    return;
-  }
-  host.textContent = `ارسال به ${smsState.chargeRecipients.toLocaleString("fa-IR")} مسئول نهاد دارای قرارداد سال جاری.`;
-};
-
-const loadChargeReminderPanel = async () => {
-  try {
-    const data = await fetchJson("api.php?resource=sms-charge-preview");
-    smsState.chargeRecipients = Number(data.recipient_count || 0);
-    renderChargeRecipientInfo();
-  } catch (error) {
-    const host = document.getElementById("smsChargeRecipientInfo");
-    if (host) host.textContent = `خطا در بارگذاری: ${error.message}`;
-    return;
-  }
-
-  try {
-    const settings = await fetchJson("api.php?resource=sms-settings");
-    smsState.chargeTemplate = settings.sms_charge_template || "";
-    smsState.configured = Boolean(settings.sms_configured);
-    renderSmsSetupBanner(settings);
-  } catch {
-    smsState.chargeTemplate = "";
-  }
-
-  if (chargeTemplateEditor) {
-    chargeTemplateEditor.setValue(smsState.chargeTemplate);
-  }
-
-  const sendBtn = document.getElementById("smsSendChargeReminders");
-  if (!sendBtn || sendBtn.dataset.ready) return;
-  sendBtn.dataset.ready = "1";
-  sendBtn.addEventListener("click", () => {
-    sendChargeReminders().catch((error) => showToast(error.message, "error"));
-  });
-};
-
-const sendChargeReminders = async () => {
-  if (!canWrite) throw new Error("دسترسی ارسال ندارید.");
-  if (!smsState.configured) throw new Error("ابتدا تنظیمات ملی‌پیامک را کامل کنید.");
-  if (smsState.chargeRecipients <= 0) throw new Error("نهاد دارای قرارداد با مسئول قابل ارسال یافت نشد.");
-  const template = chargeTemplateEditor?.getValue() || smsState.chargeTemplate;
-  if (!template) throw new Error("الگوی یادآور خالی است.");
-  if (!window.confirm(`یادآور پرداخت برای ${smsState.chargeRecipients} مسئول نهاد ارسال شود؟`)) return;
-  const result = await postJson("api.php?resource=sms-send-charge-reminders", {
-    team_ids: [],
-    template,
-  });
-  showToast(`یادآور ارسال شد — موفق: ${result.result?.sent || 0}، ناموفق: ${result.result?.failed || 0}`, "success");
-  await loadSmsStats();
-  await loadSmsHistory();
-  scheduleDeliveryCheck(result.result?.batch_uid, result.result?.pending_delivery_log_ids || []);
 };
 
 document.getElementById("smsRecipientsPager")?.addEventListener("click", (event) => {
