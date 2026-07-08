@@ -958,8 +958,10 @@ const loadTeamDeskAssignments = async () => {
     return;
   }
 
-  const activeRows = rows.filter((row) => !row.assigned_until);
-  const historyRows = rows.filter((row) => row.assigned_until);
+  const isActiveAssignment = (row) => String(row.assignment_status || "") === "active";
+  const currentYear = String(window.MECHINNO?.fiscalYear || "");
+  const activeRows = rows.filter(isActiveAssignment);
+  const historyRows = rows.filter((row) => !isActiveAssignment(row));
   const renderCard = (row, isActive = false) => `
     <article class="desk-assignment-card${isActive ? " is-active" : ""}">
       <div class="desk-assignment-card-head">
@@ -969,21 +971,21 @@ const loadTeamDeskAssignments = async () => {
       <span class="badge">${escapeHtml(usageLabels[row.usage_type] || row.usage_type || "—")}</span>
       <div class="desk-assignment-dates">
         <span>${escapeHtml(row.assignment_period || formatMonthRange(row.assigned_from, row.assigned_until))}</span>
-        ${!row.assigned_until ? `<span class="hint">فعال — بدون تاریخ تحویل</span>` : ""}
+        ${isActive ? `<span class="hint">فعال${row.assigned_until ? "" : " — بدون تاریخ تحویل"}</span>` : ""}
       </div>
       ${row.notes ? `<p class="hint">${escapeHtml(row.notes)}</p>` : ""}
     </article>`;
 
   const activeHtml = activeRows.length
     ? `<div class="desk-assignment-section">
-        <h3>میزهای فعال سال جاری</h3>
+        <h3>میزهای فعال${currentYear ? ` سال ${escapeHtml(currentYear)}` : ""}</h3>
         <div class="desk-assignment-grid">${activeRows.map((row) => renderCard(row, true)).join("")}</div>
       </div>`
     : `<div class="desk-assignment-section"><h3>میزهای فعال</h3><div class="empty">در حال حاضر میز فعالی ثبت نشده است.</div></div>`;
 
   const historyHtml = historyRows.length
     ? `<div class="desk-assignment-section">
-        <h3>سوابق سال‌های قبل</h3>
+        <h3>سوابق و تخصیص‌های پایان‌یافته</h3>
         <div class="desk-assignment-grid">${historyRows.map((row) => renderCard(row)).join("")}</div>
       </div>`
     : "";
