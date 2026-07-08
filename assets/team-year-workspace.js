@@ -427,9 +427,9 @@
 
     const year = currentFiscalYear();
     const assignParams = { page: 1, perPage: 100, fiscalYear: year };
-    if (desk.team_id) assignParams.teamId = desk.team_id;
     const { rows: assignments } = await S().fetchResource("api.php?resource=desk-assignments", assignParams);
-    const existing = assignments.find((row) => Number(row.desk_id) === Number(desk.id));
+    const deskMatches = assignments.filter((row) => Number(row.desk_id) === Number(desk.id));
+    const existing = deskMatches.sort((a, b) => String(b.assigned_from || "").localeCompare(String(a.assigned_from || "")))[0] || null;
 
     let prefill = {
       desk_id: String(desk.id),

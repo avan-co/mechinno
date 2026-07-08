@@ -88,30 +88,38 @@ final class TeamContracts
 
     public function deskCountForMonth(int $teamId, string $fiscalYear, int $monthIndex): int
     {
-        $count = 0;
+        $deskNumbers = [];
         foreach ($this->deskAssignmentsForTeamInYear($teamId, $fiscalYear) as $assignment) {
-            if ($this->assignmentOverlapsMonth($assignment, $fiscalYear, $monthIndex)) {
-                $count++;
+            if (!$this->assignmentOverlapsMonth($assignment, $fiscalYear, $monthIndex)) {
+                continue;
+            }
+            $deskNumber = (int) ($assignment['desk_number'] ?? 0);
+            if ($deskNumber > 0) {
+                $deskNumbers[$deskNumber] = true;
             }
         }
 
-        return $count;
+        return count($deskNumbers);
     }
 
     public function informalDeskCountForMonth(int $teamId, string $fiscalYear, int $monthIndex): int
     {
-        $count = 0;
+        $informalDesks = [];
         foreach ($this->deskAssignmentsForTeamInYear($teamId, $fiscalYear) as $assignment) {
             if (!$this->assignmentOverlapsMonth($assignment, $fiscalYear, $monthIndex)) {
                 continue;
             }
             $usage = (string) ($assignment['usage_type'] ?? 'formal');
-            if (in_array($usage, ['informal', 'mixed'], true)) {
-                $count++;
+            if (!in_array($usage, ['informal', 'mixed'], true)) {
+                continue;
+            }
+            $deskNumber = (int) ($assignment['desk_number'] ?? 0);
+            if ($deskNumber > 0) {
+                $informalDesks[$deskNumber] = true;
             }
         }
 
-        return $count;
+        return count($informalDesks);
     }
 
     public function hasInformalDeskInYear(int $teamId, string $fiscalYear): bool

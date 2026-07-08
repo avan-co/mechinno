@@ -213,6 +213,49 @@ foreach ($partialMatrix['rows'] ?? [] as $matrixRow) {
 $assert($chargedMonths === 7, 'charges: partial desk assignment charges only assigned months');
 $assert($emptyAfterDesk === 0, 'charges: no charges after desk assignment end month');
 
+$assignmentRow = $pdo->query('SELECT id FROM desk_assignments WHERE desk_id = 1 AND team_id = ' . $teamId . ' ORDER BY id DESC LIMIT 1')->fetch();
+$assert($assignmentRow !== false, 'desk-assignments: has row for desk 1');
+$assignmentId = (int) $assignmentRow['id'];
+$fromMonth5 = JalaliDate::monthStart('1405', 5);
+$untilMonth7 = JalaliDate::monthEnd('1405', 7);
+$updatedAssign = $crud->update('desk_assignments', $assignmentId, [
+    'team_id' => (string) $teamId,
+    'desk_id' => '1',
+    'usage_type' => 'formal',
+    'fiscal_year' => '1405',
+    'assigned_from_month' => '5',
+    'assigned_until_month' => '7',
+    'notes' => '',
+]);
+$assert(($updatedAssign['assigned_from'] ?? '') === $fromMonth5, 'desk-assignments: update persists from month');
+$deskListAfterAssign = null;
+foreach ($repo->paginatedResource('desks', 1, 100)['rows'] as $deskRow) {
+    if ((int) ($deskRow['number'] ?? 0) === 1) {
+        $deskListAfterAssign = $deskRow;
+        break;
+    }
+}
+$assert($deskListAfterAssign !== null, 'desks: list after desk-assignments update');
+$assert(($deskListAfterAssign['assignment_from'] ?? '') === $fromMonth5, 'desks: list shows updated assignment_from');
+$assert(($deskListAfterAssign['assignment_until'] ?? '') === $untilMonth7, 'desks: list shows updated assignment_until');
+
+$pdo->prepare(
+    'INSERT INTO desk_assignments (desk_id, desk_number, team_id, usage_type, assigned_from, assigned_until)
+     VALUES (1, 1, :team_id, :usage_type, :assigned_from, :assigned_until)'
+)->execute([
+    'team_id' => $teamId,
+    'usage_type' => 'formal',
+    'assigned_from' => $fromMonth5,
+    'assigned_until' => $untilMonth7,
+]);
+$duplicateAmounts = (new Seeder($pdo))->monthlyAmountsForTeam($teamId, '1405');
+$assert(count($duplicateAmounts) === 3, 'charges: duplicate desk rows still charge only assigned months');
+$assert(($duplicateAmounts[5]['charge_amount'] ?? 0) === 300, 'charges: duplicate rows count one desk per month');
+(new Seeder($pdo))->recalculateCharges('1405');
+$afterGlobalRecalc = (new Seeder($pdo))->monthlyAmountsForTeam($teamId, '1405');
+$assert(($afterGlobalRecalc[5]['charge_amount'] ?? 0) === 300, 'charges: global recalc keeps single-desk amounts');
+$pdo->exec('DELETE FROM desk_assignments WHERE desk_id = 1 AND id <> ' . $assignmentId);
+
 $expiredDeskId = (int) ($pdo->query('SELECT id FROM desks WHERE number = 10')->fetchColumn() ?: 0);
 if ($expiredDeskId > 0) {
     $pdo->exec('DELETE FROM desk_assignments WHERE desk_id = ' . $expiredDeskId);

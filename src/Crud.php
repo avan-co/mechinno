@@ -709,8 +709,7 @@ final class Crud
     private function enrichDeskAssignment(array $row): array
     {
         $deskId = (int) ($row['id'] ?? 0);
-        $teamId = (int) ($row['team_id'] ?? 0);
-        $assignment = (new DeskAssignments($this->pdo))->assignmentForDeskForm($deskId, $teamId > 0 ? $teamId : null);
+        $assignment = (new DeskAssignments($this->pdo))->assignmentForDeskForm($deskId, null);
         if ($assignment !== null) {
             $row['assignment_from'] = $assignment['assigned_from'] ?? '';
             $row['assignment_until'] = $assignment['assigned_until'] ?? '';
