@@ -132,6 +132,34 @@ try {
         json_response((new SmsService($pdo))->stats());
     }
 
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && $resource === 'sms-query-lines') {
+        require_csrf_json();
+        Access::requireWriteJson();
+        json_response(['ok' => true, 'result' => (new SmsService($pdo))->queryLines()]);
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && $resource === 'sms-sync-history') {
+        require_csrf_json();
+        json_response(['ok' => true, 'result' => (new SmsService($pdo))->syncHistoryFromApi()]);
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && $resource === 'sms-check-deliveries') {
+        require_csrf_json();
+        $payload = json_decode((string) file_get_contents('php://input'), true);
+        if (!is_array($payload)) {
+            $payload = $_POST;
+        }
+        $logIds = array_map('intval', (array) ($payload['log_ids'] ?? []));
+        $batchUid = trim((string) ($payload['batch_uid'] ?? ''));
+        json_response([
+            'ok' => true,
+            'result' => (new SmsService($pdo))->checkDeliveries(
+                $logIds !== [] ? $logIds : null,
+                $batchUid !== '' ? $batchUid : null
+            ),
+        ]);
+    }
+
     if ($resource === 'sms-charge-preview') {
         $teamId = isset($_GET['team_id']) ? (int) $_GET['team_id'] : null;
         if ($teamId !== null && $teamId <= 0) {
@@ -160,7 +188,22 @@ try {
             $payload = $_POST;
         }
         $items = is_array($payload['items'] ?? null) ? $payload['items'] : [];
-        json_response(['ok' => true, 'result' => (new SmsService($pdo))->sendChargeReminders($items)]);
+        $teamIds = array_map('intval', (array) ($payload['team_ids'] ?? []));
+        $template = trim((string) ($payload['template'] ?? ''));
+        if ($items === [] && $teamIds !== []) {
+            foreach ($teamIds as $teamId) {
+                if ($teamId > 0) {
+                    $items[] = ['team_id' => $teamId];
+                }
+            }
+        }
+        json_response([
+            'ok' => true,
+            'result' => (new SmsService($pdo))->sendChargeReminders(
+                $items,
+                $template !== '' ? $template : null
+            ),
+        ]);
     }
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && $resource === 'teams' && $action === 'reset-portal-password') {

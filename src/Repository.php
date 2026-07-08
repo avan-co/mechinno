@@ -476,7 +476,8 @@ final class Repository
                 . $this->searchClause('members', $filters, true)
                 . ' ORDER BY m.is_leader DESC, t.name, m.full_name, m.id',
             'sms-history' => 'SELECT id, batch_uid, message_type, member_id, team_id, team_name, recipient_name, phone,
-                        is_leader, message_text, status, error_message, provider_rec_id, cost_rial, sent_by, created_at, sent_at
+                        is_leader, message_text, status, error_message, provider_rec_id, cost_rial, sent_by, created_at, sent_at,
+                        delivery_status, delivery_checked_at, api_confirmed
                  FROM sms_logs WHERE 1=1'
                 . $this->smsHistoryFilterClause($filters)
                 . ' ORDER BY created_at DESC, id DESC',

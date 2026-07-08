@@ -47,6 +47,26 @@ if (!source.includes('crudResourceKey(resource)') || !source.includes('.replace(
   process.exit(1);
 }
 
+if (!source.includes("buildRecipientFilterBar")) {
+  console.error("app.js must expose buildRecipientFilterBar for member/sms filters");
+  process.exit(1);
+}
+
+if (!fs.existsSync(path.join(__dirname, "..", "assets", "sms-editor.js"))) {
+  console.error("sms-editor.js is missing");
+  process.exit(1);
+}
+
+if (!fs.existsSync(path.join(__dirname, "..", "sms-settings.php"))) {
+  console.error("sms-settings.php is missing");
+  process.exit(1);
+}
+
+if (!apiSource.includes("sms-query-lines") || !apiSource.includes("sms-check-deliveries")) {
+  console.error("api.php must expose sms-query-lines and sms-check-deliveries");
+  process.exit(1);
+}
+
 if (!apiSource.includes("'desk-assignments' => 'desk_assignments'")) {
   console.error("api.php must map desk-assignments to desk_assignments for CRUD");
   process.exit(1);

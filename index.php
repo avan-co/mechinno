@@ -14,7 +14,8 @@ $today = JalaliDate::todayParts();
 $assetVer = (string) max(
     filemtime(__DIR__ . '/assets/styles.css'),
     filemtime(__DIR__ . '/assets/app.js'),
-    filemtime(__DIR__ . '/assets/sms-panel.js')
+    filemtime(__DIR__ . '/assets/sms-panel.js'),
+    filemtime(__DIR__ . '/assets/sms-editor.js')
 );
 ?>
 <!doctype html>
@@ -130,8 +131,12 @@ $assetVer = (string) max(
             <?php if (Access::isAdmin()): ?>
             <button class="nav-item" data-section="sms" type="button">
               <span class="nav-icon nav-icon--green"><svg viewBox="0 0 24 24"><path d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2Zm0 2v.5L12 13 4 6.5V6ZM4 18V8.2l7.4 6.5a1 1 0 0 0 1.2 0L20 8.2V18Z" fill="currentColor"/></svg></span>
-              پیامک
+              ارسال پیامک
             </button>
+            <a class="nav-item nav-item--sub" href="sms-settings.php">
+              <span class="nav-icon nav-icon--green"><svg viewBox="0 0 24 24"><path d="M12 8a1 1 0 0 1 1 1v3h3a1 1 0 1 1 0 2h-4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Zm8-3H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Z" fill="currentColor"/></svg></span>
+              تنظیمات پیامک
+            </a>
             <?php endif; ?>
             <?php if (Access::canWrite()): ?>
             <button class="nav-item" data-section="development" type="button">
@@ -243,11 +248,12 @@ $assetVer = (string) max(
             </section>
 
             <section id="sms" class="section">
-              <p class="hint">ارسال پیامک از طریق <strong>ملی‌پیامک</strong>. مدیر مشاهده‌گر فقط تاریخچه و آمار را می‌بیند. گیرنده را با فیلتر و تیک انتخاب کنید.</p>
-              <article class="panel">
-                <div class="panel-head"><h2>تنظیمات پیامک</h2></div>
-                <form id="smsSettingsForm" class="payment-settings-form">در حال بارگذاری…</form>
-              </article>
+              <div class="sms-page-head">
+                <p class="hint">ارسال پیامک از طریق <strong>ملی‌پیامک</strong>. تنظیمات API در <a href="sms-settings.php">صفحه تنظیمات پیامک</a>. مدیر مشاهده‌گر فقط آمار و تاریخچه را می‌بیند.</p>
+                <?php if (Access::canWrite()): ?>
+                <a class="button ghost" href="sms-settings.php">تنظیمات پیامک</a>
+                <?php endif; ?>
+              </div>
               <article class="panel">
                 <div class="panel-head"><h2>آمار ارسال</h2></div>
                 <div id="smsStats">در حال بارگذاری…</div>
@@ -261,26 +267,7 @@ $assetVer = (string) max(
                     <button type="button" class="button ghost" id="smsClearSelection">پاک کردن انتخاب</button>
                   </div>
                 </div>
-                <div class="sms-filters">
-                  <input id="smsFilterSearch" type="search" placeholder="جست‌وجو نام / موبایل / نهاد" />
-                  <select id="smsFilterTeam"><option value="">همه نهادها</option></select>
-                  <select id="smsFilterEntityType">
-                    <option value="">همه انواع</option>
-                    <option value="team">تیم</option>
-                    <option value="company">شرکت</option>
-                    <option value="student">دانشجو</option>
-                  </select>
-                  <select id="smsFilterLeader">
-                    <option value="">همه نقش‌ها</option>
-                    <option value="1">مسئول</option>
-                    <option value="0">عضو عادی</option>
-                  </select>
-                  <select id="smsFilterAccess">
-                    <option value="">همه ترددها</option>
-                    <option value="1">نیاز به تردد</option>
-                    <option value="0">بدون تردد</option>
-                  </select>
-                </div>
+                <div id="smsFilterBar"></div>
                 <p class="hint" id="smsSelectionInfo">۰ نفر انتخاب شده</p>
                 <div class="table-wrap">
                   <table id="smsRecipientsTable" class="data-table">
@@ -289,13 +276,13 @@ $assetVer = (string) max(
                   </table>
                 </div>
                 <div class="table-pagination" id="smsRecipientsPager">
-                  <span></span>
+                  <span class="pager-info"></span>
                   <div class="pager-buttons">
                     <button class="mini-button" type="button" data-sms-prev>قبلی</button>
                     <button class="mini-button" type="button" data-sms-next>بعدی</button>
                   </div>
                 </div>
-                <label class="wide"><span>متن اطلاعیه</span><textarea id="smsAnnouncementText" rows="4" placeholder="متن پیامک را بنویسید…"></textarea></label>
+                <div id="smsAnnouncementEditor"></div>
                 <?php if (Access::canWrite()): ?>
                 <button type="button" class="button" id="smsSendAnnouncement">ارسال به انتخاب‌شده‌ها</button>
                 <?php endif; ?>
@@ -307,14 +294,24 @@ $assetVer = (string) max(
                   <button type="button" class="button" id="smsSendChargeReminders">ارسال یادآور انتخاب‌شده‌ها</button>
                   <?php endif; ?>
                 </div>
-                <p class="hint">متن هر پیامک از روی مانده بدهی و اطلاعات بانکی پیش‌نویس می‌شود و قبل از ارسال قابل ویرایش است.</p>
-                <div id="smsChargeReminderList" class="charge-reminder-list">در حال بارگذاری…</div>
+                <p class="hint">یک الگو برای همه نهادهای انتخاب‌شده — متغیرها به‌صورت خودکار جایگزین می‌شوند.</p>
+                <div id="smsChargeTemplateInline"></div>
+                <div class="charge-reminder-layout">
+                  <div>
+                    <h3 class="panel-subtitle">نهادهای بدهکار</h3>
+                    <div id="smsChargeDebtorList" class="charge-debtor-list">در حال بارگذاری…</div>
+                  </div>
+                  <div>
+                    <h3 class="panel-subtitle">پیش‌نمایش نمونه</h3>
+                    <pre id="smsChargePreview" class="sms-editor-preview-block">—</pre>
+                  </div>
+                </div>
               </article>
               <article class="panel">
                 <div class="panel-head"><h2>تاریخچه پیامک‌ها</h2></div>
                 <div class="table-wrap table-scroll">
                   <table id="smsHistoryTable" class="data-table data-table--wide">
-                    <thead><tr><th>زمان</th><th>نوع</th><th>گیرنده</th><th>موبایل</th><th>نهاد</th><th>وضعیت</th><th>هزینه</th><th>متن</th><th>خطا</th></tr></thead>
+                    <thead><tr><th>زمان</th><th>نوع</th><th>گیرنده</th><th>موبایل</th><th>نهاد</th><th>وضعیت</th><th>دلیوری</th><th>تایید API</th><th>هزینه</th><th>متن</th></tr></thead>
                     <tbody></tbody>
                   </table>
                 </div>
@@ -507,6 +504,7 @@ $assetVer = (string) max(
         };
       </script>
       <script src="assets/app.js?v=<?= e($assetVer) ?>"></script>
+      <script src="assets/sms-editor.js?v=<?= e($assetVer) ?>"></script>
       <script src="assets/sms-panel.js?v=<?= e($assetVer) ?>"></script>
     <?php endif; ?>
   </body>
