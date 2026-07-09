@@ -171,6 +171,9 @@ $assetVer = (string) max(
           <div class="sidebar-foot">
             <a class="foot-btn" href="export.php?report=all">خروجی Excel</a>
             <a class="foot-btn foot-btn--soft" href="report.php">گزارش PDF</a>
+            <?php if (Access::canWrite()): ?>
+            <a class="foot-btn foot-btn--soft" href="backup.php">پشتیبان JSON</a>
+            <?php endif; ?>
           </div>
         </aside>
 
