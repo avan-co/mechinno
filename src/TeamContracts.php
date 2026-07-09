@@ -583,33 +583,19 @@ final class TeamContracts
 
     public function contractRateOverrideSelect(string $alias = ''): string
     {
-        static $cache = [];
-        if (isset($cache[$alias])) {
-            return $cache[$alias];
+        if (!Schema::hasColumn($this->pdo, 'team_contracts', 'charge_rate_override')
+            || !Schema::hasColumn($this->pdo, 'team_contracts', 'informal_rent_rate_override')) {
+            return '';
         }
 
         $prefix = $alias !== '' ? $alias . '.' : '';
-        $cache[$alias] = Schema::hasColumn($this->pdo, 'team_contracts', 'charge_rate_override')
-            && Schema::hasColumn($this->pdo, 'team_contracts', 'informal_rent_rate_override')
-            ? ', ' . $prefix . 'charge_rate_override, ' . $prefix . 'informal_rent_rate_override'
-            : '';
 
-        return $cache[$alias];
+        return ', ' . $prefix . 'charge_rate_override, ' . $prefix . 'informal_rent_rate_override';
     }
 
     private function deskAssignmentExemptSelect(): string
     {
-        static $columns = null;
-        if ($columns !== null) {
-            return $columns;
-        }
-
-        $columns = Schema::hasColumn($this->pdo, 'desk_assignments', 'charge_exempt')
-            && Schema::hasColumn($this->pdo, 'desk_assignments', 'rent_exempt')
-            ? ', charge_exempt, rent_exempt'
-            : '';
-
-        return $columns;
+        return Schema::deskAssignmentExemptSelect($this->pdo);
     }
 
     /**
@@ -618,11 +604,9 @@ final class TeamContracts
      */
     private function normalizeDeskAssignmentRows(array $rows): array
     {
-        return array_map(static function (array $row): array {
-            $row['charge_exempt'] = (int) ($row['charge_exempt'] ?? 0);
-            $row['rent_exempt'] = (int) ($row['rent_exempt'] ?? 0);
-
-            return $row;
-        }, $rows);
+        return array_map(
+            static fn (array $row): array => Schema::normalizeDeskAssignmentRow($row),
+            $rows
+        );
     }
 }

@@ -354,6 +354,10 @@ $crud->update('desk_assignments', $assignmentId, [
 $rentExemptAmounts = (new Seeder($pdo))->monthlyAmountsForTeam($teamId, '1405');
 $assert(($rentExemptAmounts[5]['charge_amount'] ?? 0) === 300, 'billing: rent-exempt desk still pays charge');
 $assert(($rentExemptAmounts[5]['rent_amount'] ?? -1) === 0, 'billing: rent-exempt desk skips informal rent');
+$rentExemptProfile = $repo->teamProfile($teamId);
+$rentProfileBilling = $rentExemptProfile['billing_summaries']['1405'] ?? [];
+$assert(($rentProfileBilling['has_exemptions'] ?? false) === true, 'api: team profile billing summaries include desk exemptions');
+$assert(is_array($rentProfileBilling['exempt_desks'] ?? null) && $rentProfileBilling['exempt_desks'] !== [], 'api: team profile exposes exempt desk list');
 
 $contractRow = $pdo->query("SELECT id FROM team_contracts WHERE team_id = {$teamId} AND fiscal_year = '1405'")->fetch();
 $assert($contractRow !== false, 'billing: team contract exists for test year');

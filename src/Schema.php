@@ -322,6 +322,7 @@ final class Schema
             ],
             'rate_settings' => [
                 'informal_rent_rate' => 'BIGINT NULL',
+                'effective_from' => 'VARCHAR(32) NULL',
             ],
             'team_contracts' => [
                 'charge_rate_override' => 'BIGINT NULL',
@@ -971,6 +972,36 @@ final class Schema
     public static function hasColumn(PDO $pdo, string $table, string $column): bool
     {
         return self::columnExists($pdo, $table, $column);
+    }
+
+    public static function deskAssignmentExemptSelect(PDO $pdo, string $alias = ''): string
+    {
+        if (!self::hasColumn($pdo, 'desk_assignments', 'charge_exempt')
+            || !self::hasColumn($pdo, 'desk_assignments', 'rent_exempt')) {
+            return '';
+        }
+
+        $prefix = $alias !== '' ? $alias . '.' : '';
+
+        return ', ' . $prefix . 'charge_exempt, ' . $prefix . 'rent_exempt';
+    }
+
+    public static function deskAssignmentExemptWritable(PDO $pdo): bool
+    {
+        return self::hasColumn($pdo, 'desk_assignments', 'charge_exempt')
+            && self::hasColumn($pdo, 'desk_assignments', 'rent_exempt');
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     * @return array<string, mixed>
+     */
+    public static function normalizeDeskAssignmentRow(array $row): array
+    {
+        $row['charge_exempt'] = (int) ($row['charge_exempt'] ?? 0);
+        $row['rent_exempt'] = (int) ($row['rent_exempt'] ?? 0);
+
+        return $row;
     }
 
     private static function columnExists(PDO $pdo, string $table, string $column): bool

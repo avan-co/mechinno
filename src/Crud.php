@@ -1162,6 +1162,9 @@ final class Crud
                     $data[$field] = (int) (!empty($data[$field]) && (string) $data[$field] !== '0');
                 }
             }
+            if (!Schema::deskAssignmentExemptWritable($this->pdo)) {
+                unset($data['charge_exempt'], $data['rent_exempt']);
+            }
         }
         if ($resource === 'panel_users') {
             $role = (string) ($data['role'] ?? '');

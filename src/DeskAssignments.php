@@ -53,6 +53,9 @@ final class DeskAssignments
             'charge_exempt' => (int) ($desk['charge_exempt'] ?? 0),
             'rent_exempt' => (int) ($desk['rent_exempt'] ?? 0),
         ];
+        if (!$this->exemptWritable()) {
+            unset($payload['charge_exempt'], $payload['rent_exempt']);
+        }
 
         $yearRecord = $this->findAssignmentForYear($deskId, $fiscalYear, $teamId);
         if ($yearRecord !== null) {
@@ -245,8 +248,9 @@ final class DeskAssignments
 
         $yearStart = $fiscalYear . '/01/01';
         $yearEnd = $fiscalYear . '/12/29';
-        $sql = 'SELECT id, desk_id, desk_number, team_id, usage_type, assigned_from, assigned_until, notes, charge_exempt, rent_exempt
-                FROM desk_assignments
+        $sql = 'SELECT id, desk_id, desk_number, team_id, usage_type, assigned_from, assigned_until, notes'
+            . $this->exemptSelect()
+            . ' FROM desk_assignments
                 WHERE desk_id = :desk_id
                   AND assigned_from <= :year_end
                   AND (assigned_until IS NULL OR assigned_until = \'\' OR assigned_until >= :year_start)';
@@ -260,7 +264,7 @@ final class DeskAssignments
         $statement->execute($params);
         $row = $statement->fetch();
 
-        return $row === false ? null : $row;
+        return $row === false ? null : $this->normalizeRow($row);
     }
 
     /**
@@ -270,8 +274,9 @@ final class DeskAssignments
     {
         $today = JalaliDate::todayParts()['formatted'];
         $statement = $this->pdo->prepare(
-            'SELECT id, desk_id, desk_number, team_id, usage_type, assigned_from, assigned_until, notes, charge_exempt, rent_exempt
-             FROM desk_assignments
+            'SELECT id, desk_id, desk_number, team_id, usage_type, assigned_from, assigned_until, notes'
+            . $this->exemptSelect()
+            . ' FROM desk_assignments
              WHERE desk_id = :desk_id
                AND assigned_from <= :today
                AND (assigned_until IS NULL OR assigned_until = \'\' OR assigned_until >= :today)
@@ -281,7 +286,7 @@ final class DeskAssignments
         $statement->execute(['desk_id' => $deskId, 'today' => $today]);
         $row = $statement->fetch();
 
-        return $row === false ? null : $row;
+        return $row === false ? null : $this->normalizeRow($row);
     }
 
     /**
@@ -290,8 +295,9 @@ final class DeskAssignments
     private function findOpenAssignment(int $deskId): ?array
     {
         $statement = $this->pdo->prepare(
-            'SELECT id, desk_id, desk_number, team_id, usage_type, assigned_from, assigned_until, notes, charge_exempt, rent_exempt
-             FROM desk_assignments
+            'SELECT id, desk_id, desk_number, team_id, usage_type, assigned_from, assigned_until, notes'
+            . $this->exemptSelect()
+            . ' FROM desk_assignments
              WHERE desk_id = :desk_id
                AND (assigned_until IS NULL OR assigned_until = \'\')
              ORDER BY assigned_from DESC, id DESC
@@ -300,7 +306,7 @@ final class DeskAssignments
         $statement->execute(['desk_id' => $deskId]);
         $row = $statement->fetch();
 
-        return $row === false ? null : $row;
+        return $row === false ? null : $this->normalizeRow($row);
     }
 
     /**
@@ -323,10 +329,8 @@ final class DeskAssignments
             null
         );
 
-        $this->pdo->prepare(
-            'INSERT INTO desk_assignments (desk_id, desk_number, team_id, usage_type, assigned_from, assigned_until, notes, charge_exempt, rent_exempt)
-             VALUES (:desk_id, :desk_number, :team_id, :usage_type, :assigned_from, :assigned_until, :notes, :charge_exempt, :rent_exempt)'
-        )->execute([
+        $columns = ['desk_id', 'desk_number', 'team_id', 'usage_type', 'assigned_from', 'assigned_until', 'notes'];
+        $params = [
             'desk_id' => (int) $payload['desk_id'],
             'desk_number' => (int) $payload['desk_number'],
             'team_id' => (int) $payload['team_id'],
@@ -334,9 +338,19 @@ final class DeskAssignments
             'assigned_from' => (string) $payload['assigned_from'],
             'assigned_until' => $payload['assigned_until'],
             'notes' => $payload['notes'] ?? null,
-            'charge_exempt' => (int) ($payload['charge_exempt'] ?? 0),
-            'rent_exempt' => (int) ($payload['rent_exempt'] ?? 0),
-        ]);
+        ];
+        if ($this->exemptWritable()) {
+            $columns[] = 'charge_exempt';
+            $columns[] = 'rent_exempt';
+            $params['charge_exempt'] = (int) ($payload['charge_exempt'] ?? 0);
+            $params['rent_exempt'] = (int) ($payload['rent_exempt'] ?? 0);
+        }
+
+        $placeholders = implode(', ', array_map(static fn (string $column): string => ':' . $column, $columns));
+        $this->pdo->prepare(
+            'INSERT INTO desk_assignments (' . implode(', ', $columns) . ')
+             VALUES (' . $placeholders . ')'
+        )->execute($params);
         $id = (int) $this->pdo->lastInsertId();
         if ($id > 0) {
             $record = $this->findAssignment($id);
@@ -358,23 +372,33 @@ final class DeskAssignments
             $id
         );
 
-        $this->pdo->prepare(
-            'UPDATE desk_assignments
-             SET team_id = :team_id, usage_type = :usage_type, notes = :notes,
-                 assigned_from = :assigned_from, assigned_until = :assigned_until, desk_number = :desk_number,
-                 charge_exempt = :charge_exempt, rent_exempt = :rent_exempt
-             WHERE id = :id'
-        )->execute([
+        $setClauses = [
+            'team_id = :team_id',
+            'usage_type = :usage_type',
+            'notes = :notes',
+            'assigned_from = :assigned_from',
+            'assigned_until = :assigned_until',
+            'desk_number = :desk_number',
+        ];
+        $params = [
             'team_id' => (int) $payload['team_id'],
             'usage_type' => (string) $payload['usage_type'],
             'notes' => $payload['notes'] ?? null,
             'assigned_from' => (string) $payload['assigned_from'],
             'assigned_until' => $payload['assigned_until'],
             'desk_number' => (int) $payload['desk_number'],
-            'charge_exempt' => (int) ($payload['charge_exempt'] ?? 0),
-            'rent_exempt' => (int) ($payload['rent_exempt'] ?? 0),
             'id' => $id,
-        ]);
+        ];
+        if ($this->exemptWritable()) {
+            $setClauses[] = 'charge_exempt = :charge_exempt';
+            $setClauses[] = 'rent_exempt = :rent_exempt';
+            $params['charge_exempt'] = (int) ($payload['charge_exempt'] ?? 0);
+            $params['rent_exempt'] = (int) ($payload['rent_exempt'] ?? 0);
+        }
+
+        $this->pdo->prepare(
+            'UPDATE desk_assignments SET ' . implode(', ', $setClauses) . ' WHERE id = :id'
+        )->execute($params);
         $record = $this->findAssignment($id);
         if ($record !== null) {
             $this->applyAssignmentRecord($record, $id);
@@ -482,13 +506,14 @@ final class DeskAssignments
     private function findAssignment(int $id): ?array
     {
         $statement = $this->pdo->prepare(
-            'SELECT id, desk_id, desk_number, team_id, usage_type, assigned_from, assigned_until, notes, charge_exempt, rent_exempt
-             FROM desk_assignments WHERE id = :id'
+            'SELECT id, desk_id, desk_number, team_id, usage_type, assigned_from, assigned_until, notes'
+            . $this->exemptSelect()
+            . ' FROM desk_assignments WHERE id = :id'
         );
         $statement->execute(['id' => $id]);
         $row = $statement->fetch();
 
-        return $row === false ? null : $row;
+        return $row === false ? null : $this->normalizeRow($row);
     }
 
     /**
@@ -573,5 +598,24 @@ final class DeskAssignments
     private function isOpenEnded(string $until): bool
     {
         return trim($until) === '';
+    }
+
+    private function exemptSelect(string $alias = ''): string
+    {
+        return Schema::deskAssignmentExemptSelect($this->pdo, $alias);
+    }
+
+    private function exemptWritable(): bool
+    {
+        return Schema::deskAssignmentExemptWritable($this->pdo);
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     * @return array<string, mixed>
+     */
+    private function normalizeRow(array $row): array
+    {
+        return Schema::normalizeDeskAssignmentRow($row);
     }
 }
