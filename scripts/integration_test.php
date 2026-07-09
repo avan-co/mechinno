@@ -834,6 +834,25 @@ $assert(count($report['teams']) >= 1, 'report: includes teams');
 $exporter = new ExcelExporter($pdo);
 $assert(method_exists($exporter, 'output'), 'export: ExcelExporter available');
 
+// --- Database backup roundtrip ---
+require_once dirname(__DIR__) . '/src/DatabaseBackup.php';
+$backupService = new DatabaseBackup($pdo);
+$exportPayload = $backupService->export();
+$assert(($exportPayload['format'] ?? '') === DatabaseBackup::FORMAT, 'backup: export format');
+$assert(($exportPayload['counts']['teams'] ?? 0) >= 1, 'backup: export includes teams');
+$roundtripDb = dirname(__DIR__) . '/data/integration_backup_roundtrip.sqlite3';
+if (is_file($roundtripDb)) {
+    unlink($roundtripDb);
+}
+$roundtripPdo = new PDO('sqlite:' . $roundtripDb);
+$roundtripPdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+Schema::migrate($roundtripPdo);
+$roundtripBackup = new DatabaseBackup($roundtripPdo);
+$imported = $roundtripBackup->import($exportPayload);
+$assert(($imported['teams'] ?? 0) >= 1, 'backup: restore imports teams');
+$restoredTeamCount = (int) $roundtripPdo->query('SELECT COUNT(*) FROM teams')->fetchColumn();
+$assert($restoredTeamCount === (int) ($exportPayload['counts']['teams'] ?? 0), 'backup: restored team count matches export');
+
 // --- Delete team cascades portal user ---
 $userBefore = (int) $pdo->query('SELECT COUNT(*) FROM panel_users WHERE team_id = ' . $teamId)->fetchColumn();
 $assert($userBefore === 1, 'entity: one portal user per team');
