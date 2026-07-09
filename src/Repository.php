@@ -1227,8 +1227,8 @@ final class Repository
                 ['id' => $teamId]
             )),
             'payments' => $this->preparedRows(
-                "SELECT id, tx_date, description, amount, category, fiscal_year, month_index, confirmed, notes,
-                        payment_status, payment_reference, announced_at, reviewed_at,
+                "SELECT id, tx_date, description, amount, category, fiscal_year, month_index, confirmed, notes"
+                . $this->transactionTeamPaymentSelect() . ",
                         CASE month_index
                             WHEN 1 THEN 'فروردین' WHEN 2 THEN 'اردیبهشت' WHEN 3 THEN 'خرداد'
                             WHEN 4 THEN 'تیر' WHEN 5 THEN 'مرداد' WHEN 6 THEN 'شهریور'
@@ -2536,18 +2536,7 @@ final class Repository
 
     private function deskAssignmentExemptSelect(string $alias = 'da'): string
     {
-        static $suffix = null;
-        if ($suffix !== null) {
-            return $suffix;
-        }
-
-        $prefix = $alias !== '' ? $alias . '.' : '';
-        $suffix = Schema::hasColumn($this->pdo, 'desk_assignments', 'charge_exempt')
-            && Schema::hasColumn($this->pdo, 'desk_assignments', 'rent_exempt')
-            ? ', ' . $prefix . 'charge_exempt, ' . $prefix . 'rent_exempt'
-            : '';
-
-        return $suffix;
+        return Schema::deskAssignmentExemptSelect($this->pdo, $alias);
     }
 
     private function teamContractRateOverrideSelect(string $alias = ''): string
@@ -2557,11 +2546,6 @@ final class Repository
 
     private function lockerExtraSelect(string $alias = 'l'): string
     {
-        static $cache = [];
-        if (isset($cache[$alias])) {
-            return $cache[$alias];
-        }
-
         $prefix = $alias !== '' ? $alias . '.' : '';
         $columns = [];
         if (Schema::hasColumn($this->pdo, 'lockers', 'key_number')) {
@@ -2570,18 +2554,12 @@ final class Repository
         if (Schema::hasColumn($this->pdo, 'lockers', 'spare_key')) {
             $columns[] = $prefix . 'spare_key';
         }
-        $cache[$alias] = $columns === [] ? '' : ', ' . implode(', ', $columns);
 
-        return $cache[$alias];
+        return $columns === [] ? '' : ', ' . implode(', ', $columns);
     }
 
     private function chargeOptionalSelect(): string
     {
-        static $suffix = null;
-        if ($suffix !== null) {
-            return $suffix;
-        }
-
         $columns = [];
         if (Schema::hasColumn($this->pdo, 'charges', 'month_name')) {
             $columns[] = 'month_name';
@@ -2592,20 +2570,24 @@ final class Repository
         if (Schema::hasColumn($this->pdo, 'charges', 'rent_amount')) {
             $columns[] = 'rent_amount';
         }
-        $suffix = $columns === [] ? '' : ', ' . implode(', ', $columns);
 
-        return $suffix;
+        return $columns === [] ? '' : ', ' . implode(', ', $columns);
     }
 
     private function transactionPaymentPlanSelect(): string
     {
-        static $suffix = null;
-        if ($suffix !== null) {
-            return $suffix;
+        return Schema::hasColumn($this->pdo, 'transactions', 'payment_plan') ? ', payment_plan' : '';
+    }
+
+    private function transactionTeamPaymentSelect(): string
+    {
+        $columns = [];
+        foreach (['payment_status', 'payment_reference', 'announced_at', 'reviewed_at'] as $column) {
+            if (Schema::hasColumn($this->pdo, 'transactions', $column)) {
+                $columns[] = $column;
+            }
         }
 
-        $suffix = Schema::hasColumn($this->pdo, 'transactions', 'payment_plan') ? ', payment_plan' : '';
-
-        return $suffix;
+        return $columns === [] ? '' : ', ' . implode(', ', $columns);
     }
 }

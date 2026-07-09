@@ -1222,8 +1222,8 @@ const openDeskHistoryAssignModal = async (prefill = {}) => {
       usage_type: prefill.usage_type || "formal",
       assigned_from_month: validAssignmentMonth(prefill.assigned_from_month, "1"),
       assigned_until_month: validAssignmentMonth(prefill.assigned_until_month, "12"),
-      charge_exempt: prefill.charge_exempt ? "1" : "0",
-      rent_exempt: prefill.rent_exempt ? "1" : "0",
+      charge_exempt: Number(prefill.charge_exempt) === 1 ? "1" : "0",
+      rent_exempt: Number(prefill.rent_exempt) === 1 ? "1" : "0",
       notes: prefill.notes || "",
     }],
   };
