@@ -1111,6 +1111,7 @@ final class Repository
                 'team_id' => $teamId,
                 'team_name' => $row['team_name'] ?? '',
                 'fiscal_year' => $row['fiscal_year'] ?? '',
+                'month_index' => $monthIndex,
                 'month_name' => $row['month_name'] ?? '',
                 'charge_amount' => (int) ($row['charge_amount'] ?? 0),
                 'rent_amount' => (int) ($row['rent_amount'] ?? 0),

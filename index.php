@@ -144,6 +144,10 @@ $assetVer = (string) max(
               <span class="nav-icon nav-icon--pink"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4Zm2 2v2h12V7Zm0 4v2h8v-2Z" fill="currentColor"/></svg></span>
               مالی
             </button>
+            <button class="nav-item" data-section="reports" type="button">
+              <span class="nav-icon nav-icon--blue"><svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm8 1.5V8h4.5L14 3.5ZM8 12h8v2H8v-2Zm0 4h8v2H8v-2Zm0-8h4v2H8V8Z" fill="currentColor"/></svg></span>
+              گزارش‌گیری
+            </button>
             <?php if (Access::isAdmin()): ?>
             <button class="nav-item" data-section="sms" type="button">
               <span class="nav-icon nav-icon--green"><svg viewBox="0 0 24 24"><path d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2Zm0 2v.5L12 13 4 6.5V6ZM4 18V8.2l7.4 6.5a1 1 0 0 0 1.2 0L20 8.2V18Z" fill="currentColor"/></svg></span>
@@ -169,8 +173,8 @@ $assetVer = (string) max(
           </nav>
 
           <div class="sidebar-foot">
-            <a class="foot-btn" href="export.php?report=all">خروجی Excel</a>
-            <a class="foot-btn foot-btn--soft" href="report.php">گزارش PDF</a>
+            <button class="foot-btn" type="button" data-go="reports">گزارش‌گیری حرفه‌ای</button>
+            <a class="foot-btn foot-btn--soft" href="export.php?report=all">خروجی Excel کامل</a>
             <?php if (Access::canWrite()): ?>
             <a class="foot-btn foot-btn--soft" href="backup.php">پشتیبان JSON</a>
             <?php endif; ?>
@@ -506,6 +510,70 @@ $assetVer = (string) max(
                   <data-table title="" endpoint="api.php?resource=transactions" data-tx-filter="هزینه" data-no-add></data-table>
                 </article>
               </div>
+            </section>
+
+            <section id="reports" class="section">
+              <p class="hint">نوع گزارش، بازه زمانی (ماهانه / سه‌ماهه / سالانه / سفارشی) و در صورت نیاز نهاد را انتخاب کنید؛ سپس پیش‌نمایش، چاپ PDF یا Excel بگیرید.</p>
+              <article class="panel report-builder-panel">
+                <div class="panel-head">
+                  <h2>سازنده گزارش</h2>
+                  <span class="hint">انتخاب دقیق محتوا و بازه</span>
+                </div>
+                <form id="reportBuilderForm" class="report-builder-form">
+                  <div class="report-type-grid" id="reportTypeGrid" role="radiogroup" aria-label="نوع گزارش"></div>
+                  <div class="crud-grid report-filters-grid">
+                    <label>
+                      <span>بازه زمانی</span>
+                      <select name="period" id="reportPeriod">
+                        <option value="monthly">ماهانه</option>
+                        <option value="quarterly">سه‌ماهه</option>
+                        <option value="annual">سالانه</option>
+                        <option value="custom">بازه سفارشی</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>سال مالی</span>
+                      <select name="fiscal_year" id="reportFiscalYear"></select>
+                    </label>
+                    <label id="reportMonthWrap">
+                      <span>ماه</span>
+                      <select name="month" id="reportMonth"></select>
+                    </label>
+                    <label id="reportQuarterWrap" hidden>
+                      <span>فصل</span>
+                      <select name="quarter" id="reportQuarter"></select>
+                    </label>
+                    <label id="reportMonthFromWrap" hidden>
+                      <span>از ماه</span>
+                      <select name="month_from" id="reportMonthFrom"></select>
+                    </label>
+                    <label id="reportMonthToWrap" hidden>
+                      <span>تا ماه</span>
+                      <select name="month_to" id="reportMonthTo"></select>
+                    </label>
+                    <label>
+                      <span>نهاد (اختیاری)</span>
+                      <select name="team_id" id="reportTeam">
+                        <option value="0">همه نهادها</option>
+                      </select>
+                    </label>
+                  </div>
+                  <div class="form-actions report-builder-actions">
+                    <button class="button" type="submit">پیش‌نمایش گزارش</button>
+                    <button class="button ghost" type="button" id="reportOpenPrint">چاپ / PDF</button>
+                    <button class="button ghost" type="button" id="reportOpenExcel">دانلود Excel</button>
+                  </div>
+                </form>
+              </article>
+              <article class="panel">
+                <div class="panel-head">
+                  <h2>پیش‌نمایش</h2>
+                  <span class="hint" id="reportPreviewMeta">هنوز گزارشی ساخته نشده است</span>
+                </div>
+                <div id="reportPreview" class="report-preview">
+                  <div class="empty">نوع گزارش و بازه را انتخاب کنید، سپس «پیش‌نمایش گزارش» را بزنید.</div>
+                </div>
+              </article>
             </section>
 
             <?php if (Access::canWrite()): ?>

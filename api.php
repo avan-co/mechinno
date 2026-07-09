@@ -65,6 +65,33 @@ try {
         json_response((new CenterLedger($pdo))->snapshot($page, $perPage));
     }
 
+    if ($resource === 'report-catalog') {
+        json_response((new ReportBuilder($pdo))->catalog());
+    }
+
+    if ($resource === 'reports') {
+        $filters = [
+            'type' => (string) ($_GET['type'] ?? 'finance'),
+            'period' => (string) ($_GET['period'] ?? 'monthly'),
+            'fiscal_year' => (string) ($_GET['fiscal_year'] ?? ''),
+            'month' => (int) ($_GET['month'] ?? 0),
+            'quarter' => (int) ($_GET['quarter'] ?? 0),
+            'month_from' => (int) ($_GET['month_from'] ?? 0),
+            'month_to' => (int) ($_GET['month_to'] ?? 0),
+            'team_id' => (int) ($_GET['team_id'] ?? 0),
+        ];
+        // Keep empty numeric filters unset so defaults apply.
+        foreach (['month', 'quarter', 'month_from', 'month_to'] as $key) {
+            if (($filters[$key] ?? 0) <= 0) {
+                unset($filters[$key]);
+            }
+        }
+        if ($filters['fiscal_year'] === '') {
+            unset($filters['fiscal_year']);
+        }
+        json_response((new ReportBuilder($pdo))->build($filters));
+    }
+
     if ($resource === 'charges-matrix') {
         $year = JalaliDate::normalizeDigits((string) ($_GET['fiscal_year'] ?? '1404'));
         json_response($repository->chargesMatrix($year));

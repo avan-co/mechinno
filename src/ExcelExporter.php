@@ -123,11 +123,17 @@ final class ExcelExporter
         'summary', 'teams', 'members', 'desks', 'desk_assignments', 'lockers', 'rate_settings', 'charges', 'debts', 'transactions',
     ];
 
+    /** @var array{fiscal_year?:string,month_from?:int,month_to?:int,team_id?:int} */
+    private array $filters = [];
+
     public function __construct(private readonly PDO $pdo)
     {
     }
 
-    public function output(string $reportKey): void
+    /**
+     * @param array{fiscal_year?:string,month_from?:int,month_to?:int,team_id?:int} $filters
+     */
+    public function output(string $reportKey, array $filters = []): void
     {
         $reports = self::reports();
         if ($reportKey !== 'all' && !isset($reports[$reportKey])) {
@@ -136,6 +142,7 @@ final class ExcelExporter
             return;
         }
 
+        $this->filters = $this->normalizeFilters($filters);
         $today = JalaliDate::todayParts();
         $fileName = $reportKey === 'all'
             ? 'mechinno-report-' . str_replace('/', '-', $today['formatted']) . '.xls'
@@ -150,6 +157,33 @@ final class ExcelExporter
             : [$reportKey];
 
         echo $this->workbookXml($keys, $today['formatted']);
+    }
+
+    /**
+     * @param array{fiscal_year?:string,month_from?:int,month_to?:int,team_id?:int} $filters
+     * @return array{fiscal_year?:string,month_from?:int,month_to?:int,team_id?:int}
+     */
+    private function normalizeFilters(array $filters): array
+    {
+        $normalized = [];
+        $year = JalaliDate::normalizeDigits((string) ($filters['fiscal_year'] ?? ''));
+        if ($year !== '' && preg_match('/^\d{4}$/', $year)) {
+            $normalized['fiscal_year'] = $year;
+        }
+        $from = (int) ($filters['month_from'] ?? 0);
+        $to = (int) ($filters['month_to'] ?? 0);
+        if ($from >= 1 && $from <= 12) {
+            $normalized['month_from'] = $from;
+        }
+        if ($to >= 1 && $to <= 12) {
+            $normalized['month_to'] = $to;
+        }
+        $teamId = (int) ($filters['team_id'] ?? 0);
+        if ($teamId > 0) {
+            $normalized['team_id'] = $teamId;
+        }
+
+        return $normalized;
     }
 
     /**
@@ -175,6 +209,8 @@ final class ExcelExporter
                 continue;
             }
             if ($key === 'debts') {
+                $debtRows = (new Repository($this->pdo))->chargeDebtRows();
+                $debtRows = array_values(array_filter($debtRows, fn (array $row): bool => $this->rowMatchesFilters($row)));
                 $rows = array_map(static fn (array $row): array => [
                     $row['team_name'] ?? '',
                     $row['fiscal_year'] ?? '',
@@ -184,7 +220,12 @@ final class ExcelExporter
                     $row['amount_due'] ?? 0,
                     $row['amount_paid'] ?? 0,
                     $row['status'] ?? '',
-                ], (new Repository($this->pdo))->chargeDebtRows());
+                ], $debtRows);
+                $xml .= $this->worksheetXml($report['title'], $report['headers'], $rows, $generatedAt);
+                continue;
+            }
+            if (in_array($key, ['charges', 'transactions'], true) && $this->filters !== []) {
+                $rows = $this->filteredQueryRows($key, $report['query']);
                 $xml .= $this->worksheetXml($report['title'], $report['headers'], $rows, $generatedAt);
                 continue;
             }
@@ -195,6 +236,108 @@ final class ExcelExporter
         $xml .= '</Workbook>';
 
         return $xml;
+    }
+
+    /**
+     * @return list<list<mixed>>
+     */
+    private function filteredQueryRows(string $key, string $baseQuery): array
+    {
+        if ($key === 'charges') {
+            $sql = 'SELECT c.fiscal_year, t.name AS team_name,
+                           CASE t.entity_type WHEN \'team\' THEN \'تیم\' WHEN \'company\' THEN \'شرکت\' WHEN \'student\' THEN \'دانشجو\' ELSE t.entity_type END,
+                           c.month_name, c.month_index, c.charge_amount, c.rent_amount, c.amount, c.note
+                    FROM charges c
+                    LEFT JOIN teams t ON t.id = c.team_id
+                    WHERE 1=1';
+            $params = [];
+            if (isset($this->filters['fiscal_year'])) {
+                $sql .= ' AND c.fiscal_year = :fiscal_year';
+                $params['fiscal_year'] = $this->filters['fiscal_year'];
+            }
+            if (isset($this->filters['month_from'], $this->filters['month_to'])) {
+                $sql .= ' AND c.month_index BETWEEN :month_from AND :month_to';
+                $params['month_from'] = $this->filters['month_from'];
+                $params['month_to'] = $this->filters['month_to'];
+            }
+            if (isset($this->filters['team_id'])) {
+                $sql .= ' AND c.team_id = :team_id';
+                $params['team_id'] = $this->filters['team_id'];
+            }
+            $sql .= ' ORDER BY c.fiscal_year, t.name, c.month_index';
+            $statement = $this->pdo->prepare($sql);
+            $statement->execute($params);
+
+            return $statement->fetchAll(PDO::FETCH_NUM);
+        }
+
+        if ($key === 'transactions') {
+            $sql = "SELECT t.tx_date, t.description, t.amount,
+                           CASE t.category WHEN 'واریز تیم' THEN 'دریافت از نهاد' ELSE t.category END,
+                           tm.name AS team_name,
+                           t.fiscal_year,
+                           CASE t.month_index
+                               WHEN 1 THEN 'فروردین' WHEN 2 THEN 'اردیبهشت' WHEN 3 THEN 'خرداد'
+                               WHEN 4 THEN 'تیر' WHEN 5 THEN 'مرداد' WHEN 6 THEN 'شهریور'
+                               WHEN 7 THEN 'مهر' WHEN 8 THEN 'آبان' WHEN 9 THEN 'آذر'
+                               WHEN 10 THEN 'دی' WHEN 11 THEN 'بهمن' WHEN 12 THEN 'اسفند'
+                               ELSE ''
+                           END,
+                           t.confirmed, t.notes
+                    FROM transactions t
+                    LEFT JOIN teams tm ON tm.id = t.team_id
+                    WHERE t.confirmed = 1
+                      AND (t.category <> 'واریز تیم' OR t.payment_status = 'approved')";
+            $params = [];
+            if (isset($this->filters['fiscal_year'], $this->filters['month_from'], $this->filters['month_to'])) {
+                $sql .= ' AND t.tx_date >= :date_from AND t.tx_date <= :date_to';
+                $params['date_from'] = JalaliDate::monthStart(
+                    $this->filters['fiscal_year'],
+                    (int) $this->filters['month_from']
+                );
+                $params['date_to'] = JalaliDate::monthEnd(
+                    $this->filters['fiscal_year'],
+                    (int) $this->filters['month_to']
+                );
+            } elseif (isset($this->filters['fiscal_year'])) {
+                $sql .= ' AND t.fiscal_year = :fiscal_year';
+                $params['fiscal_year'] = $this->filters['fiscal_year'];
+            }
+            if (isset($this->filters['team_id'])) {
+                $sql .= ' AND t.team_id = :team_id';
+                $params['team_id'] = $this->filters['team_id'];
+            }
+            $sql .= ' ORDER BY t.tx_date DESC, t.id DESC';
+            $statement = $this->pdo->prepare($sql);
+            $statement->execute($params);
+
+            return $statement->fetchAll(PDO::FETCH_NUM);
+        }
+
+        return $this->pdo->query($baseQuery)->fetchAll(PDO::FETCH_NUM);
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     */
+    private function rowMatchesFilters(array $row): bool
+    {
+        if (isset($this->filters['fiscal_year'])
+            && (string) ($row['fiscal_year'] ?? '') !== $this->filters['fiscal_year']) {
+            return false;
+        }
+        $monthIndex = (int) ($row['month_index'] ?? 0);
+        if (isset($this->filters['month_from']) && $monthIndex < $this->filters['month_from']) {
+            return false;
+        }
+        if (isset($this->filters['month_to']) && $monthIndex > $this->filters['month_to']) {
+            return false;
+        }
+        if (isset($this->filters['team_id']) && (int) ($row['team_id'] ?? 0) !== $this->filters['team_id']) {
+            return false;
+        }
+
+        return true;
     }
 
     private function documentPropertiesXml(string $generatedAt): string

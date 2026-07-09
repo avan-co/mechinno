@@ -2254,6 +2254,63 @@ body.is-mobile .table-wrap { display: none; }
   .grid.two { grid-template-columns: 1fr; }
 }
 
+/* ── گزارش‌ساز حرفه‌ای ── */
+.report-builder-form { display: grid; gap: 16px; }
+.report-type-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 10px;
+}
+.report-type-card {
+  display: grid;
+  gap: 6px;
+  text-align: right;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--panel) 92%, var(--bg));
+  color: inherit;
+  cursor: pointer;
+  transition: border-color .15s ease, transform .15s ease, background .15s ease;
+}
+.report-type-card strong { font-size: .95rem; }
+.report-type-card span { color: var(--muted); font-size: .8rem; line-height: 1.45; }
+.report-type-card:hover { border-color: color-mix(in srgb, var(--primary) 45%, var(--line)); }
+.report-type-card.is-active {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 10%, var(--panel));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 35%, transparent);
+}
+.report-filters-grid { align-items: end; }
+.report-builder-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.report-preview { display: grid; gap: 14px; }
+.report-preview-title {
+  margin: 4px 0 0;
+  font-size: 1rem;
+}
+.report-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+}
+.report-kpi-card {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--panel) 94%, var(--bg));
+}
+.report-kpi-card span { color: var(--muted); font-size: .78rem; }
+.report-kpi-card strong { font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+.report-kpi-card.is-success strong { color: var(--success, #15803d); }
+.report-kpi-card.is-danger strong { color: var(--danger); }
+
+@media (max-width: 768px) {
+  .report-type-grid { grid-template-columns: 1fr 1fr; }
+  .report-builder-actions .button { width: 100%; justify-content: center; }
+}
+
 @media print {
   .no-print, .bottom-nav, .sidebar, .topbar, .bg-blobs { display: none !important; }
 }

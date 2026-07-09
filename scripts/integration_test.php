@@ -834,6 +834,37 @@ $report = (new ReportData($pdo))->build();
 $assert(isset($report['teams'], $report['members'], $report['desks']), 'report: build succeeds');
 $assert(count($report['teams']) >= 1, 'report: includes teams');
 
+// --- Professional report builder ---
+$builder = new ReportBuilder($pdo);
+$catalog = $builder->catalog();
+$assert(isset($catalog['types'], $catalog['periods'], $catalog['defaults']), 'reports: catalog shape');
+$assert(count($catalog['types']) >= 8, 'reports: catalog has report types');
+$monthly = $builder->build([
+    'type' => 'finance',
+    'period' => 'monthly',
+    'fiscal_year' => '1405',
+    'month' => 5,
+    'team_id' => $teamId,
+]);
+$assert(($monthly['meta']['type'] ?? '') === 'finance', 'reports: finance monthly type');
+$assert(($monthly['meta']['month_from'] ?? 0) === 5 && ($monthly['meta']['month_to'] ?? 0) === 5, 'reports: monthly range');
+$assert(isset($monthly['finance_summary']['income_total'], $monthly['monthly_breakdown']), 'reports: finance sections');
+$quarterly = $builder->build([
+    'type' => 'debts',
+    'period' => 'quarterly',
+    'fiscal_year' => '1405',
+    'quarter' => 2,
+]);
+$assert(($quarterly['meta']['month_from'] ?? 0) === 4 && ($quarterly['meta']['month_to'] ?? 0) === 6, 'reports: quarterly summer months');
+$assert(is_array($quarterly['debts'] ?? null), 'reports: debts section present');
+$annual = $builder->build([
+    'type' => 'full',
+    'period' => 'annual',
+    'fiscal_year' => '1405',
+]);
+$assert(in_array('teams', $annual['meta']['sections'] ?? [], true), 'reports: full includes teams');
+$assert(isset($annual['transactions'], $annual['charges'], $annual['kpis']), 'reports: full payload');
+
 // --- Excel exporter ---
 $exporter = new ExcelExporter($pdo);
 $assert(method_exists($exporter, 'output'), 'export: ExcelExporter available');
