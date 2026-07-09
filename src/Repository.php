@@ -509,7 +509,8 @@ final class Repository
                 . ($teamId !== null ? " WHERE d.team_id = {$teamId}" : '')
                 . $this->searchClause('desks', $filters, $teamId !== null)
                 . ' ORDER BY d.number',
-            'lockers' => "SELECT l.id, l.locker_number, l.team_id, l.status, l.delivered_at, l.key_number, l.spare_key, l.notes,
+            'lockers' => "SELECT l.id, l.locker_number, l.team_id, l.status, l.delivered_at"
+                . $this->lockerExtraSelect('l') . ", l.notes,
                         t.name AS team_label, t.is_active AS team_is_active
                  FROM lockers l
                  LEFT JOIN teams t ON t.id = l.team_id"
@@ -666,15 +667,31 @@ final class Repository
      */
     private function teamSummary(int $teamId): array
     {
-        $profile = $this->teamProfile($teamId);
+        Access::assertTeamAccess($teamId);
+        $team = $this->preparedRow('SELECT * FROM teams WHERE id = :id', ['id' => $teamId]);
+        if ($team === null) {
+            throw new InvalidArgumentException('تیم پیدا نشد.');
+        }
+
+        $members = $this->preparedRows(
+            'SELECT approval_status FROM members WHERE team_id = :id',
+            ['id' => $teamId]
+        );
+        $desks = $this->preparedRows(
+            'SELECT number FROM desks WHERE team_id = :id ORDER BY number',
+            ['id' => $teamId]
+        );
 
         return [
-            'team' => $profile['team'],
+            'team' => self::stripLegacyColumns($team),
             'cards' => [
-                'members' => count(array_filter($profile['members'], static fn ($m) => ($m['approval_status'] ?? 'approved') === 'approved')),
-                'desks' => count($profile['desks']),
-                'desk_numbers' => implode('، ', array_map(static fn ($d) => (string) ($d['number'] ?? ''), $profile['desks'])),
-                'lockers' => count($profile['lockers']),
+                'members' => count(array_filter($members, static fn ($m) => ($m['approval_status'] ?? 'approved') === 'approved')),
+                'desks' => count($desks),
+                'desk_numbers' => implode('، ', array_map(static fn ($d) => (string) ($d['number'] ?? ''), $desks)),
+                'lockers' => $this->preparedScalar(
+                    'SELECT COUNT(*) FROM lockers WHERE team_id = :id',
+                    ['id' => $teamId]
+                ),
                 'charge_total' => $this->contractChargeTotalForTeam($teamId),
                 'debt_total' => $this->contractDebtForTeam($teamId),
                 'paid_total' => $this->contractPaidTotalForTeam($teamId),
@@ -704,12 +721,22 @@ final class Repository
                 ['team_id' => $teamId]
             ),
             'current_month' => $this->currentMonthSummaryForTeam($teamId),
-            'monthly_charges' => $this->preparedRows(
-                'SELECT fiscal_year, month_index, month_name, amount
+            'monthly_charges' => array_map(
+                function (array $row): array {
+                    $monthIndex = (int) ($row['month_index'] ?? 0);
+                    if (!isset($row['month_name']) || (string) ($row['month_name'] ?? '') === '') {
+                        $row['month_name'] = $monthIndex > 0 ? $this->monthName($monthIndex) : '';
+                    }
+
+                    return $row;
+                },
+                $this->preparedRows(
+                'SELECT fiscal_year, month_index'
+                . $this->chargeOptionalSelect() . ', amount
                  FROM charges WHERE team_id = :team_id
                  ORDER BY fiscal_year, month_index',
                 ['team_id' => $teamId]
-            ),
+            )),
             'action_items' => $this->teamActionItems($teamId),
             'recent_approvals' => $this->recentApprovalsForTeam($teamId),
             'payment_settings' => (new CenterSettings($this->pdo))->get(),
@@ -1146,7 +1173,8 @@ final class Repository
                 ['id' => $teamId]
             ),
             'lockers' => $this->preparedRows(
-                'SELECT l.id, l.locker_number, l.status, l.delivered_at, l.key_number, l.spare_key, l.notes
+                'SELECT l.id, l.locker_number, l.status, l.delivered_at'
+                . $this->lockerExtraSelect('l') . ', l.notes
                  FROM lockers l WHERE l.team_id = :id ORDER BY l.locker_number',
                 ['id' => $teamId]
             ),
@@ -1183,11 +1211,21 @@ final class Repository
                  ORDER BY lr.submitted_at DESC',
                 ['id' => $teamId]
             ),
-            'charges' => $this->preparedRows(
-                'SELECT id, fiscal_year, month_index, month_name, charge_amount, rent_amount, amount, note
+            'charges' => array_map(
+                function (array $row): array {
+                    $monthIndex = (int) ($row['month_index'] ?? 0);
+                    if (!isset($row['month_name']) || (string) ($row['month_name'] ?? '') === '') {
+                        $row['month_name'] = $monthIndex > 0 ? $this->monthName($monthIndex) : '';
+                    }
+
+                    return $row;
+                },
+                $this->preparedRows(
+                'SELECT id, fiscal_year, month_index'
+                . $this->chargeOptionalSelect() . ', amount, note
                  FROM charges WHERE team_id = :id ORDER BY fiscal_year, month_index',
                 ['id' => $teamId]
-            ),
+            )),
             'payments' => $this->preparedRows(
                 "SELECT id, tx_date, description, amount, category, fiscal_year, month_index, confirmed, notes,
                         payment_status, payment_reference, announced_at, reviewed_at,
@@ -1898,7 +1936,7 @@ final class Repository
         }
 
         $payments = $this->preparedRows(
-            "SELECT amount, payment_plan FROM transactions
+            "SELECT amount" . $this->transactionPaymentPlanSelect() . " FROM transactions
              WHERE team_id = :id AND category = 'واریز تیم' AND payment_status = 'approved' AND confirmed = 1
              ORDER BY COALESCE(reviewed_at, tx_date), id",
             ['id' => $teamId]
@@ -2515,5 +2553,59 @@ final class Repository
     private function teamContractRateOverrideSelect(string $alias = ''): string
     {
         return $this->contracts()->contractRateOverrideSelect($alias);
+    }
+
+    private function lockerExtraSelect(string $alias = 'l'): string
+    {
+        static $cache = [];
+        if (isset($cache[$alias])) {
+            return $cache[$alias];
+        }
+
+        $prefix = $alias !== '' ? $alias . '.' : '';
+        $columns = [];
+        if (Schema::hasColumn($this->pdo, 'lockers', 'key_number')) {
+            $columns[] = $prefix . 'key_number';
+        }
+        if (Schema::hasColumn($this->pdo, 'lockers', 'spare_key')) {
+            $columns[] = $prefix . 'spare_key';
+        }
+        $cache[$alias] = $columns === [] ? '' : ', ' . implode(', ', $columns);
+
+        return $cache[$alias];
+    }
+
+    private function chargeOptionalSelect(): string
+    {
+        static $suffix = null;
+        if ($suffix !== null) {
+            return $suffix;
+        }
+
+        $columns = [];
+        if (Schema::hasColumn($this->pdo, 'charges', 'month_name')) {
+            $columns[] = 'month_name';
+        }
+        if (Schema::hasColumn($this->pdo, 'charges', 'charge_amount')) {
+            $columns[] = 'charge_amount';
+        }
+        if (Schema::hasColumn($this->pdo, 'charges', 'rent_amount')) {
+            $columns[] = 'rent_amount';
+        }
+        $suffix = $columns === [] ? '' : ', ' . implode(', ', $columns);
+
+        return $suffix;
+    }
+
+    private function transactionPaymentPlanSelect(): string
+    {
+        static $suffix = null;
+        if ($suffix !== null) {
+            return $suffix;
+        }
+
+        $suffix = Schema::hasColumn($this->pdo, 'transactions', 'payment_plan') ? ', payment_plan' : '';
+
+        return $suffix;
     }
 }
