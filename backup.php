@@ -124,6 +124,7 @@ if (!$configured) {
           <div class="install-actions">
             <h2>دانلود پشتیبان</h2>
             <p class="hint">فایل JSON خوانا است و می‌توانید آن را ویرایش یا در جای امن نگه دارید.</p>
+            <p class="hint warn">این فایل شامل رمزهای ورود نهادها و تنظیمات پیامک است؛ فقط در محل امن نگهداری کنید و از کانال‌های عمومی ارسال نکنید.</p>
             <a class="button" href="backup.php?action=download">دانلود پشتیبان کامل</a>
           </div>
 

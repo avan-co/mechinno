@@ -104,10 +104,19 @@ final class YearBackfill
 
     private function resolveTeamIdByName(string $name): int
     {
-        $statement = $this->pdo->prepare('SELECT id FROM teams WHERE name = :name LIMIT 1');
+        $statement = $this->pdo->prepare('SELECT id FROM teams WHERE name = :name ORDER BY id ASC');
         $statement->execute(['name' => $name]);
+        $ids = array_map(static fn (array $row): int => (int) ($row['id'] ?? 0), $statement->fetchAll());
+        if ($ids === []) {
+            return 0;
+        }
+        if (count($ids) > 1) {
+            throw new InvalidArgumentException(
+                'چند نهاد با نام «' . $name . '» وجود دارد؛ به‌جای نام، شناسه نهاد (team_id) را وارد کنید.'
+            );
+        }
 
-        return (int) ($statement->fetchColumn() ?: 0);
+        return $ids[0];
     }
 
     private function ensureContract(

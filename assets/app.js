@@ -947,17 +947,23 @@ const entryTypeLabel = (type) => ({
   expense: "هزینه",
 }[type] || type || "—");
 
-const loadLedger = async () => {
+let ledgerPage = 1;
+
+const loadLedger = async (page = ledgerPage) => {
   const summaryBody = document.getElementById("ledgerSummaryBody");
   const tableBody = document.getElementById("ledgerTableBody");
   const billingWrap = document.getElementById("ledgerBillingWrap");
   const billingBody = document.getElementById("ledgerBillingBody");
+  const pager = document.getElementById("ledgerPager");
   if (!summaryBody || !tableBody) return;
 
-  const data = await fetchJson("api.php?resource=ledger");
+  ledgerPage = Math.max(1, Number(page) || 1);
+  const data = await fetchJson(`api.php?resource=ledger&page=${ledgerPage}&per_page=100`);
   const totals = data.totals || {};
   const billing = data.billing || {};
   const balance = Number(totals.balance ?? data.balance ?? 0);
+  const pages = Math.max(1, Number(data.pages || 1));
+  ledgerPage = Math.min(ledgerPage, pages);
 
   summaryBody.innerHTML = `
     <tr class="ledger-row-balance ${balance < 0 ? "ledger-negative-row" : ""}">
@@ -982,6 +988,7 @@ const loadLedger = async () => {
   const rows = data.rows || [];
   if (!rows.length) {
     tableBody.innerHTML = `<tr><td colspan="7" class="empty">هنوز گردش نقدی ثبت نشده است.</td></tr>`;
+    if (pager) pager.innerHTML = "";
     return;
   }
 
@@ -999,6 +1006,21 @@ const loadLedger = async () => {
       <td class="num ledger-balance-cell">${escapeHtml(formatMoney(row.running_balance ?? 0))}</td>
     </tr>`;
   }).join("");
+
+  if (pager) {
+    const total = Number(data.total || rows.length);
+    pager.innerHTML = pages > 1
+      ? `<button type="button" class="button ghost" ${ledgerPage <= 1 ? "disabled" : ""} data-ledger-page="${ledgerPage - 1}">قبلی</button>
+         <span class="hint">صفحه ${ledgerPage} از ${pages} — ${total} ردیف</span>
+         <button type="button" class="button ghost" ${ledgerPage >= pages ? "disabled" : ""} data-ledger-page="${ledgerPage + 1}">بعدی</button>`
+      : `<span class="hint">${total} ردیف گردش نقدی</span>`;
+    pager.querySelectorAll("[data-ledger-page]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        if (btn.hasAttribute("disabled")) return;
+        loadLedger(Number(btn.getAttribute("data-ledger-page") || 1));
+      });
+    });
+  }
 };
 
 const loadTeamDeskAssignments = async () => {

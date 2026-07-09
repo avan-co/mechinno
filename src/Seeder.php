@@ -42,85 +42,112 @@ final class Seeder
         }
 
         $fiscalYear = JalaliDate::normalizeDigits($fiscalYear);
-        if ($deleteExisting) {
-            $this->pdo->prepare(
-                'DELETE FROM charges WHERE team_id = :team_id AND fiscal_year = :fiscal_year AND source_file = :source'
-            )->execute(['team_id' => $teamId, 'fiscal_year' => $fiscalYear, 'source' => 'system']);
+        $startedTransaction = false;
+        if (!$this->pdo->inTransaction()) {
+            $this->pdo->beginTransaction();
+            $startedTransaction = true;
         }
 
-        $manualCheck = $this->pdo->prepare(
-            'SELECT id FROM charges
-             WHERE team_id = :team_id AND fiscal_year = :fiscal_year AND month_index = :month_index
-               AND source_file = :source LIMIT 1'
-        );
-
-        $contracts = new TeamContracts($this->pdo);
-        if (!$contracts->hasContractInYear($teamId, $fiscalYear) || !$contracts->hasDeskInFiscalYear($teamId, $fiscalYear)) {
-            return;
-        }
-
-        $amounts = $this->monthlyAmountsForTeam($teamId, $fiscalYear);
-        $existingSystem = $this->pdo->prepare(
-            'SELECT id, month_index FROM charges
-             WHERE team_id = :team_id AND fiscal_year = :fiscal_year AND source_file = :source'
-        );
-        $existingSystem->execute(['team_id' => $teamId, 'fiscal_year' => $fiscalYear, 'source' => 'system']);
-        $systemByMonth = [];
-        foreach ($existingSystem->fetchAll() as $row) {
-            $systemByMonth[(int) ($row['month_index'] ?? 0)] = (int) ($row['id'] ?? 0);
-        }
-
-        $updateSystem = $this->pdo->prepare(
-            'UPDATE charges
-             SET month_name = :month_name, charge_amount = :charge_amount, rent_amount = :rent_amount,
-                 amount = :amount, note = :note
-             WHERE id = :id'
-        );
-
-        foreach ($amounts as $monthIndex => $parts) {
-            if (($parts['amount'] ?? 0) <= 0) {
-                continue;
+        try {
+            if ($deleteExisting) {
+                $this->pdo->prepare(
+                    'DELETE FROM charges WHERE team_id = :team_id AND fiscal_year = :fiscal_year AND source_file = :source'
+                )->execute(['team_id' => $teamId, 'fiscal_year' => $fiscalYear, 'source' => 'system']);
             }
-            $manualCheck->execute([
-                'team_id' => $teamId,
-                'fiscal_year' => $fiscalYear,
-                'month_index' => $monthIndex,
-                'source' => 'manual',
-            ]);
-            if ($manualCheck->fetchColumn() !== false) {
-                continue;
-            }
-            $payload = [
-                'month_name' => JalaliDate::monthName($monthIndex),
-                'charge_amount' => $parts['charge_amount'],
-                'rent_amount' => $parts['rent_amount'],
-                'amount' => $parts['amount'],
-                'note' => (string) ($parts['note'] ?? ''),
-            ];
-            if (isset($systemByMonth[$monthIndex])) {
-                $updateSystem->execute($payload + ['id' => $systemByMonth[$monthIndex]]);
-                unset($systemByMonth[$monthIndex]);
-                continue;
-            }
-            $this->insert('charges', [
-                'team_id' => $teamId,
-                'fiscal_year' => $fiscalYear,
-                'month_index' => $monthIndex,
-                'month_name' => $payload['month_name'],
-                'charge_amount' => $payload['charge_amount'],
-                'rent_amount' => $payload['rent_amount'],
-                'amount' => $payload['amount'],
-                'note' => $payload['note'],
-                'source_file' => 'system',
-                'source_sheet' => 'auto',
-            ]);
-        }
 
-        if ($systemByMonth !== []) {
-            $deleteStale = $this->pdo->prepare('DELETE FROM charges WHERE id = :id');
-            foreach ($systemByMonth as $systemId) {
-                $deleteStale->execute(['id' => $systemId]);
+            $manualCheck = $this->pdo->prepare(
+                'SELECT id FROM charges
+                 WHERE team_id = :team_id AND fiscal_year = :fiscal_year AND month_index = :month_index
+                   AND source_file = :source LIMIT 1'
+            );
+
+            $contracts = new TeamContracts($this->pdo);
+            if (!$contracts->hasContractInYear($teamId, $fiscalYear) || !$contracts->hasDeskInFiscalYear($teamId, $fiscalYear)) {
+                if ($startedTransaction) {
+                    $this->pdo->commit();
+                }
+
+                return;
             }
+
+            $amounts = $this->monthlyAmountsForTeam($teamId, $fiscalYear);
+            $existingSystem = $this->pdo->prepare(
+                'SELECT id, month_index FROM charges
+                 WHERE team_id = :team_id AND fiscal_year = :fiscal_year AND source_file = :source'
+            );
+            $existingSystem->execute(['team_id' => $teamId, 'fiscal_year' => $fiscalYear, 'source' => 'system']);
+            $systemByMonth = [];
+            foreach ($existingSystem->fetchAll() as $row) {
+                $systemByMonth[(int) ($row['month_index'] ?? 0)] = (int) ($row['id'] ?? 0);
+            }
+
+            $updateSystem = $this->pdo->prepare(
+                'UPDATE charges
+                 SET month_name = :month_name, charge_amount = :charge_amount, rent_amount = :rent_amount,
+                     amount = :amount, note = :note
+                 WHERE id = :id'
+            );
+
+            foreach ($amounts as $monthIndex => $parts) {
+                if (($parts['amount'] ?? 0) <= 0) {
+                    continue;
+                }
+                $manualCheck->execute([
+                    'team_id' => $teamId,
+                    'fiscal_year' => $fiscalYear,
+                    'month_index' => $monthIndex,
+                    'source' => 'manual',
+                ]);
+                if ($manualCheck->fetchColumn() !== false) {
+                    // Manual charge wins: remove any leftover system row for the same month.
+                    if (isset($systemByMonth[$monthIndex])) {
+                        $this->pdo->prepare('DELETE FROM charges WHERE id = :id')
+                            ->execute(['id' => $systemByMonth[$monthIndex]]);
+                        unset($systemByMonth[$monthIndex]);
+                    }
+                    continue;
+                }
+                $payload = [
+                    'month_name' => JalaliDate::monthName($monthIndex),
+                    'charge_amount' => $parts['charge_amount'],
+                    'rent_amount' => $parts['rent_amount'],
+                    'amount' => $parts['amount'],
+                    'note' => (string) ($parts['note'] ?? ''),
+                ];
+                if (isset($systemByMonth[$monthIndex])) {
+                    $updateSystem->execute($payload + ['id' => $systemByMonth[$monthIndex]]);
+                    unset($systemByMonth[$monthIndex]);
+                    continue;
+                }
+                $this->insert('charges', [
+                    'team_id' => $teamId,
+                    'fiscal_year' => $fiscalYear,
+                    'month_index' => $monthIndex,
+                    'month_name' => $payload['month_name'],
+                    'charge_amount' => $payload['charge_amount'],
+                    'rent_amount' => $payload['rent_amount'],
+                    'amount' => $payload['amount'],
+                    'note' => $payload['note'],
+                    'source_file' => 'system',
+                    'source_sheet' => 'auto',
+                ]);
+            }
+
+            if ($systemByMonth !== []) {
+                $deleteStale = $this->pdo->prepare('DELETE FROM charges WHERE id = :id');
+                foreach ($systemByMonth as $systemId) {
+                    $deleteStale->execute(['id' => $systemId]);
+                }
+            }
+
+            if ($startedTransaction) {
+                $this->pdo->commit();
+            }
+        } catch (Throwable $exception) {
+            if ($startedTransaction && $this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            throw $exception;
         }
     }
 

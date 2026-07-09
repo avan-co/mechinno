@@ -17,13 +17,14 @@ final class Schema
         self::ensureTeamContractsTable($pdo);
         self::dropLegacyColumns($pdo);
         self::dropUnusedTables($pdo);
+        self::ensureDataIntegrity($pdo);
         self::seedDesks($pdo);
         self::seedDeskAssignments($pdo);
         self::reconcileDeskAssignments($pdo);
     }
 
     /**
-     * Align desk_assignments with current code: fill missing end dates and remove duplicates.
+     * Align desk_assignments with current code: fill missing end dates and remove duplicates once.
      */
     public static function reconcileDeskAssignments(PDO $pdo): void
     {
@@ -32,7 +33,10 @@ final class Schema
         }
 
         self::backfillDeskAssignmentEnds($pdo);
-        self::normalizeDeskAssignments($pdo);
+        if (self::needsDeskAssignmentNormalization($pdo)) {
+            self::normalizeDeskAssignments($pdo);
+            self::markDeskAssignmentNormalizationDone($pdo);
+        }
     }
 
     public static function reset(PDO $pdo): void
@@ -191,7 +195,8 @@ final class Schema
                 source_file VARCHAR(255) NULL,
                 source_sheet VARCHAR(255) NULL,
                 INDEX idx_charges_team_id (team_id),
-                INDEX idx_charges_year_month (fiscal_year, month_index)
+                INDEX idx_charges_year_month (fiscal_year, month_index),
+                UNIQUE KEY uniq_charges_team_year_month (team_id, fiscal_year, month_index)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
             "CREATE TABLE IF NOT EXISTS transactions (
                 id INT AUTO_INCREMENT PRIMARY KEY,
@@ -308,6 +313,7 @@ final class Schema
                 'sms_panel_credit' => 'BIGINT NULL',
                 'sms_live_synced_at' => 'VARCHAR(32) NULL',
                 'legacy_team_contracts_migrated' => 'TINYINT NOT NULL DEFAULT 0',
+                'desk_assignments_normalized' => 'TINYINT NOT NULL DEFAULT 0',
             ],
             'lockers' => [
                 'team_id' => 'INT NULL',
@@ -362,6 +368,9 @@ final class Schema
         ];
 
         foreach ($columns as $table => $tableColumns) {
+            if (!self::tableExists($pdo, $table)) {
+                continue;
+            }
             foreach ($tableColumns as $column => $definition) {
                 if (!self::columnExists($pdo, $table, $column)) {
                     $type = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite'
@@ -393,6 +402,250 @@ final class Schema
         (new TeamContracts($pdo))->syncAllTeamActiveStatuses();
         TeamLeaders::backfillAll($pdo);
         CenterLedger::purgeAccrualMirrorEntries($pdo);
+    }
+
+    /**
+     * Deduplicate critical rows and ensure uniqueness / performance indexes.
+     */
+    private static function ensureDataIntegrity(PDO $pdo): void
+    {
+        self::deduplicateCharges($pdo);
+        self::ensureUniqueIndex(
+            $pdo,
+            'charges',
+            'uniq_charges_team_year_month',
+            ['team_id', 'fiscal_year', 'month_index']
+        );
+        self::ensureIndex($pdo, 'transactions', 'idx_transactions_team', ['team_id']);
+        self::ensureIndex($pdo, 'transactions', 'idx_transactions_category', ['category']);
+        if (self::columnExists($pdo, 'transactions', 'payment_status')) {
+            self::ensureIndex($pdo, 'transactions', 'idx_transactions_status', ['payment_status']);
+            self::ensureIndex($pdo, 'transactions', 'idx_transactions_team_status', ['team_id', 'payment_status']);
+            if (self::columnExists($pdo, 'transactions', 'confirmed')) {
+                self::ensureIndex(
+                    $pdo,
+                    'transactions',
+                    'idx_transactions_cash',
+                    ['category', 'payment_status', 'confirmed']
+                );
+            }
+        }
+        self::ensureIndex($pdo, 'charges', 'idx_charges_team_id', ['team_id']);
+        self::ensureIndex($pdo, 'charges', 'idx_charges_year_month', ['fiscal_year', 'month_index']);
+        self::ensureIndex($pdo, 'members', 'idx_members_team_id', ['team_id']);
+        self::ensureIndex($pdo, 'desk_assignments', 'idx_desk_assignments_team', ['team_id']);
+        self::ensureIndex($pdo, 'desk_assignments', 'idx_desk_assignments_desk', ['desk_id']);
+    }
+
+    private static function deduplicateCharges(PDO $pdo): void
+    {
+        if (!self::tableExists($pdo, 'charges')) {
+            return;
+        }
+
+        $groups = $pdo->query(
+            "SELECT team_id, fiscal_year, month_index, COUNT(*) AS cnt
+             FROM charges
+             WHERE team_id IS NOT NULL AND fiscal_year IS NOT NULL AND month_index IS NOT NULL
+             GROUP BY team_id, fiscal_year, month_index
+             HAVING COUNT(*) > 1"
+        )->fetchAll();
+
+        if ($groups === []) {
+            return;
+        }
+
+        $select = $pdo->prepare(
+            'SELECT id, source_file, amount, charge_amount, rent_amount, note
+             FROM charges
+             WHERE team_id = :team_id AND fiscal_year = :fiscal_year AND month_index = :month_index
+             ORDER BY id ASC'
+        );
+        $delete = $pdo->prepare('DELETE FROM charges WHERE id = :id');
+        $update = $pdo->prepare(
+            'UPDATE charges
+             SET source_file = :source_file, amount = :amount, charge_amount = :charge_amount,
+                 rent_amount = :rent_amount, note = :note
+             WHERE id = :id'
+        );
+
+        foreach ($groups as $group) {
+            $select->execute([
+                'team_id' => (int) ($group['team_id'] ?? 0),
+                'fiscal_year' => (string) ($group['fiscal_year'] ?? ''),
+                'month_index' => (int) ($group['month_index'] ?? 0),
+            ]);
+            $rows = $select->fetchAll();
+            if (count($rows) <= 1) {
+                continue;
+            }
+
+            $keep = null;
+            foreach ($rows as $row) {
+                if ((string) ($row['source_file'] ?? '') === 'manual') {
+                    $keep = $row;
+                    break;
+                }
+            }
+            if ($keep === null) {
+                $keep = $rows[count($rows) - 1];
+            }
+
+            $keepId = (int) ($keep['id'] ?? 0);
+            $update->execute([
+                'source_file' => (string) ($keep['source_file'] ?? 'manual') === 'system' ? 'system' : 'manual',
+                'amount' => (int) ($keep['amount'] ?? 0),
+                'charge_amount' => (int) ($keep['charge_amount'] ?? 0),
+                'rent_amount' => (int) ($keep['rent_amount'] ?? 0),
+                'note' => (string) ($keep['note'] ?? ''),
+                'id' => $keepId,
+            ]);
+
+            foreach ($rows as $row) {
+                $rowId = (int) ($row['id'] ?? 0);
+                if ($rowId > 0 && $rowId !== $keepId) {
+                    $delete->execute(['id' => $rowId]);
+                }
+            }
+        }
+    }
+
+    /**
+     * @param list<string> $columns
+     */
+    private static function ensureUniqueIndex(PDO $pdo, string $table, string $indexName, array $columns): void
+    {
+        if (!self::tableExists($pdo, $table) || self::indexExists($pdo, $table, $indexName)) {
+            return;
+        }
+
+        $columnSql = implode(', ', array_map(
+            static fn (string $column): string => Sql::quoteIdentifier($column),
+            $columns
+        ));
+
+        try {
+            if ($pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite') {
+                $pdo->exec(
+                    'CREATE UNIQUE INDEX IF NOT EXISTS ' . $indexName
+                    . ' ON ' . Sql::quoteIdentifier($table) . ' (' . $columnSql . ')'
+                );
+            } else {
+                $pdo->exec(
+                    'ALTER TABLE ' . Sql::quoteIdentifier($table)
+                    . ' ADD UNIQUE KEY ' . $indexName . ' (' . $columnSql . ')'
+                );
+            }
+        } catch (PDOException) {
+            // Host may lack ALTER privilege; application upsert still prevents new duplicates.
+        }
+    }
+
+    /**
+     * @param list<string> $columns
+     */
+    private static function ensureIndex(PDO $pdo, string $table, string $indexName, array $columns): void
+    {
+        if (!self::tableExists($pdo, $table) || self::indexExists($pdo, $table, $indexName)) {
+            return;
+        }
+
+        $columnSql = implode(', ', array_map(
+            static fn (string $column): string => Sql::quoteIdentifier($column),
+            $columns
+        ));
+
+        try {
+            if ($pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite') {
+                $pdo->exec(
+                    'CREATE INDEX IF NOT EXISTS ' . $indexName
+                    . ' ON ' . Sql::quoteIdentifier($table) . ' (' . $columnSql . ')'
+                );
+            } else {
+                $pdo->exec(
+                    'ALTER TABLE ' . Sql::quoteIdentifier($table)
+                    . ' ADD INDEX ' . $indexName . ' (' . $columnSql . ')'
+                );
+            }
+        } catch (PDOException) {
+            // Best-effort on restricted hosts.
+        }
+    }
+
+    private static function indexExists(PDO $pdo, string $table, string $indexName): bool
+    {
+        try {
+            if ($pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite') {
+                $statement = $pdo->prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = :name");
+                $statement->execute(['name' => $indexName]);
+
+                return $statement->fetchColumn() !== false;
+            }
+
+            $statement = $pdo->prepare(
+                'SELECT COUNT(*) FROM information_schema.STATISTICS
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table AND INDEX_NAME = :index_name'
+            );
+            $statement->execute(['table' => $table, 'index_name' => $indexName]);
+
+            return (int) $statement->fetchColumn() > 0;
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    private static function needsDeskAssignmentNormalization(PDO $pdo): bool
+    {
+        if (!self::tableExists($pdo, 'center_settings')
+            || !self::columnExists($pdo, 'center_settings', 'desk_assignments_normalized')) {
+            return true;
+        }
+
+        $flag = (int) $pdo->query(
+            'SELECT desk_assignments_normalized FROM center_settings WHERE id = 1'
+        )->fetchColumn();
+        if ($flag !== 1) {
+            return true;
+        }
+
+        // Re-run only when duplicate desk-year rows appear (cheap existence check).
+        return self::hasDuplicateDeskAssignments($pdo);
+    }
+
+    private static function hasDuplicateDeskAssignments(PDO $pdo): bool
+    {
+        if (!self::tableExists($pdo, 'desk_assignments')) {
+            return false;
+        }
+
+        $rows = $pdo->query(
+            'SELECT desk_id, assigned_from FROM desk_assignments ORDER BY desk_id, assigned_from, id'
+        )->fetchAll();
+        $seen = [];
+        foreach ($rows as $row) {
+            $deskId = (int) ($row['desk_id'] ?? 0);
+            $fiscalYear = JalaliDate::fiscalYearFromDate((string) ($row['assigned_from'] ?? ''));
+            if ($deskId <= 0 || $fiscalYear === '') {
+                continue;
+            }
+            $key = $deskId . ':' . $fiscalYear;
+            if (isset($seen[$key])) {
+                return true;
+            }
+            $seen[$key] = true;
+        }
+
+        return false;
+    }
+
+    private static function markDeskAssignmentNormalizationDone(PDO $pdo): void
+    {
+        if (!self::tableExists($pdo, 'center_settings')
+            || !self::columnExists($pdo, 'center_settings', 'desk_assignments_normalized')) {
+            return;
+        }
+
+        $pdo->exec('UPDATE center_settings SET desk_assignments_normalized = 1 WHERE id = 1');
     }
 
     private static function ensureTeamContractsTable(PDO $pdo): void

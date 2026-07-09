@@ -109,6 +109,17 @@ final class DatabaseBackup
         if ($tables === []) {
             throw new InvalidArgumentException('فایل پشتیبان خالی است.');
         }
+        foreach ($tables as $tableName => $rows) {
+            if (!is_string($tableName) || !preg_match('/^[a-z_][a-z0-9_]*$/', $tableName)) {
+                throw new InvalidArgumentException('نام جدول در فایل پشتیبان معتبر نیست.');
+            }
+            if (!is_array($rows)) {
+                throw new InvalidArgumentException('ساختار جدول «' . $tableName . '» در فایل پشتیبان معتبر نیست.');
+            }
+        }
+        if (!isset($tables['teams']) || !is_array($tables['teams'])) {
+            throw new InvalidArgumentException('فایل پشتیبان باید شامل جدول نهادها باشد.');
+        }
 
         Schema::migrate($this->pdo);
 

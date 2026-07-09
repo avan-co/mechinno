@@ -324,6 +324,9 @@ $assert(($duplicateAmounts[5]['charge_amount'] ?? 0) === 300, 'charges: duplicat
 (new Seeder($pdo))->recalculateCharges('1405');
 $afterGlobalRecalc = (new Seeder($pdo))->monthlyAmountsForTeam($teamId, '1405');
 $assert(($afterGlobalRecalc[5]['charge_amount'] ?? 0) === 300, 'charges: global recalc keeps single-desk amounts');
+// Remove intentional duplicate so later assignment updates are not blocked by overlap checks.
+$pdo->exec('DELETE FROM desk_assignments WHERE desk_id = 1 AND id <> ' . (int) $assignmentId);
+Schema::reconcileDeskAssignments($pdo);
 
 $crud->update('desk_assignments', $assignmentId, [
     'team_id' => (string) $teamId,
@@ -468,6 +471,7 @@ $teamIn1404 = array_filter($matrixEmptyYear['rows'] ?? [], static fn (array $r):
 $assert($teamIn1404 === [], 'charges: team without 1404 contract hidden from collage');
 $ledger = (new CenterLedger($pdo))->snapshot();
 $assert(array_key_exists('balance', $ledger), 'ledger: snapshot has balance');
+$assert(array_key_exists('page', $ledger) && array_key_exists('pages', $ledger), 'ledger: snapshot is paginated');
 $systemRows = array_filter($ledger['rows'] ?? [], static fn (array $r): bool => str_starts_with((string) ($r['source_file'] ?? ''), 'system:'));
 $assert(count($systemRows) === 0, 'ledger: no duplicate accrual rows');
 $assert(($ledger['totals']['balance'] ?? -1) === ($ledger['totals']['income_total'] ?? 0) - ($ledger['totals']['expense_total'] ?? 0), 'ledger: balance equals income minus expense');
@@ -853,12 +857,67 @@ $assert(($imported['teams'] ?? 0) >= 1, 'backup: restore imports teams');
 $restoredTeamCount = (int) $roundtripPdo->query('SELECT COUNT(*) FROM teams')->fetchColumn();
 $assert($restoredTeamCount === (int) ($exportPayload['counts']['teams'] ?? 0), 'backup: restored team count matches export');
 
-// --- Delete team cascades portal user ---
+// --- Delete team cascades related finance/member data ---
 $userBefore = (int) $pdo->query('SELECT COUNT(*) FROM panel_users WHERE team_id = ' . $teamId)->fetchColumn();
 $assert($userBefore === 1, 'entity: one portal user per team');
+$membersBefore = (int) $pdo->query('SELECT COUNT(*) FROM members WHERE team_id = ' . $teamId)->fetchColumn();
+$chargesBefore = (int) $pdo->query('SELECT COUNT(*) FROM charges WHERE team_id = ' . $teamId)->fetchColumn();
+$txBefore = (int) $pdo->query('SELECT COUNT(*) FROM transactions WHERE team_id = ' . $teamId)->fetchColumn();
+$assert($membersBefore >= 1, 'entity: team has members before cascade delete');
+$assert($chargesBefore >= 1, 'entity: team has charges before cascade delete');
+$assert($txBefore >= 1, 'entity: team has transactions before cascade delete');
 $crud->delete('teams', $teamId);
 $userAfter = (int) $pdo->query('SELECT COUNT(*) FROM panel_users WHERE team_id = ' . $teamId)->fetchColumn();
+$membersAfter = (int) $pdo->query('SELECT COUNT(*) FROM members WHERE team_id = ' . $teamId)->fetchColumn();
+$chargesAfter = (int) $pdo->query('SELECT COUNT(*) FROM charges WHERE team_id = ' . $teamId)->fetchColumn();
+$txAfter = (int) $pdo->query('SELECT COUNT(*) FROM transactions WHERE team_id = ' . $teamId)->fetchColumn();
+$contractsAfter = (int) $pdo->query('SELECT COUNT(*) FROM team_contracts WHERE team_id = ' . $teamId)->fetchColumn();
+$desksAfter = (int) $pdo->query('SELECT COUNT(*) FROM desks WHERE team_id = ' . $teamId)->fetchColumn();
 $assert($userAfter === 0, 'entity: portal user deleted with team');
+$assert($membersAfter === 0, 'entity: members deleted with team');
+$assert($chargesAfter === 0, 'entity: charges deleted with team');
+$assert($txAfter === 0, 'entity: transactions deleted with team');
+$assert($contractsAfter === 0, 'entity: contracts deleted with team');
+$assert($desksAfter === 0, 'entity: desks released when team deleted');
+
+// --- Charge uniqueness / dedupe ---
+$uniqTeam = $crud->create('teams', [
+    'entity_type' => 'team',
+    'name' => 'نهاد یکتایی شارژ',
+    'leader' => 'تست',
+    'phone' => '09120001111',
+    'joined_at' => '1405/01/01',
+]);
+$uniqTeamId = (int) $uniqTeam['id'];
+$crud->create('charges', [
+    'team_id' => (string) $uniqTeamId,
+    'fiscal_year' => '1405',
+    'month_index' => '3',
+    'charge_amount' => '1000',
+    'rent_amount' => '0',
+    'amount' => '1000',
+]);
+$crud->create('charges', [
+    'team_id' => (string) $uniqTeamId,
+    'fiscal_year' => '1405',
+    'month_index' => '3',
+    'charge_amount' => '1500',
+    'rent_amount' => '0',
+    'amount' => '1500',
+]);
+$chargeCount = (int) $pdo->query(
+    "SELECT COUNT(*) FROM charges WHERE team_id = {$uniqTeamId} AND fiscal_year = '1405' AND month_index = 3"
+)->fetchColumn();
+$chargeAmount = (int) $pdo->query(
+    "SELECT amount FROM charges WHERE team_id = {$uniqTeamId} AND fiscal_year = '1405' AND month_index = 3"
+)->fetchColumn();
+$assert($chargeCount === 1, 'charges: upsert keeps one row per team/month');
+$assert($chargeAmount === 1500, 'charges: upsert updates amount instead of duplicating');
+$indexExists = (int) $pdo->query(
+    "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'uniq_charges_team_year_month'"
+)->fetchColumn();
+$assert($indexExists === 1, 'schema: unique charge index exists');
+$crud->delete('teams', $uniqTeamId);
 
 // --- Unused tables dropped ---
 foreach (['plans', 'team_rates', 'member_desks', 'import_runs'] as $table) {

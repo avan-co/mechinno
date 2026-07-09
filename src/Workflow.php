@@ -123,13 +123,30 @@ final class Workflow
         }
 
         $today = JalaliDate::todayParts()['formatted'];
-        $this->pdo->prepare(
-            "UPDATE lockers SET team_id = :team_id, status = 'تخصیص یافته', delivered_at = :delivered_at WHERE id = :id"
-        )->execute(['team_id' => $teamId, 'delivered_at' => $today, 'id' => $lockerId]);
+        $startedTransaction = false;
+        if (!$this->pdo->inTransaction()) {
+            $this->pdo->beginTransaction();
+            $startedTransaction = true;
+        }
 
-        $this->pdo->prepare(
-            "UPDATE locker_requests SET status = 'approved', locker_id = :locker_id, reviewed_at = :reviewed_at, rejection_reason = NULL WHERE id = :id"
-        )->execute(['locker_id' => $lockerId, 'reviewed_at' => $today, 'id' => $id]);
+        try {
+            $this->pdo->prepare(
+                "UPDATE lockers SET team_id = :team_id, status = 'تخصیص یافته', delivered_at = :delivered_at WHERE id = :id"
+            )->execute(['team_id' => $teamId, 'delivered_at' => $today, 'id' => $lockerId]);
+
+            $this->pdo->prepare(
+                "UPDATE locker_requests SET status = 'approved', locker_id = :locker_id, reviewed_at = :reviewed_at, rejection_reason = NULL WHERE id = :id"
+            )->execute(['locker_id' => $lockerId, 'reviewed_at' => $today, 'id' => $id]);
+
+            if ($startedTransaction) {
+                $this->pdo->commit();
+            }
+        } catch (Throwable $exception) {
+            if ($startedTransaction && $this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            throw $exception;
+        }
 
         return $this->fetchLockerRequest($id);
     }
@@ -163,25 +180,42 @@ final class Workflow
         $memberId = (int) ($row['member_id'] ?? 0);
         $type = (string) ($row['request_type'] ?? '');
         $crud = new Crud($this->pdo);
-        if ($type === 'delete') {
-            $crud->delete('members', $memberId);
-        } elseif ($type === 'update') {
-            $payload = [
-                'full_name' => (string) ($row['full_name'] ?? ''),
-                'phone' => (string) ($row['phone'] ?? ''),
-                'national_id' => (string) ($row['national_id'] ?? ''),
-                'wants_access' => (string) ($row['wants_access'] ?? '0'),
-                'notes' => (string) ($row['notes'] ?? ''),
-            ];
-            $crud->update('members', $memberId, $payload);
-        } else {
-            throw new InvalidArgumentException('نوع درخواست عضو معتبر نیست.');
+        $startedTransaction = false;
+        if (!$this->pdo->inTransaction()) {
+            $this->pdo->beginTransaction();
+            $startedTransaction = true;
         }
 
-        $today = JalaliDate::todayParts()['formatted'];
-        $this->pdo->prepare(
-            "UPDATE member_requests SET status = 'approved', reviewed_at = :reviewed_at, rejection_reason = NULL WHERE id = :id"
-        )->execute(['reviewed_at' => $today, 'id' => $id]);
+        try {
+            if ($type === 'delete') {
+                $crud->delete('members', $memberId);
+            } elseif ($type === 'update') {
+                $payload = [
+                    'full_name' => (string) ($row['full_name'] ?? ''),
+                    'phone' => (string) ($row['phone'] ?? ''),
+                    'national_id' => (string) ($row['national_id'] ?? ''),
+                    'wants_access' => (string) ($row['wants_access'] ?? '0'),
+                    'notes' => (string) ($row['notes'] ?? ''),
+                ];
+                $crud->update('members', $memberId, $payload);
+            } else {
+                throw new InvalidArgumentException('نوع درخواست عضو معتبر نیست.');
+            }
+
+            $today = JalaliDate::todayParts()['formatted'];
+            $this->pdo->prepare(
+                "UPDATE member_requests SET status = 'approved', reviewed_at = :reviewed_at, rejection_reason = NULL WHERE id = :id"
+            )->execute(['reviewed_at' => $today, 'id' => $id]);
+
+            if ($startedTransaction) {
+                $this->pdo->commit();
+            }
+        } catch (Throwable $exception) {
+            if ($startedTransaction && $this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            throw $exception;
+        }
 
         return $this->fetchMemberRequest($id);
     }

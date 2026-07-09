@@ -1484,6 +1484,16 @@ textarea[dir="ltr"] {
   flex-wrap: wrap;
 }
 .pager-buttons { display: flex; gap: 6px; align-items: center; }
+#ledgerPager.pager,
+.pager {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 10px 0 4px;
+  color: var(--muted);
+}
 
 .mobile-cards { display: none; gap: 10px; }
 body.is-mobile .mobile-cards { display: grid; }

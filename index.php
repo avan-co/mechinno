@@ -446,6 +446,7 @@ $assetVer = (string) max(
                     </tbody>
                   </table>
                 </div>
+                <div class="pager" id="ledgerPager" aria-label="صفحه‌بندی دفتر معین"></div>
                 <div class="table-wrap ledger-block" id="ledgerBillingWrap" hidden>
                   <table class="data-table ledger-billing-table">
                     <caption class="ledger-caption">مطالبات شارژ — مرجع بخش شارژ (در موجودی نقدی لحاظ نمی‌شود)</caption>

@@ -12,11 +12,12 @@ return [
 
     'auth' => [
         'enabled' => true,
+        // قبل از لانچ این رمزها را عوض کنید. هرگز رمز نمونه را در production نگه ندارید.
         'username' => 'admin',
-        'password' => '159357',
+        'password' => 'CHANGE_ME_ADMIN_PASSWORD',
         'password_hash' => '',
         'viewer_username' => 'viewer',
-        'viewer_password' => '159357',
+        'viewer_password' => 'CHANGE_ME_VIEWER_PASSWORD',
         'viewer_password_hash' => '',
     ],
 
@@ -24,15 +25,15 @@ return [
      * cPanel / MySQL
      * 1. دیتابیس و کاربر MySQL را در cPanel بسازید.
      * 2. این فایل را به config.php کپی کنید.
-     * 3. در صورت نیاز نام دیتابیس و کاربر را اصلاح کنید.
+     * 3. نام دیتابیس، کاربر و رمز واقعی خودتان را وارد کنید.
      */
     'db' => [
         'driver' => 'mysql',
         'host' => 'localhost',
         'port' => 3306,
-        'database' => 'h325207_inn',
-        'username' => 'h325207_inu',
-        'password' => '159357aa258654A',
+        'database' => 'YOUR_DB_NAME',
+        'username' => 'YOUR_DB_USER',
+        'password' => 'CHANGE_ME_DB_PASSWORD',
         'charset' => 'utf8mb4',
     ],
 

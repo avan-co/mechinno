@@ -60,7 +60,9 @@ try {
     }
 
     if ($resource === 'ledger') {
-        json_response((new CenterLedger($pdo))->snapshot());
+        $page = max(1, (int) ($_GET['page'] ?? 1));
+        $perPage = min(200, max(25, (int) ($_GET['per_page'] ?? 100)));
+        json_response((new CenterLedger($pdo))->snapshot($page, $perPage));
     }
 
     if ($resource === 'charges-matrix') {
@@ -167,11 +169,13 @@ try {
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && $resource === 'sms-sync-history') {
         require_csrf_json();
+        Access::requireWriteJson();
         json_response(['ok' => true, 'result' => (new SmsService($pdo))->syncHistoryFromApi()]);
     }
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && $resource === 'sms-check-deliveries') {
         require_csrf_json();
+        Access::requireWriteJson();
         $payload = json_decode((string) file_get_contents('php://input'), true);
         if (!is_array($payload)) {
             $payload = $_POST;
