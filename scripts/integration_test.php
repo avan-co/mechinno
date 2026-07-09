@@ -126,6 +126,7 @@ $_SESSION = [
 $joinedOnlyProfile = $repo->teamProfile($joinedOnlyTeamId);
 $assert(isset($joinedOnlyProfile['team']['name']), 'api: team profile without current-year contract');
 $assert(is_array($joinedOnlyProfile['year_summaries'] ?? null), 'api: team profile year summaries without contract');
+$assert(isset($joinedOnlyProfile['lockers']) && is_array($joinedOnlyProfile['charges']), 'api: team profile loads lockers and charges');
 $joinedOnlySummary = $repo->summary();
 $assert(isset($joinedOnlySummary['team']['name']), 'api: team summary without current-year contract');
 $_SESSION = [];

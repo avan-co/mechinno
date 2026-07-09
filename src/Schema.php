@@ -312,6 +312,8 @@ final class Schema
             'lockers' => [
                 'team_id' => 'INT NULL',
                 'member_id' => 'INT NULL',
+                'key_number' => 'VARCHAR(64) NULL',
+                'spare_key' => 'VARCHAR(64) NULL',
             ],
             'desks' => [
                 'usage_type' => "VARCHAR(32) NOT NULL DEFAULT 'informal'",
@@ -973,20 +975,27 @@ final class Schema
 
     private static function columnExists(PDO $pdo, string $table, string $column): bool
     {
-        if ($pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite') {
-            $statement = $pdo->query("PRAGMA table_info({$table})");
-            foreach ($statement->fetchAll() as $row) {
-                if (($row['name'] ?? '') === $column) {
-                    return true;
+        try {
+            if ($pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite') {
+                $statement = $pdo->query("PRAGMA table_info({$table})");
+                foreach ($statement->fetchAll() as $row) {
+                    if (($row['name'] ?? '') === $column) {
+                        return true;
+                    }
                 }
+
+                return false;
             }
 
+            $statement = $pdo->prepare(
+                'SELECT COUNT(*) FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table AND COLUMN_NAME = :column'
+            );
+            $statement->execute(['table' => $table, 'column' => $column]);
+
+            return (int) $statement->fetchColumn() > 0;
+        } catch (Throwable) {
             return false;
         }
-
-        $statement = $pdo->prepare('SHOW COLUMNS FROM ' . $table . ' LIKE :column');
-        $statement->execute(['column' => $column]);
-
-        return $statement->fetch() !== false;
     }
 }
