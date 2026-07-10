@@ -473,15 +473,43 @@ final class Crud
             }
         }
 
-        $columns = array_keys($data);
-        $statement = $this->pdo->prepare(sprintf(
-            'INSERT INTO %s (%s) VALUES (%s)',
-            $definition['table'],
-            Sql::columnList($columns),
-            implode(', ', array_map(static fn (string $c): string => ':' . $c, $columns))
-        ));
-        $statement->execute($data);
-        $id = (int) $this->pdo->lastInsertId();
+        $lockTeamPayment = $resource === 'transactions'
+            && Access::isTeam()
+            && (string) ($data['category'] ?? '') === 'واریز تیم'
+            && (string) ($data['payment_status'] ?? '') === 'pending';
+        $startedTransaction = false;
+        if ($lockTeamPayment && !$this->pdo->inTransaction()) {
+            $this->beginImmediateTransaction();
+            $startedTransaction = true;
+            $this->lockTeamRow((int) ($data['team_id'] ?? 0));
+            if ($this->countPendingTeamPayment((int) ($data['team_id'] ?? 0)) > 0) {
+                if ($startedTransaction) {
+                    $this->pdo->rollBack();
+                }
+                throw new InvalidArgumentException('اعلام واریز دیگری در انتظار تأیید است. ابتدا آن را پیگیری یا حذف کنید.');
+            }
+        }
+
+        try {
+            $columns = array_keys($data);
+            $statement = $this->pdo->prepare(sprintf(
+                'INSERT INTO %s (%s) VALUES (%s)',
+                $definition['table'],
+                Sql::columnList($columns),
+                implode(', ', array_map(static fn (string $c): string => ':' . $c, $columns))
+            ));
+            $statement->execute($data);
+            $id = (int) $this->pdo->lastInsertId();
+            if ($startedTransaction) {
+                $this->pdo->commit();
+            }
+        } catch (Throwable $exception) {
+            if ($startedTransaction && $this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            throw $exception;
+        }
+
         if ($resource === 'transactions') {
             $this->syncTeamDepositIncome($id);
         }
@@ -621,8 +649,9 @@ final class Crud
             $this->assertPanelUserDeletable($id);
         }
         if ($resource === 'teams') {
-            $this->pdo->prepare('DELETE FROM team_contracts WHERE team_id = :id')->execute(['id' => $id]);
-            EntityAccounts::deleteForTeam($this->pdo, $id);
+            $this->deleteTeamCascade($id);
+
+            return;
         }
         if ($resource === 'team_contracts') {
             $record = $this->find($resource, $id);
@@ -654,6 +683,61 @@ final class Crud
             return;
         }
         $this->pdo->prepare(sprintf('DELETE FROM %s WHERE id = :id', $definition['table']))->execute(['id' => $id]);
+    }
+
+    private function deleteTeamCascade(int $teamId): void
+    {
+        if ($teamId <= 0) {
+            throw new InvalidArgumentException('نهاد معتبر نیست.');
+        }
+
+        $pendingPayments = $this->countPendingTeamPayment($teamId);
+        if ($pendingPayments > 0) {
+            throw new InvalidArgumentException('ابتدا اعلام واریزهای در انتظار تأیید این نهاد را تأیید یا رد کنید.');
+        }
+
+        $startedTransaction = false;
+        if (!$this->pdo->inTransaction()) {
+            $this->pdo->beginTransaction();
+            $startedTransaction = true;
+        }
+
+        try {
+            $this->pdo->prepare('UPDATE desks SET team_id = NULL WHERE team_id = :id')->execute(['id' => $teamId]);
+            $this->pdo->prepare(
+                "UPDATE lockers SET team_id = NULL, member_id = NULL, status = 'خالی' WHERE team_id = :id"
+            )->execute(['id' => $teamId]);
+            $this->pdo->prepare('UPDATE members SET locker_id = NULL WHERE team_id = :id')->execute(['id' => $teamId]);
+
+            foreach ([
+                'DELETE FROM locker_requests WHERE team_id = :id',
+                'DELETE FROM member_requests WHERE team_id = :id',
+                'DELETE FROM desk_assignments WHERE team_id = :id',
+                'DELETE FROM charges WHERE team_id = :id',
+                'DELETE FROM transactions WHERE team_id = :id',
+                'DELETE FROM members WHERE team_id = :id',
+                'DELETE FROM team_contracts WHERE team_id = :id',
+                'DELETE FROM sms_logs WHERE team_id = :id',
+            ] as $sql) {
+                try {
+                    $this->pdo->prepare($sql)->execute(['id' => $teamId]);
+                } catch (PDOException) {
+                    // Table may be absent on older installs mid-migrate.
+                }
+            }
+
+            EntityAccounts::deleteForTeam($this->pdo, $teamId);
+            $this->pdo->prepare('DELETE FROM teams WHERE id = :id')->execute(['id' => $teamId]);
+
+            if ($startedTransaction) {
+                $this->pdo->commit();
+            }
+        } catch (Throwable $exception) {
+            if ($startedTransaction && $this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            throw $exception;
+        }
     }
 
     public function updateStatus(string $resource, int $id, string $status): array
@@ -1495,6 +1579,32 @@ final class Crud
         $statement->execute(['team_id' => $teamId]);
 
         return (int) $statement->fetchColumn();
+    }
+
+    private function beginImmediateTransaction(): void
+    {
+        // Keep PDO transaction state in sync so commit()/rollBack() work on all drivers.
+        $this->pdo->beginTransaction();
+    }
+
+    private function lockTeamRow(int $teamId): void
+    {
+        if ($teamId <= 0) {
+            return;
+        }
+
+        if ($this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql') {
+            $statement = $this->pdo->prepare('SELECT id FROM teams WHERE id = :id FOR UPDATE');
+            $statement->execute(['id' => $teamId]);
+            $statement->fetchColumn();
+
+            return;
+        }
+
+        // SQLite serializes writers; touch the team row inside the open transaction.
+        $statement = $this->pdo->prepare('SELECT id FROM teams WHERE id = :id');
+        $statement->execute(['id' => $teamId]);
+        $statement->fetchColumn();
     }
 
     private function findChargeId(int $teamId, string $fiscalYear, int $monthIndex): ?int

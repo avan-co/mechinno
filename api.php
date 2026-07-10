@@ -60,7 +60,36 @@ try {
     }
 
     if ($resource === 'ledger') {
-        json_response((new CenterLedger($pdo))->snapshot());
+        $page = max(1, (int) ($_GET['page'] ?? 1));
+        $perPage = min(200, max(25, (int) ($_GET['per_page'] ?? 100)));
+        json_response((new CenterLedger($pdo))->snapshot($page, $perPage));
+    }
+
+    if ($resource === 'report-catalog') {
+        json_response((new ReportBuilder($pdo))->catalog());
+    }
+
+    if ($resource === 'reports') {
+        $filters = [
+            'type' => (string) ($_GET['type'] ?? 'finance'),
+            'period' => (string) ($_GET['period'] ?? 'monthly'),
+            'fiscal_year' => (string) ($_GET['fiscal_year'] ?? ''),
+            'month' => (int) ($_GET['month'] ?? 0),
+            'quarter' => (int) ($_GET['quarter'] ?? 0),
+            'month_from' => (int) ($_GET['month_from'] ?? 0),
+            'month_to' => (int) ($_GET['month_to'] ?? 0),
+            'team_id' => (int) ($_GET['team_id'] ?? 0),
+        ];
+        // Keep empty numeric filters unset so defaults apply.
+        foreach (['month', 'quarter', 'month_from', 'month_to'] as $key) {
+            if (($filters[$key] ?? 0) <= 0) {
+                unset($filters[$key]);
+            }
+        }
+        if ($filters['fiscal_year'] === '') {
+            unset($filters['fiscal_year']);
+        }
+        json_response((new ReportBuilder($pdo))->build($filters));
     }
 
     if ($resource === 'charges-matrix') {
@@ -167,11 +196,13 @@ try {
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && $resource === 'sms-sync-history') {
         require_csrf_json();
+        Access::requireWriteJson();
         json_response(['ok' => true, 'result' => (new SmsService($pdo))->syncHistoryFromApi()]);
     }
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && $resource === 'sms-check-deliveries') {
         require_csrf_json();
+        Access::requireWriteJson();
         $payload = json_decode((string) file_get_contents('php://input'), true);
         if (!is_array($payload)) {
             $payload = $_POST;

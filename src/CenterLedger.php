@@ -11,22 +11,35 @@ final class CenterLedger
     /**
      * @return array<string, mixed>
      */
-    public function snapshot(): array
+    public function snapshot(int $page = 1, int $perPage = 100): array
     {
-        $rows = $this->cashEntries();
-        $totals = $this->totals($rows);
+        $page = max(1, $page);
+        $perPage = min(200, max(25, $perPage));
+        $totals = $this->totalsFromDb();
+        $totalRows = $this->cashEntryCount();
+        $pages = max(1, (int) ceil($totalRows / $perPage));
+        if ($page > $pages) {
+            $page = $pages;
+        }
+
+        $offset = ($page - 1) * $perPage;
+        $rows = $this->cashEntriesPage($offset, $perPage, $totalRows);
 
         return [
             'balance' => $totals['balance'],
             'totals' => $totals,
             'billing' => $this->billingSummary(),
             'rows' => $rows,
+            'total' => $totalRows,
+            'page' => $page,
+            'per_page' => $perPage,
+            'pages' => $pages,
         ];
     }
 
     public function balance(): int
     {
-        return $this->totals($this->cashEntries())['balance'];
+        return $this->totalsFromDb()['balance'];
     }
 
     public static function purgeAccrualMirrorEntries(PDO $pdo): void
@@ -39,12 +52,26 @@ final class CenterLedger
         return is_string($sourceFile) && str_starts_with($sourceFile, 'system:charge:');
     }
 
+    private function cashWhereSql(): string
+    {
+        return "(category = 'واریز تیم' AND payment_status = 'approved' AND confirmed = 1)
+                OR (category = 'درآمد' AND confirmed = 1)
+                OR (category = 'هزینه' AND confirmed = 1)";
+    }
+
+    private function cashEntryCount(): int
+    {
+        return (int) $this->pdo->query(
+            'SELECT COUNT(*) FROM transactions WHERE ' . $this->cashWhereSql()
+        )->fetchColumn();
+    }
+
     /**
      * @return list<array<string, mixed>>
      */
-    private function cashEntries(): array
+    private function cashEntriesPage(int $offset, int $limit, int $totalRows): array
     {
-        $statement = $this->pdo->query(
+        $statement = $this->pdo->prepare(
             "SELECT t.id, t.tx_date, t.description, t.amount, t.category, t.team_id,
                     t.fiscal_year, t.month_index, t.confirmed, t.payment_status, t.source_file,
                     tm.name AS team_name
@@ -53,14 +80,23 @@ final class CenterLedger
              WHERE (t.category = 'واریز تیم' AND t.payment_status = 'approved' AND t.confirmed = 1)
                 OR (t.category = 'درآمد' AND t.confirmed = 1)
                 OR (t.category = 'هزینه' AND t.confirmed = 1)
-             ORDER BY t.tx_date ASC, t.id ASC"
+             ORDER BY t.tx_date ASC, t.id ASC
+             LIMIT :limit OFFSET :offset"
         );
+        $statement->bindValue(':limit', $limit, PDO::PARAM_INT);
+        $statement->bindValue(':offset', $offset, PDO::PARAM_INT);
+        $statement->execute();
 
+        $prefixBalance = $this->signedSumBeforeOffset($offset);
         $rows = [];
+        $line = $offset;
+        $running = $prefixBalance;
         foreach ($statement->fetchAll() as $row) {
+            $line++;
             $category = (string) ($row['category'] ?? '');
             $amount = abs((int) ($row['amount'] ?? 0));
             $signed = $category === 'هزینه' ? -$amount : $amount;
+            $running += $signed;
             $entryType = match ($category) {
                 'واریز تیم' => 'deposit',
                 'درآمد' => 'income',
@@ -82,53 +118,57 @@ final class CenterLedger
                 'month_index' => (int) ($row['month_index'] ?? 0),
                 'entry_type' => $entryType,
                 'entry_type_label' => self::entryTypeLabel($entryType, $category),
-                'running_balance' => 0,
+                'line_no' => $line,
+                'running_balance' => $running,
             ];
         }
-
-        return $this->annotateRunningBalance($rows);
-    }
-
-    /**
-     * @param list<array<string, mixed>> $rows
-     * @return list<array<string, mixed>>
-     */
-    private function annotateRunningBalance(array $rows): array
-    {
-        $running = 0;
-        $line = 0;
-        foreach ($rows as &$row) {
-            $line++;
-            $running += (int) ($row['signed_amount'] ?? 0);
-            $row['line_no'] = $line;
-            $row['running_balance'] = $running;
-        }
-        unset($row);
 
         return $rows;
     }
 
+    private function signedSumBeforeOffset(int $offset): int
+    {
+        if ($offset <= 0) {
+            return 0;
+        }
+
+        $statement = $this->pdo->prepare(
+            "SELECT amount, category FROM transactions
+             WHERE (category = 'واریز تیم' AND payment_status = 'approved' AND confirmed = 1)
+                OR (category = 'درآمد' AND confirmed = 1)
+                OR (category = 'هزینه' AND confirmed = 1)
+             ORDER BY tx_date ASC, id ASC
+             LIMIT :limit"
+        );
+        $statement->bindValue(':limit', $offset, PDO::PARAM_INT);
+        $statement->execute();
+
+        $sum = 0;
+        foreach ($statement->fetchAll() as $row) {
+            $amount = abs((int) ($row['amount'] ?? 0));
+            $sum += ((string) ($row['category'] ?? '') === 'هزینه') ? -$amount : $amount;
+        }
+
+        return $sum;
+    }
+
     /**
-     * @param list<array<string, mixed>> $rows
      * @return array<string, int>
      */
-    private function totals(array $rows): array
+    private function totalsFromDb(): array
     {
-        $deposits = 0;
-        $manualIncome = 0;
-        $manualExpense = 0;
-
-        foreach ($rows as $row) {
-            $amount = abs((int) ($row['amount'] ?? 0));
-            $type = (string) ($row['entry_type'] ?? '');
-            if ($type === 'deposit') {
-                $deposits += $amount;
-            } elseif ($type === 'income') {
-                $manualIncome += $amount;
-            } elseif ($type === 'expense') {
-                $manualExpense += $amount;
-            }
-        }
+        $deposits = (int) $this->pdo->query(
+            "SELECT COALESCE(SUM(amount), 0) FROM transactions
+             WHERE category = 'واریز تیم' AND payment_status = 'approved' AND confirmed = 1"
+        )->fetchColumn();
+        $manualIncome = (int) $this->pdo->query(
+            "SELECT COALESCE(SUM(ABS(amount)), 0) FROM transactions
+             WHERE category = 'درآمد' AND confirmed = 1"
+        )->fetchColumn();
+        $manualExpense = (int) $this->pdo->query(
+            "SELECT COALESCE(SUM(ABS(amount)), 0) FROM transactions
+             WHERE category = 'هزینه' AND confirmed = 1"
+        )->fetchColumn();
 
         return [
             'deposits' => $deposits,

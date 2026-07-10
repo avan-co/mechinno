@@ -1111,6 +1111,7 @@ final class Repository
                 'team_id' => $teamId,
                 'team_name' => $row['team_name'] ?? '',
                 'fiscal_year' => $row['fiscal_year'] ?? '',
+                'month_index' => $monthIndex,
                 'month_name' => $row['month_name'] ?? '',
                 'charge_amount' => (int) ($row['charge_amount'] ?? 0),
                 'rent_amount' => (int) ($row['rent_amount'] ?? 0),
@@ -1271,7 +1272,8 @@ final class Repository
         }
         $summaries = [];
         foreach (array_keys($years) as $year) {
-            $summaries[$year] = $contracts->billingSummaryForTeamInYear($teamId, $year);
+            $fiscalYear = (string) $year;
+            $summaries[$fiscalYear] = $contracts->billingSummaryForTeamInYear($teamId, $fiscalYear);
         }
 
         return $summaries;
@@ -2342,8 +2344,23 @@ final class Repository
     private function paymentAllocationByTeamMonth(): array
     {
         $map = [];
-        foreach ($this->pdo->query('SELECT id, contract_start, contract_end FROM teams')->fetchAll() as $team) {
-            $teamId = (int) $team['id'];
+        $teamIds = $this->pdo->query(
+            "SELECT DISTINCT team_id FROM (
+                SELECT team_id FROM charges WHERE team_id IS NOT NULL AND team_id > 0
+                UNION
+                SELECT team_id FROM transactions
+                WHERE team_id IS NOT NULL AND team_id > 0
+                  AND category = 'واریز تیم'
+                  AND payment_status = 'approved'
+                  AND confirmed = 1
+             ) AS finance_teams"
+        )->fetchAll(PDO::FETCH_COLUMN);
+
+        foreach ($teamIds as $teamIdRaw) {
+            $teamId = (int) $teamIdRaw;
+            if ($teamId <= 0) {
+                continue;
+            }
             $allocation = $this->allocatedPaymentsForTeam($teamId);
             $map[$teamId] = $allocation['by_month'];
         }

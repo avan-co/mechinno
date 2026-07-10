@@ -164,6 +164,7 @@ const sectionMeta = {
   lockers: { eyebrow: "کمدها", title: "مدیریت کمدها", subtitle: "شماره کمدها را خودتان تعریف و تخصیص دهید" },
   charges: { eyebrow: "شارژ", title: "نرخ و شارژ ماهانه", subtitle: "تعریف نرخ سالانه، محاسبه خودکار و پیگیری پرداخت" },
   transactions: { eyebrow: "مالی", title: "دفتر معین و موجودی نقدی", subtitle: "گردش واقعی حساب مرکز — بدون تکرار شارژ سیستمی" },
+  reports: { eyebrow: "گزارش‌گیری", title: "گزارش‌ساز حرفه‌ای", subtitle: "انتخاب نوع گزارش، بازه ماهانه/سه‌ماهه/سالانه و خروجی چاپ یا Excel" },
   development: { eyebrow: "برنامه‌ریزی", title: "برنامه توسعه", subtitle: "کارهای جاری مرکز — اولویت‌بندی و پیگیری ساده" },
   users: { eyebrow: "دسترسی", title: "کاربران پنل", subtitle: "مدیریت نقش‌ها و پنل اختصاصی نهادها" },
   sms: { eyebrow: "اطلاع‌رسانی", title: "ارسال پیامک", subtitle: "ارسال اطلاعیه به اعضا و مسئولین نهادها" },
@@ -696,6 +697,9 @@ const activateSection = (id, options = {}) => {
   if (id === "sms-settings" && panelMode === "admin") {
     window.initSmsSettingsPanel?.();
   }
+  if (id === "reports" && panelMode === "admin") {
+    initReportBuilder().catch((error) => showToast(error.message, "error"));
+  }
   if (options.scrollTarget) {
     setTimeout(() => {
       document.querySelector(`data-table[data-table-key="${options.scrollTarget}"]`)
@@ -715,7 +719,7 @@ document.getElementById("menuToggle")?.addEventListener("click", openDrawer);
 document.getElementById("bottomNavMenu")?.addEventListener("click", openDrawer);
 document.getElementById("sidebarBackdrop")?.addEventListener("click", closeDrawer);
 
-document.querySelectorAll(".start-step[data-go], .text-link[data-go], .button[data-go]").forEach((item) => {
+document.querySelectorAll(".start-step[data-go], .text-link[data-go], .button[data-go], .foot-btn[data-go]").forEach((item) => {
   item.addEventListener("click", () => activateSection(item.dataset.go));
 });
 
@@ -947,17 +951,23 @@ const entryTypeLabel = (type) => ({
   expense: "هزینه",
 }[type] || type || "—");
 
-const loadLedger = async () => {
+let ledgerPage = 1;
+
+const loadLedger = async (page = ledgerPage) => {
   const summaryBody = document.getElementById("ledgerSummaryBody");
   const tableBody = document.getElementById("ledgerTableBody");
   const billingWrap = document.getElementById("ledgerBillingWrap");
   const billingBody = document.getElementById("ledgerBillingBody");
+  const pager = document.getElementById("ledgerPager");
   if (!summaryBody || !tableBody) return;
 
-  const data = await fetchJson("api.php?resource=ledger");
+  ledgerPage = Math.max(1, Number(page) || 1);
+  const data = await fetchJson(`api.php?resource=ledger&page=${ledgerPage}&per_page=100`);
   const totals = data.totals || {};
   const billing = data.billing || {};
   const balance = Number(totals.balance ?? data.balance ?? 0);
+  const pages = Math.max(1, Number(data.pages || 1));
+  ledgerPage = Math.min(ledgerPage, pages);
 
   summaryBody.innerHTML = `
     <tr class="ledger-row-balance ${balance < 0 ? "ledger-negative-row" : ""}">
@@ -982,6 +992,7 @@ const loadLedger = async () => {
   const rows = data.rows || [];
   if (!rows.length) {
     tableBody.innerHTML = `<tr><td colspan="7" class="empty">هنوز گردش نقدی ثبت نشده است.</td></tr>`;
+    if (pager) pager.innerHTML = "";
     return;
   }
 
@@ -999,6 +1010,21 @@ const loadLedger = async () => {
       <td class="num ledger-balance-cell">${escapeHtml(formatMoney(row.running_balance ?? 0))}</td>
     </tr>`;
   }).join("");
+
+  if (pager) {
+    const total = Number(data.total || rows.length);
+    pager.innerHTML = pages > 1
+      ? `<button type="button" class="button ghost" ${ledgerPage <= 1 ? "disabled" : ""} data-ledger-page="${ledgerPage - 1}">قبلی</button>
+         <span class="hint">صفحه ${ledgerPage} از ${pages} — ${total} ردیف</span>
+         <button type="button" class="button ghost" ${ledgerPage >= pages ? "disabled" : ""} data-ledger-page="${ledgerPage + 1}">بعدی</button>`
+      : `<span class="hint">${total} ردیف گردش نقدی</span>`;
+    pager.querySelectorAll("[data-ledger-page]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        if (btn.hasAttribute("disabled")) return;
+        loadLedger(Number(btn.getAttribute("data-ledger-page") || 1));
+      });
+    });
+  }
 };
 
 const loadTeamDeskAssignments = async () => {
@@ -3460,6 +3486,264 @@ document.getElementById("deskHistoryAddButton")?.addEventListener("click", () =>
   openDeskHistoryAssignModal().catch((error) => showToast(error.message, "error"));
 });
 
+let reportCatalog = null;
+let reportSelectedType = "finance";
+let reportLastFilters = null;
+
+const reportTypeSupportsPeriod = (typeId) => {
+  const item = (reportCatalog?.types || []).find((row) => row.id === typeId);
+  return item ? !!item.supports_period : true;
+};
+
+const fillSelectOptions = (select, options, selected) => {
+  if (!select) return;
+  select.innerHTML = options.map((opt) => {
+    const value = String(opt.id ?? opt.value ?? "");
+    const label = String(opt.label ?? opt.name ?? value);
+    const isSelected = String(selected) === value ? " selected" : "";
+    return `<option value="${escapeHtml(value)}"${isSelected}>${escapeHtml(label)}</option>`;
+  }).join("");
+};
+
+const syncReportPeriodFields = () => {
+  const period = document.getElementById("reportPeriod")?.value || "monthly";
+  const supports = reportTypeSupportsPeriod(reportSelectedType);
+  const periodSelect = document.getElementById("reportPeriod");
+  if (periodSelect) periodSelect.disabled = !supports;
+  const showMonth = supports && period === "monthly";
+  const showQuarter = supports && period === "quarterly";
+  const showCustom = supports && period === "custom";
+  document.getElementById("reportMonthWrap")?.toggleAttribute("hidden", !showMonth);
+  document.getElementById("reportQuarterWrap")?.toggleAttribute("hidden", !showQuarter);
+  document.getElementById("reportMonthFromWrap")?.toggleAttribute("hidden", !showCustom);
+  document.getElementById("reportMonthToWrap")?.toggleAttribute("hidden", !showCustom);
+};
+
+const collectReportFilters = () => {
+  const period = document.getElementById("reportPeriod")?.value || "monthly";
+  const filters = {
+    type: reportSelectedType || "finance",
+    period: reportTypeSupportsPeriod(reportSelectedType) ? period : "annual",
+    fiscal_year: document.getElementById("reportFiscalYear")?.value || String(window.MECHINNO?.fiscalYear || ""),
+    team_id: Number(document.getElementById("reportTeam")?.value || 0),
+  };
+  if (filters.period === "monthly") {
+    filters.month = Number(document.getElementById("reportMonth")?.value || window.MECHINNO?.monthIndex || 1);
+  } else if (filters.period === "quarterly") {
+    filters.quarter = Number(document.getElementById("reportQuarter")?.value || 1);
+  } else if (filters.period === "custom") {
+    filters.month_from = Number(document.getElementById("reportMonthFrom")?.value || 1);
+    filters.month_to = Number(document.getElementById("reportMonthTo")?.value || 12);
+  }
+  return filters;
+};
+
+const reportQueryString = (filters) => {
+  const params = new URLSearchParams();
+  Object.entries(filters || {}).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === "" || (value === 0 && key === "team_id")) return;
+    params.set(key, String(value));
+  });
+  return params.toString();
+};
+
+const renderReportTypeCards = () => {
+  const host = document.getElementById("reportTypeGrid");
+  if (!host || !reportCatalog) return;
+  host.innerHTML = (reportCatalog.types || []).map((type) => `
+    <button type="button" class="report-type-card${type.id === reportSelectedType ? " is-active" : ""}" data-report-type="${escapeHtml(type.id)}">
+      <strong>${escapeHtml(type.label)}</strong>
+      <span>${escapeHtml(type.description || "")}</span>
+    </button>
+  `).join("");
+  host.querySelectorAll("[data-report-type]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      reportSelectedType = btn.getAttribute("data-report-type") || "finance";
+      renderReportTypeCards();
+      syncReportPeriodFields();
+    });
+  });
+};
+
+const initReportBuilder = async () => {
+  const form = document.getElementById("reportBuilderForm");
+  if (!form || panelMode !== "admin") return;
+  if (!reportCatalog) {
+    reportCatalog = await fetchJson("api.php?resource=report-catalog");
+  }
+  const defaults = reportCatalog.defaults || {};
+  reportSelectedType = reportSelectedType || defaults.type || "finance";
+  fillSelectOptions(
+    document.getElementById("reportFiscalYear"),
+    (reportCatalog.fiscal_years || []).map((year) => ({ id: year, label: year })),
+    defaults.fiscal_year
+  );
+  fillSelectOptions(document.getElementById("reportMonth"), reportCatalog.months || [], defaults.month);
+  fillSelectOptions(document.getElementById("reportMonthFrom"), reportCatalog.months || [], 1);
+  fillSelectOptions(document.getElementById("reportMonthTo"), reportCatalog.months || [], 12);
+  fillSelectOptions(document.getElementById("reportQuarter"), reportCatalog.quarters || [], defaults.quarter);
+  const teamOptions = [{ id: 0, label: "همه نهادها" }].concat(
+    (reportCatalog.teams || []).map((team) => ({ id: team.id, label: team.name }))
+  );
+  fillSelectOptions(document.getElementById("reportTeam"), teamOptions, defaults.team_id || 0);
+  const periodSelect = document.getElementById("reportPeriod");
+  if (periodSelect && !periodSelect.dataset.bound) {
+    periodSelect.value = defaults.period || "monthly";
+    periodSelect.addEventListener("change", syncReportPeriodFields);
+    periodSelect.dataset.bound = "1";
+  }
+  renderReportTypeCards();
+  syncReportPeriodFields();
+  if (!form.dataset.bound) {
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      await previewReport();
+    });
+    document.getElementById("reportOpenPrint")?.addEventListener("click", () => {
+      const filters = reportLastFilters || collectReportFilters();
+      window.open(`report.php?${reportQueryString(filters)}`, "_blank", "noopener");
+    });
+    document.getElementById("reportOpenExcel")?.addEventListener("click", () => {
+      const filters = reportLastFilters || collectReportFilters();
+      const excelReport = ({
+        finance: "transactions",
+        transactions: "transactions",
+        charges: "charges",
+        debts: "debts",
+        teams: "teams",
+        members: "members",
+        desks: "desks",
+        lockers: "lockers",
+      })[filters.type] || "all";
+      const params = new URLSearchParams({
+        report: excelReport,
+        fiscal_year: filters.fiscal_year || "",
+        month_from: String(filters.month_from || filters.month || 1),
+        month_to: String(filters.month_to || filters.month || 12),
+      });
+      if (filters.period === "quarterly") {
+        const q = Number(filters.quarter || 1);
+        params.set("month_from", String(((q - 1) * 3) + 1));
+        params.set("month_to", String((q * 3)));
+      }
+      if (filters.period === "annual") {
+        params.set("month_from", "1");
+        params.set("month_to", "12");
+      }
+      if (filters.team_id) params.set("team_id", String(filters.team_id));
+      window.open(`export.php?${params.toString()}`, "_blank", "noopener");
+    });
+    form.dataset.bound = "1";
+  }
+};
+
+const renderReportPreviewTable = (headers, rows, emptyText) => {
+  if (!rows?.length) {
+    return `<div class="empty">${escapeHtml(emptyText || "داده‌ای نیست.")}</div>`;
+  }
+  return `<div class="table-wrap"><table class="data-table">
+    <thead><tr>${headers.map((h) => `<th>${escapeHtml(h)}</th>`).join("")}</tr></thead>
+    <tbody>
+      ${rows.map((cells) => `<tr>${cells.map((cell, index) => {
+        const isMoney = typeof cell === "number";
+        return `<td class="${isMoney ? "num" : ""}">${escapeHtml(isMoney ? formatMoney(cell) : (cell || "—"))}</td>`;
+      }).join("")}</tr>`).join("")}
+    </tbody>
+  </table></div>`;
+};
+
+const previewReport = async () => {
+  const host = document.getElementById("reportPreview");
+  const meta = document.getElementById("reportPreviewMeta");
+  if (!host) return;
+  const filters = collectReportFilters();
+  reportLastFilters = filters;
+  host.innerHTML = `<div class="empty">در حال ساخت گزارش…</div>`;
+  const data = await fetchJson(`api.php?resource=reports&${reportQueryString(filters)}`);
+  const info = data.meta || {};
+  if (meta) {
+    meta.textContent = `${info.type_label || ""} — ${info.period_title || ""} — ${info.team_name || "همه نهادها"}`;
+  }
+  const blocks = [];
+  if (data.kpis?.length) {
+    blocks.push(`<div class="report-kpi-grid">${data.kpis.map((kpi) => `
+      <article class="report-kpi-card ${kpi.tone === "danger" ? "is-danger" : kpi.tone === "success" ? "is-success" : ""}">
+        <span>${escapeHtml(kpi.label || "")}</span>
+        <strong>${escapeHtml(typeof kpi.value === "number" ? formatMoney(kpi.value) : (kpi.value || "—"))}</strong>
+      </article>`).join("")}</div>`);
+  }
+  if (data.monthly_breakdown?.length) {
+    blocks.push(`<h3 class="report-preview-title">تفکیک ماهانه</h3>`);
+    blocks.push(renderReportPreviewTable(
+      ["ماه", "واریز", "درآمد دستی", "هزینه", "خالص", "شارژ", "مانده طلب"],
+      data.monthly_breakdown.map((row) => [
+        row.month_name, row.deposits, row.manual_income, row.expense_total, row.net, row.charge_total, row.debt_total,
+      ])
+    ));
+  }
+  if (data.debts) {
+    blocks.push(`<h3 class="report-preview-title">مطالبات</h3>`);
+    blocks.push(renderReportPreviewTable(
+      ["نهاد", "ماه", "مستحق", "دریافت", "مانده", "وضعیت"],
+      data.debts.map((row) => [
+        row.team_name, row.month_name, row.amount_due, row.amount_paid, row.amount_remaining, row.status,
+      ]),
+      "مطالبه‌ای در این بازه نیست."
+    ));
+  }
+  if (data.charges) {
+    blocks.push(`<h3 class="report-preview-title">شارژ</h3>`);
+    blocks.push(renderReportPreviewTable(
+      ["نهاد", "ماه", "شارژ", "اجاره", "جمع"],
+      data.charges.map((row) => [row.team_name, row.month_name, row.charge_amount, row.rent_amount, row.amount]),
+      "شارژی در این بازه نیست."
+    ));
+  }
+  if (data.transactions) {
+    blocks.push(`<h3 class="report-preview-title">تراکنش‌ها</h3>`);
+    blocks.push(renderReportPreviewTable(
+      ["تاریخ", "شرح", "مبلغ", "دسته", "نهاد"],
+      data.transactions.slice(0, 50).map((row) => [
+        row.tx_date, row.description, row.amount, row.category_label || row.category, row.team_name,
+      ]),
+      "تراکنشی در این بازه نیست."
+    ));
+    if (data.transactions.length > 50) {
+      blocks.push(`<p class="hint">نمایش ۵۰ تراکنش اول از ${formatNumber(data.transactions.length)} مورد — برای لیست کامل چاپ/PDF بگیرید.</p>`);
+    }
+  }
+  if (data.teams) {
+    blocks.push(`<h3 class="report-preview-title">نهادها</h3>`);
+    blocks.push(renderReportPreviewTable(
+      ["کد", "نام", "مسئول", "میز"],
+      data.teams.map((row) => [row.entity_code, row.name, row.leader, row.desk_count || 0])
+    ));
+  }
+  if (data.members) {
+    blocks.push(`<h3 class="report-preview-title">اعضا</h3>`);
+    blocks.push(renderReportPreviewTable(
+      ["کد", "نام", "نهاد", "تماس"],
+      data.members.slice(0, 50).map((row) => [row.member_code, row.full_name, row.team_label, row.phone]),
+      "عضوی نیست."
+    ));
+  }
+  if (data.desks) {
+    blocks.push(`<h3 class="report-preview-title">میزها</h3>`);
+    blocks.push(renderReportPreviewTable(
+      ["شماره", "نهاد", "نوع"],
+      data.desks.map((row) => [row.number, row.team_name || "آزاد", usageLabels[row.usage_type] || row.usage_type || "—"])
+    ));
+  }
+  if (data.lockers) {
+    blocks.push(`<h3 class="report-preview-title">کمدها</h3>`);
+    blocks.push(renderReportPreviewTable(
+      ["شماره", "وضعیت", "نهاد"],
+      data.lockers.map((row) => [row.locker_number, row.status, row.team_label || "—"])
+    ));
+  }
+  host.innerHTML = blocks.join("") || `<div class="empty">برای این انتخاب داده‌ای یافت نشد.</div>`;
+};
+
 window.MechinnoShared = {
   fetchJson,
   fetchResource,
@@ -3497,5 +3781,6 @@ window.MechinnoShared = {
   loadDeskGrid,
   deskLink,
   teamBillingBadges,
+  initReportBuilder,
   MECHINNO: window.MECHINNO,
 };

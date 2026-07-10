@@ -60,6 +60,8 @@ final class Access
         'recalculate-charges',
         'bulk-year-import',
         'ledger',
+        'reports',
+        'report-catalog',
         'sms-settings',
         'sms-stats',
         'sms-recipients',
