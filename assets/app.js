@@ -496,6 +496,26 @@ const formatMoney = (value) => {
   return `${maybe.toLocaleString("fa-IR")} ریال`;
 };
 
+const moneyColumns = new Set([
+  "amount", "charge_amount", "rent_amount", "charge_rate", "informal_rent_rate",
+  "formal_contract_amount", "charge_rate_override", "informal_rent_rate_override",
+  "estimated_cost", "estimated_revenue",
+]);
+
+const formatReportCell = (cell, kind = "text") => {
+  if (cell === null || cell === undefined || cell === "") return "—";
+  if (kind === "money") return formatMoney(cell);
+  if (kind === "count" || kind === "number") return formatNumber(cell);
+  return String(cell);
+};
+
+const formatKpiValue = (kpi) => {
+  const format = kpi?.format || (typeof kpi?.value === "number" ? "money" : "text");
+  if (format === "money") return formatMoney(kpi.value);
+  if (format === "count" || format === "number") return formatNumber(kpi.value);
+  return kpi?.value || "—";
+};
+
 const debugLog = (scope, ...args) => {
   console.log(`[mechinno:${scope}]`, ...args);
 };
@@ -731,16 +751,17 @@ const renderReportTypeCards = () => {
   });
 };
 
-const renderReportPreviewTable = (headers, rows, emptyText) => {
+const renderReportPreviewTable = (headers, rows, emptyText, columnKinds = []) => {
   if (!rows?.length) {
     return `<div class="empty">${escapeHtml(emptyText || "داده‌ای نیست.")}</div>`;
   }
   return `<div class="table-wrap"><table class="data-table">
     <thead><tr>${headers.map((h) => `<th>${escapeHtml(h)}</th>`).join("")}</tr></thead>
     <tbody>
-      ${rows.map((cells) => `<tr>${cells.map((cell) => {
-        const isMoney = typeof cell === "number";
-        return `<td class="${isMoney ? "num" : ""}">${escapeHtml(isMoney ? formatMoney(cell) : (cell || "—"))}</td>`;
+      ${rows.map((cells) => `<tr>${cells.map((cell, index) => {
+        const kind = columnKinds[index] || (typeof cell === "number" ? "count" : "text");
+        const className = kind === "money" ? "num" : "";
+        return `<td class="${className}">${escapeHtml(formatReportCell(cell, kind))}</td>`;
       }).join("")}</tr>`).join("")}
     </tbody>
   </table></div>`;
@@ -764,7 +785,7 @@ const previewReport = async () => {
       blocks.push(`<div class="report-kpi-grid">${data.kpis.map((kpi) => `
         <article class="report-kpi-card ${kpi.tone === "danger" ? "is-danger" : kpi.tone === "success" ? "is-success" : ""}">
           <span>${escapeHtml(kpi.label || "")}</span>
-          <strong>${escapeHtml(typeof kpi.value === "number" ? formatMoney(kpi.value) : (kpi.value || "—"))}</strong>
+          <strong>${escapeHtml(formatKpiValue(kpi))}</strong>
         </article>`).join("")}</div>`);
     }
     if (data.finance_summary) {
@@ -783,7 +804,9 @@ const previewReport = async () => {
           ...(finance.formal_contract_total !== undefined
             ? [["جمع مبلغ قراردادهای رسمی سال", finance.formal_contract_total || 0]]
             : []),
-        ]
+        ],
+        null,
+        ["text", "money"]
       ));
     }
     if (data.monthly_breakdown?.length) {
@@ -792,7 +815,9 @@ const previewReport = async () => {
         ["ماه", "واریز", "درآمد دستی", "هزینه", "خالص", "شارژ", "مانده طلب"],
         data.monthly_breakdown.map((row) => [
           row.month_name, row.deposits, row.manual_income, row.expense_total, row.net, row.charge_total, row.debt_total,
-        ])
+        ]),
+        null,
+        ["text", "money", "money", "money", "money", "money", "money"]
       ));
     }
     if (data.debts) {
@@ -802,7 +827,8 @@ const previewReport = async () => {
         data.debts.map((row) => [
           row.team_name, row.month_name, row.amount_due, row.amount_paid, row.amount_remaining, row.status,
         ]),
-        "مطالبه‌ای در این بازه نیست."
+        "مطالبه‌ای در این بازه نیست.",
+        ["text", "text", "money", "money", "money", "text"]
       ));
     }
     if (data.charges) {
@@ -810,7 +836,8 @@ const previewReport = async () => {
       blocks.push(renderReportPreviewTable(
         ["نهاد", "ماه", "شارژ", "اجاره", "جمع"],
         data.charges.map((row) => [row.team_name, row.month_name, row.charge_amount, row.rent_amount, row.amount]),
-        "شارژی در این بازه نیست."
+        "شارژی در این بازه نیست.",
+        ["text", "text", "money", "money", "money"]
       ));
     }
     if (data.transactions) {
@@ -820,7 +847,8 @@ const previewReport = async () => {
         data.transactions.slice(0, 50).map((row) => [
           row.tx_date, row.description, row.amount, row.category_label || row.category, row.team_name,
         ]),
-        "تراکنشی در این بازه نیست."
+        "تراکنشی در این بازه نیست.",
+        ["text", "text", "money", "text", "text"]
       ));
       if (data.transactions.length > 50) {
         blocks.push(`<p class="hint">نمایش ۵۰ تراکنش اول از ${formatNumber(data.transactions.length)} مورد — برای لیست کامل چاپ/PDF بگیرید.</p>`);
@@ -830,7 +858,9 @@ const previewReport = async () => {
       blocks.push(`<h3 class="report-preview-title">نهادها</h3>`);
       blocks.push(renderReportPreviewTable(
         ["کد", "نام", "مسئول", "میز"],
-        data.teams.map((row) => [row.entity_code, row.name, row.leader, row.desk_count || 0])
+        data.teams.map((row) => [row.entity_code, row.name, row.leader, row.desk_count || 0]),
+        null,
+        ["text", "text", "text", "count"]
       ));
     }
     if (data.members) {
@@ -838,21 +868,26 @@ const previewReport = async () => {
       blocks.push(renderReportPreviewTable(
         ["کد", "نام", "نهاد", "تماس"],
         data.members.slice(0, 50).map((row) => [row.member_code, row.full_name, row.team_label, row.phone]),
-        "عضوی نیست."
+        "عضوی نیست.",
+        ["text", "text", "text", "text"]
       ));
     }
     if (data.desks) {
       blocks.push(`<h3 class="report-preview-title">میزها</h3>`);
       blocks.push(renderReportPreviewTable(
         ["شماره", "نهاد", "نوع"],
-        data.desks.map((row) => [row.number, row.team_name || "آزاد", usageLabels[row.usage_type] || row.usage_type || "—"])
+        data.desks.map((row) => [row.number, row.team_name || "آزاد", usageLabels[row.usage_type] || row.usage_type || "—"]),
+        null,
+        ["count", "text", "text"]
       ));
     }
     if (data.lockers) {
       blocks.push(`<h3 class="report-preview-title">کمدها</h3>`);
       blocks.push(renderReportPreviewTable(
         ["شماره", "وضعیت", "نهاد"],
-        data.lockers.map((row) => [row.locker_number, row.status, row.team_label || "—"])
+        data.lockers.map((row) => [row.locker_number, row.status, row.team_label || "—"]),
+        null,
+        ["count", "text", "text"]
       ));
     }
     host.innerHTML = blocks.join("") || `<div class="empty">برای این انتخاب داده‌ای یافت نشد.</div>`;
@@ -1290,7 +1325,7 @@ const loadLedger = async (page = ledgerPage) => {
     const debit = signed < 0 ? formatMoney(Math.abs(signed)) : "—";
     const credit = signed > 0 ? formatMoney(signed) : "—";
     return `<tr>
-      <td class="num">${escapeHtml(String(row.line_no ?? "—"))}</td>
+      <td>${escapeHtml(String(row.line_no ?? "—"))}</td>
       <td>${escapeHtml(formatPlain(row.tx_date))}</td>
       <td>${escapeHtml(row.entry_type_label || entryTypeLabel(row.entry_type))}</td>
       <td class="ledger-desc" title="${escapeHtml(row.description || "")}">${escapeHtml(row.description || "—")}</td>
@@ -2207,7 +2242,9 @@ const profileSection = (title, rows, cols, cellRenderer = null) => `
             if (custom !== null) return `<td>${custom}</td>`;
           }
           const value = row[c];
-          if (["amount", "charge_amount", "rent_amount"].includes(c)) return `<td>${escapeHtml(formatMoney(value))}</td>`;
+          if (["amount", "charge_amount", "rent_amount", "formal_contract_amount", "charge_rate", "informal_rent_rate", "charge_rate_override", "informal_rent_rate_override"].includes(c)) {
+            return `<td class="num">${escapeHtml(formatMoney(value))}</td>`;
+          }
           if (c === "usage_type") return `<td>${usageLabels[value] || value || "—"}</td>`;
           if (c === "wants_access") return `<td>${accessStatusLabel(row)}</td>`;
           if (c === "approval_status") return `<td>${approvalStatusBadge(value)}</td>`;
@@ -3511,8 +3548,11 @@ class DataTable extends HTMLElement {
           return `<td><select class="inline-status" data-id="${escapeHtml(row.id)}">${options}</select></td>`;
         }
         let className = "";
-        if (column === "amount") {
-          className = Number(value) < 0 ? "money-negative" : Number(value) > 0 ? "money-positive" : "";
+        if (moneyColumns.has(column)) {
+          className = "num";
+          if (column === "amount") {
+            className += Number(value) < 0 ? " money-negative" : Number(value) > 0 ? " money-positive" : "";
+          }
         }
         return `<td class="${className}">${formatCell(column, value, row, this.resource)}</td>`;
       }).join("");

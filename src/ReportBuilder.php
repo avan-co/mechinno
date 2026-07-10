@@ -376,31 +376,32 @@ final class ReportBuilder
     /**
      * @param array<string, int> $finance
      * @param array{label:string,fiscal_year:string} $period
-     * @return list<array{label:string,value:int|string,tone?:string}>
+     * @return list<array{label:string,value:int|string,format:string,tone?:string}>
      */
     private function buildKpis(array $finance, array $period, int $teamId): array
     {
         $kpis = [
-            ['label' => 'بازه گزارش', 'value' => $period['label']],
-            ['label' => 'درآمد کل (واریز+دستی)', 'value' => $finance['income_total'], 'tone' => 'success'],
-            ['label' => 'واریز نهادها', 'value' => $finance['deposits']],
-            ['label' => 'درآمد دستی', 'value' => $finance['manual_income']],
-            ['label' => 'هزینه‌ها', 'value' => $finance['expense_total'], 'tone' => 'danger'],
-            ['label' => 'خالص نقدی بازه', 'value' => $finance['net'], 'tone' => $finance['net'] < 0 ? 'danger' : 'success'],
-            ['label' => 'جمع شارژ بازه', 'value' => $finance['charge_total']],
-            ['label' => 'واریز تخصیص‌یافته', 'value' => $finance['paid_allocated']],
-            ['label' => 'مانده طلب بازه', 'value' => $finance['debt_total'], 'tone' => 'danger'],
-            ['label' => 'تعداد تراکنش', 'value' => $finance['transaction_count']],
+            ['label' => 'بازه گزارش', 'value' => $period['label'], 'format' => 'text'],
+            ['label' => 'درآمد کل (واریز+دستی)', 'value' => $finance['income_total'], 'format' => 'money', 'tone' => 'success'],
+            ['label' => 'واریز نهادها', 'value' => $finance['deposits'], 'format' => 'money'],
+            ['label' => 'درآمد دستی', 'value' => $finance['manual_income'], 'format' => 'money'],
+            ['label' => 'هزینه‌ها', 'value' => $finance['expense_total'], 'format' => 'money', 'tone' => 'danger'],
+            ['label' => 'خالص نقدی بازه', 'value' => $finance['net'], 'format' => 'money', 'tone' => $finance['net'] < 0 ? 'danger' : 'success'],
+            ['label' => 'جمع شارژ بازه', 'value' => $finance['charge_total'], 'format' => 'money'],
+            ['label' => 'واریز تخصیص‌یافته', 'value' => $finance['paid_allocated'], 'format' => 'money'],
+            ['label' => 'مانده طلب بازه', 'value' => $finance['debt_total'], 'format' => 'money', 'tone' => 'danger'],
+            ['label' => 'تعداد تراکنش', 'value' => $finance['transaction_count'], 'format' => 'count'],
         ];
         if (array_key_exists('formal_contract_total', $finance)) {
             $kpis[] = [
                 'label' => 'جمع مبلغ قراردادهای رسمی سال',
                 'value' => $finance['formal_contract_total'],
+                'format' => 'money',
                 'tone' => 'success',
             ];
         }
         if ($teamId > 0) {
-            array_unshift($kpis, ['label' => 'نهاد', 'value' => $this->teamName($teamId)]);
+            array_unshift($kpis, ['label' => 'نهاد', 'value' => $this->teamName($teamId), 'format' => 'text']);
         }
 
         return $kpis;

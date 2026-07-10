@@ -121,12 +121,11 @@ $statusClass = static function (?string $status): string {
       <section class="report-section">
         <h2 class="section-title">خلاصه شاخص‌ها</h2>
         <div class="kpi-grid">
-          <?php foreach ($data['kpis'] as $kpi): ?>
+            <?php foreach ($data['kpis'] as $kpi): ?>
             <?php
               $tone = (string) ($kpi['tone'] ?? '');
               $toneClass = $tone === 'danger' ? 'kpi--danger' : ($tone === 'success' ? 'kpi--success' : '');
-              $value = $kpi['value'] ?? '';
-              $display = is_numeric($value) ? ReportData::money($value) : ReportData::cell($value);
+              $display = ReportData::kpiValue(is_array($kpi) ? $kpi : []);
             ?>
             <div class="kpi <?= e($toneClass) ?>">
               <span class="kpi-label"><?= e((string) ($kpi['label'] ?? '')) ?></span>
@@ -144,13 +143,16 @@ $statusClass = static function (?string $status): string {
         <div class="table-scroll">
           <table class="data-table">
             <tbody>
-              <tr><th>واریز نهادها</th><td class="num"><?= ReportData::money($finance['deposits'] ?? 0) ?></td></tr>
-              <tr><th>درآمد دستی</th><td class="num"><?= ReportData::money($finance['manual_income'] ?? 0) ?></td></tr>
-              <tr><th>جمع درآمد</th><td class="num"><?= ReportData::money($finance['income_total'] ?? 0) ?></td></tr>
-              <tr><th>هزینه‌ها</th><td class="num"><?= ReportData::money($finance['expense_total'] ?? 0) ?></td></tr>
-              <tr><th>خالص نقدی</th><td class="num"><?= ReportData::money($finance['net'] ?? 0) ?></td></tr>
-              <tr><th>جمع شارژ</th><td class="num"><?= ReportData::money($finance['charge_total'] ?? 0) ?></td></tr>
-              <tr><th>مانده طلب</th><td class="num"><?= ReportData::money($finance['debt_total'] ?? 0) ?></td></tr>
+              <tr><th scope="row">واریز نهادها</th><td class="num"><?= ReportData::money($finance['deposits'] ?? 0) ?></td></tr>
+              <tr><th scope="row">درآمد دستی</th><td class="num"><?= ReportData::money($finance['manual_income'] ?? 0) ?></td></tr>
+              <tr><th scope="row">جمع درآمد</th><td class="num"><?= ReportData::money($finance['income_total'] ?? 0) ?></td></tr>
+              <tr><th scope="row">هزینه‌ها</th><td class="num"><?= ReportData::money($finance['expense_total'] ?? 0) ?></td></tr>
+              <tr><th scope="row">خالص نقدی</th><td class="num"><?= ReportData::money($finance['net'] ?? 0) ?></td></tr>
+              <tr><th scope="row">جمع شارژ</th><td class="num"><?= ReportData::money($finance['charge_total'] ?? 0) ?></td></tr>
+              <tr><th scope="row">مانده طلب</th><td class="num"><?= ReportData::money($finance['debt_total'] ?? 0) ?></td></tr>
+              <?php if (array_key_exists('formal_contract_total', $finance)): ?>
+              <tr><th scope="row">جمع مبلغ قراردادهای رسمی سال</th><td class="num"><?= ReportData::money($finance['formal_contract_total'] ?? 0) ?></td></tr>
+              <?php endif; ?>
             </tbody>
           </table>
         </div>
@@ -188,7 +190,7 @@ $statusClass = static function (?string $status): string {
       <?php if (in_array('debts', $sections, true)): ?>
       <section class="report-section report-section--break">
         <h2 class="section-title">مطالبات و بدهی‌ها</h2>
-        <p class="section-note">تعداد: <?= ReportData::money(count($data['debts'] ?? [])) ?> ردیف</p>
+        <p class="section-note">تعداد: <?= ReportData::count(count($data['debts'] ?? [])) ?> ردیف</p>
         <div class="table-scroll">
           <table class="data-table data-table--wide">
             <thead>
@@ -219,7 +221,7 @@ $statusClass = static function (?string $status): string {
       <?php if (in_array('charges', $sections, true)): ?>
       <section class="report-section report-section--break">
         <h2 class="section-title">شارژ ماهانه</h2>
-        <p class="section-note">تعداد: <?= ReportData::money(count($data['charges'] ?? [])) ?> ردیف</p>
+        <p class="section-note">تعداد: <?= ReportData::count(count($data['charges'] ?? [])) ?> ردیف</p>
         <div class="table-scroll">
           <table class="data-table data-table--wide">
             <thead>
@@ -250,7 +252,7 @@ $statusClass = static function (?string $status): string {
       <?php if (in_array('transactions', $sections, true)): ?>
       <section class="report-section report-section--break">
         <h2 class="section-title">تراکنش‌های مالی</h2>
-        <p class="section-note">تعداد: <?= ReportData::money(count($data['transactions'] ?? [])) ?> تراکنش</p>
+        <p class="section-note">تعداد: <?= ReportData::count(count($data['transactions'] ?? [])) ?> تراکنش</p>
         <div class="table-scroll">
           <table class="data-table data-table--wide">
             <thead>
@@ -281,7 +283,7 @@ $statusClass = static function (?string $status): string {
       <?php if (in_array('teams', $sections, true)): ?>
       <section class="report-section report-section--break">
         <h2 class="section-title">نهادها</h2>
-        <p class="section-note">تعداد: <?= ReportData::money(count($data['teams'] ?? [])) ?> نهاد</p>
+        <p class="section-note">تعداد: <?= ReportData::count(count($data['teams'] ?? [])) ?> نهاد</p>
         <div class="table-scroll">
           <table class="data-table data-table--wide">
             <thead>
@@ -298,7 +300,7 @@ $statusClass = static function (?string $status): string {
                     <td><?= e(ReportData::cell($row['name'] ?? null)) ?></td>
                     <td><?= e(ReportData::cell($row['leader'] ?? null)) ?></td>
                     <td><?= e(ReportData::plain($row['phone'] ?? null)) ?></td>
-                    <td class="num"><?= ReportData::money($row['desk_count'] ?? 0) ?></td>
+                    <td><?= e(ReportData::count($row['desk_count'] ?? 0)) ?></td>
                     <td><?= e(ReportData::cell($row['contract_start'] ?? null)) ?></td>
                     <td><?= e(ReportData::cell($row['contract_end'] ?? null)) ?></td>
                   </tr>
@@ -313,7 +315,7 @@ $statusClass = static function (?string $status): string {
       <?php if (in_array('members', $sections, true)): ?>
       <section class="report-section report-section--break">
         <h2 class="section-title">اعضا</h2>
-        <p class="section-note">تعداد: <?= ReportData::money(count($data['members'] ?? [])) ?> عضو</p>
+        <p class="section-note">تعداد: <?= ReportData::count(count($data['members'] ?? [])) ?> عضو</p>
         <div class="table-scroll">
           <table class="data-table data-table--wide">
             <thead>
@@ -349,7 +351,7 @@ $statusClass = static function (?string $status): string {
             <tbody>
               <?php foreach (($data['desks'] ?? []) as $row): ?>
                 <tr>
-                  <td class="num"><?= ReportData::money($row['number'] ?? 0) ?></td>
+                  <td><?= e(ReportData::count($row['number'] ?? 0)) ?></td>
                   <td><?= e(ReportData::cell($row['team_name'] ?? 'آزاد')) ?></td>
                   <td><?= e(ReportData::usageLabel($row['usage_type'] ?? null)) ?></td>
                   <td><?= e(ReportData::cell($row['notes'] ?? null)) ?></td>
@@ -373,7 +375,7 @@ $statusClass = static function (?string $status): string {
               <?php else: ?>
                 <?php foreach ($data['lockers'] as $row): ?>
                   <tr>
-                    <td class="num"><?= e(ReportData::cell($row['locker_number'] ?? null)) ?></td>
+                    <td><?= e(ReportData::cell($row['locker_number'] ?? null)) ?></td>
                     <td><?= e(ReportData::cell($row['status'] ?? null)) ?></td>
                     <td><?= e(ReportData::cell($row['team_label'] ?? null)) ?></td>
                     <td><?= e(ReportData::cell($row['delivered_at'] ?? null)) ?></td>
