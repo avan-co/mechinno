@@ -73,6 +73,33 @@ final class ReportData
         return number_format((int) $value);
     }
 
+    public static function count(mixed $value): string
+    {
+        if ($value === null || $value === '') {
+            return '0';
+        }
+
+        return number_format((int) $value);
+    }
+
+    public static function kpiValue(array $kpi): string
+    {
+        $format = (string) ($kpi['format'] ?? '');
+        $value = $kpi['value'] ?? '';
+        if ($format === 'money') {
+            return self::money($value);
+        }
+        if ($format === 'count' || $format === 'number') {
+            return self::count($value);
+        }
+        if ($format === 'text' || !is_numeric($value)) {
+            return self::cell($value);
+        }
+
+        // Backward-compatible default: numeric without explicit format stays plain count.
+        return self::count($value);
+    }
+
     public static function plain(mixed $value): string
     {
         if ($value === null || $value === '') {

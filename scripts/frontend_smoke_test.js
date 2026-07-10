@@ -93,5 +93,13 @@ if (!apiSource.includes("report-catalog") || !apiSource.includes("resource === '
   console.error("api.php must expose report-catalog and reports resources");
   process.exit(1);
 }
+if (!source.includes("formatKpiValue") || !source.includes("formatReportCell") || !source.includes("columnKinds")) {
+  console.error("report preview must format KPI/cells by kind (not all numbers as money)");
+  process.exit(1);
+}
+if (!/text-align:\s*center/.test(fs.readFileSync(path.join(__dirname, "..", "assets", "styles.css"), "utf8"))) {
+  console.error("styles.css should center-align table cells");
+  process.exit(1);
+}
 
 console.log("Frontend smoke tests passed");

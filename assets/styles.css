@@ -1277,7 +1277,7 @@ textarea[dir="ltr"] {
 .collage-table th { background: var(--surface-2); color: var(--primary); font-weight: 700; }
 .collage-table thead th { position: sticky; top: 0; z-index: 2; }
 .collage-table .team-col {
-  text-align: right;
+  text-align: center;
   min-width: 140px;
   position: sticky;
   inset-inline-start: 0;
@@ -1387,7 +1387,7 @@ textarea[dir="ltr"] {
 .table-wrap th, .table-wrap td {
   padding: 10px 10px;
   border-bottom: 1px solid var(--line);
-  text-align: right;
+  text-align: center;
   color: var(--text);
 }
 .table-wrap th {
@@ -1400,8 +1400,9 @@ textarea[dir="ltr"] {
 .table-wrap .num,
 .ledger-table .num {
   direction: ltr;
-  text-align: left;
+  text-align: center;
   font-variant-numeric: tabular-nums;
+  unicode-bidi: isolate;
   white-space: nowrap;
 }
 .table-wrap tbody tr:hover { background: color-mix(in srgb, var(--primary) 6%, transparent); }
@@ -1511,7 +1512,13 @@ textarea[dir="ltr"] {
 
 .mobile-cards { display: none; gap: 10px; }
 body.is-mobile .mobile-cards { display: grid; }
-body.is-mobile .table-wrap { display: none; }
+body.is-mobile data-table .table-wrap { display: none; }
+body.is-mobile .mobile-card .row-actions {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--line);
+  justify-content: center;
+}
 
 .mobile-card {
   padding: 12px;
@@ -1616,7 +1623,7 @@ body.is-mobile .table-wrap { display: none; }
 .profile-table { margin-bottom: 14px; overflow: auto; }
 .profile-table h3 { margin: 0 0 8px; font-size: 14px; }
 .profile-table table { width: 100%; border-collapse: collapse; font-size: 12px; }
-.profile-table th, .profile-table td { padding: 8px; border: 1px solid var(--line); text-align: right; }
+.profile-table th, .profile-table td { padding: 8px; border: 1px solid var(--line); text-align: center; }
 
 .team-year-workspace { display: grid; gap: 16px; }
 .team-year-header { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; align-items: flex-start; }
@@ -2155,7 +2162,7 @@ body.is-mobile .table-wrap { display: none; }
 
 .ledger-caption {
   caption-side: top;
-  text-align: right;
+  text-align: center;
   padding: 0 4px 10px;
   font-size: 13px;
   font-weight: 800;
@@ -2167,6 +2174,7 @@ body.is-mobile .table-wrap { display: none; }
   color: var(--text);
   background: transparent;
   width: 42%;
+  text-align: center;
 }
 
 .ledger-row-balance th,
@@ -2316,7 +2324,12 @@ body.is-mobile .table-wrap { display: none; }
   background: color-mix(in srgb, var(--panel) 94%, var(--bg));
 }
 .report-kpi-card span { color: var(--muted); font-size: .78rem; }
-.report-kpi-card strong { font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+.report-kpi-card strong {
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
+  direction: ltr;
+  unicode-bidi: isolate;
+}
 .report-kpi-card.is-success strong { color: var(--success, #15803d); }
 .report-kpi-card.is-danger strong { color: var(--danger); }
 

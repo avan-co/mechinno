@@ -872,6 +872,17 @@ $assert(in_array('teams', $annual['meta']['sections'] ?? [], true), 'reports: fu
 $assert(isset($annual['transactions'], $annual['charges'], $annual['kpis']), 'reports: full payload');
 $assert(array_key_exists('formal_contract_total', $annual['finance_summary'] ?? []), 'reports: annual includes formal contract total');
 $assert((int) ($annual['finance_summary']['formal_contract_total'] ?? 0) >= 5000000, 'reports: annual formal contract sum');
+$txKpi = null;
+foreach ($annual['kpis'] as $kpi) {
+    if (($kpi['label'] ?? '') === 'تعداد تراکنش') {
+        $txKpi = $kpi;
+        break;
+    }
+}
+$assert(is_array($txKpi) && ($txKpi['format'] ?? '') === 'count', 'reports: transaction count KPI is count format');
+$assert(ReportData::kpiValue(['value' => 12, 'format' => 'count']) === '12', 'reports: count KPI formats without money suffix');
+$assert(ReportData::kpiValue(['value' => 1000, 'format' => 'money']) === '1,000', 'reports: money KPI formats number');
+$assert(ReportData::kpiValue(['value' => 'سال مالی 1405', 'format' => 'text']) === 'سال مالی 1405', 'reports: text KPI stays plain');
 $adminSummary = $repo->summary();
 $assert(array_key_exists('formal_contract_year', $adminSummary['cards'] ?? []), 'summary: formal contract year card');
 $assert((int) ($adminSummary['cards']['formal_contract_year'] ?? 0) >= 5000000, 'summary: formal contract year total');
