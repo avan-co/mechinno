@@ -164,7 +164,7 @@ const sectionMeta = {
   lockers: { eyebrow: "کمدها", title: "مدیریت کمدها", subtitle: "شماره کمدها را خودتان تعریف و تخصیص دهید" },
   charges: { eyebrow: "شارژ", title: "نرخ و شارژ ماهانه", subtitle: "تعریف نرخ سالانه، محاسبه خودکار و پیگیری پرداخت" },
   transactions: { eyebrow: "مالی", title: "دفتر معین و موجودی نقدی", subtitle: "گردش واقعی حساب مرکز — بدون تکرار شارژ سیستمی" },
-  reports: { eyebrow: "گزارش‌گیری", title: "گزارش‌ساز حرفه‌ای", subtitle: "انتخاب نوع گزارش، بازه ماهانه/سه‌ماهه/سالانه و خروجی چاپ یا Excel" },
+  reports: { eyebrow: "گزارش‌گیری", title: "گزارش‌ساز", subtitle: "انتخاب نوع گزارش، بازه ماهانه/سه‌ماهه/سالانه و خروجی چاپ یا Excel" },
   development: { eyebrow: "برنامه‌ریزی", title: "برنامه توسعه", subtitle: "کارهای جاری مرکز — اولویت‌بندی و پیگیری ساده" },
   users: { eyebrow: "دسترسی", title: "کاربران پنل", subtitle: "مدیریت نقش‌ها و پنل اختصاصی نهادها" },
   sms: { eyebrow: "اطلاع‌رسانی", title: "ارسال پیامک", subtitle: "ارسال اطلاعیه به اعضا و مسئولین نهادها" },
@@ -1002,7 +1002,7 @@ document.getElementById("menuToggle")?.addEventListener("click", openDrawer);
 document.getElementById("bottomNavMenu")?.addEventListener("click", openDrawer);
 document.getElementById("sidebarBackdrop")?.addEventListener("click", closeDrawer);
 
-document.querySelectorAll(".start-step[data-go], .text-link[data-go], .button[data-go], .foot-btn[data-go]").forEach((item) => {
+document.querySelectorAll(".start-step[data-go], .text-link[data-go], .button[data-go]").forEach((item) => {
   item.addEventListener("click", () => activateSection(item.dataset.go));
 });
 
