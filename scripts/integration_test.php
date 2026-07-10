@@ -66,6 +66,7 @@ $crud->create('team_contracts', [
     'fiscal_year' => '1405',
     'contract_start' => '1405/03/01',
     'contract_end' => '1405/08/29',
+    'formal_contract_amount' => '1000000',
 ]);
 $pdo->exec('UPDATE desks SET team_id = ' . $syncTeamId . ' WHERE number = 2');
 $pdo->prepare(
@@ -104,6 +105,7 @@ $crud->create('team_contracts', [
     'fiscal_year' => '1405',
     'contract_start' => '1405/01/01',
     'contract_end' => '1405/12/29',
+    'formal_contract_amount' => '5000000',
 ]);
 $joinedOnlyTeam = $crud->create('teams', [
     'entity_type' => 'team',
@@ -369,6 +371,7 @@ $crud->update('team_contracts', (int) $contractRow['id'], [
     'fiscal_year' => '1405',
     'contract_start' => '1405/01/01',
     'contract_end' => '1405/12/29',
+    'formal_contract_amount' => '5000000',
     'charge_rate_override' => '200',
     'informal_rent_rate_override' => '',
     'notes' => '',
@@ -587,6 +590,7 @@ $crud->create('team_contracts', [
     'fiscal_year' => '1404',
     'contract_start' => '1404/01/01',
     'contract_end' => '1404/12/29',
+    'formal_contract_amount' => '3000000',
 ]);
 
 $deskAssign = $crud->create('desk_assignments', [
@@ -706,6 +710,7 @@ $crud->create('team_contracts', [
     'fiscal_year' => '1405',
     'contract_start' => '1405/01/01',
     'contract_end' => '1405/12/29',
+    'formal_contract_amount' => '2000000',
 ]);
 $crud->create('charges', [
     'team_id' => (string) $manualDebtTeamId,
@@ -849,6 +854,7 @@ $monthly = $builder->build([
 $assert(($monthly['meta']['type'] ?? '') === 'finance', 'reports: finance monthly type');
 $assert(($monthly['meta']['month_from'] ?? 0) === 5 && ($monthly['meta']['month_to'] ?? 0) === 5, 'reports: monthly range');
 $assert(isset($monthly['finance_summary']['income_total'], $monthly['monthly_breakdown']), 'reports: finance sections');
+$assert(!array_key_exists('formal_contract_total', $monthly['finance_summary']), 'reports: monthly omits formal contract total');
 $quarterly = $builder->build([
     'type' => 'debts',
     'period' => 'quarterly',
@@ -864,6 +870,25 @@ $annual = $builder->build([
 ]);
 $assert(in_array('teams', $annual['meta']['sections'] ?? [], true), 'reports: full includes teams');
 $assert(isset($annual['transactions'], $annual['charges'], $annual['kpis']), 'reports: full payload');
+$assert(array_key_exists('formal_contract_total', $annual['finance_summary'] ?? []), 'reports: annual includes formal contract total');
+$assert((int) ($annual['finance_summary']['formal_contract_total'] ?? 0) >= 5000000, 'reports: annual formal contract sum');
+$adminSummary = $repo->summary();
+$assert(array_key_exists('formal_contract_year', $adminSummary['cards'] ?? []), 'summary: formal contract year card');
+$assert((int) ($adminSummary['cards']['formal_contract_year'] ?? 0) >= 5000000, 'summary: formal contract year total');
+$contractAmount = (int) $pdo->query("SELECT formal_contract_amount FROM team_contracts WHERE team_id = {$teamId} AND fiscal_year = '1405'")->fetchColumn();
+$assert($contractAmount === 5000000, 'contracts: formal amount persisted');
+$missingAmountFailed = false;
+try {
+    $crud->create('team_contracts', [
+        'team_id' => (string) $teamId,
+        'fiscal_year' => '1403',
+        'contract_start' => '1403/01/01',
+        'contract_end' => '1403/12/29',
+    ]);
+} catch (InvalidArgumentException) {
+    $missingAmountFailed = true;
+}
+$assert($missingAmountFailed, 'contracts: formal amount required on create');
 
 // --- Excel exporter ---
 $exporter = new ExcelExporter($pdo);

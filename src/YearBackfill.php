@@ -58,7 +58,8 @@ final class YearBackfill
                     $fiscalYear,
                     (string) ($row['contract_start'] ?? $defaultStart),
                     (string) ($row['contract_end'] ?? $defaultEnd),
-                    (string) ($row['notes'] ?? '')
+                    (string) ($row['notes'] ?? ''),
+                    (int) preg_replace('/\D+/', '', (string) ($row['formal_contract_amount'] ?? '0'))
                 );
 
                 $deskRows = $row['desks'] ?? [];
@@ -124,7 +125,8 @@ final class YearBackfill
         string $fiscalYear,
         string $contractStart,
         string $contractEnd,
-        string $notes
+        string $notes,
+        int $formalContractAmount = 0
     ): int {
         $check = $this->pdo->prepare(
             'SELECT id FROM team_contracts WHERE team_id = :team_id AND fiscal_year = :year LIMIT 1'
@@ -132,13 +134,21 @@ final class YearBackfill
         $check->execute(['team_id' => $teamId, 'year' => $fiscalYear]);
         $existingId = (int) ($check->fetchColumn() ?: 0);
         if ($existingId > 0) {
-            $this->crud->update('team_contracts', $existingId, [
+            $payload = [
                 'contract_start' => $contractStart,
                 'contract_end' => $contractEnd,
                 'notes' => $notes,
-            ]);
+            ];
+            if ($formalContractAmount > 0) {
+                $payload['formal_contract_amount'] = (string) $formalContractAmount;
+            }
+            $this->crud->update('team_contracts', $existingId, $payload);
 
             return $existingId;
+        }
+
+        if ($formalContractAmount <= 0) {
+            throw new InvalidArgumentException('مبلغ کل قرارداد رسمی الزامی است.');
         }
 
         $record = $this->crud->create('team_contracts', [
@@ -146,6 +156,7 @@ final class YearBackfill
             'fiscal_year' => $fiscalYear,
             'contract_start' => $contractStart,
             'contract_end' => $contractEnd,
+            'formal_contract_amount' => (string) $formalContractAmount,
             'notes' => $notes,
         ]);
 

@@ -54,6 +54,7 @@ final class Crud
                     'fiscal_year' => ['label' => 'سال مالی', 'type' => 'text', 'required' => true, 'placeholder' => '1404'],
                     'contract_start' => ['label' => 'شروع قرارداد', 'type' => 'date', 'required' => true, 'placeholder' => '1404/01/01'],
                     'contract_end' => ['label' => 'پایان قرارداد', 'type' => 'date', 'required' => true, 'placeholder' => '1404/12/29'],
+                    'formal_contract_amount' => ['label' => 'مبلغ کل قرارداد رسمی (ریال)', 'type' => 'number', 'required' => true, 'placeholder' => 'مبلغ کل قرارداد رسمی'],
                     'charge_rate_override' => ['label' => 'نرخ شارژ اختصاصی (اختیاری)', 'type' => 'number', 'placeholder' => 'خالی = نرخ عمومی'],
                     'informal_rent_rate_override' => ['label' => 'نرخ اجاره اختصاصی (اختیاری)', 'type' => 'number', 'placeholder' => 'خالی = نرخ عمومی'],
                     'notes' => ['label' => 'توضیحات', 'type' => 'textarea'],
@@ -1007,6 +1008,18 @@ final class Crud
         if ($resource === 'team_contracts') {
             if (isset($data['fiscal_year'])) {
                 $data['fiscal_year'] = JalaliDate::normalizeDigits($data['fiscal_year']);
+            }
+            if (array_key_exists('formal_contract_amount', $data)) {
+                if ($this->blank($data['formal_contract_amount'])) {
+                    throw new InvalidArgumentException('مبلغ کل قرارداد رسمی الزامی است.');
+                }
+                $amount = (int) $data['formal_contract_amount'];
+                if ($amount < 0) {
+                    throw new InvalidArgumentException('مبلغ قرارداد رسمی نمی‌تواند منفی باشد.');
+                }
+                $data['formal_contract_amount'] = $amount;
+            } elseif ($creating) {
+                throw new InvalidArgumentException('مبلغ کل قرارداد رسمی الزامی است.');
             }
             foreach (['charge_rate_override', 'informal_rent_rate_override'] as $field) {
                 if (array_key_exists($field, $data)) {

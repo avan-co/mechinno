@@ -8,6 +8,7 @@ const labels = {
   is_leader: "نقش",
   contract_start: "شروع قرارداد",
   contract_end: "پایان قرارداد",
+  formal_contract_amount: "مبلغ قرارداد رسمی",
   fiscal_year: "سال مالی",
   full_name: "نام",
   team_id: "نهاد",
@@ -195,6 +196,7 @@ const cardNavMap = {
   desks: "desks",
   lockers: "lockers",
   ledger_balance: "transactions",
+  formal_contract_year: "teams",
   paid_total_year: "transactions",
   available_lockers: "lockers",
   desks_occupied: "desks",
@@ -206,6 +208,7 @@ const adminCardConfig = [
   ["expense_year", "هزینه سال", "↑", "expense"],
   ["expense_month", "هزینه ماه", "↑", "expense"],
   ["ledger_balance", "موجودی نقد مرکز", "₡", "income"],
+  ["formal_contract_year", "جمع قراردادهای رسمی سال", "📄", "income"],
   ["debt_total", "مطالبات نهادها", "!", "debt"],
 ];
 
@@ -238,7 +241,7 @@ const teamCardConfig = [
 
 const cardConfig = adminCardConfig;
 
-const moneyCards = new Set(["income_year", "income_month", "expense_year", "expense_month", "debt_total", "paid_total", "charge_total", "ledger_balance"]);
+const moneyCards = new Set(["income_year", "income_month", "expense_year", "expense_month", "debt_total", "paid_total", "charge_total", "ledger_balance", "formal_contract_year"]);
 
 const monthNames = ["", "فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور", "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"];
 
@@ -275,7 +278,7 @@ const fiscalYearFromDate = (value) => {
 
 const resourceColumns = {
   teams: ["entity_code", "entity_type", "name", "is_active", "year_status", "leader", "phone", "joined_at", "portal_username", "portal_has_password", "desk_count", "warning", "notes"],
-  team_contracts: ["team_name", "fiscal_year", "contract_status", "contract_start", "contract_end", "charge_rate_override", "informal_rent_rate_override", "notes"],
+  team_contracts: ["team_name", "fiscal_year", "contract_status", "contract_start", "contract_end", "formal_contract_amount", "charge_rate_override", "informal_rent_rate_override", "notes"],
   members: ["member_code", "full_name", "is_leader", "team_label", "entity_type", "desk_numbers", "wants_access", "access_code", "phone", "national_id", "approval_status", "rejection_reason"],
   desks: ["number", "team_name", "usage_type", "assignment_period", "notes"],
   "desk-assignments": ["assignment_status", "fiscal_year", "desk_number", "team_name", "usage_type", "billing_exemptions", "assignment_period", "notes"],
@@ -777,6 +780,9 @@ const previewReport = async () => {
           ["خالص نقدی", finance.net || 0],
           ["جمع شارژ", finance.charge_total || 0],
           ["مانده طلب", finance.debt_total || 0],
+          ...(finance.formal_contract_total !== undefined
+            ? [["جمع مبلغ قراردادهای رسمی سال", finance.formal_contract_total || 0]]
+            : []),
         ]
       ));
     }
@@ -2242,7 +2248,7 @@ const openTeamProfile = async (teamId, options = {}) => {
       <button type="button" class="button ghost" data-profile-action="charges">مشاهده شارژ</button>
       <button type="button" class="button ghost" data-profile-action="desks">مشاهده میزها</button>
     </div>`}
-    ${profileSection("قراردادهای سالانه", data.contracts || [], ["fiscal_year", "contract_start", "contract_end", "notes"])}
+    ${profileSection("قراردادهای سالانه", data.contracts || [], ["fiscal_year", "contract_start", "contract_end", "formal_contract_amount", "notes"])}
     ${profileSection("میزهای نهاد", data.desks, ["number", "usage_type", "notes"])}
     ${profileSection("تاریخچه تخصیص میز", data.desk_assignments || [], ["fiscal_year", "desk_number", "usage_type", "assigned_from", "assigned_until", "notes"])}
     ${profileSection("اعضا", data.members, ["member_code", "full_name", "access_code", "phone", "national_id"])}
@@ -3019,7 +3025,7 @@ const formatCell = (column, value, row, resource) => {
   if (column === "request_type") return escapeHtml(requestTypeLabel(value));
   if (column === "usage_type") return escapeHtml(usageLabels[value] || value || "—");
   if (column === "billing_exemptions") return billingExemptionBadges(row);
-  if (["charge_rate_override", "informal_rent_rate_override"].includes(column)) {
+  if (["charge_rate_override", "informal_rent_rate_override", "formal_contract_amount"].includes(column)) {
     return value === null || value === "" || value === undefined ? "—" : escapeHtml(formatMoney(value));
   }
   if (column === "category" && resource === "development_plans") {
@@ -3102,7 +3108,7 @@ const formatCell = (column, value, row, resource) => {
   }
   if (column === "locker_number" && value) return lockerLink(value);
   if (column === "number" && resource === "desks") return deskLink(value);
-  if (["amount", "charge_amount", "rent_amount", "charge_rate", "informal_rent_rate"].includes(column)) {
+  if (["amount", "charge_amount", "rent_amount", "charge_rate", "informal_rent_rate", "formal_contract_amount"].includes(column)) {
     return formatMoney(value);
   }
   if (plainColumns.has(column)) return formatPlain(value);

@@ -140,7 +140,7 @@ final class ReportBuilder
         ];
 
         if (in_array('kpis', $sections, true) || in_array('finance_summary', $sections, true)) {
-            $finance = $this->financeTotals($period, $normalized['team_id']);
+            $finance = $this->financeTotals($period, $normalized['team_id'], $normalized['period']);
             $data['kpis'] = $this->buildKpis($finance, $period, $normalized['team_id']);
             $data['finance_summary'] = $finance;
         }
@@ -338,7 +338,7 @@ final class ReportBuilder
      * @param array{fiscal_year:string,month_from:int,month_to:int,date_from:string,date_to:string,months:list<int>} $period
      * @return array<string, int>
      */
-    private function financeTotals(array $period, int $teamId): array
+    private function financeTotals(array $period, int $teamId, string $periodType = self::PERIOD_ANNUAL): array
     {
         $deposits = $this->sumTransactions($period, ['واریز تیم'], $teamId, true);
         $income = $this->sumTransactions($period, ['درآمد'], 0, false);
@@ -352,7 +352,7 @@ final class ReportBuilder
             $paidAllocated += (int) ($row['amount_paid'] ?? 0);
         }
 
-        return [
+        $totals = [
             'deposits' => $deposits,
             'manual_income' => $income,
             'income_total' => $deposits + $income,
@@ -363,6 +363,14 @@ final class ReportBuilder
             'debt_total' => $debtTotal,
             'transaction_count' => $this->countTransactions($period, $teamId),
         ];
+
+        // مبلغ قرارداد رسمی فقط در گزارش سالانه (یک قرارداد در سال)
+        if ($periodType === self::PERIOD_ANNUAL) {
+            $totals['formal_contract_total'] = (new Repository($this->pdo))
+                ->totalFormalContractAmount($period['fiscal_year'], $teamId);
+        }
+
+        return $totals;
     }
 
     /**
@@ -384,6 +392,13 @@ final class ReportBuilder
             ['label' => 'مانده طلب بازه', 'value' => $finance['debt_total'], 'tone' => 'danger'],
             ['label' => 'تعداد تراکنش', 'value' => $finance['transaction_count']],
         ];
+        if (array_key_exists('formal_contract_total', $finance)) {
+            $kpis[] = [
+                'label' => 'جمع مبلغ قراردادهای رسمی سال',
+                'value' => $finance['formal_contract_total'],
+                'tone' => 'success',
+            ];
+        }
         if ($teamId > 0) {
             array_unshift($kpis, ['label' => 'نهاد', 'value' => $this->teamName($teamId)]);
         }
@@ -407,7 +422,7 @@ final class ReportBuilder
                 'date_from' => JalaliDate::monthStart($period['fiscal_year'], $month),
                 'date_to' => JalaliDate::monthEnd($period['fiscal_year'], $month),
             ];
-            $totals = $this->financeTotals($slice, $teamId);
+            $totals = $this->financeTotals($slice, $teamId, self::PERIOD_MONTHLY);
             $rows[] = [
                 'month_index' => $month,
                 'month_name' => JalaliDate::monthName($month),

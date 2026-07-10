@@ -333,6 +333,7 @@ final class Schema
             'team_contracts' => [
                 'charge_rate_override' => 'BIGINT NULL',
                 'informal_rent_rate_override' => 'BIGINT NULL',
+                'formal_contract_amount' => 'BIGINT NOT NULL DEFAULT 0',
             ],
             'desk_assignments' => [
                 'charge_exempt' => 'TINYINT NOT NULL DEFAULT 0',
@@ -659,6 +660,7 @@ final class Schema
                     fiscal_year TEXT NOT NULL,
                     contract_start TEXT NOT NULL,
                     contract_end TEXT NOT NULL,
+                    formal_contract_amount INTEGER NOT NULL DEFAULT 0,
                     notes TEXT,
                     created_at TEXT,
                     UNIQUE(team_id, fiscal_year)
@@ -672,6 +674,7 @@ final class Schema
                     fiscal_year VARCHAR(8) NOT NULL,
                     contract_start VARCHAR(32) NOT NULL,
                     contract_end VARCHAR(32) NOT NULL,
+                    formal_contract_amount BIGINT NOT NULL DEFAULT 0,
                     notes TEXT NULL,
                     created_at VARCHAR(32) NULL,
                     UNIQUE KEY uniq_team_contract_year (team_id, fiscal_year),

@@ -37,6 +37,7 @@
       contract_id: contract?.id || null,
       contract_start: contract?.contract_start || null,
       contract_end: contract?.contract_end || null,
+      formal_contract_amount: contract?.formal_contract_amount ?? null,
       contract_notes: contract?.notes || null,
       desk_count: desks.length,
       charge_total: 0,
@@ -106,6 +107,7 @@
         <div class="year-contract-readonly">
           <div><span>شروع</span><strong>${S().escapeHtml(S().formatPlain(contract.contract_start))}</strong></div>
           <div><span>پایان</span><strong>${S().escapeHtml(S().formatPlain(contract.contract_end))}</strong></div>
+          <div><span>مبلغ قرارداد رسمی</span><strong>${S().escapeHtml(S().formatMoney(contract.formal_contract_amount || 0))}</strong></div>
           ${contract.charge_rate_override ? `<div><span>نرخ شارژ اختصاصی</span><strong>${S().escapeHtml(S().formatMoney(contract.charge_rate_override))}</strong></div>` : ""}
           ${contract.informal_rent_rate_override ? `<div><span>نرخ اجاره اختصاصی</span><strong>${S().escapeHtml(S().formatMoney(contract.informal_rent_rate_override))}</strong></div>` : ""}
           ${contract.notes ? `<p class="hint">${S().escapeHtml(contract.notes)}</p>` : ""}
@@ -123,6 +125,7 @@
         <div class="crud-grid year-form-grid">
           <label><span>شروع قرارداد</span><input name="contract_start" type="text" required value="${S().escapeHtml(contract?.contract_start || `${year}/01/01`)}" placeholder="${year}/01/01" /></label>
           <label><span>پایان قرارداد</span><input name="contract_end" type="text" required value="${S().escapeHtml(contract?.contract_end || `${year}/12/29`)}" placeholder="${year}/12/29" /></label>
+          <label><span>مبلغ کل قرارداد رسمی (ریال)</span><input name="formal_contract_amount" type="number" min="0" step="1" required value="${S().escapeHtml(contract?.formal_contract_amount ?? "")}" placeholder="مبلغ کل قرارداد رسمی" /></label>
           <label><span>نرخ شارژ اختصاصی</span><input name="charge_rate_override" type="number" min="0" step="1" value="${S().escapeHtml(contract?.charge_rate_override ?? "")}" placeholder="خالی = نرخ عمومی" /></label>
           <label><span>نرخ اجاره اختصاصی</span><input name="informal_rent_rate_override" type="number" min="0" step="1" value="${S().escapeHtml(contract?.informal_rent_rate_override ?? "")}" placeholder="خالی = نرخ عمومی" /></label>
           <label class="wide"><span>توضیحات</span><textarea name="notes" rows="2">${S().escapeHtml(contract?.notes || "")}</textarea></label>
@@ -253,6 +256,7 @@
       fiscal_year: year,
       contract_start: form.contract_start.value,
       contract_end: form.contract_end.value,
+      formal_contract_amount: form.formal_contract_amount?.value?.trim() || "",
       charge_rate_override: form.charge_rate_override?.value?.trim() || "",
       informal_rent_rate_override: form.informal_rent_rate_override?.value?.trim() || "",
       notes: form.notes.value,
@@ -386,11 +390,11 @@
     const form = modal.querySelector("#crudForm");
     modal.querySelector("#crudModalTitle").textContent = "ورود سریع سال (CSV)";
     form.innerHTML = `
-      <p class="hint">هر خط: <code>نام نهاد,شروع قرارداد,پایان,میزها</code> — میزها با کاما جدا شوند.</p>
+      <p class="hint">هر خط: <code>نام نهاد,شروع قرارداد,پایان,مبلغ قرارداد,میزها</code> — میزها با کاما جدا شوند.</p>
       <div class="crud-grid">
         <label><span>سال مالی</span><input name="fiscal_year" type="text" required value="${S().escapeHtml(currentFiscalYear())}" /></label>
         <label class="wide"><span>داده CSV</span>
-          <textarea name="csv" rows="10" placeholder="تیم آلفا,1403/01/01,1403/12/29,3,7&#10;شرکت بتا,1403/01/01,1403/12/29,12"></textarea>
+          <textarea name="csv" rows="10" placeholder="تیم آلفا,1403/01/01,1403/12/29,120000000,3,7&#10;شرکت بتا,1403/01/01,1403/12/29,85000000,12"></textarea>
         </label>
         <label class="wide"><input type="checkbox" name="recalculate" checked /> محاسبه خودکار شهریه پس از import</label>
       </div>
@@ -404,11 +408,12 @@
       const lines = form.csv.value.trim().split("\n").filter(Boolean);
       const rows = lines.map((line) => {
         const parts = line.split(",").map((part) => part.trim());
-        const [teamName, contractStart, contractEnd, ...deskParts] = parts;
+        const [teamName, contractStart, contractEnd, formalAmount, ...deskParts] = parts;
         return {
           team_name: teamName,
           contract_start: contractStart || `${fiscalYear}/01/01`,
           contract_end: contractEnd || `${fiscalYear}/12/29`,
+          formal_contract_amount: formalAmount || "0",
           desk_numbers: deskParts.join(","),
         };
       });
