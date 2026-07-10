@@ -157,7 +157,14 @@ final class ReportBuilder
             $data['transactions'] = $this->transactionsInPeriod($period, $normalized['team_id']);
         }
         if (in_array('teams', $sections, true)) {
-            $data['teams'] = $repo->resource('teams');
+            $teams = $repo->resource('teams');
+            if ($normalized['team_id'] > 0) {
+                $teams = array_values(array_filter(
+                    $teams,
+                    static fn (array $row): bool => (int) ($row['id'] ?? 0) === $normalized['team_id']
+                ));
+            }
+            $data['teams'] = $teams;
         }
         if (in_array('members', $sections, true)) {
             $members = $repo->resource('members');
@@ -170,7 +177,14 @@ final class ReportBuilder
             $data['members'] = $members;
         }
         if (in_array('desks', $sections, true)) {
-            $data['desks'] = $repo->resource('desks');
+            $desks = $repo->resource('desks');
+            if ($normalized['team_id'] > 0) {
+                $desks = array_values(array_filter(
+                    $desks,
+                    static fn (array $row): bool => (int) ($row['team_id'] ?? 0) === $normalized['team_id']
+                ));
+            }
+            $data['desks'] = $desks;
         }
         if (in_array('lockers', $sections, true)) {
             $lockers = $repo->resource('lockers');
