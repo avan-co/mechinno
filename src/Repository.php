@@ -43,6 +43,7 @@ final class Repository
                 ),
                 'paid_total_year' => $this->incomeTeamDepositsForPeriod($this->currentFiscalYear()),
                 'ledger_balance' => (new CenterLedger($this->pdo))->balance(),
+                'formal_contract_year' => $this->totalFormalContractAmount($this->currentFiscalYear()),
                 'pending_members' => $this->scalar("SELECT COUNT(*) FROM members WHERE approval_status = 'pending'"),
                 'pending_payments' => $this->scalar("SELECT COUNT(*) FROM transactions WHERE category = 'واریز تیم' AND payment_status = 'pending'"),
                 'pending_locker_requests' => $this->scalar("SELECT COUNT(*) FROM locker_requests WHERE status = 'pending'"),
@@ -459,7 +460,7 @@ final class Repository
                 . $this->searchClause('teams', $filters)
                 . ' ORDER BY t.is_active DESC, t.entity_type, t.name',
             'team_contracts' => "SELECT tc.id, tc.team_id, tc.fiscal_year, tc.contract_start, tc.contract_end,
-                        tc.notes, tc.created_at"
+                        tc.formal_contract_amount, tc.notes, tc.created_at"
                 . $this->teamContractRateOverrideSelect('tc') . ",
                         t.name AS team_name, t.entity_type, t.is_active AS team_is_active
                  FROM team_contracts tc
@@ -1158,7 +1159,7 @@ final class Repository
         return [
             'team' => self::stripLegacyColumns($team),
             'contracts' => $this->preparedRows(
-                'SELECT id, fiscal_year, contract_start, contract_end, notes, created_at'
+                'SELECT id, fiscal_year, contract_start, contract_end, formal_contract_amount, notes, created_at'
                 . $this->teamContractRateOverrideSelect() . '
                  FROM team_contracts WHERE team_id = :id ORDER BY fiscal_year DESC',
                 ['id' => $teamId]
@@ -1343,6 +1344,7 @@ final class Repository
                 'contract_id' => is_array($contract) ? (int) ($contract['id'] ?? 0) : null,
                 'contract_start' => is_array($contract) ? ($contract['contract_start'] ?? null) : null,
                 'contract_end' => is_array($contract) ? ($contract['contract_end'] ?? null) : null,
+                'formal_contract_amount' => is_array($contract) ? (int) ($contract['formal_contract_amount'] ?? 0) : null,
                 'contract_notes' => is_array($contract) ? ($contract['notes'] ?? null) : null,
                 'charge_rate_override' => is_array($contract) ? ($contract['charge_rate_override'] ?? null) : null,
                 'informal_rent_rate_override' => is_array($contract) ? ($contract['informal_rent_rate_override'] ?? null) : null,
@@ -1552,6 +1554,29 @@ final class Repository
         }
 
         return $total;
+    }
+
+    public function totalFormalContractAmount(string $fiscalYear, int $teamId = 0): int
+    {
+        $fiscalYear = JalaliDate::normalizeDigits($fiscalYear);
+        if ($fiscalYear === '') {
+            return 0;
+        }
+        if (!Schema::hasColumn($this->pdo, 'team_contracts', 'formal_contract_amount')) {
+            return 0;
+        }
+        if ($teamId > 0) {
+            return $this->preparedScalar(
+                'SELECT COALESCE(SUM(formal_contract_amount), 0) FROM team_contracts
+                 WHERE fiscal_year = :year AND team_id = :team_id',
+                ['year' => $fiscalYear, 'team_id' => $teamId]
+            );
+        }
+
+        return $this->preparedScalar(
+            'SELECT COALESCE(SUM(formal_contract_amount), 0) FROM team_contracts WHERE fiscal_year = :year',
+            ['year' => $fiscalYear]
+        );
     }
 
     /**
