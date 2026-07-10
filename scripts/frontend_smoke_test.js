@@ -78,4 +78,20 @@ if (!apiSource.includes("'desk-assignments' => 'desk_assignments'")) {
   process.exit(1);
 }
 
+const initReportBuilderIndex = source.indexOf("const initReportBuilder");
+const activateSectionIndex = source.indexOf("const activateSection");
+const bootActivateIndex = source.indexOf("activateSection(initialSection)");
+if (initReportBuilderIndex < 0 || activateSectionIndex < 0 || bootActivateIndex < 0) {
+  console.error("report builder / activateSection boot symbols missing");
+  process.exit(1);
+}
+if (!(initReportBuilderIndex < activateSectionIndex && activateSectionIndex < bootActivateIndex)) {
+  console.error("initReportBuilder must be defined before activateSection, and activateSection before boot call");
+  process.exit(1);
+}
+if (!apiSource.includes("report-catalog") || !apiSource.includes("resource === 'reports'")) {
+  console.error("api.php must expose report-catalog and reports resources");
+  process.exit(1);
+}
+
 console.log("Frontend smoke tests passed");

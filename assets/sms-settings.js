@@ -151,3 +151,7 @@ window.initSmsSettingsPanel = () => {
   bindSmsSettingsActions();
   loadSmsSettingsPage().catch((error) => showToast(error.message, "error"));
 };
+
+if (document.getElementById("sms-settings")?.classList.contains("active")) {
+  window.initSmsSettingsPanel?.();
+}

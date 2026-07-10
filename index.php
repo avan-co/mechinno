@@ -108,6 +108,8 @@ $assetVer = (string) max(
               <span class="nav-icon nav-icon--blue"><svg viewBox="0 0 24 24"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5Z" fill="currentColor"/></svg></span>
               داشبورد
             </button>
+
+            <p class="nav-group-label">عملیات مرکز</p>
             <button class="nav-item" data-section="teams" type="button">
               <span class="nav-icon nav-icon--purple"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm-7 8a7 7 0 0 1 14 0Z" fill="currentColor"/></svg></span>
               نهادها
@@ -136,6 +138,8 @@ $assetVer = (string) max(
               <span class="nav-icon nav-icon--green"><svg viewBox="0 0 24 24"><path d="M6 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm0 4v12h12V7H6Zm3 2h2v2H9V9Zm4 0h2v2h-2V9Z" fill="currentColor"/></svg></span>
               کمدها
             </button>
+
+            <p class="nav-group-label">مالی و گزارش</p>
             <button class="nav-item" data-section="charges" type="button">
               <span class="nav-icon nav-icon--amber"><svg viewBox="0 0 24 24"><path d="M12 2 4 6v6c0 5 3.4 9.7 8 11 4.6-1.3 8-6 8-11V6l-8-4Zm0 6.5A2.5 2.5 0 1 1 9.5 6 2.5 2.5 0 0 1 12 8.5Z" fill="currentColor"/></svg></span>
               شارژ
@@ -148,7 +152,19 @@ $assetVer = (string) max(
               <span class="nav-icon nav-icon--blue"><svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm8 1.5V8h4.5L14 3.5ZM8 12h8v2H8v-2Zm0 4h8v2H8v-2Zm0-8h4v2H8V8Z" fill="currentColor"/></svg></span>
               گزارش‌گیری
             </button>
+            <a class="nav-item" href="export.php?report=all">
+              <span class="nav-icon nav-icon--teal"><svg viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9l-6-6Zm1 7V4.5L18.5 10H15ZM8 13h8v2H8v-2Zm0 4h5v2H8v-2Z" fill="currentColor"/></svg></span>
+              خروجی Excel
+            </a>
+            <?php if (Access::canWrite()): ?>
+            <a class="nav-item" href="backup.php">
+              <span class="nav-icon nav-icon--amber"><svg viewBox="0 0 24 24"><path d="M12 3a7 7 0 0 0-7 7v2.1A4.5 4.5 0 0 0 7.5 21h9A4.5 4.5 0 0 0 19 12.1V10a7 7 0 0 0-7-7Zm0 2a5 5 0 0 1 5 5v1H7v-1a5 5 0 0 1 5-5Zm-1 8h2v4h-2v-4Z" fill="currentColor"/></svg></span>
+              پشتیبان‌گیری
+            </a>
+            <?php endif; ?>
+
             <?php if (Access::isAdmin()): ?>
+            <p class="nav-group-label">ارتباطات</p>
             <button class="nav-item" data-section="sms" type="button">
               <span class="nav-icon nav-icon--green"><svg viewBox="0 0 24 24"><path d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2Zm0 2v.5L12 13 4 6.5V6ZM4 18V8.2l7.4 6.5a1 1 0 0 0 1.2 0L20 8.2V18Z" fill="currentColor"/></svg></span>
               ارسال پیامک
@@ -157,6 +173,10 @@ $assetVer = (string) max(
               <span class="nav-icon nav-icon--green"><svg viewBox="0 0 24 24"><path d="M12 8a1 1 0 0 1 1 1v3h3a1 1 0 1 1 0 2h-4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Zm8-3H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Z" fill="currentColor"/></svg></span>
               تنظیمات پیامک
             </button>
+            <?php endif; ?>
+
+            <?php if (Access::canWrite() || Access::isAdmin()): ?>
+            <p class="nav-group-label">مدیریت</p>
             <?php endif; ?>
             <?php if (Access::canWrite()): ?>
             <button class="nav-item" data-section="development" type="button">
@@ -171,14 +191,6 @@ $assetVer = (string) max(
             </button>
             <?php endif; ?>
           </nav>
-
-          <div class="sidebar-foot">
-            <button class="foot-btn" type="button" data-go="reports">گزارش‌گیری حرفه‌ای</button>
-            <a class="foot-btn foot-btn--soft" href="export.php?report=all">خروجی Excel کامل</a>
-            <?php if (Access::canWrite()): ?>
-            <a class="foot-btn foot-btn--soft" href="backup.php">پشتیبان JSON</a>
-            <?php endif; ?>
-          </div>
         </aside>
 
         <div class="main-wrap">
