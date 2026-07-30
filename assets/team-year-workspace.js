@@ -444,7 +444,6 @@
   };
 
   const openDeskAssignModal = async (deskNumber) => {
-    console.log("[mechinno:desk-map:open]", { deskNumber });
     const mapData = await S().fetchJson("api.php?resource=desks-map");
     const mapDesk = (mapData.rows || []).find((row) => Number(row.number) === Number(deskNumber));
     if (!mapDesk) {
@@ -494,7 +493,6 @@
     if (!prefill.assigned_from_month) prefill.assigned_from_month = "1";
     if (!prefill.assigned_until_month) prefill.assigned_until_month = "12";
 
-    console.log("[mechinno:desk-map:prefill]", { desk, existing, prefill });
     await S().openDeskHistoryAssignModal(prefill);
   };
 

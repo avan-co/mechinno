@@ -992,7 +992,8 @@ const activateSection = (id, options = {}) => {
     }
   }
   if (id === "members" && panelMode === "admin") {
-    initMemberFilters().catch(() => {});
+    initMemberFilters().catch((error) => showToast(error.message, "error"));
+    reloadSectionTables(id);
   } else {
     reloadSectionTables(id);
   }
@@ -1001,7 +1002,7 @@ const activateSection = (id, options = {}) => {
     loadDeskGrid().catch((error) => showToast(error.message, "error"));
   }
   if (id === "desk-history" && panelMode === "admin") {
-    initDeskHistoryFilters().catch(() => {});
+    initDeskHistoryFilters().catch((error) => showToast(error.message, "error"));
   }
   if (id === "desks" && panelMode === "team") loadTeamDeskAssignments().catch((error) => showToast(error.message, "error"));
   if (id === "profile" && panelMode === "team") loadTeamProfile().catch((error) => showToast(error.message, "error"));
@@ -1925,6 +1926,7 @@ const initDeskHistoryFilters = async () => {
       applyFilters();
     });
   }
+  table.load?.();
 };
 
 const loadDevProgramSummary = async () => {
@@ -3194,11 +3196,15 @@ const openChangeLeaderModal = async (teamId, teamName) => {
     event.preventDefault();
     const memberId = Number(new FormData(form).get("member_id"));
     if (!memberId) return;
-    await postJson("api.php?resource=teams&action=change-leader", { id: teamId, member_id: memberId });
-    closeModal();
-    await refreshAfterMutation("teams");
-    await refreshAfterMutation("members");
-    showToast("مسئول نهاد به‌روز شد.", "success");
+    try {
+      await postJson("api.php?resource=teams&action=change-leader", { id: teamId, member_id: memberId });
+      closeModal();
+      await refreshAfterMutation("teams");
+      await refreshAfterMutation("members");
+      showToast("مسئول نهاد به‌روز شد.", "success");
+    } catch (error) {
+      showToast(error.message, "error");
+    }
   };
   modal.hidden = false;
   trapFocus(modal);
@@ -3704,10 +3710,14 @@ class DataTable extends HTMLElement {
     }
     if (button.dataset.action === "delete") {
       if (!window.confirm("حذف شود؟")) return;
-      await postJson(`api.php?resource=${encodeURIComponent(this.resource)}&action=delete`, { id });
-      await this.load();
-      await refreshAfterMutation(this.closest(".section")?.id || null);
-      showToast("حذف شد.", "success");
+      try {
+        await postJson(`api.php?resource=${encodeURIComponent(this.resource)}&action=delete`, { id });
+        await this.load();
+        await refreshAfterMutation(this.closest(".section")?.id || null);
+        showToast("حذف شد.", "success");
+      } catch (error) {
+        showToast(error.message, "error");
+      }
     }
   }
 
