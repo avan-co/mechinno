@@ -70,9 +70,12 @@ try {
         $id = (int) ($payload['id'] ?? 0);
         $token = trim((string) ($payload['token'] ?? ''));
         $reason = trim((string) ($payload['reason'] ?? ''));
+        if ($token === '') {
+            json_response(['error' => 'کد پیگیری معتبر نیست.'], 422);
+        }
         json_response([
             'ok' => true,
-            'record' => $rooms->cancel($id, $reason, $token !== '' ? $token : null),
+            'record' => $rooms->cancel($id, $reason, $token),
         ]);
     }
 

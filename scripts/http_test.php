@@ -140,6 +140,57 @@ if (!is_file($root . '/config.php')) {
     $r = $request('GET', '/api.php?resource=desks-map');
     $assert($r['status'] === 200 && count($r['json']['rows'] ?? []) === 24, 'http: admin desks-map API');
 
+    $r = $htmlRequest('/reserve.php');
+    $assert($r['status'] === 200 && str_contains($r['body'], 'رزرو اتاق جلسه'), 'http: public reserve page loads');
+
+    $r = $request('GET', '/public-api.php?resource=config');
+    $assert($r['status'] === 200 && isset($r['json']['rooms']), 'http: public room config API');
+    $publicRoomId = (int) ($r['json']['rooms'][0]['id'] ?? 0);
+    $publicToday = (string) ($r['json']['today'] ?? '');
+
+    $r = $request('GET', '/api.php?resource=meeting-rooms&page=1&per_page=25');
+    $assert($r['status'] === 200 && isset($r['json']['rows']), 'http: admin meeting-rooms list');
+
+    $r = $request('GET', '/api.php?resource=room-settings');
+    $assert($r['status'] === 200 && isset($r['json']['room_auto_approve']), 'http: admin room-settings API');
+
+    if ($publicRoomId > 0 && $publicToday !== '') {
+        $r = $request('GET', '/public-api.php?resource=availability&room_id=' . $publicRoomId . '&date=' . rawurlencode($publicToday));
+        $assert($r['status'] === 200 && isset($r['json']['slots']), 'http: public room availability');
+        $slot = null;
+        foreach ($r['json']['slots'] ?? [] as $candidate) {
+            if (($candidate['status'] ?? '') === 'free') {
+                $slot = $candidate;
+                break;
+            }
+        }
+        if ($slot !== null) {
+            $book = $request('POST', '/public-api.php?resource=book', json_encode([
+                'room_id' => $publicRoomId,
+                'reserved_date' => $publicToday,
+                'start_time' => $slot['time'],
+                'end_time' => $slot['end'],
+                'booker_name' => 'HTTP تست',
+                'booker_phone' => '09120001111',
+            ], JSON_UNESCAPED_UNICODE), ['Content-Type: application/json']);
+            $assert(($book['json']['ok'] ?? false) === true, 'http: public room book');
+            $bookingId = (int) ($book['json']['record']['id'] ?? 0);
+            $bookingToken = (string) ($book['json']['record']['public_token'] ?? '');
+            $assert($bookingId > 0 && $bookingToken !== '', 'http: public room book returns token');
+
+            $badCancel = $request('POST', '/public-api.php?resource=cancel', json_encode([
+                'id' => $bookingId,
+            ], JSON_UNESCAPED_UNICODE), ['Content-Type: application/json']);
+            $assert($badCancel['status'] === 422, 'http: public cancel requires token');
+
+            $cancel = $request('POST', '/public-api.php?resource=cancel', json_encode([
+                'id' => $bookingId,
+                'token' => $bookingToken,
+            ], JSON_UNESCAPED_UNICODE), ['Content-Type: application/json']);
+            $assert(($cancel['json']['ok'] ?? false) === true, 'http: public room cancel with token');
+        }
+    }
+
     $r = $request('GET', '/team.php');
     $assert(in_array($r['status'], [302, 303], true) || str_contains($r['body'], 'index.php'), 'http: admin redirected from team panel');
 
@@ -200,6 +251,12 @@ if (!is_file($root . '/config.php')) {
 
     $r = $request('GET', '/api.php?resource=payment-history');
     $assert($r['status'] === 200, 'http: entity can access payment history');
+
+    $r = $request('GET', '/api.php?resource=meeting-rooms&page=1&per_page=25');
+    $assert($r['status'] === 200, 'http: entity can list meeting rooms');
+
+    $r = $request('GET', '/api.php?resource=room-reservations&page=1&per_page=25');
+    $assert($r['status'] === 200, 'http: entity can list room reservations');
 
     $r = $request('GET', '/api.php?resource=center-settings');
     $assert($r['status'] === 200 && isset($r['json']['bank_name']), 'http: entity can read payment settings');
