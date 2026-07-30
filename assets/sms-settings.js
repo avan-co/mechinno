@@ -49,7 +49,7 @@ const renderSmsLineForm = (data) => {
   host.innerHTML = `
     <div class="crud-grid">
       <label><span>شماره خط ارسال</span>
-        <input name="sms_from_number" type="text" inputmode="numeric" placeholder="مثلاً 3000xxxx یا 5000xxxx" value="${escapeHtml(data.sms_from_number || "")}" ${canWrite ? "" : "readonly"} />
+        <input name="sms_from_number" type="text" inputmode="numeric" placeholder="مثلاً 3000xxxx یا 5000xxxx" value="${escapeHtml(data.sms_from_number || "")}" ${canWrite ? "required" : "readonly"} />
       </label>
       <label><span>سقف ارسال روزانه (پنل)</span><input name="sms_daily_limit" type="number" min="1" value="${escapeHtml(data.sms_daily_limit || 500)}" ${canWrite ? "" : "readonly"} /></label>
       <label><span>هزینه هر پیامک (ریال — از API)</span><input name="sms_unit_cost" type="number" value="${escapeHtml(data.sms_base_price || data.sms_unit_cost || 0)}" readonly /></label>

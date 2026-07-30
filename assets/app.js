@@ -637,7 +637,7 @@ const reloadDeskTables = async () => {
     await historyTable.load?.();
   }
   if (panelMode === "admin") {
-    await loadDeskGrid().catch(() => {});
+    await loadDeskGrid().catch((error) => showToast(error.message, "error"));
   }
 };
 
@@ -645,7 +645,7 @@ const refreshAfterMutation = async (sectionId = null) => {
   invalidateCrudMeta();
   if (sectionId) reloadSectionTables(sectionId, true);
   if (sectionId === "desks" && panelMode === "admin") {
-    loadDeskGrid().catch(() => {});
+    loadDeskGrid().catch((error) => showToast(error.message, "error"));
   }
   try {
     await loadDashboard();
@@ -654,7 +654,7 @@ const refreshAfterMutation = async (sectionId = null) => {
   }
   if (!sectionId || sectionId === "transactions") {
     if (panelMode === "admin" && document.getElementById("ledgerPanel")) {
-      loadLedger().catch(() => {});
+      loadLedger().catch((error) => showToast(error.message, "error"));
     }
   }
   if (!sectionId) {
@@ -1008,12 +1008,12 @@ const activateSection = (id, options = {}) => {
   if (id === "profile" && panelMode === "team") loadTeamProfile().catch((error) => showToast(error.message, "error"));
   if (id === "charges") {
     loadChargesCollage().catch((error) => showToast(error.message, "error"));
-    if (panelMode === "team") loadTeamChargeRates().catch(() => {});
+    if (panelMode === "team") loadTeamChargeRates().catch((error) => showToast(error.message, "error"));
   }
-  if (id === "transactions" && canWrite) loadPaymentSettings().catch(() => {});
+  if (id === "transactions" && canWrite) loadPaymentSettings().catch((error) => showToast(error.message, "error"));
   if (id === "transactions" && panelMode === "admin") loadLedger().catch((error) => showToast(error.message, "error"));
   if (id === "payments" && panelMode === "team") {
-    loadPaymentGuide().catch(() => {});
+    loadPaymentGuide().catch((error) => showToast(error.message, "error"));
     loadTeamPaymentWizard().catch((error) => showToast(error.message, "error"));
   }
   if (id === "sms" && panelMode === "admin") {
@@ -2373,16 +2373,36 @@ const openChargeModal = async ({ teamId, teamName, fiscalYear, monthIndex, month
   });
 };
 
-const openPortalCredentialsModal = ({ username, password }) => {
+const openPortalCredentialsModal = ({ username, password, password_set: passwordSet, message }) => {
   const modal = ensureModal();
   const form = modal.querySelector("#crudForm");
   modal.querySelector("#crudModalTitle").textContent = "اطلاعات ورود نهاد";
+  const passwordBlock = password
+    ? `<label><span>رمز عبور</span><strong class="ltr-value" dir="ltr">${escapeHtml(password)}</strong></label>`
+    : `<p class="hint warning-text">${escapeHtml(message || "رمز عبور در سیستم ذخیره نمی‌شود. برای دریافت رمز جدید از «بازنشانی رمز» استفاده کنید.")}</p>`;
   form.innerHTML = `
     <div class="portal-creds">
       <label><span>نام کاربری</span><strong class="ltr-value" dir="ltr">${escapeHtml(username || "—")}</strong></label>
-      <label><span>رمز عبور</span><strong class="ltr-value" dir="ltr">${escapeHtml(password || "—")}</strong></label>
+      ${passwordBlock}
+      ${passwordSet === false ? `<p class="hint">حساب ورود هنوز ساخته نشده یا رمز تنظیم نشده است.</p>` : ""}
     </div>
     <p class="hint warning-text">این اطلاعات محرمانه است — فقط در اختیار مسئول نهاد قرار دهید.</p>
+    <div class="modal-actions"><button class="button ghost" type="button" data-close-modal>بستن</button></div>`;
+  form.querySelector("[data-close-modal]").addEventListener("click", closeModal);
+  modal.hidden = false;
+  trapFocus(modal);
+};
+
+const openPortalPasswordResultModal = ({ username, password }) => {
+  const modal = ensureModal();
+  const form = modal.querySelector("#crudForm");
+  modal.querySelector("#crudModalTitle").textContent = "رمز جدید پنل نهاد";
+  form.innerHTML = `
+    <div class="portal-creds">
+      <label><span>نام کاربری</span><strong class="ltr-value" dir="ltr">${escapeHtml(username || "—")}</strong></label>
+      <label><span>رمز عبور جدید</span><strong class="ltr-value" dir="ltr">${escapeHtml(password || "—")}</strong></label>
+    </div>
+    <p class="hint warning-text">این رمز فقط یک‌بار نمایش داده می‌شود. آن را یادداشت کنید و به مسئول نهاد بدهید.</p>
     <div class="modal-actions"><button class="button ghost" type="button" data-close-modal>بستن</button></div>`;
   form.querySelector("[data-close-modal]").addEventListener("click", closeModal);
   modal.hidden = false;
@@ -2560,6 +2580,44 @@ const ltrFields = new Set([
   "account_number", "card_number", "sheba", "payment_reference", "entity_code", "member_code",
 ]);
 
+const jalaliDateFieldNames = new Set([
+  "joined_at", "contract_start", "contract_end", "tx_date", "assigned_from", "assigned_until",
+  "submitted_at", "reviewed_at", "effective_from", "announced_at", "created_at", "updated_at",
+  "sent_at",
+]);
+
+const isJalaliDateField = (name, meta) => {
+  if (meta?.type === "date") return true;
+  if (jalaliDateFieldNames.has(name)) return true;
+  return /(?:^|_)(?:date|at)$/.test(name) || name.endsWith("_from") || name.endsWith("_until");
+};
+
+const isValidJalaliDate = (value) => /^\d{4}\/\d{2}\/\d{2}$/.test(String(value || "").trim());
+
+const isValidIranPhone = (value) => /^09\d{9}$/.test(String(value || "").trim());
+
+const isValidNationalId = (value) => /^\d{10}$/.test(String(value || "").trim());
+
+const validateCrudForm = (form, definition) => {
+  const payload = Object.fromEntries(new FormData(form).entries());
+  for (const [name, meta] of Object.entries(definition.fields || {})) {
+    const value = String(payload[name] ?? "").trim();
+    if (meta.required && value === "" && meta.type !== "hidden") {
+      throw new Error(`${meta.label || name} الزامی است.`);
+    }
+    if (value === "") continue;
+    if (isJalaliDateField(name, meta) && !isValidJalaliDate(value)) {
+      throw new Error(`${meta.label || name} باید به فرمت 1404/01/01 باشد.`);
+    }
+    if (name === "phone" && !isValidIranPhone(value)) {
+      throw new Error("شماره موبایل باید ۱۱ رقم و با 09 شروع شود.");
+    }
+    if (name === "national_id" && !isValidNationalId(value)) {
+      throw new Error("کد ملی باید ۱۰ رقم باشد.");
+    }
+  }
+};
+
 const fieldInput = (name, meta, value) => {
   const type = meta.type || "text";
   const required = meta.required ? "required" : "";
@@ -2593,7 +2651,14 @@ const fieldInput = (name, meta, value) => {
   if (type === "password") {
     return `<input name="${escapeHtml(name)}" type="password" value="" ${required} autocomplete="new-password" placeholder="برای تغییر وارد کنید" ${ltr} />`;
   }
-  return `<input name="${escapeHtml(name)}" type="text" value="${escapeHtml(safeValue)}" ${required} ${placeholder} ${ltr} />`;
+  const patternAttr = name === "phone"
+    ? 'pattern="09[0-9]{9}" inputmode="numeric" title="مثلاً 09121234567"'
+    : name === "national_id"
+      ? 'pattern="\\d{10}" inputmode="numeric" title="۱۰ رقم"'
+      : isJalaliDateField(name, meta)
+        ? 'pattern="\\d{4}/\\d{2}/\\d{2}" title="مثلاً 1404/01/01"'
+        : "";
+  return `<input name="${escapeHtml(name)}" type="text" value="${escapeHtml(safeValue)}" ${required} ${placeholder} ${ltr} ${patternAttr} />`;
 };
 
 const portalPasswordSectionHtml = (title = "رمز ورود پنل نهاد") => `
@@ -2719,6 +2784,7 @@ const openRecordModal = ({ resource, definition, record = null, onSaved, title =
     const submitButton = form.querySelector('button[type="submit"]');
     submitButton.disabled = true;
     try {
+      validateCrudForm(form, definition);
       const payload = Object.fromEntries(new FormData(form).entries());
       if (isEdit) payload.id = payload.id || record.id;
       if (portalPasswordBlock) Object.assign(payload, collectPortalPasswordPayload(form));
@@ -2865,7 +2931,11 @@ const openMemberRequestModal = (requestType, member) => {
 
 const workflowApprove = async (resource, id, row = {}, workflowType = "") => {
   if (resource === "pending-members" || workflowType === "member-approve") {
-    await postJson(`api.php?resource=${encodeURIComponent(resource)}&action=approve`, { id });
+    let accessCode = "";
+    if (Number(row.wants_access) === 1) {
+      accessCode = await askAccessCode(row.full_name || "عضو");
+    }
+    await postJson(`api.php?resource=${encodeURIComponent(resource)}&action=approve`, { id, access_code: accessCode });
     return;
   }
 
@@ -2900,6 +2970,66 @@ const workflowApprove = async (resource, id, row = {}, workflowType = "") => {
 const workflowReject = async (resource, id, reason = "") => {
   await postJson(`api.php?resource=${encodeURIComponent(resource)}&action=reject`, { id, reason });
 };
+
+const askAccessCode = (memberName = "عضو") => new Promise((resolve, reject) => {
+  let modal = document.getElementById("accessCodeModal");
+  if (!modal) {
+    document.body.insertAdjacentHTML("beforeend", `
+      <div id="accessCodeModal" class="modal-backdrop" hidden>
+        <div class="modal-card" role="dialog" aria-labelledby="accessCodeModalTitle">
+          <div class="modal-head">
+            <h2 id="accessCodeModalTitle">ثبت کد تردد</h2>
+            <button class="modal-close" type="button" data-access-cancel aria-label="بستن">×</button>
+          </div>
+          <p class="hint" id="accessCodeModalHint"></p>
+          <label class="wide"><span>کد تردد</span>
+            <input id="accessCodeInput" type="text" dir="ltr" class="ltr-input" required placeholder="کد دسترسی عضو" />
+          </label>
+          <div class="form-actions">
+            <button type="button" class="button ghost" data-access-cancel>انصراف</button>
+            <button type="button" class="button" data-access-confirm>تأیید عضو</button>
+          </div>
+        </div>
+      </div>`);
+    modal = document.getElementById("accessCodeModal");
+    modal.addEventListener("click", (event) => {
+      if (event.target === modal) {
+        modal.hidden = true;
+        reject(new Error("cancelled"));
+      }
+    });
+  }
+
+  modal.querySelector("#accessCodeModalHint").textContent = `برای «${memberName}» کد تردد را وارد کنید.`;
+  const input = modal.querySelector("#accessCodeInput");
+  input.value = "";
+  modal.hidden = false;
+  input.focus();
+  trapFocus(modal);
+
+  const cleanup = () => {
+    modal.hidden = true;
+    releaseFocusTrap(modal);
+    modal.querySelector("[data-access-confirm]").onclick = null;
+    modal.querySelectorAll("[data-access-cancel]").forEach((btn) => { btn.onclick = null; });
+  };
+
+  modal.querySelector("[data-access-confirm]").onclick = () => {
+    const code = input.value.trim();
+    if (!code) {
+      showToast("کد تردد الزامی است.", "error");
+      return;
+    }
+    cleanup();
+    resolve(code);
+  };
+  modal.querySelectorAll("[data-access-cancel]").forEach((btn) => {
+    btn.onclick = () => {
+      cleanup();
+      reject(new Error("cancelled"));
+    };
+  });
+});
 
 const askRejectReason = () => new Promise((resolve, reject) => {
   let modal = document.getElementById("rejectModal");
@@ -3666,7 +3796,10 @@ class DataTable extends HTMLElement {
         const team = this.rows.find((row) => Number(row.id) === id);
         const result = await openResetPortalModal(id, team?.name || "");
         await this.load();
-        showToast(`رمز جدید: ${result.credentials?.password || "—"}`, "success");
+        if (result.credentials?.password) {
+          openPortalPasswordResultModal(result.credentials);
+        }
+        showToast("رمز پنل نهاد بازنشانی شد.", "success");
       } catch (error) {
         if (error.message !== "cancelled") showToast(error.message, "error");
       }

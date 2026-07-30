@@ -22,13 +22,21 @@ if (!$configured) {
         $pdo = require_database();
         $backup = new DatabaseBackup($pdo);
 
-        if (($_GET['action'] ?? '') === 'download') {
+        if (($_POST['action'] ?? '') === 'download') {
+            $csrfError = require_csrf_html();
+            if ($csrfError !== null) {
+                throw new RuntimeException($csrfError);
+            }
             $filename = $backup->suggestedFilename();
             header('Content-Type: application/json; charset=utf-8');
             header('Content-Disposition: attachment; filename="' . $filename . '"');
             header('Cache-Control: no-store');
             echo $backup->exportJson();
             exit;
+        }
+
+        if (($_GET['action'] ?? '') === 'download') {
+            throw new RuntimeException('برای دانلود پشتیبان از دکمه دانلود در صفحه استفاده کنید.');
         }
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -124,8 +132,12 @@ if (!$configured) {
           <div class="install-actions">
             <h2>دانلود پشتیبان</h2>
             <p class="hint">فایل JSON خوانا است و می‌توانید آن را ویرایش یا در جای امن نگه دارید.</p>
-            <p class="hint warn">این فایل شامل رمزهای ورود نهادها و تنظیمات پیامک است؛ فقط در محل امن نگهداری کنید و از کانال‌های عمومی ارسال نکنید.</p>
-            <a class="button" href="backup.php?action=download">دانلود پشتیبان کامل</a>
+            <p class="hint warn">این فایل شامل هش رمزها و تنظیمات رمزنگاری‌شده پیامک است؛ فقط در محل امن نگهداری کنید و از کانال‌های عمومی ارسال نکنید.</p>
+            <form method="post" class="install-actions">
+              <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>" />
+              <input type="hidden" name="action" value="download" />
+              <button class="button" type="submit">دانلود پشتیبان کامل</button>
+            </form>
           </div>
 
           <form method="post" enctype="multipart/form-data" class="install-actions">

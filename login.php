@@ -31,7 +31,8 @@ if ($configured) {
                 if (Auth::attempt($pdo, $config, (string) ($_POST['username'] ?? ''), (string) ($_POST['password'] ?? ''))) {
                     redirect_to(Access::sanitizeNext($next));
                 }
-                $error = 'نام کاربری یا رمز عبور اشتباه است.';
+                $throttleMessage = Auth::throttleMessage((string) ($_POST['username'] ?? ''));
+                $error = $throttleMessage ?? 'نام کاربری یا رمز عبور اشتباه است.';
             }
         }
     } catch (Throwable $exception) {

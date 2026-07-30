@@ -1279,11 +1279,10 @@ final class Crud
                     throw new InvalidArgumentException('رمز عبور الزامی است.');
                 }
                 $data['password_hash'] = UserAccounts::hashPassword($plainPassword);
-                $data['password_plain'] = $plainPassword;
             } elseif ($plainPassword !== '') {
                 $data['password_hash'] = UserAccounts::hashPassword($plainPassword);
-                $data['password_plain'] = $plainPassword;
             }
+            unset($data['password_plain']);
             if (!isset($data['is_active'])) {
                 $data['is_active'] = 1;
             }

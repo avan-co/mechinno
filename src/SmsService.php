@@ -141,6 +141,10 @@ final class SmsService
             default => $payload,
         };
 
+        if ($section === 'line' && trim((string) ($updatePayload['sms_from_number'] ?? '')) === '') {
+            throw new InvalidArgumentException('شماره خط ارسال الزامی است.');
+        }
+
         $settings = $center->updateSms($updatePayload);
 
         $send = $center->smsSettingsForSend();

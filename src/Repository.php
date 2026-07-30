@@ -451,7 +451,7 @@ final class Repository
             'teams' => "SELECT t.id, t.entity_code, t.entity_type, t.name, t.leader, t.phone, t.joined_at,
                         t.contract_start, t.contract_end, t.is_active, t.warning, t.notes,
                         u.username AS portal_username,
-                        CASE WHEN u.password_plain IS NOT NULL AND u.password_plain <> '' THEN 1 ELSE 0 END AS portal_has_password,
+                        CASE WHEN u.password_hash IS NOT NULL AND u.password_hash <> '' THEN 1 ELSE 0 END AS portal_has_password,
                         (SELECT COUNT(*) FROM desks d WHERE d.team_id = t.id) AS desk_count,
                         (SELECT COALESCE(SUM(d.informal_seats), 0) FROM desks d WHERE d.team_id = t.id) AS informal_seats
                  FROM teams t
@@ -1046,7 +1046,7 @@ final class Repository
             throw new InvalidArgumentException('دسترسی مجاز نیست.');
         }
         $row = $this->preparedRow(
-            "SELECT u.username, u.password_plain FROM panel_users u
+            "SELECT u.username FROM panel_users u
              WHERE u.team_id = :team_id AND u.role = 'team' LIMIT 1",
             ['team_id' => $teamId]
         );
@@ -1056,7 +1056,8 @@ final class Repository
 
         return [
             'username' => (string) ($row['username'] ?? ''),
-            'password' => (string) ($row['password_plain'] ?? ''),
+            'password_set' => true,
+            'message' => 'رمز عبور در سیستم ذخیره نمی‌شود. برای دریافت رمز جدید از «بازنشانی رمز» استفاده کنید.',
         ];
     }
 

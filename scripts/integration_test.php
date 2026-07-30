@@ -143,7 +143,8 @@ $assert(($row['portal_username'] ?? '') === strtolower(preg_replace('/[^a-zA-Z0-
 $assert((int) ($row['portal_has_password'] ?? 0) === 1, 'entity: portal password set');
 
 // --- Auth: database login for entity ---
-$plainPassword = (string) $pdo->query("SELECT password_plain FROM panel_users WHERE team_id = {$teamId}")->fetchColumn();
+$credentials = EntityAccounts::resetPassword($pdo, $teamId);
+$plainPassword = (string) ($credentials['password'] ?? '');
 $_SESSION = [];
 $assert(Auth::attempt($pdo, ['auth' => ['enabled' => true]], (string) $row['portal_username'], $plainPassword), 'auth: entity login works');
 $assert(Access::isTeam() && Access::scopedTeamId() === $teamId, 'auth: entity session scoped to team');

@@ -61,6 +61,9 @@ final class Auth
     public static function attempt(PDO $pdo, array $config, string $username, string $password): bool
     {
         if (!self::isEnabled($config)) {
+            if (!(bool) ($config['debug'] ?? false)) {
+                return false;
+            }
             self::establishSession('disabled', Access::ROLE_ADMIN_EDITOR, null, 0);
             return true;
         }
@@ -70,11 +73,34 @@ final class Auth
             return false;
         }
 
+        if (LoginThrottle::isBlocked($username)) {
+            return false;
+        }
+
         if (self::attemptDatabaseUser($pdo, $username, $password)) {
+            LoginThrottle::clear($username);
             return true;
         }
 
-        return self::attemptConfigUser($config, $username, $password);
+        if (self::attemptConfigUser($config, $username, $password)) {
+            LoginThrottle::clear($username);
+            return true;
+        }
+
+        LoginThrottle::recordFailure($username);
+
+        return false;
+    }
+
+    public static function throttleMessage(string $username): ?string
+    {
+        if (!LoginThrottle::isBlocked($username)) {
+            return null;
+        }
+        $seconds = LoginThrottle::retryAfterSeconds($username);
+        $minutes = max(1, (int) ceil($seconds / 60));
+
+        return "تعداد تلاش‌های ناموفق زیاد است. لطفاً {$minutes} دقیقه دیگر دوباره تلاش کنید.";
     }
 
     public static function check(): bool

@@ -161,7 +161,7 @@ const scheduleDeliveryCheck = (batchUid, logIds = []) => {
       postJson("api.php?resource=sms-check-deliveries", {
         batch_uid: batchUid || "",
         log_ids: logIds,
-      }).then(() => loadSmsHistory()).catch(() => {});
+      }).then(() => loadSmsHistory()).catch((error) => showToast(error.message, "error"));
     }, delay);
   });
 };

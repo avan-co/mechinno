@@ -9,9 +9,18 @@ $result = null;
 $error = null;
 $hasExistingData = false;
 $action = '';
+$installDisabled = false;
+
+if ($configured) {
+    $installConfig = require __DIR__ . '/config.php';
+    $installDisabled = ($installConfig['install_enabled'] ?? true) === false;
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $configured) {
     try {
+        if ($installDisabled) {
+            throw new RuntimeException('صفحه نصب در تنظیمات غیرفعال شده است. برای فعال‌سازی موقت، install_enabled را در config.php روی true بگذارید.');
+        }
         require_auth();
         if (!Access::canWrite()) {
             throw new RuntimeException('فقط مدیر ویرایشگر می‌تواند پنل را بازنشانی کند.');
@@ -39,6 +48,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $configured) {
 } elseif ($configured) {
     require_auth();
     if (!Access::canWrite()) {
+        redirect_to('index.php');
+    }
+    if ($installDisabled) {
         redirect_to('index.php');
     }
     try {

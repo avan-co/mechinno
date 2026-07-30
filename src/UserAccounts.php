@@ -86,20 +86,13 @@ final class UserAccounts
         if ($row !== false) {
             $storedHash = (string) ($row['password_hash'] ?? '');
             if ($passwordHash !== null && !hash_equals($storedHash, $passwordHash)) {
-                $update = $pdo->prepare(
-                    'UPDATE panel_users SET password_hash = :password_hash, full_name = :full_name'
-                    . ($passwordPlain !== null && $passwordPlain !== '' ? ', password_plain = :password_plain' : '')
-                    . ' WHERE id = :id'
-                );
-                $params = [
+                $pdo->prepare(
+                    'UPDATE panel_users SET password_hash = :password_hash, password_plain = NULL, full_name = :full_name WHERE id = :id'
+                )->execute([
                     'password_hash' => $passwordHash,
                     'full_name' => $fullName,
                     'id' => (int) $row['id'],
-                ];
-                if ($passwordPlain !== null && $passwordPlain !== '') {
-                    $params['password_plain'] = $passwordPlain;
-                }
-                $update->execute($params);
+                ]);
             }
 
             return;
@@ -111,11 +104,10 @@ final class UserAccounts
 
         $pdo->prepare(
             'INSERT INTO panel_users (username, password_hash, password_plain, role, team_id, full_name, is_active)
-             VALUES (:username, :password_hash, :password_plain, :role, :team_id, :full_name, 1)'
+             VALUES (:username, :password_hash, NULL, :role, :team_id, :full_name, 1)'
         )->execute([
             'username' => $username,
             'password_hash' => $passwordHash,
-            'password_plain' => $passwordPlain,
             'role' => $role,
             'team_id' => $teamId,
             'full_name' => $fullName,

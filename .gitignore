@@ -2,5 +2,6 @@ config.php
 data/*.sqlite3
 data/*.db
 data/*.log
+data/login_throttle.json
 .DS_Store
 .env

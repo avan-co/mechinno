@@ -103,7 +103,7 @@ final class CenterSettings
 
         return [
             'sms_username' => (string) ($row['sms_username'] ?? ''),
-            'sms_password_set' => trim((string) ($row['sms_password'] ?? '')) !== '',
+            'sms_password_set' => $this->smsPasswordPlain($row) !== '',
             'sms_from_number' => (string) ($row['sms_from_number'] ?? ''),
             'sms_daily_limit' => (int) ($row['sms_daily_limit'] ?? 500),
             'sms_unit_cost' => (int) ($row['sms_unit_cost'] ?? 0),
@@ -132,7 +132,7 @@ final class CenterSettings
 
         return [
             'sms_username' => (string) ($row['sms_username'] ?? ''),
-            'sms_password' => (string) ($row['sms_password'] ?? ''),
+            'sms_password' => $this->smsPasswordPlain($row),
             'sms_from_number' => (string) ($row['sms_from_number'] ?? ''),
             'sms_daily_limit' => (int) ($row['sms_daily_limit'] ?? 500),
             'sms_unit_cost' => (int) ($row['sms_unit_cost'] ?? 0),
@@ -161,6 +161,8 @@ final class CenterSettings
             : '';
         if ($password === '') {
             $password = (string) ($current['sms_password'] ?? '');
+        } elseif (app_configured()) {
+            $password = SecretVault::encrypt($password, app_config());
         }
 
         $fromNumber = array_key_exists('sms_from_number', $payload)
@@ -281,6 +283,22 @@ final class CenterSettings
         return is_array($decoded)
             ? array_values(array_filter(array_map(static fn ($item): string => trim((string) $item), $decoded)))
             : [];
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     */
+    private function smsPasswordPlain(array $row): string
+    {
+        $stored = (string) ($row['sms_password'] ?? '');
+        if ($stored === '') {
+            return '';
+        }
+        if (!app_configured()) {
+            return $stored;
+        }
+
+        return SecretVault::decrypt($stored, app_config());
     }
 
     private function ensureRow(): void

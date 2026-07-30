@@ -29,13 +29,12 @@ final class EntityAccounts
             $username = self::ensureUniqueUsername($pdo, $username, (int) $row['id']);
             $pdo->prepare(
                 'UPDATE panel_users
-                 SET username = :username, password_hash = :password_hash, password_plain = :password_plain,
+                 SET username = :username, password_hash = :password_hash, password_plain = NULL,
                      full_name = :full_name, is_active = 1
                  WHERE id = :id'
             )->execute([
                 'username' => $username,
                 'password_hash' => $passwordHash,
-                'password_plain' => $plainPassword,
                 'full_name' => $fullName,
                 'id' => (int) $row['id'],
             ]);
@@ -46,11 +45,10 @@ final class EntityAccounts
         $username = self::ensureUniqueUsername($pdo, $username, 0);
         $pdo->prepare(
             'INSERT INTO panel_users (username, password_hash, password_plain, role, team_id, full_name, is_active)
-             VALUES (:username, :password_hash, :password_plain, :role, :team_id, :full_name, 1)'
+             VALUES (:username, :password_hash, NULL, :role, :team_id, :full_name, 1)'
         )->execute([
             'username' => $username,
             'password_hash' => $passwordHash,
-            'password_plain' => $plainPassword,
             'role' => Access::ROLE_TEAM,
             'team_id' => $teamId,
             'full_name' => $fullName,

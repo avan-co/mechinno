@@ -4,8 +4,16 @@ declare(strict_types=1);
 
 final class Schema
 {
+    private const VERSION = 16;
+
     public static function migrate(PDO $pdo): void
     {
+        if (self::storedVersion($pdo) >= self::VERSION) {
+            self::ensureColumns($pdo);
+            self::reconcileDeskAssignments($pdo);
+            return;
+        }
+
         if ($pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite') {
             self::migrateSqlite($pdo);
         } else {
@@ -15,12 +23,55 @@ final class Schema
         self::ensureWorkflowTables($pdo);
         self::ensureMemberRequestsTable($pdo);
         self::ensureTeamContractsTable($pdo);
+        self::ensureColumns($pdo);
         self::dropLegacyColumns($pdo);
         self::dropUnusedTables($pdo);
         self::ensureDataIntegrity($pdo);
         self::seedDesks($pdo);
         self::seedDeskAssignments($pdo);
         self::reconcileDeskAssignments($pdo);
+        self::applySecurityHardening($pdo);
+        self::setVersion($pdo, self::VERSION);
+    }
+
+    private static function storedVersion(PDO $pdo): int
+    {
+        if (!self::tableExists($pdo, 'center_settings')
+            || !self::columnExists($pdo, 'center_settings', 'schema_version')) {
+            return 0;
+        }
+
+        return (int) $pdo->query('SELECT schema_version FROM center_settings WHERE id = 1')->fetchColumn();
+    }
+
+    private static function setVersion(PDO $pdo, int $version): void
+    {
+        if (!self::columnExists($pdo, 'center_settings', 'schema_version')) {
+            return;
+        }
+
+        $pdo->prepare('UPDATE center_settings SET schema_version = :version WHERE id = 1')
+            ->execute(['version' => $version]);
+    }
+
+    private static function applySecurityHardening(PDO $pdo): void
+    {
+        if (self::tableExists($pdo, 'panel_users')) {
+            $pdo->exec("UPDATE panel_users SET password_plain = NULL WHERE password_plain IS NOT NULL AND password_plain <> ''");
+        }
+
+        if (!self::tableExists($pdo, 'center_settings')
+            || !self::columnExists($pdo, 'center_settings', 'sms_password')
+            || !app_configured()) {
+            return;
+        }
+
+        $config = app_config();
+        $stored = (string) $pdo->query('SELECT sms_password FROM center_settings WHERE id = 1')->fetchColumn();
+        if ($stored !== '' && !SecretVault::isEncrypted($stored)) {
+            $pdo->prepare('UPDATE center_settings SET sms_password = :password WHERE id = 1')
+                ->execute(['password' => SecretVault::encrypt($stored, $config)]);
+        }
     }
 
     /**
@@ -300,6 +351,7 @@ final class Schema
                 'is_leader' => 'TINYINT NOT NULL DEFAULT 0',
             ],
             'center_settings' => [
+                'schema_version' => 'INT NOT NULL DEFAULT 0',
                 'sms_username' => 'VARCHAR(128) NULL',
                 'sms_password' => 'VARCHAR(255) NULL',
                 'sms_from_number' => 'VARCHAR(32) NULL',

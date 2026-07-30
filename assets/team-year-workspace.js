@@ -405,7 +405,16 @@
     form.querySelector("[data-close-modal]").addEventListener("click", S().closeModal);
     form.querySelector("#bulkImportSubmit").addEventListener("click", async () => {
       const fiscalYear = form.fiscal_year.value.trim();
-      const lines = form.csv.value.trim().split("\n").filter(Boolean);
+      if (!/^\d{4}$/.test(fiscalYear)) {
+        S().showToast("سال مالی باید ۴ رقم باشد (مثلاً 1404).", "error");
+        return;
+      }
+      const csv = form.csv.value.trim();
+      if (!csv) {
+        S().showToast("داده CSV را وارد کنید.", "error");
+        return;
+      }
+      const lines = csv.split("\n").filter(Boolean);
       const rows = lines.map((line) => {
         const parts = line.split(",").map((part) => part.trim());
         const [teamName, contractStart, contractEnd, formalAmount, ...deskParts] = parts;
@@ -416,7 +425,11 @@
           formal_contract_amount: formalAmount || "0",
           desk_numbers: deskParts.join(","),
         };
-      });
+      }).filter((row) => row.team_name);
+      if (!rows.length) {
+        S().showToast("حداقل یک ردیف معتبر با نام نهاد وارد کنید.", "error");
+        return;
+      }
       const button = form.querySelector("#bulkImportSubmit");
       button.disabled = true;
       try {

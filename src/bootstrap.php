@@ -5,6 +5,8 @@ declare(strict_types=1);
 require_once __DIR__ . '/Database.php';
 require_once __DIR__ . '/Sql.php';
 require_once __DIR__ . '/Identifier.php';
+require_once __DIR__ . '/SecretVault.php';
+require_once __DIR__ . '/LoginThrottle.php';
 require_once __DIR__ . '/Auth.php';
 require_once __DIR__ . '/Access.php';
 require_once __DIR__ . '/UserAccounts.php';

@@ -40,10 +40,16 @@ final class DatabaseBackup
         foreach ($this->orderedTables() as $table) {
             $rows = $this->pdo->query('SELECT * FROM ' . Sql::quoteIdentifier($table))->fetchAll(PDO::FETCH_ASSOC);
             $tables[$table] = array_map(
-                static fn (array $row): array => array_map(
-                    static fn (mixed $value): mixed => is_string($value) ? $value : $value,
-                    $row
-                ),
+                function (array $row) use ($table): array {
+                    if ($table === 'panel_users') {
+                        unset($row['password_plain']);
+                    }
+
+                    return array_map(
+                        static fn (mixed $value): mixed => is_string($value) ? $value : $value,
+                        $row
+                    );
+                },
                 $rows
             );
             $counts[$table] = count($rows);
