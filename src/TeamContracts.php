@@ -209,6 +209,9 @@ final class TeamContracts
 
         $countStatement = $this->pdo->prepare('SELECT COUNT(*) FROM team_contracts WHERE team_id = :team_id');
         $teams = $this->pdo->query('SELECT id, contract_start, contract_end FROM teams')->fetchAll();
+        if ($teams === []) {
+            return;
+        }
         foreach ($teams as $team) {
             $teamId = (int) $team['id'];
             $countStatement->execute(['team_id' => $teamId]);

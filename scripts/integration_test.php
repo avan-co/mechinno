@@ -483,17 +483,32 @@ $crud->create('lockers', ['locker_number' => '10', 'team_id' => (string) $teamId
 $lockers = $repo->paginatedResource('lockers', 1, 25);
 $assert(count($lockers['rows']) >= 1, 'crud: locker created');
 
+$directTarget = $payable[count($payable) - 1];
 $tx = $crud->create('transactions', [
     'tx_date' => '1405/01/15',
     'description' => 'واریز تست',
-    'amount' => '600',
+    'amount' => '1',
     'category' => 'واریز تیم',
     'team_id' => (string) $teamId,
-    'fiscal_year' => '1405',
-    'month_index' => '1',
+    'fiscal_year' => (string) $directTarget['fiscal_year'],
+    'month_index' => (string) $directTarget['month_index'],
     'confirmed' => '1',
+    'payment_plan' => [[
+        'fiscal_year' => $directTarget['fiscal_year'],
+        'month_index' => $directTarget['month_index'],
+        'amount' => $directTarget['amount_remaining'],
+    ]],
 ]);
-$assert((int) ($tx['amount'] ?? 0) === 600, 'crud: team deposit transaction');
+$assert((int) ($tx['amount'] ?? 0) === (int) $directTarget['amount_remaining'], 'crud: direct deposit uses selected month amount');
+$storedDirectPlan = json_decode((string) ($tx['payment_plan'] ?? ''), true);
+$assert((int) ($storedDirectPlan[0]['month_index'] ?? 0) === (int) $directTarget['month_index'], 'crud: direct deposit preserves selected month');
+$payableAfterDirect = $repo->teamPayableMonths($teamId);
+$directTargetStillPayable = array_filter(
+    $payableAfterDirect,
+    static fn (array $item): bool => (string) ($item['fiscal_year'] ?? '') === (string) $directTarget['fiscal_year']
+        && (int) ($item['month_index'] ?? 0) === (int) $directTarget['month_index']
+);
+$assert($directTargetStillPayable === [], 'payments: direct deposit is allocated to selected month');
 
 $workflow = new Workflow($pdo);
 $approvedMember = $workflow->approveMember((int) $member['id']);
