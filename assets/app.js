@@ -993,6 +993,7 @@ const activateSection = (id, options = {}) => {
   }
   if (id === "members" && panelMode === "admin") {
     initMemberFilters().catch(() => {});
+    reloadSectionTables(id);
   } else {
     reloadSectionTables(id);
   }
@@ -1043,8 +1044,10 @@ document.getElementById("menuToggle")?.addEventListener("click", openDrawer);
 document.getElementById("bottomNavMenu")?.addEventListener("click", openDrawer);
 document.getElementById("sidebarBackdrop")?.addEventListener("click", closeDrawer);
 
-document.querySelectorAll(".start-step[data-go], .text-link[data-go], .button[data-go]").forEach((item) => {
-  item.addEventListener("click", () => activateSection(item.dataset.go));
+document.addEventListener("click", (event) => {
+  const item = event.target.closest(".start-step[data-go], .text-link[data-go], .button[data-go]");
+  if (!item || !item.dataset.go) return;
+  activateSection(item.dataset.go);
 });
 
 document.getElementById("themeToggle")?.addEventListener("click", () => {
@@ -1821,6 +1824,11 @@ const openDeskHistoryAssignModal = async (prefill = {}) => {
           const result = await postJson("api.php?resource=desk-assignments&action=update", payload);
           debugLog("desk-assign:update:ok", result?.record);
         } else {
+          const validDesks = state.desks.filter((deskRow) => deskRow.desk_id);
+          if (!validDesks.length) {
+            showToast("حداقل یک میز انتخاب کنید.", "error");
+            return;
+          }
           for (let index = 0; index < state.desks.length; index += 1) {
             const deskRow = state.desks[index];
             if (!deskRow.desk_id) continue;
@@ -3500,9 +3508,13 @@ class DataTable extends HTMLElement {
           ? `<button class="mini-button" type="button" data-action="edit" data-id="${escapeHtml(row.id)}">ویرایش</button>` : "";
         const deleteBtns = ((editable && canWrite) || rowAllowsTeamDelete(this.resource, row))
           ? `<button class="mini-button danger" type="button" data-action="delete" data-id="${escapeHtml(row.id)}">حذف</button>` : "";
+        const memberTeamActions = panelMode === "team" && this.resource === "members" && row.approval_status === "approved"
+          ? `<button class="mini-button" type="button" data-action="request-member-edit" data-id="${escapeHtml(row.id)}">درخواست ویرایش</button>
+             <button class="mini-button danger" type="button" data-action="request-member-delete" data-id="${escapeHtml(row.id)}">درخواست حذف</button>`
+          : "";
         const rowEditBtns = `${editBtns}${deleteBtns}`;
         return `<article class="mobile-card ${highlighted ? "highlighted" : ""}">${fields}
-          <div class="row-actions">${profileBtn}${workflowBtns}${rowEditBtns}</div></article>`;
+          <div class="row-actions">${profileBtn}${workflowBtns}${memberTeamActions}${rowEditBtns}</div></article>`;
       }).join("")
       : `<div class="empty">رکوردی یافت نشد.</div>`;
     return true;
@@ -3686,6 +3698,8 @@ class DataTable extends HTMLElement {
           fiscal_year: record.fiscal_year,
           assigned_from_month: validAssignmentMonth(record.assigned_from_month || monthIndexFromDate(record.assigned_from), "1"),
           assigned_until_month: validAssignmentMonth(record.assigned_until_month || monthIndexFromDate(record.assigned_until), "12"),
+          charge_exempt: record.charge_exempt,
+          rent_exempt: record.rent_exempt,
           notes: record.notes,
         }).catch((error) => showToast(error.message, "error"));
         return;

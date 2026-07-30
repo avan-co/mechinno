@@ -986,6 +986,197 @@ $indexExists = (int) $pdo->query(
 $assert($indexExists === 1, 'schema: unique charge index exists');
 $crud->delete('teams', $uniqTeamId);
 
+// --- Full audit regressions ---
+$handoverA = $crud->create('teams', [
+    'entity_type' => 'team',
+    'name' => 'نهاد واگذاری اول',
+    'leader' => 'الف',
+    'phone' => '09120001111',
+    'joined_at' => '1405/01/01',
+]);
+$handoverB = $crud->create('teams', [
+    'entity_type' => 'team',
+    'name' => 'نهاد واگذاری دوم',
+    'leader' => 'ب',
+    'phone' => '09120002222',
+    'joined_at' => '1405/01/01',
+]);
+$handoverAId = (int) $handoverA['id'];
+$handoverBId = (int) $handoverB['id'];
+$crud->create('team_contracts', [
+    'team_id' => (string) $handoverAId,
+    'fiscal_year' => '1405',
+    'contract_start' => '1405/01/01',
+    'contract_end' => JalaliDate::monthEnd('1405', 6),
+    'formal_contract_amount' => '1000000',
+]);
+$crud->create('team_contracts', [
+    'team_id' => (string) $handoverBId,
+    'fiscal_year' => '1405',
+    'contract_start' => '1405/07/01',
+    'contract_end' => JalaliDate::monthEnd('1405', 12),
+    'formal_contract_amount' => '2000000',
+]);
+$firstHalf = $crud->create('desk_assignments', [
+    'team_id' => (string) $handoverAId,
+    'desk_id' => '10',
+    'usage_type' => 'formal',
+    'fiscal_year' => '1405',
+    'assigned_from_month' => '1',
+    'assigned_until_month' => '6',
+    'notes' => 'نیمه اول',
+]);
+$secondHalf = $crud->create('desk_assignments', [
+    'team_id' => (string) $handoverBId,
+    'desk_id' => '10',
+    'usage_type' => 'formal',
+    'fiscal_year' => '1405',
+    'assigned_from_month' => '7',
+    'assigned_until_month' => '12',
+    'notes' => 'نیمه دوم',
+]);
+$handoverCount = (int) $pdo->query('SELECT COUNT(*) FROM desk_assignments WHERE desk_id = 10')->fetchColumn();
+$assert($handoverCount === 2, 'audit: mid-year desk handover keeps both non-overlapping assignments');
+$assert((int) ($firstHalf['id'] ?? 0) > 0 && (int) ($secondHalf['id'] ?? 0) > 0, 'audit: both handover rows created');
+Schema::reconcileDeskAssignments($pdo);
+$handoverCountAfterNormalize = (int) $pdo->query('SELECT COUNT(*) FROM desk_assignments WHERE desk_id = 10')->fetchColumn();
+$assert($handoverCountAfterNormalize === 2, 'audit: normalize preserves mid-year handovers');
+
+$zeroCharge = $crud->create('charges', [
+    'team_id' => (string) $handoverAId,
+    'fiscal_year' => '1405',
+    'month_index' => '1',
+    'charge_amount' => '500',
+    'rent_amount' => '200',
+    'amount' => '0',
+    'note' => 'معاف دستی',
+]);
+$matrixZero = $repo->chargesMatrix('1405');
+$zeroDue = -1;
+foreach ($matrixZero['rows'] as $matrixRow) {
+    if ((int) ($matrixRow['team']['id'] ?? 0) !== $handoverAId) {
+        continue;
+    }
+    foreach ($matrixRow['cells'] ?? [] as $cell) {
+        if ((int) ($cell['month_index'] ?? 0) === 1) {
+            $zeroDue = (int) ($cell['amount_due'] ?? -1);
+            break 2;
+        }
+    }
+}
+$assert($zeroDue === 0, 'audit: explicit zero amount is respected as due amount');
+unset($zeroCharge);
+
+$searchSqlOk = true;
+try {
+    $repo->paginatedResource('desks', 1, 10, ['q' => '10']);
+    $repo->paginatedResource('lockers', 1, 10, ['q' => '1']);
+} catch (Throwable $e) {
+    $searchSqlOk = false;
+}
+$assert($searchSqlOk, 'audit: desks/lockers search uses portable CAST/CONCAT');
+
+$teamsEnriched = $repo->paginatedResource('teams', 1, 50);
+$hasYearStatus = false;
+foreach ($teamsEnriched['rows'] as $teamRow) {
+    if (array_key_exists('year_status', $teamRow)) {
+        $hasYearStatus = true;
+        break;
+    }
+}
+$assert($hasYearStatus, 'audit: teams rows include year_status virtual column');
+$deskAssignEnriched = $repo->paginatedResource('desk-assignments', 1, 50);
+$hasBillingExemptions = false;
+foreach ($deskAssignEnriched['rows'] as $assignRow) {
+    if (array_key_exists('billing_exemptions', $assignRow)) {
+        $hasBillingExemptions = true;
+        break;
+    }
+}
+$assert($hasBillingExemptions, 'audit: desk-assignments rows include billing_exemptions virtual column');
+
+$_SESSION = [
+    'mechinno_authenticated' => true,
+    'mechinno_role' => Access::ROLE_TEAM,
+    'mechinno_team_id' => $handoverAId,
+    'mechinno_user' => 'handover-a',
+    'mechinno_user_id' => 1,
+];
+$leaderMember = $crud->create('members', [
+    'full_name' => 'مسئول الف',
+    'phone' => '09120001111',
+    'national_id' => '1111111111',
+    'wants_access' => '1',
+]);
+$pdo->prepare('UPDATE members SET is_leader = 1, approval_status = \'approved\' WHERE id = :id')
+    ->execute(['id' => (int) $leaderMember['id']]);
+$leaderDeleteBlocked = false;
+try {
+    $crud->create('member_requests', [
+        'member_id' => (string) $leaderMember['id'],
+        'request_type' => 'delete',
+    ]);
+} catch (InvalidArgumentException $e) {
+    $leaderDeleteBlocked = true;
+}
+$assert($leaderDeleteBlocked, 'audit: team cannot request delete of leader');
+
+$nonLeader = $crud->create('members', [
+    'full_name' => 'عضو عادی',
+    'phone' => '09120003333',
+    'national_id' => '2222222222',
+    'wants_access' => '0',
+]);
+$pdo->prepare('UPDATE members SET approval_status = \'approved\' WHERE id = :id')
+    ->execute(['id' => (int) $nonLeader['id']]);
+$pendingReq = $crud->create('member_requests', [
+    'member_id' => (string) $nonLeader['id'],
+    'request_type' => 'update',
+    'full_name' => 'عضو عادی ۲',
+    'phone' => '09120003333',
+    'national_id' => '2222222222',
+    'wants_access' => '0',
+]);
+$teamUpdateBlocked = false;
+try {
+    $crud->update('member_requests', (int) $pendingReq['id'], [
+        'request_type' => 'delete',
+    ]);
+} catch (InvalidArgumentException $e) {
+    $teamUpdateBlocked = true;
+}
+$assert($teamUpdateBlocked, 'audit: team cannot mutate pending member_requests via update');
+$teamCount = $repo->paginatedResource('member-requests', 1, 25);
+$assert(($teamCount['total'] ?? 0) >= 1, 'audit: team member-requests pagination total is non-zero');
+$_SESSION['mechinno_role'] = Access::ROLE_ADMIN_EDITOR;
+unset($_SESSION['mechinno_team_id']);
+
+$backfill = new YearBackfill($pdo, $crud);
+$importResult = $backfill->import([
+    'fiscal_year' => '1404',
+    'recalculate' => false,
+    'rows' => [[
+        'team_id' => $handoverAId,
+        'contract_start' => '1404/01/01',
+        'contract_end' => JalaliDate::monthEnd('1404', 12),
+        'formal_contract_amount' => 500000,
+        'desks' => [[
+            'desk_number' => 11,
+            'usage_type' => 'formal',
+            'assigned_from' => '1404/01/01',
+            'assigned_until' => JalaliDate::monthEnd('1404', 12),
+        ]],
+    ]],
+]);
+$assert(($importResult['imported'] ?? 0) === 1, 'audit: bulk-year-import creates desk assignments with month fields');
+$importedDesk = (int) $pdo->query(
+    'SELECT COUNT(*) FROM desk_assignments WHERE desk_id = 11 AND team_id = ' . $handoverAId
+)->fetchColumn();
+$assert($importedDesk === 1, 'audit: imported desk assignment row exists');
+
+$crud->delete('teams', $handoverAId);
+$crud->delete('teams', $handoverBId);
+
 // --- Unused tables dropped ---
 foreach (['plans', 'team_rates', 'member_desks', 'import_runs'] as $table) {
     $exists = $pdo->query("SELECT name FROM sqlite_master WHERE type='table' AND name='{$table}'")->fetchColumn();

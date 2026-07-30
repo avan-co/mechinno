@@ -336,12 +336,11 @@ final class Repository
                     ['id' => $teamId]
                 ),
                 'locker-requests' => $this->preparedScalar('SELECT COUNT(*) FROM locker_requests WHERE team_id = :id', ['id' => $teamId]),
+                'member-requests' => $this->preparedScalar('SELECT COUNT(*) FROM member_requests WHERE team_id = :id', ['id' => $teamId]),
+                'team_contracts' => $this->preparedScalar('SELECT COUNT(*) FROM team_contracts WHERE team_id = :id', ['id' => $teamId]),
                 'desk-assignments' => $this->preparedScalar(
-                    'SELECT COUNT(*) FROM desk_assignments
-                     WHERE team_id = :id
-                       AND assigned_from <= :today
-                       AND (assigned_until IS NULL OR assigned_until = \'\' OR assigned_until >= :today)',
-                    ['id' => $teamId, 'today' => JalaliDate::todayParts()['formatted']]
+                    'SELECT COUNT(*) FROM desk_assignments WHERE team_id = :id',
+                    ['id' => $teamId]
                 ),
                 default => 0,
             };
@@ -1384,6 +1383,8 @@ final class Repository
             $row['has_contract_year'] = $contract !== null ? 1 : 0;
             $row['year_desk_count'] = $deskCount;
             $row['year_debt'] = $debt;
+            // Virtual column for frontend checklist renderer.
+            $row['year_status'] = 1;
 
             return $row;
         }, $rows);
@@ -1442,6 +1443,10 @@ final class Repository
             if (empty($row['fiscal_year'])) {
                 $row['fiscal_year'] = JalaliDate::fiscalYearFromDate((string) ($row['assigned_from'] ?? ''));
             }
+            $row['charge_exempt'] = (int) ($row['charge_exempt'] ?? 0);
+            $row['rent_exempt'] = (int) ($row['rent_exempt'] ?? 0);
+            // Virtual column for frontend exemption badges.
+            $row['billing_exemptions'] = 1;
 
             return $row;
         }, $rows);
@@ -1482,7 +1487,7 @@ final class Repository
         $year = JalaliDate::normalizeDigits(trim((string) ($filters['fiscal_year'] ?? '')));
         if ($year !== '') {
             $yearStart = $this->pdo->quote($year . '/01/01');
-            $yearEnd = $this->pdo->quote($year . '/12/29');
+            $yearEnd = $this->pdo->quote(JalaliDate::monthEnd($year, 12));
             $clauses[] = "da.assigned_from <= {$yearEnd}";
             $clauses[] = "(da.assigned_until IS NULL OR da.assigned_until = '' OR da.assigned_until >= {$yearStart})";
         }
@@ -1770,7 +1775,7 @@ final class Repository
         }
 
         $yearStart = $this->pdo->quote($year . '/01/01');
-        $yearEnd = $this->pdo->quote($year . '/12/29');
+        $yearEnd = $this->pdo->quote(JalaliDate::monthEnd($year, 12));
 
         return " WHERE da.assigned_from <= {$yearEnd}
                  AND (da.assigned_until IS NULL OR da.assigned_until = '' OR da.assigned_until >= {$yearStart})";
@@ -1792,8 +1797,8 @@ final class Repository
             'teams' => "t.name LIKE {$quoted} OR t.leader LIKE {$quoted} OR t.phone LIKE {$quoted} OR t.entity_code LIKE {$quoted} OR COALESCE(u.username, '') LIKE {$quoted}",
             'team_contracts' => "t.name LIKE {$quoted} OR COALESCE(tc.fiscal_year, '') LIKE {$quoted} OR COALESCE(tc.notes, '') LIKE {$quoted}",
             'members' => "m.full_name LIKE {$quoted} OR COALESCE(m.phone, '') LIKE {$quoted} OR COALESCE(m.national_id, '') LIKE {$quoted} OR COALESCE(m.member_code, '') LIKE {$quoted} OR COALESCE(t.name, '') LIKE {$quoted}",
-            'desks' => "CAST(d.number AS TEXT) LIKE {$quoted} OR COALESCE(t.name, '') LIKE {$quoted} OR COALESCE(d.notes, '') LIKE {$quoted}",
-            'lockers' => "CAST(l.locker_number AS TEXT) LIKE {$quoted} OR COALESCE(t.name, '') LIKE {$quoted} OR COALESCE(l.notes, '') LIKE {$quoted}",
+            'desks' => "CONCAT(d.number, '') LIKE {$quoted} OR COALESCE(t.name, '') LIKE {$quoted} OR COALESCE(d.notes, '') LIKE {$quoted}",
+            'lockers' => "CONCAT(l.locker_number, '') LIKE {$quoted} OR COALESCE(t.name, '') LIKE {$quoted} OR COALESCE(l.notes, '') LIKE {$quoted}",
             'charges' => "COALESCE(t.name, '') LIKE {$quoted} OR COALESCE(c.note, '') LIKE {$quoted} OR COALESCE(c.fiscal_year, '') LIKE {$quoted}",
             'transactions' => "COALESCE(t.description, '') LIKE {$quoted} OR COALESCE(t.notes, '') LIKE {$quoted} OR COALESCE(tm.name, '') LIKE {$quoted} OR COALESCE(t.payment_reference, '') LIKE {$quoted}",
             'rate_settings' => "COALESCE(title, '') LIKE {$quoted} OR COALESCE(fiscal_year, '') LIKE {$quoted} OR COALESCE(notes, '') LIKE {$quoted}",
@@ -1810,9 +1815,8 @@ final class Repository
 
     private function chargeRowDueAmount(array $row): int
     {
-        $amount = (int) ($row['amount'] ?? 0);
-        if ($amount > 0) {
-            return $amount;
+        if (array_key_exists('amount', $row) && $row['amount'] !== null && $row['amount'] !== '') {
+            return (int) $row['amount'];
         }
 
         return (int) ($row['charge_amount'] ?? 0) + (int) ($row['rent_amount'] ?? 0);

@@ -229,7 +229,7 @@ final class TeamContracts
                 $start = sprintf('%s/01/01', $fiscalYear);
             }
             if ($end === '') {
-                $end = sprintf('%s/12/29', (int) $fiscalYear);
+                $end = JalaliDate::monthEnd($fiscalYear, 12);
             }
             $this->upsertContract($teamId, $fiscalYear, $start, $end, 'مهاجرت از تاریخ قرارداد قبلی');
         }
@@ -275,7 +275,7 @@ final class TeamContracts
     {
         $fiscalYear = JalaliDate::normalizeDigits($fiscalYear);
         $yearStart = $fiscalYear . '/01/01';
-        $yearEnd = $fiscalYear . '/12/29';
+        $yearEnd = JalaliDate::monthEnd($fiscalYear, 12);
         $assignments = $this->pdo->prepare(
             'SELECT desk_number, usage_type, assigned_from, assigned_until' . $this->deskAssignmentExemptSelect() . '
              FROM desk_assignments
@@ -403,7 +403,7 @@ final class TeamContracts
     {
         $fiscalYear = $this->currentFiscalYear();
         $yearStart = $fiscalYear . '/01/01';
-        $yearEnd = $fiscalYear . '/12/29';
+        $yearEnd = JalaliDate::monthEnd($fiscalYear, 12);
         $desks = $this->pdo->prepare('SELECT id, number, usage_type FROM desks WHERE team_id = :team_id');
         $desks->execute(['team_id' => $teamId]);
         $deskList = $desks->fetchAll();

@@ -991,6 +991,13 @@ final class Crud
                 throw new InvalidArgumentException('برای این عضو درخواست دیگری در انتظار تأیید است.');
             }
             if ($type === 'delete') {
+                $leaderCheck = $this->pdo->prepare(
+                    'SELECT is_leader FROM members WHERE id = :id AND team_id = :team_id LIMIT 1'
+                );
+                $leaderCheck->execute(['id' => $memberId, 'team_id' => $teamId]);
+                if ((int) ($leaderCheck->fetchColumn() ?: 0) === 1) {
+                    throw new InvalidArgumentException('مسئول نهاد را نمی‌توان حذف کرد؛ ابتدا مسئول را تغییر دهید.');
+                }
                 $data['full_name'] = null;
                 $data['phone'] = null;
                 $data['national_id'] = null;
@@ -1563,6 +1570,9 @@ final class Crud
             }
             if (($row['status'] ?? '') !== 'pending') {
                 throw new InvalidArgumentException('فقط درخواست‌های در انتظار قابل تغییر هستند.');
+            }
+            if ($action !== 'delete') {
+                throw new InvalidArgumentException('درخواست عضو پس از ثبت فقط قابل لغو است؛ برای تغییر، درخواست جدید ثبت کنید.');
             }
 
             return;

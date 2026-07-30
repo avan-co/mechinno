@@ -215,21 +215,25 @@ final class DeskAssignments
     public function reconcileDeskYearAssignments(array $record): void
     {
         $deskId = (int) ($record['desk_id'] ?? 0);
+        $teamId = (int) ($record['team_id'] ?? 0);
         $keepId = (int) ($record['id'] ?? 0);
         $fiscalYear = $this->fiscalYearFrom((string) ($record['assigned_from'] ?? ''));
-        if ($deskId <= 0 || $keepId <= 0 || $fiscalYear === '') {
+        if ($deskId <= 0 || $teamId <= 0 || $keepId <= 0 || $fiscalYear === '') {
             return;
         }
 
+        // Only collapse duplicate rows for the same desk+team+year.
+        // Mid-year handovers to other teams (non-overlapping ranges) must be kept.
         $yearStart = $fiscalYear . '/01/01';
-        $yearEnd = $fiscalYear . '/12/29';
+        $yearEnd = JalaliDate::monthEnd($fiscalYear, 12);
         $this->pdo->prepare(
             'DELETE FROM desk_assignments
-             WHERE desk_id = :desk_id AND id <> :keep_id
+             WHERE desk_id = :desk_id AND team_id = :team_id AND id <> :keep_id
                AND assigned_from <= :year_end
                AND (assigned_until IS NULL OR assigned_until = \'\' OR assigned_until >= :year_start)'
         )->execute([
             'desk_id' => $deskId,
+            'team_id' => $teamId,
             'keep_id' => $keepId,
             'year_start' => $yearStart,
             'year_end' => $yearEnd,
@@ -247,7 +251,7 @@ final class DeskAssignments
         }
 
         $yearStart = $fiscalYear . '/01/01';
-        $yearEnd = $fiscalYear . '/12/29';
+        $yearEnd = JalaliDate::monthEnd($fiscalYear, 12);
         $sql = 'SELECT id, desk_id, desk_number, team_id, usage_type, assigned_from, assigned_until, notes'
             . $this->exemptSelect()
             . ' FROM desk_assignments

@@ -205,6 +205,9 @@ final class Access
 
     public static function assertTeamAccess(int $teamId): void
     {
+        if (self::isTeam() && self::scopedTeamId() === null) {
+            json_response(['error' => 'حساب نهاد به هیچ تیمی متصل نیست.'], 403);
+        }
         $scope = self::scopedTeamId();
         if ($scope !== null && $scope !== $teamId) {
             json_response(['error' => 'دسترسی به این نهاد مجاز نیست.'], 403);

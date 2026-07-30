@@ -28,7 +28,7 @@ final class YearBackfill
 
         $recalculate = !empty($payload['recalculate']);
         $defaultStart = $fiscalYear . '/01/01';
-        $defaultEnd = $fiscalYear . '/12/29';
+        $defaultEnd = JalaliDate::monthEnd($fiscalYear, 12);
         $imported = 0;
         $skipped = 0;
         $results = [];
@@ -170,7 +170,7 @@ final class YearBackfill
     {
         $parts = preg_split('/[\s,،]+/u', trim($deskNumbers)) ?: [];
         $defaultStart = $fiscalYear . '/01/01';
-        $defaultEnd = $fiscalYear . '/12/29';
+        $defaultEnd = JalaliDate::monthEnd($fiscalYear, 12);
         $rows = [];
         foreach ($parts as $part) {
             $number = (int) preg_replace('/\D+/', '', $part);
@@ -210,12 +210,23 @@ final class YearBackfill
             $assignedFrom = $defaultStart;
         }
 
+        $until = $assignedUntil !== '' ? $assignedUntil : $defaultEnd;
+        $fromMonth = JalaliDate::monthIndexFromDate($assignedFrom);
+        $untilMonth = JalaliDate::monthIndexFromDate($until);
+        if ($fromMonth < 1) {
+            $fromMonth = 1;
+        }
+        if ($untilMonth < 1) {
+            $untilMonth = 12;
+        }
+
         $this->crud->create('desk_assignments', [
             'desk_id' => (string) $deskId,
             'team_id' => (string) $teamId,
             'usage_type' => (string) ($deskRow['usage_type'] ?? 'formal'),
-            'assigned_from' => $assignedFrom,
-            'assigned_until' => $assignedUntil !== '' ? $assignedUntil : $defaultEnd,
+            'fiscal_year' => $fiscalYear,
+            'assigned_from_month' => (string) $fromMonth,
+            'assigned_until_month' => (string) $untilMonth,
             'notes' => (string) ($deskRow['notes'] ?? ''),
         ]);
     }

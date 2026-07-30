@@ -5,6 +5,7 @@ const smsState = {
   selected: new Set(),
   configured: false,
   page: 1,
+  pages: 1,
   perPage: 25,
   filters: { q: "", teamId: "", entityType: "", isLeader: "", wantsAccess: "" },
 };
@@ -144,6 +145,7 @@ const loadSmsRecipients = async () => {
   const result = await fetchResource("api.php?resource=sms-recipients", smsRecipientFilters());
   smsState.recipients = result.rows || [];
   smsState.page = result.page;
+  smsState.pages = result.pages || 1;
   smsState.perPage = result.per_page;
   renderSmsRecipients();
   const pager = document.getElementById("smsRecipientsPager");
@@ -207,7 +209,7 @@ document.getElementById("smsRecipientsPager")?.addEventListener("click", (event)
   const button = event.target.closest("button[data-sms-prev], button[data-sms-next]");
   if (!button) return;
   if (button.hasAttribute("data-sms-prev") && smsState.page > 1) smsState.page -= 1;
-  if (button.hasAttribute("data-sms-next")) smsState.page += 1;
+  if (button.hasAttribute("data-sms-next") && smsState.page < smsState.pages) smsState.page += 1;
   loadSmsRecipients().catch((error) => showToast(error.message, "error"));
 });
 

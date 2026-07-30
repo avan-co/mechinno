@@ -619,17 +619,20 @@ final class Schema
             return false;
         }
 
+        // Same desk+team+year may have at most one row. Mid-year handovers
+        // (different teams, non-overlapping months) are valid and not duplicates.
         $rows = $pdo->query(
-            'SELECT desk_id, assigned_from FROM desk_assignments ORDER BY desk_id, assigned_from, id'
+            'SELECT desk_id, team_id, assigned_from FROM desk_assignments ORDER BY desk_id, team_id, assigned_from, id'
         )->fetchAll();
         $seen = [];
         foreach ($rows as $row) {
             $deskId = (int) ($row['desk_id'] ?? 0);
+            $teamId = (int) ($row['team_id'] ?? 0);
             $fiscalYear = JalaliDate::fiscalYearFromDate((string) ($row['assigned_from'] ?? ''));
-            if ($deskId <= 0 || $fiscalYear === '') {
+            if ($deskId <= 0 || $teamId <= 0 || $fiscalYear === '') {
                 continue;
             }
-            $key = $deskId . ':' . $fiscalYear;
+            $key = $deskId . ':' . $teamId . ':' . $fiscalYear;
             if (isset($seen[$key])) {
                 return true;
             }
@@ -834,7 +837,7 @@ final class Schema
         $today = JalaliDate::todayParts();
         $fiscalYear = (string) $today['year'];
         $yearStart = $fiscalYear . '/01/01';
-        $yearEnd = $fiscalYear . '/12/29';
+        $yearEnd = JalaliDate::monthEnd($fiscalYear, 12);
         $desks = $pdo->query(
             'SELECT d.id, d.number, d.team_id, d.usage_type, d.notes
              FROM desks d
@@ -943,18 +946,20 @@ final class Schema
         }
 
         $rows = $pdo->query(
-            'SELECT id, desk_id, assigned_from, assigned_until
+            'SELECT id, desk_id, team_id, assigned_from, assigned_until
              FROM desk_assignments
-             ORDER BY desk_id, assigned_from, id'
+             ORDER BY desk_id, team_id, assigned_from, id'
         )->fetchAll();
         $groups = [];
         foreach ($rows as $row) {
             $deskId = (int) ($row['desk_id'] ?? 0);
+            $teamId = (int) ($row['team_id'] ?? 0);
             $fiscalYear = JalaliDate::fiscalYearFromDate((string) ($row['assigned_from'] ?? ''));
-            if ($deskId <= 0 || $fiscalYear === '') {
+            if ($deskId <= 0 || $teamId <= 0 || $fiscalYear === '') {
                 continue;
             }
-            $groups[$deskId . ':' . $fiscalYear][] = $row;
+            // Keep mid-year handovers between teams; only collapse same-team duplicates.
+            $groups[$deskId . ':' . $teamId . ':' . $fiscalYear][] = $row;
         }
 
         $delete = $pdo->prepare('DELETE FROM desk_assignments WHERE id = :id');
