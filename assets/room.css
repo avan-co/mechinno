@@ -484,10 +484,12 @@
 .room-calendar-grid {
   display: grid;
   gap: 0;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
   overflow: hidden;
   min-width: 720px;
+  background: var(--surface-solid);
+  box-shadow: var(--shadow-sm);
 }
 
 .room-calendar-row {
@@ -501,7 +503,8 @@
 }
 
 .room-calendar-row--head {
-  background: var(--bg-2);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 8%, var(--surface-2)) 0%, var(--surface-2) 100%);
+  border-bottom: 2px solid color-mix(in srgb, var(--accent) 30%, var(--line));
 }
 
 .room-calendar-room-head,
@@ -516,13 +519,15 @@
 .room-calendar-room-head,
 .room-calendar-room {
   border-left: none;
-  background: var(--bg-2);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 6%, var(--surface-2)) 0%, var(--surface-2) 100%);
 }
 
 .room-calendar-room strong {
   display: block;
   font-size: 13px;
+  font-weight: 800;
   margin-bottom: 4px;
+  color: color-mix(in srgb, var(--accent) 45%, var(--text));
 }
 
 .room-calendar-room small {
@@ -537,7 +542,7 @@
 
 .room-calendar-day-head.is-today,
 .room-calendar-cell.is-today {
-  background: color-mix(in srgb, var(--primary) 5%, var(--surface-solid));
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface-solid));
 }
 
 .room-calendar-day-name {
@@ -548,9 +553,25 @@
 }
 
 .room-calendar-day-num {
-  display: block;
+  display: inline-grid;
+  place-items: center;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 6px;
+  border-radius: 999px;
   font-size: 16px;
   font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.room-calendar-day-head.is-today .room-calendar-day-num {
+  color: #fff;
+  background: linear-gradient(135deg, var(--accent), var(--accent-light));
+  box-shadow: var(--shadow-sm);
+}
+
+[data-theme="dark"] .room-calendar-day-head.is-today .room-calendar-day-num {
+  color: #1d1810;
 }
 
 .room-calendar-cell {
@@ -558,32 +579,47 @@
   flex-direction: column;
   gap: 6px;
   cursor: pointer;
+  transition: background 0.15s ease;
+}
+.room-calendar-cell:hover {
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
 }
 
 .room-calendar-empty {
   color: var(--muted);
   font-size: 12px;
-  opacity: 0.5;
+  opacity: 0.45;
+  align-self: center;
+  margin: auto;
 }
 
 .room-calendar-block {
   display: grid;
   gap: 2px;
   width: 100%;
-  padding: 6px 8px;
+  padding: 7px 9px 7px 10px;
   border: none;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--primary) 12%, var(--surface-solid));
-  color: var(--primary);
+  border-inline-start: 3px solid color-mix(in srgb, var(--primary) 65%, transparent);
+  border-radius: 9px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--primary) 16%, var(--surface-solid)), color-mix(in srgb, var(--primary) 9%, var(--surface-solid)));
+  color: color-mix(in srgb, var(--primary) 88%, var(--text));
   text-align: right;
   font: inherit;
   font-size: 11px;
+  font-weight: 600;
   cursor: default;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.room-calendar-block:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow);
 }
 
 .room-calendar-block.is-pending {
-  background: color-mix(in srgb, var(--amber) 14%, var(--surface-solid));
-  color: color-mix(in srgb, var(--amber) 85%, #000);
+  border-inline-start-color: color-mix(in srgb, var(--amber) 70%, transparent);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--amber) 18%, var(--surface-solid)), color-mix(in srgb, var(--amber) 10%, var(--surface-solid)));
+  color: color-mix(in srgb, var(--amber) 88%, var(--text));
 }
 
 .room-calendar-block small {
