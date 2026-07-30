@@ -164,6 +164,17 @@ try {
         json_response($rooms->availability($roomId, $date));
     }
 
+    if ($resource === 'room-calendar') {
+        if (isset($_GET['shift_from'], $_GET['shift_days'])) {
+            $from = JalaliDate::addDays((string) $_GET['shift_from'], (int) $_GET['shift_days']);
+        } else {
+            $from = (string) ($_GET['from'] ?? JalaliDate::todayParts()['formatted']);
+        }
+        $to = (string) ($_GET['to'] ?? JalaliDate::addDays($from, 6));
+        $roomId = (int) ($_GET['room_id'] ?? 0);
+        json_response($rooms->calendarRange($from, $to, $roomId));
+    }
+
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && $resource === 'room-reservations' && $action === 'create') {
         require_csrf_json();
         Access::requireWriteOrTeamSubmitJson();

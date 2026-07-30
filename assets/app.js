@@ -1092,6 +1092,9 @@ const activateSection = (id, options = {}) => {
   if (id === "reports" && panelMode === "admin") {
     initReportBuilder().catch((error) => showToast(error.message, "error"));
   }
+  if ((id === "meeting-rooms" || id === "room-reservations") && window.initRoomCalendar) {
+    window.initRoomCalendar();
+  }
   if (options.scrollTarget) {
     setTimeout(() => {
       document.querySelector(`data-table[data-table-key="${options.scrollTarget}"]`)

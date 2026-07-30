@@ -374,4 +374,222 @@
   }
   .room-summary { position: static; }
   .room-field-row { grid-template-columns: 1fr; }
+  .room-calendar-controls { flex-direction: column; align-items: stretch; }
+  .room-calendar-grid { overflow-x: auto; }
+}
+
+/* Panel room picker */
+.room-room-grid--panel {
+  margin-bottom: 16px;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 700px) {
+  .room-room-grid--panel {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* Room overview cards */
+.room-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.room-overview-card {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-solid);
+}
+
+.room-overview-copy strong {
+  display: block;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.room-overview-copy small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.room-overview-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--success) 10%, var(--surface-solid));
+  color: var(--success);
+  white-space: nowrap;
+}
+
+.room-overview-badge.is-busy {
+  background: color-mix(in srgb, var(--primary) 10%, var(--surface-solid));
+  color: var(--primary);
+}
+
+/* Week calendar */
+.room-calendar-shell {
+  margin-bottom: 20px;
+}
+
+.room-calendar-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.room-calendar-toolbar h2 {
+  margin: 0 0 4px;
+}
+
+.room-calendar-controls {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: end;
+}
+
+.room-calendar-filter {
+  display: grid;
+  gap: 6px;
+  min-width: 160px;
+}
+
+.room-calendar-filter span {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.room-calendar-filter select {
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-solid);
+  font: inherit;
+  font-size: 13px;
+}
+
+.room-calendar-grid {
+  display: grid;
+  gap: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  min-width: 720px;
+}
+
+.room-calendar-row {
+  display: grid;
+  grid-template-columns: 160px repeat(7, minmax(96px, 1fr));
+  border-top: 1px solid var(--line);
+}
+
+.room-calendar-row:first-child {
+  border-top: none;
+}
+
+.room-calendar-row--head {
+  background: var(--bg-2);
+}
+
+.room-calendar-room-head,
+.room-calendar-room,
+.room-calendar-day-head,
+.room-calendar-cell {
+  padding: 10px 8px;
+  border-left: 1px solid var(--line);
+  min-height: 72px;
+}
+
+.room-calendar-room-head,
+.room-calendar-room {
+  border-left: none;
+  background: var(--bg-2);
+}
+
+.room-calendar-room strong {
+  display: block;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.room-calendar-room small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.room-calendar-day-head {
+  text-align: center;
+  cursor: pointer;
+}
+
+.room-calendar-day-head.is-today,
+.room-calendar-cell.is-today {
+  background: color-mix(in srgb, var(--primary) 5%, var(--surface-solid));
+}
+
+.room-calendar-day-name {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.room-calendar-day-num {
+  display: block;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.room-calendar-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.room-calendar-empty {
+  color: var(--muted);
+  font-size: 12px;
+  opacity: 0.5;
+}
+
+.room-calendar-block {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--primary) 12%, var(--surface-solid));
+  color: var(--primary);
+  text-align: right;
+  font: inherit;
+  font-size: 11px;
+  cursor: default;
+}
+
+.room-calendar-block.is-pending {
+  background: color-mix(in srgb, var(--amber) 14%, var(--surface-solid));
+  color: color-mix(in srgb, var(--amber) 85%, #000);
+}
+
+.room-calendar-block small {
+  opacity: 0.85;
+  font-size: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }

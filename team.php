@@ -36,6 +36,7 @@ $assetVer = (string) max(
     filemtime(__DIR__ . '/assets/styles.css'),
     filemtime(__DIR__ . '/assets/app.js'),
     filemtime(__DIR__ . '/assets/room-booking.js'),
+    filemtime(__DIR__ . '/assets/room-calendar.js'),
     filemtime(__DIR__ . '/assets/room.css'),
     filemtime(__DIR__ . '/assets/team-year-workspace.js'),
     (int) Brand::version()
@@ -132,6 +133,10 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4Zm2 2v2h12V7Zm0 4v2h8v-2Z" fill="currentColor"/></svg>
           <span>واریز</span>
         </button>
+        <button class="bottom-nav-item" data-section="room-reservations" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h7v7H4V4Zm9 0h7v7h-7V4ZM4 13h7v7H4v-7Zm9 3h7v4h-7v-4Z" fill="currentColor"/></svg>
+          <span>اتاق</span>
+        </button>
         <button class="bottom-nav-item" type="button" id="bottomNavMenu" aria-label="باز کردن منو">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16v2H4V7Zm0 5h16v2H4v-2Zm0 5h16v2H4v-2Z" fill="currentColor"/></svg>
           <span>منو</span>
@@ -151,38 +156,58 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
           </div>
           </div>
           <nav class="nav" aria-label="منوی نهاد">
-            <button class="nav-item active" data-section="overview" type="button">
-              <span class="nav-icon nav-icon--blue"><svg viewBox="0 0 24 24"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5Z" fill="currentColor"/></svg></span>
-              داشبورد
-            </button>
-            <button class="nav-item" data-section="profile" type="button">
-              <span class="nav-icon nav-icon--purple"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm-8 9a8 8 0 0 1 16 0Z" fill="currentColor"/></svg></span>
-              پروفایل نهاد
-            </button>
-            <button class="nav-item" data-section="members" type="button">
-              <span class="nav-icon nav-icon--teal"><svg viewBox="0 0 24 24"><path d="M16 11c1.7 0 3-1.3 3-3S17.7 5 16 5s-3 1.3-3 3 1.3 3 3 3ZM8 11c1.7 0 3-1.3 3-3S9.7 5 8 5 5 6.3 5 8s1.3 3 3 3Zm0 2c-2.7 0-8 1.3-8 4v3h10v-3c0-1.1.4-2.1 1.1-2.9C9.8 13.1 8.9 13 8 13Zm8 0c-.9 0-1.8.1-2.6.3.7.8 1.1 1.8 1.1 2.9v3h7v-3c0-2.7-5.3-4-8-4Z" fill="currentColor"/></svg></span>
-              اعضا
-            </button>
-            <button class="nav-item" data-section="desks" type="button">
-              <span class="nav-icon nav-icon--orange"><svg viewBox="0 0 24 24"><path d="M4 5h16a1 1 0 0 1 1 1v3H3V6a1 1 0 0 1 1-1Zm17 6v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-8h18ZM8 17h2v-3H8v3Zm6 0h2v-3h-2v3Z" fill="currentColor"/></svg></span>
-              میزها
-            </button>
-            <button class="nav-item" data-section="lockers" type="button">
-              <span class="nav-icon nav-icon--green"><svg viewBox="0 0 24 24"><path d="M6 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm0 4v12h12V7H6Zm3 2h2v2H9V9Zm4 0h2v2h-2V9Z" fill="currentColor"/></svg></span>
-              کمدها
-            </button>
-            <button class="nav-item" data-section="room-reservations" type="button">
-              <span class="nav-icon nav-icon--blue"><svg viewBox="0 0 24 24"><path d="M4 4h7v7H4V4Zm9 0h7v7h-7V4ZM4 13h7v7H4v-7Zm9 3h7v4h-7v-4Z" fill="currentColor"/></svg></span>
-              اتاق جلسه
-            </button>
-            <button class="nav-item" data-section="charges" type="button">
-              <span class="nav-icon nav-icon--amber"><svg viewBox="0 0 24 24"><path d="M12 2 4 6v6c0 5 3.4 9.7 8 11 4.6-1.3 8-6 8-11V6l-8-4Zm0 6.5A2.5 2.5 0 1 1 9.5 6 2.5 2.5 0 0 1 12 8.5Z" fill="currentColor"/></svg></span>
-              شارژ
-            </button>
-            <button class="nav-item" data-section="payments" type="button">
-              <span class="nav-icon nav-icon--pink"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4Zm2 2v2h12V7Zm0 4v2h8v-2Z" fill="currentColor"/></svg></span>
-              اعلام واریز
-            </button>
+            <div class="nav-section">
+              <button class="nav-item active" data-section="overview" type="button">
+                <span class="nav-icon nav-icon--blue"><svg viewBox="0 0 24 24"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5Z" fill="currentColor"/></svg></span>
+                <span class="nav-label">داشبورد</span>
+              </button>
+            </div>
+
+            <div class="nav-section">
+              <p class="nav-section-title">نهاد</p>
+              <div class="nav-section-items">
+                <button class="nav-item" data-section="profile" type="button">
+                  <span class="nav-icon nav-icon--purple"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm-8 9a8 8 0 0 1 16 0Z" fill="currentColor"/></svg></span>
+                  <span class="nav-label">پروفایل نهاد</span>
+                </button>
+                <button class="nav-item" data-section="members" type="button">
+                  <span class="nav-icon nav-icon--teal"><svg viewBox="0 0 24 24"><path d="M16 11c1.7 0 3-1.3 3-3S17.7 5 16 5s-3 1.3-3 3 1.3 3 3 3ZM8 11c1.7 0 3-1.3 3-3S9.7 5 8 5 5 6.3 5 8s1.3 3 3 3Zm0 2c-2.7 0-8 1.3-8 4v3h10v-3c0-1.1.4-2.1 1.1-2.9C9.8 13.1 8.9 13 8 13Zm8 0c-.9 0-1.8.1-2.6.3.7.8 1.1 1.8 1.1 2.9v3h7v-3c0-2.7-5.3-4-8-4Z" fill="currentColor"/></svg></span>
+                  <span class="nav-label">اعضا</span>
+                </button>
+                <button class="nav-item" data-section="desks" type="button">
+                  <span class="nav-icon nav-icon--orange"><svg viewBox="0 0 24 24"><path d="M4 5h16a1 1 0 0 1 1 1v3H3V6a1 1 0 0 1 1-1Zm17 6v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-8h18ZM8 17h2v-3H8v3Zm6 0h2v-3h-2v3Z" fill="currentColor"/></svg></span>
+                  <span class="nav-label">میزها</span>
+                </button>
+                <button class="nav-item" data-section="lockers" type="button">
+                  <span class="nav-icon nav-icon--green"><svg viewBox="0 0 24 24"><path d="M6 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm0 4v12h12V7H6Zm3 2h2v2H9V9Zm4 0h2v2h-2V9Z" fill="currentColor"/></svg></span>
+                  <span class="nav-label">کمدها</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="nav-section">
+              <p class="nav-section-title">اتاق جلسه</p>
+              <div class="nav-section-items">
+                <button class="nav-item" data-section="room-reservations" type="button">
+                  <span class="nav-icon nav-icon--blue"><svg viewBox="0 0 24 24"><path d="M4 4h7v7H4V4Zm9 0h7v7h-7V4ZM4 13h7v7H4v-7Zm9 3h7v4h-7v-4Z" fill="currentColor"/></svg></span>
+                  <span class="nav-label">رزرو اتاق</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="nav-section">
+              <p class="nav-section-title">مالی</p>
+              <div class="nav-section-items">
+                <button class="nav-item" data-section="charges" type="button">
+                  <span class="nav-icon nav-icon--amber"><svg viewBox="0 0 24 24"><path d="M12 2 4 6v6c0 5 3.4 9.7 8 11 4.6-1.3 8-6 8-11V6l-8-4Zm0 6.5A2.5 2.5 0 1 1 9.5 6 2.5 2.5 0 0 1 12 8.5Z" fill="currentColor"/></svg></span>
+                  <span class="nav-label">شارژ</span>
+                </button>
+                <button class="nav-item" data-section="payments" type="button">
+                  <span class="nav-icon nav-icon--pink"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4Zm2 2v2h12V7Zm0 4v2h8v-2Z" fill="currentColor"/></svg></span>
+                  <span class="nav-label">اعلام واریز</span>
+                </button>
+              </div>
+            </div>
           </nav>
           <div class="sidebar-user">
             <div class="user-pill">
@@ -315,14 +340,38 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
 
             <section id="room-reservations" class="section">
               <div class="section-intro section-intro--blue">
-                <div class="section-intro-copy"><p>رزرو اتاق جلسه برای نهاد — حداکثر ۲ ساعت در روز برای هر شماره موبایل.</p></div>
+                <div class="section-intro-copy"><p>رزرو اتاق جلسه برای نهاد — تقویم هفتگی و انتخاب اتاق با کارت.</p></div>
               </div>
+
+              <article class="room-card room-calendar-shell" id="roomCalendarPanel">
+                <div class="room-calendar-toolbar">
+                  <div>
+                    <h2>تقویم رزرو</h2>
+                    <p class="room-card-lead" id="roomCalendarRangeLabel">در حال بارگذاری…</p>
+                  </div>
+                  <div class="room-calendar-controls">
+                    <label class="room-calendar-filter">
+                      <span>اتاق</span>
+                      <select id="roomCalendarRoomFilter" aria-label="فیلتر اتاق">
+                        <option value="0">همه اتاق‌ها</option>
+                      </select>
+                    </label>
+                    <button type="button" class="button ghost" id="roomCalendarPrev">هفته قبل</button>
+                    <button type="button" class="button ghost" id="roomCalendarToday">امروز</button>
+                    <button type="button" class="button ghost" id="roomCalendarNext">هفته بعد</button>
+                  </div>
+                </div>
+                <div id="roomCalendarGrid" class="room-calendar-grid" aria-live="polite"></div>
+              </article>
+
               <article class="room-card room-booking-panel">
                 <h2>رزرو جدید</h2>
                 <p class="room-card-lead">اتاق و بازه زمانی را انتخاب کنید.</p>
                 <form id="panelRoomBookingForm">
+                  <label class="wide"><span>انتخاب اتاق</span></label>
+                  <div id="panelRoomCardGrid" class="room-room-grid room-room-grid--panel" role="listbox" aria-label="انتخاب اتاق"></div>
+                  <input type="hidden" name="room_id" required />
                   <div class="room-field-row">
-                    <label><span>اتاق</span><select name="room_id" required></select></label>
                     <label><span>تاریخ</span><input name="reserved_date" type="text" required placeholder="1404/01/01" value="<?= e($today['formatted']) ?>" /></label>
                     <label><span>نام *</span><input name="booker_name" type="text" required /></label>
                     <label><span>موبایل *</span><input name="booker_phone" type="tel" required dir="ltr" class="ltr-input" /></label>
@@ -403,6 +452,7 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
       <script src="assets/app.js?v=<?= e($assetVer) ?>"></script>
       <script src="assets/team-year-workspace.js?v=<?= e($assetVer) ?>"></script>
       <script src="assets/room-booking.js?v=<?= e($assetVer) ?>"></script>
+      <script src="assets/room-calendar.js?v=<?= e($assetVer) ?>"></script>
     <?php endif; ?>
   </body>
 </html>

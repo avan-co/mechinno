@@ -29,6 +29,7 @@ final class Access
         'room-reservations',
         'room-availability',
         'room-settings',
+        'room-calendar',
         'meeting-rooms',
         'crud-meta',
     ];
@@ -81,6 +82,7 @@ final class Access
         'pending-room-reservations',
         'room-availability',
         'room-settings',
+        'room-calendar',
     ];
 
     public static function role(): string

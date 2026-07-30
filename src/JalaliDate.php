@@ -239,6 +239,17 @@ final class JalaliDate
         return sprintf('%04d/%02d/%02d', $ny, $nm, $nd);
     }
 
+    public static function weekdayName(string $date): string
+    {
+        $normalized = self::normalize($date);
+        [$jy, $jm, $jd] = array_map('intval', explode('/', $normalized));
+        [$gy, $gm, $gd] = self::jalaliToGregorian($jy, $jm, $jd);
+        $timestamp = mktime(0, 0, 0, $gm, $gd, $gy);
+        $names = ['یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه', 'شنبه'];
+
+        return $names[(int) date('w', $timestamp)] ?? '';
+    }
+
     /**
      * @return array{0:int,1:int,2:int}
      */

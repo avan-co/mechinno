@@ -65,6 +65,85 @@ final class RoomReservations
     }
 
     /**
+     * @return array{
+     *   from: string,
+     *   to: string,
+     *   today: string,
+     *   rooms: list<array<string, mixed>>,
+     *   days: list<string>,
+     *   events: list<array<string, mixed>>
+     * }
+     */
+    public function calendarRange(string $from, string $to, int $roomId = 0): array
+    {
+        if (!Schema::tableExists($this->pdo, 'room_reservations')) {
+            return [
+                'from' => JalaliDate::todayParts()['formatted'],
+                'to' => JalaliDate::todayParts()['formatted'],
+                'today' => JalaliDate::todayParts()['formatted'],
+                'rooms' => [],
+                'days' => [],
+                'events' => [],
+            ];
+        }
+
+        $fromDate = JalaliDate::normalize($from);
+        $toDate = JalaliDate::normalize($to);
+        if (JalaliDate::compare($fromDate, $toDate) > 0) {
+            throw new InvalidArgumentException('بازه تاریخ نامعتبر است.');
+        }
+
+        $days = [];
+        $daysDetail = [];
+        $cursor = $fromDate;
+        while (JalaliDate::compare($cursor, $toDate) <= 0) {
+            $days[] = $cursor;
+            $daysDetail[] = [
+                'date' => $cursor,
+                'weekday' => JalaliDate::weekdayName($cursor),
+                'day' => (int) substr($cursor, 8, 2),
+            ];
+            if (count($days) >= 7) {
+                break;
+            }
+            $cursor = JalaliDate::addDays($cursor, 1);
+        }
+        $toDate = $days[count($days) - 1] ?? $toDate;
+
+        $rooms = $roomId > 0
+            ? [array_intersect_key($this->roomRow($roomId), array_flip(['id', 'name', 'code', 'capacity', 'floor', 'open_time', 'close_time', 'is_active']))]
+            : $this->listActiveRooms();
+
+        $placeholders = implode(',', array_fill(0, count(self::ACTIVE_STATUSES), '?'));
+        $sql = "SELECT rr.id, rr.room_id, rr.reserved_date, rr.start_time, rr.end_time, rr.status,
+                       rr.booker_name, rr.booker_phone, rr.booker_org, rr.purpose, rr.source,
+                       mr.name AS room_name, mr.code AS room_code
+                FROM room_reservations rr
+                INNER JOIN meeting_rooms mr ON mr.id = rr.room_id
+                WHERE rr.reserved_date BETWEEN ? AND ?
+                  AND rr.status IN ({$placeholders})";
+        $params = array_merge([$fromDate, $toDate], self::ACTIVE_STATUSES);
+        if ($roomId > 0) {
+            $sql .= ' AND rr.room_id = ?';
+            $params[] = $roomId;
+        }
+        $sql .= ' ORDER BY rr.reserved_date, rr.start_time, rr.id';
+        $statement = $this->pdo->prepare($sql);
+        $statement->execute($params);
+        $events = $statement->fetchAll() ?: [];
+
+        return [
+            'from' => $fromDate,
+            'to' => $toDate,
+            'today' => JalaliDate::todayParts()['formatted'],
+            'rooms' => $rooms,
+            'days' => $days,
+            'days_detail' => $daysDetail,
+            'events' => $events,
+        ];
+    }
+
+    /**
      * @return array{date: string, room: array<string, mixed>, slots: list<array<string, mixed>>}
      */
     public function availability(int $roomId, string $date): array

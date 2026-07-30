@@ -19,6 +19,7 @@ $assetVer = (string) max(
     filemtime(__DIR__ . '/assets/sms-editor.js'),
     filemtime(__DIR__ . '/assets/sms-settings.js'),
     filemtime(__DIR__ . '/assets/room-booking.js'),
+    filemtime(__DIR__ . '/assets/room-calendar.js'),
     filemtime(__DIR__ . '/assets/room.css'),
     (int) Brand::version()
 );
@@ -94,6 +95,10 @@ $assetVer = (string) max(
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4Zm2 2v2h12V7Zm0 4v2h8v-2Z" fill="currentColor"/></svg>
           <span>مالی</span>
         </button>
+        <button class="bottom-nav-item" data-section="meeting-rooms" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h7v7H4V4Zm9 0h7v7h-7V4ZM4 13h7v7H4v-7Zm9 3h7v4h-7v-4Z" fill="currentColor"/></svg>
+          <span>اتاق</span>
+        </button>
         <button class="bottom-nav-item" type="button" id="bottomNavMenu" aria-label="باز کردن منو">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16v2H4V7Zm0 5h16v2H4v-2Zm0 5h16v2H4v-2Z" fill="currentColor"/></svg>
           <span>منو</span>
@@ -114,99 +119,129 @@ $assetVer = (string) max(
           </div>
 
           <nav class="nav" aria-label="منوی اصلی">
-            <button class="nav-item active" data-section="overview" type="button">
-              <span class="nav-icon nav-icon--blue"><svg viewBox="0 0 24 24"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5Z" fill="currentColor"/></svg></span>
-              داشبورد
-            </button>
+            <div class="nav-section">
+              <button class="nav-item active" data-section="overview" type="button">
+                <span class="nav-icon nav-icon--blue"><svg viewBox="0 0 24 24"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5Z" fill="currentColor"/></svg></span>
+                <span class="nav-label">داشبورد</span>
+              </button>
+            </div>
 
-            <p class="nav-group-label">عملیات مرکز</p>
-            <button class="nav-item" data-section="teams" type="button">
-              <span class="nav-icon nav-icon--purple"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm-7 8a7 7 0 0 1 14 0Z" fill="currentColor"/></svg></span>
-              نهادها
-            </button>
-            <?php if (Access::isAdmin()): ?>
-            <button class="nav-item nav-item--sub" data-section="team-contracts" type="button">
-              <span class="nav-icon nav-icon--purple"><svg viewBox="0 0 24 24"><path d="M7 3h10a2 2 0 0 1 2 2v14l-7-3-7 3V5a2 2 0 0 1 2-2Z" fill="currentColor"/></svg></span>
-              قراردادها
-            </button>
-            <?php endif; ?>
-            <button class="nav-item" data-section="members" type="button">
-              <span class="nav-icon nav-icon--teal"><svg viewBox="0 0 24 24"><path d="M16 11c1.7 0 3-1.3 3-3S17.7 5 16 5s-3 1.3-3 3 1.3 3 3 3ZM8 11c1.7 0 3-1.3 3-3S9.7 5 8 5 5 6.3 5 8s1.3 3 3 3Zm0 2c-2.7 0-8 1.3-8 4v3h10v-3c0-1.1.4-2.1 1.1-2.9C9.8 13.1 8.9 13 8 13Zm8 0c-.9 0-1.8.1-2.6.3.7.8 1.1 1.8 1.1 2.9v3h7v-3c0-2.7-5.3-4-8-4Z" fill="currentColor"/></svg></span>
-              اعضا
-            </button>
-            <button class="nav-item" data-section="desks" type="button">
-              <span class="nav-icon nav-icon--orange"><svg viewBox="0 0 24 24"><path d="M4 5h16a1 1 0 0 1 1 1v3H3V6a1 1 0 0 1 1-1Zm17 6v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-8h18ZM8 17h2v-3H8v3Zm6 0h2v-3h-2v3Z" fill="currentColor"/></svg></span>
-              میزها
-            </button>
-            <?php if (Access::isAdmin()): ?>
-            <button class="nav-item nav-item--sub" data-section="desk-history" type="button">
-              <span class="nav-icon nav-icon--orange"><svg viewBox="0 0 24 24"><path d="M7 3h10v4H7V3Zm0 6h10v12H7V9Zm2 2v2h6v-2H9Zm0 4v2h4v-2H9Z" fill="currentColor"/></svg></span>
-              تاریخچه تخصیص
-            </button>
-            <?php endif; ?>
-            <button class="nav-item" data-section="lockers" type="button">
-              <span class="nav-icon nav-icon--green"><svg viewBox="0 0 24 24"><path d="M6 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm0 4v12h12V7H6Zm3 2h2v2H9V9Zm4 0h2v2h-2V9Z" fill="currentColor"/></svg></span>
-              کمدها
-            </button>
-            <button class="nav-item" data-section="meeting-rooms" type="button">
-              <span class="nav-icon nav-icon--blue"><svg viewBox="0 0 24 24"><path d="M4 4h7v7H4V4Zm9 0h7v7h-7V4ZM4 13h7v7H4v-7Zm9 3h7v4h-7v-4Z" fill="currentColor"/></svg></span>
-              اتاق جلسه
-            </button>
-            <a class="nav-item" href="reserve.php" target="_blank" rel="noopener">
-              <span class="nav-icon nav-icon--blue"><svg viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7Zm0 9.5A2.5 2.5 0 1 1 14.5 9 2.5 2.5 0 0 1 12 11.5Z" fill="currentColor"/></svg></span>
-              رزرو عمومی
-            </a>
+            <div class="nav-section">
+              <p class="nav-section-title">عملیات مرکز</p>
+              <div class="nav-section-items">
+                <button class="nav-item" data-section="teams" type="button">
+                  <span class="nav-icon nav-icon--purple"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm-7 8a7 7 0 0 1 14 0Z" fill="currentColor"/></svg></span>
+                  <span class="nav-label">نهادها</span>
+                </button>
+                <?php if (Access::isAdmin()): ?>
+                <button class="nav-item nav-item--sub" data-section="team-contracts" type="button">
+                  <span class="nav-icon nav-icon--purple"><svg viewBox="0 0 24 24"><path d="M7 3h10a2 2 0 0 1 2 2v14l-7-3-7 3V5a2 2 0 0 1 2-2Z" fill="currentColor"/></svg></span>
+                  <span class="nav-label">قراردادها</span>
+                </button>
+                <?php endif; ?>
+                <button class="nav-item" data-section="members" type="button">
+                  <span class="nav-icon nav-icon--teal"><svg viewBox="0 0 24 24"><path d="M16 11c1.7 0 3-1.3 3-3S17.7 5 16 5s-3 1.3-3 3 1.3 3 3 3ZM8 11c1.7 0 3-1.3 3-3S9.7 5 8 5 5 6.3 5 8s1.3 3 3 3Zm0 2c-2.7 0-8 1.3-8 4v3h10v-3c0-1.1.4-2.1 1.1-2.9C9.8 13.1 8.9 13 8 13Zm8 0c-.9 0-1.8.1-2.6.3.7.8 1.1 1.8 1.1 2.9v3h7v-3c0-2.7-5.3-4-8-4Z" fill="currentColor"/></svg></span>
+                  <span class="nav-label">اعضا</span>
+                </button>
+                <button class="nav-item" data-section="desks" type="button">
+                  <span class="nav-icon nav-icon--orange"><svg viewBox="0 0 24 24"><path d="M4 5h16a1 1 0 0 1 1 1v3H3V6a1 1 0 0 1 1-1Zm17 6v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-8h18ZM8 17h2v-3H8v3Zm6 0h2v-3h-2v3Z" fill="currentColor"/></svg></span>
+                  <span class="nav-label">میزها</span>
+                </button>
+                <?php if (Access::isAdmin()): ?>
+                <button class="nav-item nav-item--sub" data-section="desk-history" type="button">
+                  <span class="nav-icon nav-icon--orange"><svg viewBox="0 0 24 24"><path d="M7 3h10v4H7V3Zm0 6h10v12H7V9Zm2 2v2h6v-2H9Zm0 4v2h4v-2H9Z" fill="currentColor"/></svg></span>
+                  <span class="nav-label">تاریخچه تخصیص</span>
+                </button>
+                <?php endif; ?>
+                <button class="nav-item" data-section="lockers" type="button">
+                  <span class="nav-icon nav-icon--green"><svg viewBox="0 0 24 24"><path d="M6 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm0 4v12h12V7H6Zm3 2h2v2H9V9Zm4 0h2v2h-2V9Z" fill="currentColor"/></svg></span>
+                  <span class="nav-label">کمدها</span>
+                </button>
+              </div>
+            </div>
 
-            <p class="nav-group-label">مالی و گزارش</p>
-            <button class="nav-item" data-section="charges" type="button">
-              <span class="nav-icon nav-icon--amber"><svg viewBox="0 0 24 24"><path d="M12 2 4 6v6c0 5 3.4 9.7 8 11 4.6-1.3 8-6 8-11V6l-8-4Zm0 6.5A2.5 2.5 0 1 1 9.5 6 2.5 2.5 0 0 1 12 8.5Z" fill="currentColor"/></svg></span>
-              شارژ
-            </button>
-            <button class="nav-item" data-section="transactions" type="button">
-              <span class="nav-icon nav-icon--pink"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4Zm2 2v2h12V7Zm0 4v2h8v-2Z" fill="currentColor"/></svg></span>
-              مالی
-            </button>
-            <button class="nav-item" data-section="reports" type="button">
-              <span class="nav-icon nav-icon--blue"><svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm8 1.5V8h4.5L14 3.5ZM8 12h8v2H8v-2Zm0 4h8v2H8v-2Zm0-8h4v2H8V8Z" fill="currentColor"/></svg></span>
-              گزارش‌گیری
-            </button>
-            <a class="nav-item" href="export.php?report=all">
-              <span class="nav-icon nav-icon--teal"><svg viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9l-6-6Zm1 7V4.5L18.5 10H15ZM8 13h8v2H8v-2Zm0 4h5v2H8v-2Z" fill="currentColor"/></svg></span>
-              خروجی Excel
-            </a>
-            <?php if (Access::canWrite()): ?>
-            <a class="nav-item" href="backup.php">
-              <span class="nav-icon nav-icon--amber"><svg viewBox="0 0 24 24"><path d="M12 3a7 7 0 0 0-7 7v2.1A4.5 4.5 0 0 0 7.5 21h9A4.5 4.5 0 0 0 19 12.1V10a7 7 0 0 0-7-7Zm0 2a5 5 0 0 1 5 5v1H7v-1a5 5 0 0 1 5-5Zm-1 8h2v4h-2v-4Z" fill="currentColor"/></svg></span>
-              پشتیبان‌گیری
-            </a>
-            <?php endif; ?>
+            <div class="nav-section">
+              <p class="nav-section-title">اتاق جلسه</p>
+              <div class="nav-section-items">
+                <button class="nav-item" data-section="meeting-rooms" type="button">
+                  <span class="nav-icon nav-icon--blue"><svg viewBox="0 0 24 24"><path d="M4 4h7v7H4V4Zm9 0h7v7h-7V4ZM4 13h7v7H4v-7Zm9 3h7v4h-7v-4Z" fill="currentColor"/></svg></span>
+                  <span class="nav-label">مدیریت رزرو</span>
+                </button>
+                <?php if (Access::canWrite()): ?>
+                <button class="nav-item nav-item--sub" data-section="room-settings" type="button">
+                  <span class="nav-icon nav-icon--blue"><svg viewBox="0 0 24 24"><path d="M12 8a1 1 0 0 1 1 1v3h3a1 1 0 1 1 0 2h-4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Zm8-3H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Z" fill="currentColor"/></svg></span>
+                  <span class="nav-label">تنظیمات رزرو</span>
+                </button>
+                <?php endif; ?>
+                <a class="nav-item nav-item--sub" href="reserve.php" target="_blank" rel="noopener">
+                  <span class="nav-icon nav-icon--blue"><svg viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7Zm0 9.5A2.5 2.5 0 1 1 14.5 9 2.5 2.5 0 0 1 12 11.5Z" fill="currentColor"/></svg></span>
+                  <span class="nav-label">صفحه رزرو عمومی</span>
+                </a>
+              </div>
+            </div>
+
+            <div class="nav-section">
+              <p class="nav-section-title">مالی و گزارش</p>
+              <div class="nav-section-items">
+                <button class="nav-item" data-section="charges" type="button">
+                  <span class="nav-icon nav-icon--amber"><svg viewBox="0 0 24 24"><path d="M12 2 4 6v6c0 5 3.4 9.7 8 11 4.6-1.3 8-6 8-11V6l-8-4Zm0 6.5A2.5 2.5 0 1 1 9.5 6 2.5 2.5 0 0 1 12 8.5Z" fill="currentColor"/></svg></span>
+                  <span class="nav-label">شارژ</span>
+                </button>
+                <button class="nav-item" data-section="transactions" type="button">
+                  <span class="nav-icon nav-icon--pink"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4Zm2 2v2h12V7Zm0 4v2h8v-2Z" fill="currentColor"/></svg></span>
+                  <span class="nav-label">مالی</span>
+                </button>
+                <button class="nav-item" data-section="reports" type="button">
+                  <span class="nav-icon nav-icon--blue"><svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm8 1.5V8h4.5L14 3.5ZM8 12h8v2H8v-2Zm0 4h8v2H8v-2Zm0-8h4v2H8V8Z" fill="currentColor"/></svg></span>
+                  <span class="nav-label">گزارش‌گیری</span>
+                </button>
+                <a class="nav-item nav-item--sub" href="export.php?report=all">
+                  <span class="nav-icon nav-icon--teal"><svg viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9l-6-6Zm1 7V4.5L18.5 10H15ZM8 13h8v2H8v-2Zm0 4h5v2H8v-2Z" fill="currentColor"/></svg></span>
+                  <span class="nav-label">خروجی Excel</span>
+                </a>
+                <?php if (Access::canWrite()): ?>
+                <a class="nav-item nav-item--sub" href="backup.php">
+                  <span class="nav-icon nav-icon--amber"><svg viewBox="0 0 24 24"><path d="M12 3a7 7 0 0 0-7 7v2.1A4.5 4.5 0 0 0 7.5 21h9A4.5 4.5 0 0 0 19 12.1V10a7 7 0 0 0-7-7Zm0 2a5 5 0 0 1 5 5v1H7v-1a5 5 0 0 1 5-5Zm-1 8h2v4h-2v-4Z" fill="currentColor"/></svg></span>
+                  <span class="nav-label">پشتیبان‌گیری</span>
+                </a>
+                <?php endif; ?>
+              </div>
+            </div>
 
             <?php if (Access::isAdmin()): ?>
-            <p class="nav-group-label">ارتباطات</p>
-            <button class="nav-item" data-section="sms" type="button">
-              <span class="nav-icon nav-icon--green"><svg viewBox="0 0 24 24"><path d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2Zm0 2v.5L12 13 4 6.5V6ZM4 18V8.2l7.4 6.5a1 1 0 0 0 1.2 0L20 8.2V18Z" fill="currentColor"/></svg></span>
-              ارسال پیامک
-            </button>
-            <button class="nav-item nav-item--sub" data-section="sms-settings" type="button">
-              <span class="nav-icon nav-icon--green"><svg viewBox="0 0 24 24"><path d="M12 8a1 1 0 0 1 1 1v3h3a1 1 0 1 1 0 2h-4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Zm8-3H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Z" fill="currentColor"/></svg></span>
-              تنظیمات پیامک
-            </button>
+            <div class="nav-section">
+              <p class="nav-section-title">ارتباطات</p>
+              <div class="nav-section-items">
+                <button class="nav-item" data-section="sms" type="button">
+                  <span class="nav-icon nav-icon--green"><svg viewBox="0 0 24 24"><path d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2Zm0 2v.5L12 13 4 6.5V6ZM4 18V8.2l7.4 6.5a1 1 0 0 0 1.2 0L20 8.2V18Z" fill="currentColor"/></svg></span>
+                  <span class="nav-label">ارسال پیامک</span>
+                </button>
+                <button class="nav-item nav-item--sub" data-section="sms-settings" type="button">
+                  <span class="nav-icon nav-icon--green"><svg viewBox="0 0 24 24"><path d="M12 8a1 1 0 0 1 1 1v3h3a1 1 0 1 1 0 2h-4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Zm8-3H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Z" fill="currentColor"/></svg></span>
+                  <span class="nav-label">تنظیمات پیامک</span>
+                </button>
+              </div>
+            </div>
             <?php endif; ?>
 
             <?php if (Access::canWrite() || Access::isAdmin()): ?>
-            <p class="nav-group-label">مدیریت</p>
-            <?php endif; ?>
-            <?php if (Access::canWrite()): ?>
-            <button class="nav-item" data-section="development" type="button">
-              <span class="nav-icon nav-icon--purple"><svg viewBox="0 0 24 24"><path d="M4 4h16v4H4V4Zm0 6h10v4H4v-4Zm0 6h16v4H4v-4Z" fill="currentColor"/></svg></span>
-              برنامه توسعه
-            </button>
-            <?php endif; ?>
-            <?php if (Access::isAdmin()): ?>
-            <button class="nav-item" data-section="users" type="button">
-              <span class="nav-icon nav-icon--purple"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm-8 9a8 8 0 0 1 16 0Z" fill="currentColor"/></svg></span>
-              کاربران مدیر
-            </button>
+            <div class="nav-section">
+              <p class="nav-section-title">مدیریت</p>
+              <div class="nav-section-items">
+                <?php if (Access::canWrite()): ?>
+                <button class="nav-item" data-section="development" type="button">
+                  <span class="nav-icon nav-icon--purple"><svg viewBox="0 0 24 24"><path d="M4 4h16v4H4V4Zm0 6h10v4H4v-4Zm0 6h16v4H4v-4Z" fill="currentColor"/></svg></span>
+                  <span class="nav-label">برنامه توسعه</span>
+                </button>
+                <?php endif; ?>
+                <?php if (Access::isAdmin()): ?>
+                <button class="nav-item" data-section="users" type="button">
+                  <span class="nav-icon nav-icon--purple"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm-8 9a8 8 0 0 1 16 0Z" fill="currentColor"/></svg></span>
+                  <span class="nav-label">کاربران مدیر</span>
+                </button>
+                <?php endif; ?>
+              </div>
+            </div>
             <?php endif; ?>
           </nav>
 
@@ -495,11 +530,32 @@ $assetVer = (string) max(
 
             <section id="meeting-rooms" class="section">
               <div class="section-intro section-intro--blue">
-                <div class="section-intro-copy"><p>رزرو اتاق جلسه، مدیریت اتاق‌ها و تأیید درخواست‌ها — <a href="reserve.php" target="_blank" rel="noopener">صفحه رزرو عمومی</a></p></div>
-                <?php if (Access::canWrite()): ?>
-                <button type="button" class="button ghost section-intro-action" data-go="room-settings">تنظیمات</button>
-                <?php endif; ?>
+                <div class="section-intro-copy"><p>رزرو اتاق جلسه، تقویم هفتگی و مدیریت اتاق‌ها — <a href="reserve.php" target="_blank" rel="noopener">صفحه رزرو عمومی</a></p></div>
               </div>
+
+              <article class="room-card room-calendar-shell" id="roomCalendarPanel">
+                <div class="room-calendar-toolbar">
+                  <div>
+                    <h2>تقویم رزرو</h2>
+                    <p class="room-card-lead" id="roomCalendarRangeLabel">در حال بارگذاری…</p>
+                  </div>
+                  <div class="room-calendar-controls">
+                    <label class="room-calendar-filter">
+                      <span>اتاق</span>
+                      <select id="roomCalendarRoomFilter" aria-label="فیلتر اتاق">
+                        <option value="0">همه اتاق‌ها</option>
+                      </select>
+                    </label>
+                    <button type="button" class="button ghost" id="roomCalendarPrev">هفته قبل</button>
+                    <button type="button" class="button ghost" id="roomCalendarToday">امروز</button>
+                    <button type="button" class="button ghost" id="roomCalendarNext">هفته بعد</button>
+                  </div>
+                </div>
+                <div id="roomCalendarGrid" class="room-calendar-grid" aria-live="polite"></div>
+              </article>
+
+              <div id="panelRoomOverview" class="room-overview-grid" aria-label="اتاق‌های فعال"></div>
+
               <?php if (Access::isAdmin()): ?>
               <data-table title="رزرو — در انتظار تأیید" endpoint="api.php?resource=pending-room-reservations" data-workflow="meeting-rooms" data-workflow-type="room-reservation" data-table-key="pending-room-reservations" data-readonly></data-table>
               <?php endif; ?>
@@ -509,8 +565,10 @@ $assetVer = (string) max(
                   <h2>رزرو سریع</h2>
                   <p class="room-card-lead">اتاق، تاریخ و بازه را انتخاب کنید.</p>
                   <form id="panelRoomBookingForm">
+                    <label class="wide"><span>انتخاب اتاق</span></label>
+                    <div id="panelRoomCardGrid" class="room-room-grid room-room-grid--panel" role="listbox" aria-label="انتخاب اتاق"></div>
+                    <input type="hidden" name="room_id" required />
                     <div class="room-field-row">
-                      <label><span>اتاق</span><select name="room_id" required></select></label>
                       <label><span>تاریخ</span><input name="reserved_date" type="text" required placeholder="1404/01/01" value="<?= e($today['formatted']) ?>" /></label>
                       <label><span>نام *</span><input name="booker_name" type="text" required /></label>
                       <label><span>موبایل *</span><input name="booker_phone" type="tel" required dir="ltr" class="ltr-input" /></label>
@@ -525,7 +583,7 @@ $assetVer = (string) max(
                 </article>
                 <aside class="room-card">
                   <h2>راهنما</h2>
-                  <p class="room-card-lead">حداکثر ۲ ساعت در روز برای هر شماره موبایل. رزروهای عمومی از <a href="reserve.php" target="_blank" rel="noopener">صفحه رزرو</a> ثبت می‌شوند.</p>
+                  <p class="room-card-lead">حداکثر ۲ ساعت در روز برای هر شماره موبایل. روی تقویم کلیک کنید تا تاریخ انتخاب شود.</p>
                 </aside>
               </div>
               <?php endif; ?>
@@ -803,6 +861,7 @@ $assetVer = (string) max(
       <script src="assets/sms-panel.js?v=<?= e($assetVer) ?>"></script>
       <script src="assets/sms-settings.js?v=<?= e($assetVer) ?>"></script>
       <script src="assets/room-booking.js?v=<?= e($assetVer) ?>"></script>
+      <script src="assets/room-calendar.js?v=<?= e($assetVer) ?>"></script>
     <?php endif; ?>
   </body>
 </html>
