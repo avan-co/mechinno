@@ -3420,3 +3420,11 @@ body.is-mobile .mobile-card .row-actions {
 }
 [data-theme="dark"] .dashboard-hero { background: var(--surface-solid); color: var(--text); }
 [data-theme="dark"] .dashboard-hero-stat { background: var(--surface-2); }
+
+/* Collapse the hero to a single column on small screens. This must come after
+   the unconditional `.dashboard-hero { grid-template-columns: 1fr auto }` v3
+   override, otherwise the copy stays cramped and the eyebrow wraps one word
+   per line on mobile. */
+@media (max-width: 900px) {
+  .dashboard-hero { grid-template-columns: 1fr; }
+}
