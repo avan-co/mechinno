@@ -849,8 +849,15 @@ a.nav-item {
   line-height: 1.6;
 }
 
-.section { display: none; animation: fadeIn 0.22s ease; }
-.section.active { display: block; }
+.section { display: none; }
+.section.active {
+  display: block;
+  animation: sectionEnter 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes sectionEnter {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: none; }
@@ -864,6 +871,11 @@ a.nav-item {
   background: var(--surface);
   backdrop-filter: var(--glass);
   box-shadow: var(--shadow-sm);
+  transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
+}
+.panel:hover {
+  border-color: color-mix(in srgb, var(--accent) 18%, var(--line));
+  box-shadow: var(--shadow);
 }
 .panel--accent {
   border-color: color-mix(in srgb, var(--accent) 35%, transparent);
@@ -2519,13 +2531,21 @@ body.is-mobile .mobile-card .row-actions {
 .quick-nav-icon {
   display: grid;
   place-items: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
   background: color-mix(in srgb, var(--accent) 14%, var(--surface-2));
   color: var(--accent);
-  font-size: 16px;
+  flex-shrink: 0;
 }
+.quick-nav-icon svg { width: 20px; height: 20px; display: block; }
+.quick-nav-icon--purple { background: color-mix(in srgb, var(--purple) 14%, var(--surface-2)); color: var(--purple); }
+.quick-nav-icon--teal { background: color-mix(in srgb, var(--teal) 14%, var(--surface-2)); color: var(--teal); }
+.quick-nav-icon--orange { background: color-mix(in srgb, var(--orange) 14%, var(--surface-2)); color: var(--orange); }
+.quick-nav-icon--green { background: color-mix(in srgb, var(--green) 14%, var(--surface-2)); color: var(--green); }
+.quick-nav-icon--amber { background: color-mix(in srgb, var(--amber) 14%, var(--surface-2)); color: var(--amber); }
+.quick-nav-icon--pink { background: color-mix(in srgb, var(--pink) 14%, var(--surface-2)); color: var(--pink); }
+.quick-nav-icon--blue { background: color-mix(in srgb, var(--primary) 14%, var(--surface-2)); color: var(--primary); }
 
 .global-search {
   position: relative;
@@ -2556,8 +2576,10 @@ body.is-mobile .mobile-card .row-actions {
   transform: translateY(-50%);
   color: var(--muted);
   pointer-events: none;
-  font-size: 14px;
+  display: grid;
+  place-items: center;
 }
+.global-search-icon svg { display: block; }
 
 .sidebar-user {
   margin-top: auto;
@@ -2620,15 +2642,43 @@ body.is-mobile .mobile-card .row-actions {
 .section-intro {
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
   gap: 16px;
   margin-bottom: 20px;
-  padding: 16px 20px;
+  padding: 18px 22px;
   border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--accent) 5%, var(--surface));
   border: 1px solid var(--line);
+  animation: sectionEnter 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
-.section-intro p { margin: 0; flex: 1; }
+.section-intro-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  flex-shrink: 0;
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface-2));
+  color: var(--accent);
+}
+.section-intro-icon svg { width: 22px; height: 22px; display: block; }
+.section-intro-copy { flex: 1; min-width: 0; }
+.section-intro p { margin: 0; font-size: 13px; line-height: 1.7; color: var(--muted); }
+.section-intro p strong { color: var(--text); }
+.section-intro-action { flex-shrink: 0; align-self: center; }
+.section-intro--purple { background: color-mix(in srgb, var(--purple) 6%, var(--surface)); border-color: color-mix(in srgb, var(--purple) 18%, var(--line)); }
+.section-intro--purple .section-intro-icon { background: color-mix(in srgb, var(--purple) 14%, var(--surface-2)); color: var(--purple); }
+.section-intro--teal { background: color-mix(in srgb, var(--teal) 6%, var(--surface)); border-color: color-mix(in srgb, var(--teal) 18%, var(--line)); }
+.section-intro--teal .section-intro-icon { background: color-mix(in srgb, var(--teal) 14%, var(--surface-2)); color: var(--teal); }
+.section-intro--orange { background: color-mix(in srgb, var(--orange) 6%, var(--surface)); border-color: color-mix(in srgb, var(--orange) 18%, var(--line)); }
+.section-intro--orange .section-intro-icon { background: color-mix(in srgb, var(--orange) 14%, var(--surface-2)); color: var(--orange); }
+.section-intro--green { background: color-mix(in srgb, var(--green) 6%, var(--surface)); border-color: color-mix(in srgb, var(--green) 18%, var(--line)); }
+.section-intro--green .section-intro-icon { background: color-mix(in srgb, var(--green) 14%, var(--surface-2)); color: var(--green); }
+.section-intro--amber { background: color-mix(in srgb, var(--amber) 6%, var(--surface)); border-color: color-mix(in srgb, var(--amber) 18%, var(--line)); }
+.section-intro--amber .section-intro-icon { background: color-mix(in srgb, var(--amber) 14%, var(--surface-2)); color: var(--amber); }
+.section-intro--pink { background: color-mix(in srgb, var(--pink) 6%, var(--surface)); border-color: color-mix(in srgb, var(--pink) 18%, var(--line)); }
+.section-intro--pink .section-intro-icon { background: color-mix(in srgb, var(--pink) 14%, var(--surface-2)); color: var(--pink); }
+.section-intro--blue { background: color-mix(in srgb, var(--primary) 6%, var(--surface)); border-color: color-mix(in srgb, var(--primary) 18%, var(--line)); }
+.section-intro--blue .section-intro-icon { background: color-mix(in srgb, var(--primary) 14%, var(--surface-2)); color: var(--primary); }
 
 .role-chip {
   padding: 7px 14px;
@@ -2723,4 +2773,82 @@ body.is-mobile .mobile-card .row-actions {
 @media (max-width: 768px) {
   .quick-nav { grid-template-columns: repeat(2, 1fr); }
   .dashboard-hero-meta { grid-template-columns: 1fr 1fr; }
+  .section-intro { flex-wrap: wrap; }
+  .section-intro-action { width: 100%; }
+}
+
+/* ═══ Micro-interactions & Motion ═══ */
+
+@media (prefers-reduced-motion: no-preference) {
+  .quick-nav-item {
+    transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.22s ease, border-color 0.22s ease;
+  }
+  .quick-nav-item:active { transform: translateY(0) scale(0.98); }
+
+  .stat-cards .stat-card,
+  .stat-cards--ops .stat-card {
+    animation: cardStagger 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .stat-cards .stat-card:nth-child(1),
+  .stat-cards--ops .stat-card:nth-child(1) { animation-delay: 0.04s; }
+  .stat-cards .stat-card:nth-child(2),
+  .stat-cards--ops .stat-card:nth-child(2) { animation-delay: 0.08s; }
+  .stat-cards .stat-card:nth-child(3),
+  .stat-cards--ops .stat-card:nth-child(3) { animation-delay: 0.12s; }
+  .stat-cards .stat-card:nth-child(4),
+  .stat-cards--ops .stat-card:nth-child(4) { animation-delay: 0.16s; }
+  .stat-cards .stat-card:nth-child(5),
+  .stat-cards--ops .stat-card:nth-child(5) { animation-delay: 0.2s; }
+  .stat-cards .stat-card:nth-child(6),
+  .stat-cards--ops .stat-card:nth-child(6) { animation-delay: 0.24s; }
+
+  .dashboard-hero {
+    animation: heroReveal 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .quick-nav .quick-nav-item {
+    animation: cardStagger 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .quick-nav .quick-nav-item:nth-child(1) { animation-delay: 0.06s; }
+  .quick-nav .quick-nav-item:nth-child(2) { animation-delay: 0.1s; }
+  .quick-nav .quick-nav-item:nth-child(3) { animation-delay: 0.14s; }
+  .quick-nav .quick-nav-item:nth-child(4) { animation-delay: 0.18s; }
+  .quick-nav .quick-nav-item:nth-child(5) { animation-delay: 0.22s; }
+  .quick-nav .quick-nav-item:nth-child(6) { animation-delay: 0.26s; }
+
+  .nav-item { transition: background 0.18s ease, color 0.18s ease, transform 0.18s ease; }
+  .nav-item:active { transform: scale(0.98); }
+
+  .button, .mini-button {
+    transition: transform 0.15s ease, box-shadow 0.2s ease, background 0.2s ease;
+  }
+  .button:active:not(:disabled), .mini-button:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+
+  .toast {
+    animation: toastSlide 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+}
+
+@keyframes cardStagger {
+  from { opacity: 0; transform: translateY(12px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes heroReveal {
+  from { opacity: 0; transform: translateY(20px) scale(0.99); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes toastSlide {
+  from { opacity: 0; transform: translateX(-16px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .section.active,
+  .section-intro,
+  .dashboard-hero,
+  .quick-nav-item,
+  .stat-card,
+  .toast { animation: none !important; }
+  .panel:hover { transform: none; }
 }

@@ -180,7 +180,7 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
               <h1 id="pageTitle"><?= e($team['name']) ?></h1>
             </div>
             <div class="global-search" role="search">
-              <span class="global-search-icon" aria-hidden="true">⌕</span>
+              <span class="global-search-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16"><path d="M10.5 3a7.5 7.5 0 1 1 4.73 13.35l4.35 4.35-1.41 1.41-4.35-4.35A7.5 7.5 0 0 1 10.5 3Zm0 2a5.5 5.5 0 1 0 5.5 5.5A5.5 5.5 0 0 0 10.5 5Z" fill="currentColor"/></svg></span>
               <input type="search" id="globalSearch" placeholder="جست‌وجو در بخش فعلی…" autocomplete="off" aria-label="جست‌وجوی سریع" />
             </div>
             <div class="topbar-actions">
@@ -212,11 +212,11 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
                 </div>
               </div>
               <nav class="quick-nav" aria-label="دسترسی سریع">
-                <button type="button" class="quick-nav-item" data-section="profile"><span class="quick-nav-icon">◆</span>پروفایل</button>
-                <button type="button" class="quick-nav-item" data-section="members"><span class="quick-nav-icon">◇</span>اعضا</button>
-                <button type="button" class="quick-nav-item" data-section="desks"><span class="quick-nav-icon">▣</span>میزها</button>
-                <button type="button" class="quick-nav-item" data-section="charges"><span class="quick-nav-icon">◈</span>شارژ</button>
-                <button type="button" class="quick-nav-item" data-section="payments"><span class="quick-nav-icon">◎</span>واریز</button>
+                <button type="button" class="quick-nav-item" data-section="profile"><span class="quick-nav-icon quick-nav-icon--purple"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm-8 9a8 8 0 0 1 16 0Z" fill="currentColor"/></svg></span>پروفایل</button>
+                <button type="button" class="quick-nav-item" data-section="members"><span class="quick-nav-icon quick-nav-icon--teal"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 11c1.7 0 3-1.3 3-3S17.7 5 16 5s-3 1.3-3 3 1.3 3 3 3ZM8 11c1.7 0 3-1.3 3-3S9.7 5 8 5 5 6.3 5 8s1.3 3 3 3Zm0 2c-2.7 0-8 1.3-8 4v3h10v-3c0-1.1.4-2.1 1.1-2.9C9.8 13.1 8.9 13 8 13Zm8 0c-.9 0-1.8.1-2.6.3.7.8 1.1 1.8 1.1 2.9v3h7v-3c0-2.7-5.3-4-8-4Z" fill="currentColor"/></svg></span>اعضا</button>
+                <button type="button" class="quick-nav-item" data-section="desks"><span class="quick-nav-icon quick-nav-icon--orange"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16a1 1 0 0 1 1 1v3H3V6a1 1 0 0 1 1-1Zm17 6v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-8h18ZM8 17h2v-3H8v3Zm6 0h2v-3h-2v3Z" fill="currentColor"/></svg></span>میزها</button>
+                <button type="button" class="quick-nav-item" data-section="charges"><span class="quick-nav-icon quick-nav-icon--amber"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 4 6v6c0 5 3.4 9.7 8 11 4.6-1.3 8-6 8-11V6l-8-4Zm0 6.5A2.5 2.5 0 1 1 9.5 6 2.5 2.5 0 0 1 12 8.5Z" fill="currentColor"/></svg></span>شارژ</button>
+                <button type="button" class="quick-nav-item" data-section="payments"><span class="quick-nav-icon quick-nav-icon--pink"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4Zm2 2v2h12V7Zm0 4v2h8v-2Z" fill="currentColor"/></svg></span>واریز</button>
               </nav>
               <div id="cards" class="stat-cards"></div>
               <div class="grid two">
@@ -245,34 +245,50 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
             </section>
 
             <section id="profile" class="section">
+              <div class="section-intro section-intro--purple">
+                <span class="section-intro-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm-8 9a8 8 0 0 1 16 0Z" fill="currentColor"/></svg></span>
+                <div class="section-intro-copy"><p>قرارداد، میزها و بدهی هر سال — با تب سال می‌توانید سوابق گذشته را هم ببینید.</p></div>
+              </div>
               <article class="panel">
                 <div class="panel-head"><h2>پروفایل و سوابق سالانه</h2></div>
-                <p class="hint">قرارداد، میزها و بدهی هر سال — با تب سال می‌توانید سوابق گذشته را هم ببینید.</p>
                 <div id="teamProfileContent" class="team-profile-content">در حال بارگذاری…</div>
               </article>
             </section>
 
             <section id="members" class="section">
-              <p class="hint">برای افزودن عضو جدید از «+ افزودن» استفاده کنید. برای اعضای تأیید‌شده فقط می‌توانید <strong>درخواست ویرایش</strong> یا <strong>درخواست حذف</strong> ثبت کنید — تغییر پس از تأیید مرکز اعمال می‌شود.</p>
+              <div class="section-intro section-intro--teal">
+                <span class="section-intro-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M16 11c1.7 0 3-1.3 3-3S17.7 5 16 5s-3 1.3-3 3 1.3 3 3 3ZM8 11c1.7 0 3-1.3 3-3S9.7 5 8 5 5 6.3 5 8s1.3 3 3 3Zm0 2c-2.7 0-8 1.3-8 4v3h10v-3c0-1.1.4-2.1 1.1-2.9C9.8 13.1 8.9 13 8 13Zm8 0c-.9 0-1.8.1-2.6.3.7.8 1.1 1.8 1.1 2.9v3h7v-3c0-2.7-5.3-4-8-4Z" fill="currentColor"/></svg></span>
+                <div class="section-intro-copy"><p>برای افزودن عضو جدید از «+ افزودن» استفاده کنید. برای اعضای تأیید‌شده فقط می‌توانید <strong>درخواست ویرایش</strong> یا <strong>درخواست حذف</strong> ثبت کنید — تغییر پس از تأیید مرکز اعمال می‌شود.</p></div>
+              </div>
               <data-table title="اعضای نهاد" endpoint="api.php?resource=members"></data-table>
               <data-table title="درخواست‌های تغییر عضو" endpoint="api.php?resource=member-requests" data-readonly></data-table>
             </section>
 
             <section id="desks" class="section">
+              <div class="section-intro section-intro--orange">
+                <span class="section-intro-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 5h16a1 1 0 0 1 1 1v3H3V6a1 1 0 0 1 1-1Zm17 6v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-8h18ZM8 17h2v-3H8v3Zm6 0h2v-3h-2v3Z" fill="currentColor"/></svg></span>
+                <div class="section-intro-copy"><p>میزهای فعال (بازه تخصیص هنوز تمام نشده) و سوابق پایان‌یافته — بازه هر میز روی کارت نمایش داده می‌شود.</p></div>
+              </div>
               <article class="panel">
                 <div class="panel-head"><h2>میزهای اختصاص‌یافته</h2></div>
-                <p class="hint">میزهای فعال (بازه تخصیص هنوز تمام نشده) و سوابق پایان‌یافته — بازه هر میز روی کارت نمایش داده می‌شود.</p>
                 <div id="teamDeskAssignments" class="desk-assignment-list">در حال بارگذاری…</div>
               </article>
             </section>
 
             <section id="lockers" class="section">
-              <p class="hint">برای درخواست کمد جدید، درخواست ثبت کنید. پس از تأیید مدیر، کمد به نهاد تخصیص می‌یابد.</p>
+              <div class="section-intro section-intro--green">
+                <span class="section-intro-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm0 4v12h12V7H6Zm3 2h2v2H9V9Zm4 0h2v2h-2V9Z" fill="currentColor"/></svg></span>
+                <div class="section-intro-copy"><p>برای درخواست کمد جدید، درخواست ثبت کنید. پس از تأیید مدیر، کمد به نهاد تخصیص می‌یابد.</p></div>
+              </div>
               <data-table title="درخواست‌های کمد" endpoint="api.php?resource=locker-requests"></data-table>
               <data-table title="کمدهای تخصیص‌یافته" endpoint="api.php?resource=lockers" data-readonly></data-table>
             </section>
 
             <section id="charges" class="section">
+              <div class="section-intro section-intro--amber">
+                <span class="section-intro-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2 4 6v6c0 5 3.4 9.7 8 11 4.6-1.3 8-6 8-11V6l-8-4Zm0 6.5A2.5 2.5 0 1 1 9.5 6 2.5 2.5 0 0 1 12 8.5Z" fill="currentColor"/></svg></span>
+                <div class="section-intro-copy"><p>نرخ شارژ سال جاری و وضعیت پرداخت هر ماه — کلاژ شارژ بر اساس تخصیص میز و نرخ‌های مرکز محاسبه می‌شود.</p></div>
+              </div>
               <article class="panel" id="teamChargeRatesPanel">
                 <div class="panel-head"><h2>نرخ شارژ سال جاری</h2></div>
                 <div id="teamChargeRates" class="team-charge-rates">در حال بارگذاری…</div>
@@ -288,6 +304,10 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
             </section>
 
             <section id="payments" class="section">
+              <div class="section-intro section-intro--pink">
+                <span class="section-intro-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4Zm2 2v2h12V7Zm0 4v2h8v-2Z" fill="currentColor"/></svg></span>
+                <div class="section-intro-copy"><p>اطلاعات حساب بانکی مرکز، اعلام واریز و پیگیری تأیید پرداخت‌ها.</p></div>
+              </div>
               <article class="panel" id="paymentGuidePanel">
                 <div class="panel-head"><h2>راهنمای پرداخت شارژ</h2></div>
                 <div id="paymentGuideContent" class="payment-guide">در حال بارگذاری…</div>

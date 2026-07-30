@@ -224,7 +224,7 @@ $assetVer = (string) max(
               <h1 id="pageTitle">مدیریت مرکز نوآوری</h1>
             </div>
             <div class="global-search" role="search">
-              <span class="global-search-icon" aria-hidden="true">⌕</span>
+              <span class="global-search-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16"><path d="M10.5 3a7.5 7.5 0 1 1 4.73 13.35l4.35 4.35-1.41 1.41-4.35-4.35A7.5 7.5 0 0 1 10.5 3Zm0 2a5.5 5.5 0 1 0 5.5 5.5A5.5 5.5 0 0 0 10.5 5Z" fill="currentColor"/></svg></span>
               <input type="search" id="globalSearch" placeholder="جست‌وجو در بخش فعلی…" autocomplete="off" aria-label="جست‌وجوی سریع" />
             </div>
             <div class="topbar-actions">
@@ -262,13 +262,13 @@ $assetVer = (string) max(
             </div>
 
             <nav class="quick-nav" id="quickNav" aria-label="دسترسی سریع">
-              <button type="button" class="quick-nav-item" data-section="teams"><span class="quick-nav-icon">◆</span>نهادها</button>
-              <button type="button" class="quick-nav-item" data-section="members"><span class="quick-nav-icon">◇</span>اعضا</button>
-              <button type="button" class="quick-nav-item" data-section="desks"><span class="quick-nav-icon">▣</span>میزها</button>
-              <button type="button" class="quick-nav-item" data-section="charges"><span class="quick-nav-icon">◈</span>شارژ</button>
-              <button type="button" class="quick-nav-item" data-section="transactions"><span class="quick-nav-icon">◎</span>مالی</button>
+              <button type="button" class="quick-nav-item" data-section="teams"><span class="quick-nav-icon quick-nav-icon--purple"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm-7 8a7 7 0 0 1 14 0Z" fill="currentColor"/></svg></span>نهادها</button>
+              <button type="button" class="quick-nav-item" data-section="members"><span class="quick-nav-icon quick-nav-icon--teal"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 11c1.7 0 3-1.3 3-3S17.7 5 16 5s-3 1.3-3 3 1.3 3 3 3ZM8 11c1.7 0 3-1.3 3-3S9.7 5 8 5 5 6.3 5 8s1.3 3 3 3Zm0 2c-2.7 0-8 1.3-8 4v3h10v-3c0-1.1.4-2.1 1.1-2.9C9.8 13.1 8.9 13 8 13Zm8 0c-.9 0-1.8.1-2.6.3.7.8 1.1 1.8 1.1 2.9v3h7v-3c0-2.7-5.3-4-8-4Z" fill="currentColor"/></svg></span>اعضا</button>
+              <button type="button" class="quick-nav-item" data-section="desks"><span class="quick-nav-icon quick-nav-icon--orange"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16a1 1 0 0 1 1 1v3H3V6a1 1 0 0 1 1-1Zm17 6v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-8h18ZM8 17h2v-3H8v3Zm6 0h2v-3h-2v3Z" fill="currentColor"/></svg></span>میزها</button>
+              <button type="button" class="quick-nav-item" data-section="charges"><span class="quick-nav-icon quick-nav-icon--amber"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 4 6v6c0 5 3.4 9.7 8 11 4.6-1.3 8-6 8-11V6l-8-4Zm0 6.5A2.5 2.5 0 1 1 9.5 6 2.5 2.5 0 0 1 12 8.5Z" fill="currentColor"/></svg></span>شارژ</button>
+              <button type="button" class="quick-nav-item" data-section="transactions"><span class="quick-nav-icon quick-nav-icon--pink"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4Zm2 2v2h12V7Zm0 4v2h8v-2Z" fill="currentColor"/></svg></span>مالی</button>
               <?php if (Access::isAdmin()): ?>
-              <button type="button" class="quick-nav-item" data-section="reports"><span class="quick-nav-icon">▤</span>گزارش</button>
+              <button type="button" class="quick-nav-item" data-section="reports"><span class="quick-nav-icon quick-nav-icon--blue"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h9l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm8 1.5V8h4.5L14 3.5ZM8 12h8v2H8v-2Zm0 4h8v2H8v-2Zm0-8h4v2H8V8Z" fill="currentColor"/></svg></span>گزارش</button>
               <?php endif; ?>
             </nav>
 
@@ -306,7 +306,10 @@ $assetVer = (string) max(
             </section>
 
             <section id="teams" class="section">
-              <div class="section-intro"><p>هر نهاد را از دکمه <strong>پروفایل</strong> باز کنید — قرارداد، میز و بدهی هر سال در یکجا مدیریت می‌شود.</p></div>
+              <div class="section-intro section-intro--purple">
+                <span class="section-intro-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm-7 8a7 7 0 0 1 14 0Z" fill="currentColor"/></svg></span>
+                <div class="section-intro-copy"><p>هر نهاد را از دکمه <strong>پروفایل</strong> باز کنید — قرارداد، میز و بدهی هر سال در یکجا مدیریت می‌شود.</p></div>
+              </div>
               <?php if (Access::canWrite()): ?>
               <article class="panel">
                 <div class="panel-head">
@@ -320,12 +323,18 @@ $assetVer = (string) max(
             </section>
 
             <section id="team-contracts" class="section">
-              <p class="hint">همه قراردادهای سال جاری و سال‌های قبل — قراردادهای <strong>فعال</strong> (در بازه امروز) در بالای لیست نمایش داده می‌شوند.</p>
+              <div class="section-intro section-intro--purple">
+                <span class="section-intro-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 3h10a2 2 0 0 1 2 2v14l-7-3-7 3V5a2 2 0 0 1 2-2Z" fill="currentColor"/></svg></span>
+                <div class="section-intro-copy"><p>همه قراردادهای سال جاری و سال‌های قبل — قراردادهای <strong>فعال</strong> (در بازه امروز) در بالای لیست نمایش داده می‌شوند.</p></div>
+              </div>
               <data-table title="قراردادهای نهادها" endpoint="api.php?resource=team_contracts"></data-table>
             </section>
 
             <section id="members" class="section">
-              <p class="hint">اعضای تأییدشده در لیست اصلی نمایش داده می‌شوند. درخواست‌های نهادها در جدول «در انتظار تأیید» بررسی می‌شود. کد تردد پس از تأیید، به‌صورت حضوری و با تأخیر ثبت می‌شود.</p>
+              <div class="section-intro section-intro--teal">
+                <span class="section-intro-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M16 11c1.7 0 3-1.3 3-3S17.7 5 16 5s-3 1.3-3 3 1.3 3 3 3ZM8 11c1.7 0 3-1.3 3-3S9.7 5 8 5 5 6.3 5 8s1.3 3 3 3Zm0 2c-2.7 0-8 1.3-8 4v3h10v-3c0-1.1.4-2.1 1.1-2.9C9.8 13.1 8.9 13 8 13Zm8 0c-.9 0-1.8.1-2.6.3.7.8 1.1 1.8 1.1 2.9v3h7v-3c0-2.7-5.3-4-8-4Z" fill="currentColor"/></svg></span>
+                <div class="section-intro-copy"><p>اعضای تأییدشده در لیست اصلی نمایش داده می‌شوند. درخواست‌های نهادها در جدول «در انتظار تأیید» بررسی می‌شود. کد تردد پس از تأیید، به‌صورت حضوری و با تأخیر ثبت می‌شود.</p></div>
+              </div>
               <?php if (Access::isAdmin()): ?>
               <data-table title="اعضا — در انتظار تأیید نهاد" endpoint="api.php?resource=pending-members" data-workflow="members" data-workflow-type="member-approve" data-table-key="pending-members" data-readonly></data-table>
               <data-table title="درخواست ویرایش/حذف عضو" endpoint="api.php?resource=pending-member-requests" data-workflow="members" data-workflow-type="member-request" data-table-key="pending-member-requests" data-readonly></data-table>
@@ -341,10 +350,13 @@ $assetVer = (string) max(
 
             <section id="sms" class="section">
               <div id="smsSetupBanner" hidden></div>
-              <div class="sms-page-head">
-                <p class="hint">ارسال پیامک از طریق <strong>ملی‌پیامک</strong>. تنظیمات API در بخش <button type="button" class="text-link" data-go="sms-settings">تنظیمات پیامک</button>. مدیر مشاهده‌گر فقط آمار و تاریخچه را می‌بیند.</p>
+              <div class="section-intro section-intro--green">
+                <span class="section-intro-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2Zm0 2v.5L12 13 4 6.5V6ZM4 18V8.2l7.4 6.5a1 1 0 0 0 1.2 0L20 8.2V18Z" fill="currentColor"/></svg></span>
+                <div class="section-intro-copy">
+                  <p>ارسال پیامک از طریق <strong>ملی‌پیامک</strong>. تنظیمات API در بخش <button type="button" class="text-link" data-go="sms-settings">تنظیمات پیامک</button>. مدیر مشاهده‌گر فقط آمار و تاریخچه را می‌بیند.</p>
+                </div>
                 <?php if (Access::canWrite()): ?>
-                <button type="button" class="button ghost" data-go="sms-settings">تنظیمات پیامک</button>
+                <button type="button" class="button ghost section-intro-action" data-go="sms-settings">تنظیمات پیامک</button>
                 <?php endif; ?>
               </div>
               <article class="panel">
@@ -392,7 +404,10 @@ $assetVer = (string) max(
             </section>
 
             <section id="sms-settings" class="section">
-              <p class="hint">اتصال REST ملی‌پیامک. حساب API و شماره خط ارسال را جداگانه وارد و ذخیره کنید.</p>
+              <div class="section-intro section-intro--green">
+                <span class="section-intro-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 8a1 1 0 0 1 1 1v3h3a1 1 0 1 1 0 2h-4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Zm8-3H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Z" fill="currentColor"/></svg></span>
+                <div class="section-intro-copy"><p>اتصال REST ملی‌پیامک. حساب API و شماره خط ارسال را جداگانه وارد و ذخیره کنید.</p></div>
+              </div>
               <article class="panel">
                 <div class="panel-head"><h2>حساب API ملی‌پیامک</h2></div>
                 <form id="smsCredentialsForm" class="payment-settings-form">در حال بارگذاری…</form>
@@ -415,6 +430,10 @@ $assetVer = (string) max(
             </section>
 
             <section id="desks" class="section">
+              <div class="section-intro section-intro--orange">
+                <span class="section-intro-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 5h16a1 1 0 0 1 1 1v3H3V6a1 1 0 0 1 1-1Zm17 6v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-8h18ZM8 17h2v-3H8v3Zm6 0h2v-3h-2v3Z" fill="currentColor"/></svg></span>
+                <div class="section-intro-copy"><p>نقشه ۲۴ میز سال جاری — <?php if (Access::canWrite()): ?>روی هر میز کلیک کنید تا تخصیص را ویرایش کنید.<?php else: ?>میزها به نهاد تخصیص می‌یابند.<?php endif; ?></p></div>
+              </div>
               <article class="panel">
                 <div class="panel-head">
                   <h2>نقشه ۲۴ میز — سال جاری</h2>
@@ -431,6 +450,10 @@ $assetVer = (string) max(
             </section>
 
             <section id="desk-history" class="section">
+              <div class="section-intro section-intro--orange">
+                <span class="section-intro-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 3h10v4H7V3Zm0 6h10v12H7V9Zm2 2v2h6v-2H9Zm0 4v2h4v-2H9Z" fill="currentColor"/></svg></span>
+                <div class="section-intro-copy"><p>تخصیص میز فقط برای نهادهایی با <strong>قرارداد ثبت‌شده</strong> امکان‌پذیر است. بازه‌ها به‌صورت ماه نمایش داده می‌شوند.</p></div>
+              </div>
               <article class="panel desk-history-panel">
                 <div class="panel-head">
                   <h2>تاریخچه تخصیص میزها</h2>
@@ -438,13 +461,17 @@ $assetVer = (string) max(
                   <button id="deskHistoryAddButton" class="button" type="button">ثبت تخصیص میز</button>
                   <?php endif; ?>
                 </div>
-                <p class="hint">تخصیص میز فقط برای نهادهایی با <strong>قرارداد ثبت‌شده</strong> امکان‌پذیر است. بازه‌ها به‌صورت ماه نمایش داده می‌شوند (مثلاً از فروردین تا مرداد).</p>
+                <p class="hint">بازه‌ها به‌صورت ماه نمایش داده می‌شوند (مثلاً از فروردین تا مرداد).</p>
                 <div id="deskHistoryFilters"></div>
                 <data-table id="deskAssignmentsTable" title="" endpoint="api.php?resource=desk-assignments" data-no-add></data-table>
               </article>
             </section>
 
             <section id="lockers" class="section">
+              <div class="section-intro section-intro--green">
+                <span class="section-intro-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm0 4v12h12V7H6Zm3 2h2v2H9V9Zm4 0h2v2h-2V9Z" fill="currentColor"/></svg></span>
+                <div class="section-intro-copy"><p>مدیریت کمدها و درخواست‌های نهادها — پس از تأیید، کمد به نهاد تخصیص می‌یابد.</p></div>
+              </div>
               <?php if (Access::isAdmin()): ?>
               <data-table title="درخواست کمد — در انتظار تأیید" endpoint="api.php?resource=pending-locker-requests" data-workflow="lockers" data-workflow-type="locker-request" data-table-key="pending-locker-requests" data-readonly></data-table>
               <?php endif; ?>
@@ -452,7 +479,10 @@ $assetVer = (string) max(
             </section>
 
             <section id="charges" class="section">
-              <p class="hint">نرخ شارژ و اجاره <strong>به ازای هر میز</strong> است. ماه‌های شارژ از <strong>بازه تخصیص میز</strong> محاسبه می‌شود (نه فقط تاریخ قرارداد). ویرایش دستی شارژ در محاسبه خودکار حفظ می‌شود.</p>
+              <div class="section-intro section-intro--amber">
+                <span class="section-intro-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2 4 6v6c0 5 3.4 9.7 8 11 4.6-1.3 8-6 8-11V6l-8-4Zm0 6.5A2.5 2.5 0 1 1 9.5 6 2.5 2.5 0 0 1 12 8.5Z" fill="currentColor"/></svg></span>
+                <div class="section-intro-copy"><p>نرخ شارژ و اجاره <strong>به ازای هر میز</strong> است. ماه‌های شارژ از <strong>بازه تخصیص میز</strong> محاسبه می‌شود. ویرایش دستی شارژ در محاسبه خودکار حفظ می‌شود.</p></div>
+              </div>
               <data-table title="نرخ‌های سالانه" endpoint="api.php?resource=rate_settings"></data-table>
               <article class="panel">
                 <div class="panel-head">
@@ -471,7 +501,10 @@ $assetVer = (string) max(
             </section>
 
             <section id="transactions" class="section">
-              <p class="hint">دفتر معین فقط <strong>گردش نقدی واقعی</strong> را نشان می‌دهد: واریز تأییدشده نهادها، درآمد و هزینه دستی. شارژ و مطالبات در بخش شارژ محاسبه می‌شود و اینجا تکرار نمی‌شود.</p>
+              <div class="section-intro section-intro--pink">
+                <span class="section-intro-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4Zm2 2v2h12V7Zm0 4v2h8v-2Z" fill="currentColor"/></svg></span>
+                <div class="section-intro-copy"><p>دفتر معین فقط <strong>گردش نقدی واقعی</strong> را نشان می‌دهد: واریز تأییدشده نهادها، درآمد و هزینه دستی. شارژ و مطالبات در بخش شارژ محاسبه می‌شود.</p></div>
+              </div>
               <article class="panel" id="ledgerPanel">
                 <div class="panel-head">
                   <h2>دفتر معین — موجودی حساب مرکز</h2>
@@ -570,7 +603,10 @@ $assetVer = (string) max(
             </section>
 
             <section id="reports" class="section">
-              <p class="hint">نوع گزارش، بازه زمانی (ماهانه / سه‌ماهه / سالانه / سفارشی) و در صورت نیاز نهاد را انتخاب کنید؛ سپس پیش‌نمایش، چاپ PDF یا Excel بگیرید.</p>
+              <div class="section-intro section-intro--blue">
+                <span class="section-intro-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm8 1.5V8h4.5L14 3.5ZM8 12h8v2H8v-2Zm0 4h8v2H8v-2Zm0-8h4v2H8V8Z" fill="currentColor"/></svg></span>
+                <div class="section-intro-copy"><p>نوع گزارش، بازه زمانی (ماهانه / سه‌ماهه / سالانه / سفارشی) و در صورت نیاز نهاد را انتخاب کنید؛ سپس پیش‌نمایش، چاپ PDF یا Excel بگیرید.</p></div>
+              </div>
               <article class="panel report-builder-panel">
                 <div class="panel-head">
                   <h2>سازنده گزارش</h2>
@@ -635,14 +671,20 @@ $assetVer = (string) max(
 
             <?php if (Access::canWrite()): ?>
             <section id="development" class="section">
-              <p class="hint">برنامه‌های جاری مرکز — عنوان، وضعیت، اولویت و موعد.</p>
+              <div class="section-intro section-intro--purple">
+                <span class="section-intro-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 4h16v4H4V4Zm0 6h10v4H4v-4Zm0 6h16v4H4v-4Z" fill="currentColor"/></svg></span>
+                <div class="section-intro-copy"><p>برنامه‌های جاری مرکز — عنوان، وضعیت، اولویت و موعد.</p></div>
+              </div>
               <data-table title="برنامه‌های توسعه" endpoint="api.php?resource=development_plans"></data-table>
             </section>
             <?php endif; ?>
 
             <?php if (Access::isAdmin()): ?>
             <section id="users" class="section">
-              <p class="hint">مدیران سیستم — هنگام ثبت نهاد می‌توانید رمز ورود را خودکار بسازید یا دستی تعیین کنید.</p>
+              <div class="section-intro section-intro--purple">
+                <span class="section-intro-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm-8 9a8 8 0 0 1 16 0Z" fill="currentColor"/></svg></span>
+                <div class="section-intro-copy"><p>مدیران سیستم — هنگام ثبت نهاد می‌توانید رمز ورود را خودکار بسازید یا دستی تعیین کنید.</p></div>
+              </div>
               <data-table title="کاربران مدیر" endpoint="api.php?resource=panel_users"></data-table>
             </section>
             <?php endif; ?>

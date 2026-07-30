@@ -1,10 +1,25 @@
-/* گزارش چاپی A4 — مستقل از تم پنل */
+/* گزارش چاپی A4 — Luxury Print Theme (هماهنگ با پنل مکینو) */
 @page {
   size: A4 portrait;
   margin: 12mm 11mm 14mm;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
+
+:root {
+  --report-bg: #ece8df;
+  --report-surface: #ffffff;
+  --report-text: #14120f;
+  --report-muted: #6b6560;
+  --report-primary: #1a2f4a;
+  --report-accent: #a67c52;
+  --report-accent-light: #c9a87c;
+  --report-line: rgba(26, 24, 20, 0.12);
+  --report-line-soft: rgba(26, 24, 20, 0.08);
+  --report-success: #1f6b4f;
+  --report-danger: #b42318;
+  --report-warning: #92610a;
+}
 
 html {
   font-family: "Vazirmatn", Tahoma, sans-serif;
@@ -16,8 +31,8 @@ html {
 
 body {
   margin: 0;
-  color: #0f2744;
-  background: #e8eef5;
+  color: var(--report-text);
+  background: var(--report-bg);
   direction: rtl;
 }
 
@@ -29,16 +44,19 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 12px 20px;
-  background: #fff;
-  border-bottom: 1px solid #c5d7ef;
-  box-shadow: 0 4px 16px rgba(15, 39, 68, 0.08);
+  padding: 14px 22px;
+  background: rgba(255, 255, 255, 0.94);
+  border-bottom: 1px solid var(--report-line);
+  box-shadow: 0 8px 32px rgba(20, 18, 15, 0.08);
+  backdrop-filter: blur(16px);
 }
 
 .report-toolbar h1 {
   margin: 0;
   font-size: 15px;
   font-weight: 800;
+  color: var(--report-primary);
+  letter-spacing: -0.02em;
 }
 
 .report-actions { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -47,38 +65,58 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 14px;
-  border: 1px solid #2563eb;
-  border-radius: 8px;
-  background: #2563eb;
-  color: #fff;
+  padding: 9px 16px;
+  border: 1px solid var(--report-primary);
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--report-primary), color-mix(in srgb, var(--report-primary) 80%, #000));
+  color: #f5f0e8;
   font: inherit;
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
   text-decoration: none;
+  transition: transform 0.15s ease, box-shadow 0.2s ease;
+}
+.btn:hover {
+  box-shadow: 0 6px 20px rgba(26, 47, 74, 0.2);
 }
 .btn--ghost {
-  background: #fff;
-  color: #2563eb;
+  background: var(--report-surface);
+  color: var(--report-primary);
+  border-color: var(--report-line);
+}
+.btn--ghost:hover {
+  border-color: color-mix(in srgb, var(--report-accent) 40%, var(--report-line));
+  color: var(--report-accent);
 }
 
 .report-doc {
   width: 210mm;
   min-height: 297mm;
-  margin: 16px auto;
+  margin: 20px auto;
   padding: 14mm 12mm;
-  background: #fff;
-  box-shadow: 0 8px 32px rgba(15, 39, 68, 0.12);
+  background: var(--report-surface);
+  box-shadow: 0 24px 64px rgba(20, 18, 15, 0.12);
+  border-radius: 4px;
 }
 
 /* ── سربرگ ── */
 .report-cover {
   display: grid;
-  gap: 14px;
-  margin-bottom: 18px;
-  padding-bottom: 16px;
-  border-bottom: 3px solid #2563eb;
+  gap: 16px;
+  margin-bottom: 20px;
+  padding-bottom: 18px;
+  border-bottom: 3px solid var(--report-accent);
+  position: relative;
+}
+.report-cover::after {
+  content: "";
+  position: absolute;
+  bottom: -3px;
+  right: 0;
+  width: 80px;
+  height: 3px;
+  background: var(--report-primary);
 }
 
 .report-brand {
@@ -94,10 +132,10 @@ body {
   width: min(150px, 34vw);
   place-items: center;
   flex-shrink: 0;
-  border-radius: 14px;
-  border: 1px solid #c5d7ef;
-  background: #fff;
-  padding: 8px 12px 6px;
+  border-radius: 16px;
+  border: 1px solid var(--report-line);
+  background: #faf8f4;
+  padding: 10px 14px 8px;
   overflow: hidden;
 }
 
@@ -110,20 +148,20 @@ body {
   display: block;
 }
 
-.report-brand-mark .brand-logo--dark {
-  display: none;
-}
+.report-brand-mark .brand-logo--dark { display: none; }
 
 .report-brand-text strong {
   display: block;
   font-size: 18pt;
   font-weight: 800;
-  color: #0f2744;
+  color: var(--report-primary);
+  letter-spacing: -0.02em;
 }
 .report-brand-text small {
   display: block;
-  color: #5b7a99;
+  color: var(--report-muted);
   font-size: 10pt;
+  margin-top: 4px;
 }
 
 .report-meta {
@@ -131,62 +169,80 @@ body {
   flex-wrap: wrap;
   gap: 8px;
   font-size: 10pt;
-  color: #4a6282;
+  color: var(--report-muted);
 }
 .report-meta span {
-  padding: 4px 10px;
+  padding: 5px 12px;
   border-radius: 999px;
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
+  background: color-mix(in srgb, var(--report-accent) 8%, #fff);
+  border: 1px solid color-mix(in srgb, var(--report-accent) 25%, var(--report-line));
+  color: var(--report-primary);
+  font-weight: 600;
 }
 
 /* ── KPI ── */
 .kpi-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
-  margin-bottom: 16px;
+  gap: 10px;
+  margin-bottom: 18px;
 }
 .kpi {
-  padding: 10px 12px;
-  border: 1px solid #c5d7ef;
-  border-radius: 10px;
-  background: #f8fbff;
+  padding: 12px 14px;
+  border: 1px solid var(--report-line);
+  border-radius: 12px;
+  background: linear-gradient(160deg, #faf8f4 0%, #fff 100%);
+  position: relative;
+  overflow: hidden;
+}
+.kpi::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 4px;
+  height: 100%;
+  background: var(--report-accent);
+  border-radius: 0 12px 12px 0;
 }
 .kpi-label {
   display: block;
   font-size: 9pt;
-  color: #5b7a99;
+  color: var(--report-muted);
   font-weight: 600;
 }
 .kpi-value {
   display: block;
-  margin-top: 4px;
+  margin-top: 5px;
   font-size: 13pt;
   font-weight: 800;
-  color: #1d4ed8;
+  color: var(--report-primary);
+  font-variant-numeric: tabular-nums;
 }
-.kpi--danger .kpi-value { color: #dc2626; }
-.kpi--success .kpi-value { color: #059669; }
+.kpi--danger .kpi-value { color: var(--report-danger); }
+.kpi--danger::before { background: var(--report-danger); }
+.kpi--success .kpi-value { color: var(--report-success); }
+.kpi--success::before { background: var(--report-success); }
 
 .section-title {
   margin: 0 0 10px;
-  padding-bottom: 6px;
+  padding-bottom: 8px;
   font-size: 13pt;
   font-weight: 800;
-  color: #1e3a5f;
-  border-bottom: 2px solid #dbeafe;
+  color: var(--report-primary);
+  border-bottom: 2px solid color-mix(in srgb, var(--report-accent) 30%, var(--report-line-soft));
   page-break-after: avoid;
+  letter-spacing: -0.01em;
 }
 
 .section-note {
   margin: 0 0 10px;
   font-size: 9.5pt;
-  color: #5b7a99;
+  color: var(--report-muted);
 }
 
 .report-section {
-  margin-bottom: 18px;
+  margin-bottom: 20px;
 }
 
 .report-section--break {
@@ -199,6 +255,8 @@ body {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   margin-bottom: 4px;
+  border-radius: 10px;
+  border: 1px solid var(--report-line-soft);
 }
 
 .data-table {
@@ -210,42 +268,50 @@ body {
 .data-table--wide { min-width: 720px; }
 .data-table th,
 .data-table td {
-  padding: 6px 8px;
-  border: 1px solid #c5d7ef;
+  padding: 7px 9px;
+  border: 1px solid var(--report-line-soft);
   text-align: center;
   vertical-align: middle;
 }
 .data-table th {
-  background: #dbeafe;
-  color: #1e3a5f;
+  background: color-mix(in srgb, var(--report-primary) 8%, #faf8f4);
+  color: var(--report-primary);
   font-weight: 800;
   white-space: nowrap;
+  font-size: 9pt;
+  letter-spacing: 0.02em;
 }
-.data-table tbody tr:nth-child(even) { background: #f8fbff; }
-.data-table .num { font-variant-numeric: tabular-nums; direction: ltr; text-align: center; unicode-bidi: isolate; white-space: nowrap; }
-.data-table .status-paid { color: #059669; font-weight: 700; }
-.data-table .status-debt { color: #dc2626; font-weight: 700; }
-.data-table .status-partial { color: #d97706; font-weight: 700; }
+.data-table tbody tr:nth-child(even) { background: #faf8f4; }
+.data-table .num {
+  font-variant-numeric: tabular-nums;
+  direction: ltr;
+  text-align: center;
+  unicode-bidi: isolate;
+  white-space: nowrap;
+}
+.data-table .status-paid { color: var(--report-success); font-weight: 700; }
+.data-table .status-debt { color: var(--report-danger); font-weight: 700; }
+.data-table .status-partial { color: var(--report-warning); font-weight: 700; }
 
 .empty-row td {
   text-align: center;
-  color: #94a3b8;
+  color: var(--report-muted);
   font-style: italic;
-  padding: 14px;
+  padding: 16px;
 }
 
 .two-col {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 14px;
+  gap: 16px;
 }
 
 .report-footer {
-  margin-top: 20px;
-  padding-top: 10px;
-  border-top: 1px dashed #c5d7ef;
+  margin-top: 24px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--report-line);
   font-size: 9pt;
-  color: #94a3b8;
+  color: var(--report-muted);
   text-align: center;
 }
 
@@ -259,8 +325,9 @@ body {
     margin: 0;
     padding: 0;
     box-shadow: none;
+    border-radius: 0;
   }
-  .table-scroll { overflow: visible; }
+  .table-scroll { overflow: visible; border: none; }
   .data-table { font-size: 8pt; }
   .data-table--wide { min-width: 0; }
   .kpi-grid { grid-template-columns: repeat(3, 1fr); gap: 6px; }
