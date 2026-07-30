@@ -4,12 +4,13 @@ declare(strict_types=1);
 
 final class Schema
 {
-    private const VERSION = 16;
+    private const VERSION = 17;
 
     public static function migrate(PDO $pdo): void
     {
         if (self::storedVersion($pdo) >= self::VERSION) {
             self::ensureColumns($pdo);
+            self::ensureMeetingRoomTables($pdo);
             self::reconcileDeskAssignments($pdo);
             return;
         }
@@ -22,6 +23,7 @@ final class Schema
         self::ensureColumns($pdo);
         self::ensureWorkflowTables($pdo);
         self::ensureMemberRequestsTable($pdo);
+        self::ensureMeetingRoomTables($pdo);
         self::ensureTeamContractsTable($pdo);
         self::ensureColumns($pdo);
         self::dropLegacyColumns($pdo);
@@ -366,6 +368,11 @@ final class Schema
                 'sms_live_synced_at' => 'VARCHAR(32) NULL',
                 'legacy_team_contracts_migrated' => 'TINYINT NOT NULL DEFAULT 0',
                 'desk_assignments_normalized' => 'TINYINT NOT NULL DEFAULT 0',
+                'room_auto_approve' => 'TINYINT NOT NULL DEFAULT 1',
+                'room_max_advance_days' => 'INT NOT NULL DEFAULT 14',
+                'room_max_hours_per_day' => 'INT NOT NULL DEFAULT 2',
+                'room_slot_minutes' => 'INT NOT NULL DEFAULT 60',
+                'room_public_enabled' => 'TINYINT NOT NULL DEFAULT 1',
             ],
             'lockers' => [
                 'team_id' => 'INT NULL',
@@ -878,6 +885,122 @@ final class Schema
         );
     }
 
+    private static function ensureMeetingRoomTables(PDO $pdo): void
+    {
+        $isSqlite = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite';
+        if ($isSqlite) {
+            $pdo->exec(
+                "CREATE TABLE IF NOT EXISTS meeting_rooms (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    code TEXT,
+                    capacity INTEGER NOT NULL DEFAULT 10,
+                    floor TEXT,
+                    equipment TEXT,
+                    open_time TEXT NOT NULL DEFAULT '08:00',
+                    close_time TEXT NOT NULL DEFAULT '20:00',
+                    slot_minutes INTEGER NOT NULL DEFAULT 60,
+                    notes TEXT,
+                    is_active INTEGER NOT NULL DEFAULT 1,
+                    created_at TEXT,
+                    updated_at TEXT
+                );
+                CREATE TABLE IF NOT EXISTS room_reservations (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    room_id INTEGER NOT NULL,
+                    reserved_date TEXT NOT NULL,
+                    start_time TEXT NOT NULL,
+                    end_time TEXT NOT NULL,
+                    duration_minutes INTEGER NOT NULL,
+                    team_id INTEGER,
+                    member_id INTEGER,
+                    booker_name TEXT NOT NULL,
+                    booker_phone TEXT NOT NULL,
+                    booker_org TEXT,
+                    purpose TEXT,
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    source TEXT NOT NULL DEFAULT 'public',
+                    public_token TEXT NOT NULL,
+                    submitted_at TEXT,
+                    reviewed_at TEXT,
+                    reviewed_by INTEGER,
+                    rejection_reason TEXT,
+                    cancel_reason TEXT,
+                    created_at TEXT,
+                    updated_at TEXT
+                );"
+            );
+        } else {
+            $pdo->exec(
+                "CREATE TABLE IF NOT EXISTS meeting_rooms (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    name VARCHAR(255) NOT NULL,
+                    code VARCHAR(32) NULL,
+                    capacity INT NOT NULL DEFAULT 10,
+                    floor VARCHAR(32) NULL,
+                    equipment TEXT NULL,
+                    open_time VARCHAR(8) NOT NULL DEFAULT '08:00',
+                    close_time VARCHAR(8) NOT NULL DEFAULT '20:00',
+                    slot_minutes INT NOT NULL DEFAULT 60,
+                    notes TEXT NULL,
+                    is_active TINYINT NOT NULL DEFAULT 1,
+                    created_at VARCHAR(32) NULL,
+                    updated_at VARCHAR(32) NULL
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+            );
+            $pdo->exec(
+                "CREATE TABLE IF NOT EXISTS room_reservations (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    room_id INT NOT NULL,
+                    reserved_date VARCHAR(32) NOT NULL,
+                    start_time VARCHAR(8) NOT NULL,
+                    end_time VARCHAR(8) NOT NULL,
+                    duration_minutes INT NOT NULL,
+                    team_id INT NULL,
+                    member_id INT NULL,
+                    booker_name VARCHAR(255) NOT NULL,
+                    booker_phone VARCHAR(32) NOT NULL,
+                    booker_org VARCHAR(255) NULL,
+                    purpose TEXT NULL,
+                    status VARCHAR(32) NOT NULL DEFAULT 'pending',
+                    source VARCHAR(16) NOT NULL DEFAULT 'public',
+                    public_token VARCHAR(64) NOT NULL,
+                    submitted_at VARCHAR(32) NULL,
+                    reviewed_at VARCHAR(32) NULL,
+                    reviewed_by INT NULL,
+                    rejection_reason TEXT NULL,
+                    cancel_reason TEXT NULL,
+                    created_at VARCHAR(32) NULL,
+                    updated_at VARCHAR(32) NULL,
+                    INDEX idx_room_res_room_date (room_id, reserved_date),
+                    INDEX idx_room_res_phone_date (booker_phone, reserved_date),
+                    INDEX idx_room_res_status (status),
+                    UNIQUE KEY uniq_room_res_token (public_token)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+            );
+        }
+
+        self::ensureIndex($pdo, 'room_reservations', 'idx_room_res_room_date', ['room_id', 'reserved_date']);
+        self::ensureIndex($pdo, 'room_reservations', 'idx_room_res_phone_date', ['booker_phone', 'reserved_date']);
+        self::ensureIndex($pdo, 'room_reservations', 'idx_room_res_status', ['status']);
+        self::ensureUniqueIndex($pdo, 'room_reservations', 'uniq_room_res_token', ['public_token']);
+
+        if (!self::tableExists($pdo, 'meeting_rooms')) {
+            return;
+        }
+
+        $count = (int) $pdo->query('SELECT COUNT(*) FROM meeting_rooms')->fetchColumn();
+        if ($count > 0) {
+            return;
+        }
+
+        $today = JalaliDate::todayParts()['formatted'];
+        $pdo->prepare(
+            "INSERT INTO meeting_rooms (name, code, capacity, floor, equipment, open_time, close_time, slot_minutes, is_active, created_at, updated_at)
+             VALUES ('اتاق جلسه اصلی', 'MR-1', 12, 'طبقه اول', 'ویدئو پروژکتور، وایت‌برد', '08:00', '20:00', 60, 1, :today, :today)"
+        )->execute(['today' => $today]);
+    }
+
     private static function seedDeskAssignments(PDO $pdo): void
     {
         if (!self::tableExists($pdo, 'desk_assignments')) {
@@ -1172,7 +1295,7 @@ final class Schema
         ]);
     }
 
-    private static function tableExists(PDO $pdo, string $table): bool
+    public static function tableExists(PDO $pdo, string $table): bool
     {
         if ($pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite') {
             $statement = $pdo->prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = :name");

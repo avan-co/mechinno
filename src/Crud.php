@@ -298,6 +298,35 @@ final class Crud
                     'sort_order' => ['label' => 'ترتیب', 'type' => 'number'],
                 ],
             ],
+            'meeting_rooms' => [
+                'table' => 'meeting_rooms',
+                'title' => 'اتاق جلسه',
+                'order' => 'is_active DESC, name, id',
+                'status_field' => null,
+                'source' => false,
+                'fields' => [
+                    'name' => ['label' => 'نام اتاق', 'type' => 'text', 'required' => true],
+                    'code' => ['label' => 'کد', 'type' => 'text', 'placeholder' => 'MR-1'],
+                    'capacity' => ['label' => 'ظرفیت', 'type' => 'number', 'required' => true],
+                    'floor' => ['label' => 'طبقه', 'type' => 'text'],
+                    'equipment' => ['label' => 'تجهیزات', 'type' => 'textarea'],
+                    'open_time' => ['label' => 'ساعت شروع', 'type' => 'text', 'required' => true, 'placeholder' => '08:00'],
+                    'close_time' => ['label' => 'ساعت پایان', 'type' => 'text', 'required' => true, 'placeholder' => '20:00'],
+                    'slot_minutes' => [
+                        'label' => 'بازه زمانی (دقیقه)',
+                        'type' => 'select',
+                        'options' => ['30' => '۳۰ دقیقه', '60' => '۶۰ دقیقه'],
+                        'required' => true,
+                    ],
+                    'is_active' => [
+                        'label' => 'وضعیت',
+                        'type' => 'select',
+                        'options' => ['1' => 'فعال', '0' => 'غیرفعال'],
+                        'required' => true,
+                    ],
+                    'notes' => ['label' => 'توضیحات', 'type' => 'textarea'],
+                ],
+            ],
             'panel_users' => [
                 'table' => 'panel_users',
                 'title' => 'کاربر پنل',
@@ -1309,6 +1338,34 @@ final class Crud
             }
             if (isset($data['related_section']) && $this->blank($data['related_section'])) {
                 $data['related_section'] = null;
+            }
+            $data['updated_at'] = $today;
+        }
+        if ($resource === 'meeting_rooms') {
+            $today = JalaliDate::todayParts()['formatted'];
+            if ($creating) {
+                $data['created_at'] = $today;
+                $data['is_active'] = $data['is_active'] ?? '1';
+                $data['capacity'] = max(1, (int) ($data['capacity'] ?? 10));
+                $data['slot_minutes'] = in_array((int) ($data['slot_minutes'] ?? 60), [30, 60], true)
+                    ? (int) $data['slot_minutes']
+                    : 60;
+            }
+            if (isset($data['open_time'])) {
+                $data['open_time'] = RoomReservations::normalizeTime((string) $data['open_time']);
+            }
+            if (isset($data['close_time'])) {
+                $data['close_time'] = RoomReservations::normalizeTime((string) $data['close_time']);
+            }
+            if (isset($data['capacity'])) {
+                $data['capacity'] = max(1, (int) $data['capacity']);
+            }
+            if (isset($data['slot_minutes'])) {
+                $slot = (int) $data['slot_minutes'];
+                $data['slot_minutes'] = in_array($slot, [30, 60], true) ? $slot : 60;
+            }
+            if (isset($data['is_active'])) {
+                $data['is_active'] = (int) $data['is_active'] === 1 ? 1 : 0;
             }
             $data['updated_at'] = $today;
         }

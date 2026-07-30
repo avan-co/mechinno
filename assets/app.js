@@ -93,6 +93,25 @@ const labels = {
   sheba: "شماره شبا",
   payment_guide: "راهنمای پرداخت",
   username: "نام کاربری",
+  room_name: "اتاق",
+  room_code: "کد اتاق",
+  reserved_date: "تاریخ",
+  start_time: "شروع",
+  end_time: "پایان",
+  duration_minutes: "مدت (دقیقه)",
+  booker_name: "رزروکننده",
+  booker_phone: "موبایل",
+  booker_org: "سازمان",
+  purpose: "موضوع",
+  source: "منبع",
+  public_token: "کد پیگیری",
+  cancel_reason: "دلیل لغو",
+  capacity: "ظرفیت",
+  floor: "طبقه",
+  equipment: "تجهیزات",
+  open_time: "شروع کاری",
+  close_time: "پایان کاری",
+  slot_minutes: "بازه (دقیقه)",
 };
 
 const entityTypeLabels = { team: "تیم", company: "شرکت", student: "دانشجو" };
@@ -168,6 +187,8 @@ const sectionMeta = {
   reports: { eyebrow: "گزارش‌گیری", title: "گزارش‌ساز", subtitle: "انتخاب نوع گزارش، بازه ماهانه/سه‌ماهه/سالانه و خروجی چاپ یا Excel" },
   development: { eyebrow: "برنامه‌ریزی", title: "برنامه توسعه", subtitle: "کارهای جاری مرکز — اولویت‌بندی و پیگیری ساده" },
   users: { eyebrow: "دسترسی", title: "کاربران پنل", subtitle: "مدیریت نقش‌ها و پنل اختصاصی نهادها" },
+  "meeting-rooms": { eyebrow: "اتاق جلسه", title: "مدیریت اتاق‌های جلسه", subtitle: "تعریف اتاق‌ها، رزروها و تنظیمات" },
+  "room-settings": { eyebrow: "اتاق جلسه", title: "تنظیمات رزرو", subtitle: "قوانین رزرو عمومی و تأیید خودکار" },
   sms: { eyebrow: "اطلاع‌رسانی", title: "ارسال پیامک", subtitle: "ارسال اطلاعیه به اعضا و مسئولین نهادها" },
   "sms-settings": { eyebrow: "پیامک", title: "تنظیمات ملی‌پیامک", subtitle: "اتصال API، خط ارسال و همگام‌سازی" },
 };
@@ -180,6 +201,7 @@ const teamSectionMeta = {
   profile: { eyebrow: "پروفایل", title: "پروفایل نهاد", subtitle: "قرارداد، میز و بدهی هر سال مالی" },
   charges: { eyebrow: "شارژ", title: "شارژ و پرداخت", subtitle: "لیست شارژ سالانه و وضعیت پرداخت" },
   payments: { eyebrow: "واریز", title: "اعلام واریز", subtitle: "ثبت واریز شارژ و پیگیری تأیید مدیر" },
+  "room-reservations": { eyebrow: "اتاق جلسه", title: "رزرو اتاق جلسه", subtitle: "رزرو بازه‌های زمانی برای نهاد" },
 };
 
 const cardNavMap = {
@@ -295,6 +317,9 @@ const resourceColumns = {
   "pending-payments": ["tx_date", "team_name", "fiscal_year", "month_name", "amount", "payment_reference", "announced_at", "notes", "description"],
   "payment-history": ["tx_date", "team_name", "fiscal_year", "month_name", "amount", "payment_status", "payment_reference", "announced_at", "reviewed_at", "notes"],
   development_plans: ["title", "status", "priority", "due_date", "notes"],
+  "meeting-rooms": ["name", "code", "capacity", "floor", "open_time", "close_time", "slot_minutes", "is_active", "equipment", "notes"],
+  "room-reservations": ["reserved_date", "start_time", "end_time", "room_name", "booker_name", "booker_phone", "booker_org", "team_label", "status", "source", "purpose", "submitted_at", "reviewed_at", "rejection_reason", "cancel_reason"],
+  "pending-room-reservations": ["reserved_date", "start_time", "end_time", "room_name", "booker_name", "booker_phone", "booker_org", "team_label", "purpose", "source", "submitted_at"],
 };
 
 const teamPanelHiddenColumns = {
@@ -328,6 +353,7 @@ const createDefaults = {
     confirmed: "1",
   }),
   development_plans: () => ({ priority: "medium", status: "open" }),
+  meeting_rooms: () => ({ is_active: "1", capacity: "10", slot_minutes: "60", open_time: "08:00", close_time: "20:00" }),
   members: () => ({ wants_access: "0" }),
   "locker-requests": () => ({}),
 };
@@ -341,7 +367,7 @@ const crudResourceKey = (resource) => (resource || "").replace(/-/g, "_");
 
 const editableResourceKeys = new Set(
   canWrite
-    ? ["members", "teams", "team_contracts", "desks", "desk_assignments", "lockers", "charges", "transactions", "rate_settings", "panel_users", "development_plans"]
+    ? ["members", "teams", "team_contracts", "desks", "desk_assignments", "lockers", "charges", "transactions", "rate_settings", "panel_users", "development_plans", "meeting_rooms"]
     : canTeamSubmit
     ? ["members", "transactions", "locker_requests", "member_requests"]
     : []
@@ -353,6 +379,7 @@ const workflowQueueResources = new Set([
   "pending-member-requests",
   "pending-payments",
   "pending-locker-requests",
+  "pending-room-reservations",
 ]);
 
 const teamReadOnlyResources = new Set(["lockers", "charges", "payment-history"]);
@@ -3065,6 +3092,11 @@ const workflowApprove = async (resource, id, row = {}, workflowType = "") => {
     return;
   }
 
+  if (resource === "pending-room-reservations" || workflowType === "room-reservation") {
+    await postJson(`api.php?resource=${encodeURIComponent(resource)}&action=approve`, { id });
+    return;
+  }
+
   await postJson(`api.php?resource=${encodeURIComponent(resource)}&action=approve`, { id });
 };
 
@@ -3363,6 +3395,15 @@ const formatCell = (column, value, row, resource) => {
     const map = { pending: "در انتظار", approved: "تأیید‌شده", rejected: "رد‌شده" };
     const label = map[value] || value || "—";
     return `<span class="badge">${escapeHtml(label)}</span>`;
+  }
+  if (column === "status" && (resource === "room-reservations" || resource === "pending-room-reservations")) {
+    const map = { pending: "در انتظار", approved: "تأیید‌شده", rejected: "رد‌شده", cancelled: "لغو‌شده" };
+    const label = map[value] || value || "—";
+    return `<span class="badge">${escapeHtml(label)}</span>`;
+  }
+  if (column === "source" && (resource === "room-reservations" || resource === "pending-room-reservations")) {
+    const map = { public: "عمومی", team: "نهاد", admin: "مدیر" };
+    return escapeHtml(map[value] || value || "—");
   }
   if (linkColumns[column] && row[linkColumns[column]] && value) {
     if (column === "name" && resource === "teams") {

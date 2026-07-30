@@ -227,6 +227,56 @@ final class JalaliDate
         ]);
     }
 
+    public static function addDays(string $date, int $days): string
+    {
+        $normalized = self::normalize($date);
+        [$jy, $jm, $jd] = array_map('intval', explode('/', $normalized));
+        [$gy, $gm, $gd] = self::jalaliToGregorian($jy, $jm, $jd);
+        $timestamp = mktime(0, 0, 0, $gm, $gd + $days, $gy);
+        $g = getdate($timestamp);
+        [$ny, $nm, $nd] = self::gregorianToJalali($g['year'], $g['mon'], $g['mday']);
+
+        return sprintf('%04d/%02d/%02d', $ny, $nm, $nd);
+    }
+
+    /**
+     * @return array{0:int,1:int,2:int}
+     */
+    private static function jalaliToGregorian(int $jy, int $jm, int $jd): array
+    {
+        $jy += 1595;
+        $days = -355668 + (365 * $jy) + (int) ($jy / 33) * 8 + (int) ((($jy % 33) + 3) / 4) + $jd;
+        if ($jm < 7) {
+            $days += ($jm - 1) * 31;
+        } else {
+            $days += (($jm - 7) * 30) + 186;
+        }
+        $gy = 400 * (int) ($days / 146097);
+        $days %= 146097;
+        if ($days > 36524) {
+            $gy += 100 * (int) (--$days / 36524);
+            $days %= 36524;
+            if ($days >= 365) {
+                $days++;
+            }
+        }
+        $gy += 4 * (int) ($days / 1461);
+        $days %= 1461;
+        if ($days > 365) {
+            $gy += (int) (($days - 1) / 365);
+            $days = ($days - 1) % 365;
+        }
+        $gd = $days + 1;
+        $salA = [0, 31, ($gy % 4 === 0 && $gy % 100 !== 0) || ($gy % 400 === 0) ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+        $gm = 0;
+        while ($gm < 13 && $gd > $salA[$gm]) {
+            $gd -= $salA[$gm];
+            $gm++;
+        }
+
+        return [$gy, $gm, $gd];
+    }
+
     /**
      * @return array{0:int,1:int,2:int}
      */

@@ -10,6 +10,7 @@ try {
     $repository = new Repository($pdo);
     $crud = new Crud($pdo);
     $workflow = new Workflow($pdo);
+    $rooms = new RoomReservations($pdo);
 
     $resource = (string) ($_GET['resource'] ?? 'summary');
     $action = (string) ($_GET['action'] ?? '');
@@ -144,6 +145,48 @@ try {
         json_response($settings->get());
     }
 
+    if ($resource === 'room-settings') {
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            require_csrf_json();
+            Access::requireWriteJson();
+            $payload = json_decode((string) file_get_contents('php://input'), true);
+            if (!is_array($payload)) {
+                $payload = $_POST;
+            }
+            json_response(['ok' => true, 'settings' => $rooms->updateSettings($payload)]);
+        }
+        json_response($rooms->settings());
+    }
+
+    if ($resource === 'room-availability') {
+        $roomId = (int) ($_GET['room_id'] ?? 0);
+        $date = (string) ($_GET['date'] ?? '');
+        json_response($rooms->availability($roomId, $date));
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && $resource === 'room-reservations' && $action === 'create') {
+        require_csrf_json();
+        Access::requireWriteOrTeamSubmitJson();
+        $payload = json_decode((string) file_get_contents('php://input'), true);
+        if (!is_array($payload)) {
+            $payload = $_POST;
+        }
+        $source = Access::isTeam() ? 'team' : 'admin';
+        json_response(['ok' => true, 'record' => $rooms->createFromPayload($payload, $source)]);
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && $resource === 'room-reservations' && $action === 'cancel') {
+        require_csrf_json();
+        Access::requireWriteOrTeamSubmitJson();
+        $payload = json_decode((string) file_get_contents('php://input'), true);
+        if (!is_array($payload)) {
+            $payload = $_POST;
+        }
+        $id = (int) ($payload['id'] ?? 0);
+        $reason = trim((string) ($payload['reason'] ?? ''));
+        json_response(['ok' => true, 'record' => $rooms->cancel($id, $reason)]);
+    }
+
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && $resource === 'teams' && $action === 'change-leader') {
         require_csrf_json();
         Access::requireWriteJson();
@@ -267,6 +310,8 @@ try {
             'pending-locker-requests:reject', 'locker-requests:reject' => $workflow->rejectLockerRequest($id, $reason),
             'pending-member-requests:approve', 'member-requests:approve' => $workflow->approveMemberRequest($id),
             'pending-member-requests:reject', 'member-requests:reject' => $workflow->rejectMemberRequest($id, $reason),
+            'pending-room-reservations:approve', 'room-reservations:approve' => $rooms->approve($id),
+            'pending-room-reservations:reject', 'room-reservations:reject' => $rooms->reject($id, $reason),
             default => throw new InvalidArgumentException('عملیات تأیید/رد برای این بخش تعریف نشده است.'),
         };
 
@@ -298,6 +343,7 @@ try {
             'locker-requests' => 'locker_requests',
             'member-requests' => 'member_requests',
             'desk-assignments' => 'desk_assignments',
+            'meeting-rooms' => 'meeting_rooms',
             default => $resource,
         };
 
@@ -318,7 +364,7 @@ try {
         'teams', 'members', 'desks', 'lockers', 'charges', 'transactions', 'rate_settings', 'panel_users',
         'development_plans', 'pending-members', 'pending-member-requests', 'pending-payments', 'pending-locker-requests',
         'locker-requests', 'member-requests', 'desk-assignments', 'payment-history', 'team_contracts',
-        'sms-recipients', 'sms-history',
+        'sms-recipients', 'sms-history', 'meeting-rooms', 'room-reservations', 'pending-room-reservations',
     ];
     if (in_array($resource, $paginatedResources, true)) {
         $page = (int) ($_GET['page'] ?? 1);
@@ -375,6 +421,9 @@ try {
         }
         if ($resource === 'desk-assignments' && isset($_GET['assignment_status']) && $_GET['assignment_status'] !== '') {
             $filters['assignment_status'] = (string) $_GET['assignment_status'];
+        }
+        if ($resource === 'room-reservations' && isset($_GET['status']) && $_GET['status'] !== '') {
+            $filters['status'] = (string) $_GET['status'];
         }
         json_response($repository->paginatedResource($resource, $page, $perPage, $filters));
     }

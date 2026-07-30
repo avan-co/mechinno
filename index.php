@@ -18,6 +18,7 @@ $assetVer = (string) max(
     filemtime(__DIR__ . '/assets/sms-panel.js'),
     filemtime(__DIR__ . '/assets/sms-editor.js'),
     filemtime(__DIR__ . '/assets/sms-settings.js'),
+    filemtime(__DIR__ . '/assets/room-booking.js'),
     (int) Brand::version()
 );
 ?>
@@ -145,6 +146,14 @@ $assetVer = (string) max(
               <span class="nav-icon nav-icon--green"><svg viewBox="0 0 24 24"><path d="M6 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm0 4v12h12V7H6Zm3 2h2v2H9V9Zm4 0h2v2h-2V9Z" fill="currentColor"/></svg></span>
               کمدها
             </button>
+            <button class="nav-item" data-section="meeting-rooms" type="button">
+              <span class="nav-icon nav-icon--blue"><svg viewBox="0 0 24 24"><path d="M4 4h7v7H4V4Zm9 0h7v7h-7V4ZM4 13h7v7H4v-7Zm9 3h7v4h-7v-4Z" fill="currentColor"/></svg></span>
+              اتاق جلسه
+            </button>
+            <a class="nav-item" href="reserve.php" target="_blank" rel="noopener">
+              <span class="nav-icon nav-icon--blue"><svg viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7Zm0 9.5A2.5 2.5 0 1 1 14.5 9 2.5 2.5 0 0 1 12 11.5Z" fill="currentColor"/></svg></span>
+              رزرو عمومی
+            </a>
 
             <p class="nav-group-label">مالی و گزارش</p>
             <button class="nav-item" data-section="charges" type="button">
@@ -482,6 +491,65 @@ $assetVer = (string) max(
               <data-table title="کمدها" endpoint="api.php?resource=lockers"></data-table>
             </section>
 
+            <section id="meeting-rooms" class="section">
+              <div class="section-intro section-intro--blue">
+                <span class="section-intro-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 4h7v7H4V4Zm9 0h7v7h-7V4ZM4 13h7v7H4v-7Zm9 3h7v4h-7v-4Z" fill="currentColor"/></svg></span>
+                <div class="section-intro-copy"><p>مدیریت اتاق‌های جلسه، رزروها و تنظیمات — صفحه <a href="reserve.php" target="_blank" rel="noopener">رزرو عمومی</a> بدون ورود در دسترس است.</p></div>
+                <?php if (Access::canWrite()): ?>
+                <button type="button" class="button ghost section-intro-action" data-go="room-settings">تنظیمات رزرو</button>
+                <?php endif; ?>
+              </div>
+              <?php if (Access::isAdmin()): ?>
+              <data-table title="رزرو — در انتظار تأیید" endpoint="api.php?resource=pending-room-reservations" data-workflow="meeting-rooms" data-workflow-type="room-reservation" data-table-key="pending-room-reservations" data-readonly></data-table>
+              <?php endif; ?>
+              <?php if (Access::canWrite()): ?>
+              <article class="panel room-booking-panel">
+                <div class="panel-head"><h2>رزرو سریع (مدیر)</h2></div>
+                <form id="panelRoomBookingForm" class="room-public-form">
+                  <div class="crud-grid">
+                    <label><span>اتاق</span><select name="room_id" required></select></label>
+                    <label><span>تاریخ</span><input name="reserved_date" type="text" required placeholder="1404/01/01" value="<?= e($today['formatted']) ?>" /></label>
+                    <label><span>نام *</span><input name="booker_name" type="text" required /></label>
+                    <label><span>موبایل *</span><input name="booker_phone" type="tel" required dir="ltr" class="ltr-input" /></label>
+                    <label><span>سازمان</span><input name="booker_org" type="text" /></label>
+                    <label class="wide"><span>موضوع</span><textarea name="purpose" rows="2"></textarea></label>
+                    <label class="wide"><span>بازه‌های آزاد</span><div id="panelRoomSlotGrid" class="room-slot-grid"></div><p class="hint" id="panelRoomTimePreview"></p></label>
+                  </div>
+                  <div class="form-actions"><button class="button" type="submit">ثبت رزرو</button></div>
+                </form>
+              </article>
+              <?php endif; ?>
+              <data-table title="رزروهای اتاق" endpoint="api.php?resource=room-reservations" data-no-add data-readonly></data-table>
+              <data-table title="اتاق‌های جلسه" endpoint="api.php?resource=meeting-rooms"></data-table>
+            </section>
+
+            <section id="room-settings" class="section">
+              <div class="section-intro section-intro--blue">
+                <span class="section-intro-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 8a1 1 0 0 1 1 1v3h3a1 1 0 1 1 0 2h-4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Zm8-3H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Z" fill="currentColor"/></svg></span>
+                <div class="section-intro-copy"><p>قوانین رزرو عمومی و تأیید خودکار — حداکثر ساعت روزانه و بازه‌های زمانی.</p></div>
+              </div>
+              <?php if (Access::canWrite()): ?>
+              <article class="panel">
+                <form id="roomSettingsForm" class="crud-grid">
+                  <label><span>رزرو عمومی</span>
+                    <select name="room_public_enabled"><option value="1">فعال</option><option value="0">غیرفعال</option></select>
+                  </label>
+                  <label><span>تأیید خودکار</span>
+                    <select name="room_auto_approve"><option value="1">بله</option><option value="0">خیر — نیاز به تأیید مدیر</option></select>
+                  </label>
+                  <label><span>حداکثر روز جلو</span><input name="room_max_advance_days" type="number" min="1" max="90" /></label>
+                  <label><span>حداکثر ساعت در روز (هر موبایل)</span><input name="room_max_hours_per_day" type="number" min="1" max="8" /></label>
+                  <label><span>بازه پیش‌فرض (دقیقه)</span>
+                    <select name="room_slot_minutes"><option value="30">۳۰</option><option value="60">۶۰</option></select>
+                  </label>
+                  <div class="form-actions wide"><button class="button" type="submit">ذخیره تنظیمات</button></div>
+                </form>
+              </article>
+              <?php else: ?>
+              <p class="hint">فقط مدیر ویرایشگر می‌تواند تنظیمات را تغییر دهد.</p>
+              <?php endif; ?>
+            </section>
+
             <section id="charges" class="section">
               <div class="section-intro section-intro--amber">
                 <span class="section-intro-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2 4 6v6c0 5 3.4 9.7 8 11 4.6-1.3 8-6 8-11V6l-8-4Zm0 6.5A2.5 2.5 0 1 1 9.5 6 2.5 2.5 0 0 1 12 8.5Z" fill="currentColor"/></svg></span>
@@ -724,6 +792,7 @@ $assetVer = (string) max(
       <script src="assets/sms-editor.js?v=<?= e($assetVer) ?>"></script>
       <script src="assets/sms-panel.js?v=<?= e($assetVer) ?>"></script>
       <script src="assets/sms-settings.js?v=<?= e($assetVer) ?>"></script>
+      <script src="assets/room-booking.js?v=<?= e($assetVer) ?>"></script>
     <?php endif; ?>
   </body>
 </html>

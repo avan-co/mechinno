@@ -26,6 +26,10 @@ final class Access
         'team_contracts',
         'team-payable-months',
         'center-settings',
+        'room-reservations',
+        'room-availability',
+        'room-settings',
+        'meeting-rooms',
         'crud-meta',
     ];
 
@@ -71,6 +75,12 @@ final class Access
         'sms-check-deliveries',
         'sms-test',
         'sms-send',
+        'meeting-rooms',
+        'meeting_rooms',
+        'room-reservations',
+        'pending-room-reservations',
+        'room-availability',
+        'room-settings',
     ];
 
     public static function role(): string
@@ -103,7 +113,7 @@ final class Access
             return ['members', 'transactions', 'locker_requests', 'member_requests'];
         }
 
-        $resources = ['teams', 'members', 'desks', 'desk_assignments', 'lockers', 'locker_requests', 'member_requests', 'charges', 'transactions', 'rate_settings', 'development_plans', 'team_contracts'];
+        $resources = ['teams', 'members', 'desks', 'desk_assignments', 'lockers', 'locker_requests', 'member_requests', 'charges', 'transactions', 'rate_settings', 'development_plans', 'team_contracts', 'meeting_rooms'];
         if (self::isAdmin()) {
             $resources[] = 'panel_users';
         }

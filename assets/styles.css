@@ -3267,3 +3267,96 @@ body.is-mobile .mobile-card .row-actions {
   .skeleton-cell { animation: none; }
   .desk-tile:hover, .cell-clickable:hover { transform: none; }
 }
+
+/* Meeting room booking */
+.room-public-body { min-height: 100vh; }
+.room-public-screen {
+  position: relative;
+  z-index: 1;
+  width: min(920px, calc(100% - 32px));
+  margin: 32px auto 48px;
+  display: grid;
+  gap: 20px;
+}
+.room-public-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.room-public-eyebrow {
+  margin: 0 0 6px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.room-public-header h1 {
+  margin: 0 0 8px;
+  font-size: clamp(24px, 4vw, 32px);
+}
+.room-public-subtitle {
+  margin: 0;
+  color: var(--text-muted);
+}
+.room-public-card {
+  background: var(--surface-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  box-shadow: var(--shadow-sm);
+}
+.room-public-card h2 {
+  margin: 0 0 16px;
+  font-size: 18px;
+}
+.room-public-form { display: grid; gap: 16px; }
+.room-public-form--inline {
+  grid-template-columns: 1fr auto;
+  align-items: end;
+}
+.room-public-message {
+  padding: 12px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--surface-muted);
+}
+.room-public-message--error {
+  border-color: color-mix(in srgb, var(--danger) 40%, var(--border));
+  background: color-mix(in srgb, var(--danger) 8%, var(--surface-elevated));
+  color: var(--danger);
+}
+.room-public-message--success {
+  border-color: color-mix(in srgb, var(--success) 40%, var(--border));
+  background: color-mix(in srgb, var(--success) 8%, var(--surface-elevated));
+}
+.room-slot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: 8px;
+}
+.room-slot {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: var(--radius-md);
+  padding: 10px 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.room-slot.is-selected {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+}
+.room-slot--busy,
+.room-slot--pending {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.room-slot--pending {
+  background: color-mix(in srgb, var(--warning) 10%, var(--surface));
+}
+.room-lookup-result {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.room-booking-panel .crud-grid { margin-bottom: 12px; }

@@ -182,6 +182,20 @@ final class Repository
             ];
         }
 
+        if (Schema::tableExists($this->pdo, 'room_reservations')) {
+            $pendingRooms = $this->scalar("SELECT COUNT(*) FROM room_reservations WHERE status = 'pending'");
+            if ($pendingRooms > 0) {
+                $items[] = [
+                    'priority' => 12,
+                    'type' => 'room',
+                    'label' => number_format($pendingRooms) . ' رزرو اتاق در انتظار',
+                    'detail' => 'بررسی و تأیید رزرو اتاق جلسه',
+                    'section' => 'meeting-rooms',
+                    'target' => 'pending-room-reservations',
+                ];
+            }
+        }
+
         $totalDebt = $this->totalContractDebt();
         if ($totalDebt > 0) {
             $items[] = [
@@ -336,6 +350,9 @@ final class Repository
                     ['id' => $teamId]
                 ),
                 'locker-requests' => $this->preparedScalar('SELECT COUNT(*) FROM locker_requests WHERE team_id = :id', ['id' => $teamId]),
+                'room-reservations' => Schema::tableExists($this->pdo, 'room_reservations')
+                    ? $this->preparedScalar('SELECT COUNT(*) FROM room_reservations WHERE team_id = :id', ['id' => $teamId])
+                    : 0,
                 'desk-assignments' => $this->preparedScalar(
                     'SELECT COUNT(*) FROM desk_assignments
                      WHERE team_id = :id
@@ -348,7 +365,7 @@ final class Repository
         }
 
         if (trim((string) ($filters['q'] ?? '')) !== '' && in_array($name, [
-            'teams', 'members', 'desks', 'lockers', 'charges', 'transactions', 'rate_settings', 'panel_users', 'development_plans', 'sms-recipients',
+            'teams', 'members', 'desks', 'lockers', 'charges', 'transactions', 'rate_settings', 'panel_users', 'development_plans', 'meeting-rooms', 'room-reservations', 'sms-recipients',
         ], true)) {
             return (int) $this->pdo->query(
                 'SELECT COUNT(*) FROM (' . $this->resourceSql($name, $filters) . ') AS filtered_rows'
@@ -378,6 +395,9 @@ final class Repository
             'pending-member-requests' => "SELECT COUNT(*) FROM member_requests WHERE status = 'pending'",
             'locker-requests' => 'SELECT COUNT(*) FROM locker_requests',
             'member-requests' => 'SELECT COUNT(*) FROM member_requests',
+            'meeting-rooms' => 'SELECT COUNT(*) FROM meeting_rooms',
+            'room-reservations' => 'SELECT COUNT(*) FROM room_reservations',
+            'pending-room-reservations' => "SELECT COUNT(*) FROM room_reservations WHERE status = 'pending'",
             'desk-assignments' => 'SELECT COUNT(*) FROM desk_assignments',
             'team_contracts' => 'SELECT COUNT(*) FROM team_contracts',
             'payment-history' => "SELECT COUNT(*) FROM transactions WHERE category = 'واریز تیم'"
@@ -590,6 +610,32 @@ final class Repository
                  LEFT JOIN lockers l ON l.id = lr.locker_id"
                 . ($teamId !== null ? " WHERE lr.team_id = {$teamId}" : '')
                 . ' ORDER BY lr.submitted_at DESC, lr.id DESC',
+            'pending-room-reservations' => "SELECT rr.id, rr.room_id, rr.reserved_date, rr.start_time, rr.end_time,
+                        rr.booker_name, rr.booker_phone, rr.booker_org, rr.purpose, rr.source, rr.submitted_at,
+                        mr.name AS room_name, mr.code AS room_code, t.name AS team_label
+                 FROM room_reservations rr
+                 INNER JOIN meeting_rooms mr ON mr.id = rr.room_id
+                 LEFT JOIN teams t ON t.id = rr.team_id
+                 WHERE rr.status = 'pending'
+                 ORDER BY rr.reserved_date, rr.start_time, rr.id DESC",
+            'room-reservations' => "SELECT rr.id, rr.room_id, rr.reserved_date, rr.start_time, rr.end_time,
+                        rr.duration_minutes, rr.team_id, rr.booker_name, rr.booker_phone, rr.booker_org,
+                        rr.purpose, rr.status, rr.source, rr.public_token, rr.submitted_at, rr.reviewed_at,
+                        rr.rejection_reason, rr.cancel_reason,
+                        mr.name AS room_name, mr.code AS room_code, t.name AS team_label
+                 FROM room_reservations rr
+                 INNER JOIN meeting_rooms mr ON mr.id = rr.room_id
+                 LEFT JOIN teams t ON t.id = rr.team_id"
+                . ($teamId !== null ? " WHERE rr.team_id = {$teamId}" : '')
+                . (isset($filters['status']) && $filters['status'] !== ''
+                    ? ($teamId !== null ? ' AND' : ' WHERE') . ' rr.status = ' . $this->pdo->quote((string) $filters['status'])
+                    : '')
+                . $this->searchClause('room-reservations', $filters, $teamId !== null || (isset($filters['status']) && $filters['status'] !== ''))
+                . ' ORDER BY rr.reserved_date DESC, rr.start_time DESC, rr.id DESC',
+            'meeting-rooms' => 'SELECT id, name, code, capacity, floor, equipment, open_time, close_time, slot_minutes, is_active, notes, created_at, updated_at
+                 FROM meeting_rooms'
+                . $this->searchClause('meeting-rooms', $filters, false)
+                . ' ORDER BY is_active DESC, name, id',
             'desk-assignments' => "SELECT da.id, da.desk_id, da.desk_number, da.team_id, da.usage_type,
                         da.assigned_from, da.assigned_until, da.notes" . $this->deskAssignmentExemptSelect('da') . ",
                         SUBSTR(da.assigned_from, 1, 4) AS fiscal_year, t.name AS team_name, t.is_active AS team_is_active
@@ -1800,6 +1846,8 @@ final class Repository
             'rate_settings' => "COALESCE(title, '') LIKE {$quoted} OR COALESCE(fiscal_year, '') LIKE {$quoted} OR COALESCE(notes, '') LIKE {$quoted}",
             'panel_users' => "u.username LIKE {$quoted} OR COALESCE(u.full_name, '') LIKE {$quoted} OR COALESCE(t.name, '') LIKE {$quoted}",
             'development_plans' => "COALESCE(p.title, '') LIKE {$quoted} OR COALESCE(p.description, '') LIKE {$quoted} OR COALESCE(p.notes, '') LIKE {$quoted}",
+            'meeting-rooms' => "COALESCE(name, '') LIKE {$quoted} OR COALESCE(code, '') LIKE {$quoted} OR COALESCE(floor, '') LIKE {$quoted} OR COALESCE(notes, '') LIKE {$quoted}",
+            'room-reservations' => "COALESCE(rr.booker_name, '') LIKE {$quoted} OR COALESCE(rr.booker_phone, '') LIKE {$quoted} OR COALESCE(rr.booker_org, '') LIKE {$quoted} OR COALESCE(mr.name, '') LIKE {$quoted} OR COALESCE(rr.purpose, '') LIKE {$quoted}",
             default => '',
         };
         if ($expr === '') {

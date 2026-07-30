@@ -35,6 +35,7 @@ $today = JalaliDate::todayParts();
 $assetVer = (string) max(
     filemtime(__DIR__ . '/assets/styles.css'),
     filemtime(__DIR__ . '/assets/app.js'),
+    filemtime(__DIR__ . '/assets/room-booking.js'),
     filemtime(__DIR__ . '/assets/team-year-workspace.js'),
     (int) Brand::version()
 );
@@ -167,6 +168,10 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
             <button class="nav-item" data-section="lockers" type="button">
               <span class="nav-icon nav-icon--green"><svg viewBox="0 0 24 24"><path d="M6 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm0 4v12h12V7H6Zm3 2h2v2H9V9Zm4 0h2v2h-2V9Z" fill="currentColor"/></svg></span>
               کمدها
+            </button>
+            <button class="nav-item" data-section="room-reservations" type="button">
+              <span class="nav-icon nav-icon--blue"><svg viewBox="0 0 24 24"><path d="M4 4h7v7H4V4Zm9 0h7v7h-7V4ZM4 13h7v7H4v-7Zm9 3h7v4h-7v-4Z" fill="currentColor"/></svg></span>
+              اتاق جلسه
             </button>
             <button class="nav-item" data-section="charges" type="button">
               <span class="nav-icon nav-icon--amber"><svg viewBox="0 0 24 24"><path d="M12 2 4 6v6c0 5 3.4 9.7 8 11 4.6-1.3 8-6 8-11V6l-8-4Zm0 6.5A2.5 2.5 0 1 1 9.5 6 2.5 2.5 0 0 1 12 8.5Z" fill="currentColor"/></svg></span>
@@ -306,6 +311,28 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
               <data-table title="کمدهای تخصیص‌یافته" endpoint="api.php?resource=lockers" data-readonly></data-table>
             </section>
 
+            <section id="room-reservations" class="section">
+              <div class="section-intro section-intro--blue">
+                <span class="section-intro-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 4h7v7H4V4Zm9 0h7v7h-7V4ZM4 13h7v7H4v-7Zm9 3h7v4h-7v-4Z" fill="currentColor"/></svg></span>
+                <div class="section-intro-copy"><p>رزرو اتاق جلسه برای نهاد — حداکثر ۲ ساعت در روز برای هر شماره موبایل.</p></div>
+              </div>
+              <article class="panel room-booking-panel">
+                <div class="panel-head"><h2>رزرو جدید</h2></div>
+                <form id="panelRoomBookingForm" class="room-public-form">
+                  <div class="crud-grid">
+                    <label><span>اتاق</span><select name="room_id" required></select></label>
+                    <label><span>تاریخ</span><input name="reserved_date" type="text" required placeholder="1404/01/01" value="<?= e($today['formatted']) ?>" /></label>
+                    <label><span>نام *</span><input name="booker_name" type="text" required /></label>
+                    <label><span>موبایل *</span><input name="booker_phone" type="tel" required dir="ltr" class="ltr-input" /></label>
+                    <label class="wide"><span>موضوع</span><textarea name="purpose" rows="2"></textarea></label>
+                    <label class="wide"><span>بازه‌های آزاد</span><div id="panelRoomSlotGrid" class="room-slot-grid"></div><p class="hint" id="panelRoomTimePreview"></p></label>
+                  </div>
+                  <div class="form-actions"><button class="button" type="submit">ثبت رزرو</button></div>
+                </form>
+              </article>
+              <data-table title="رزروهای نهاد" endpoint="api.php?resource=room-reservations" data-no-add data-readonly></data-table>
+            </section>
+
             <section id="charges" class="section">
               <div class="section-intro section-intro--amber">
                 <span class="section-intro-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2 4 6v6c0 5 3.4 9.7 8 11 4.6-1.3 8-6 8-11V6l-8-4Zm0 6.5A2.5 2.5 0 1 1 9.5 6 2.5 2.5 0 0 1 12 8.5Z" fill="currentColor"/></svg></span>
@@ -371,6 +398,7 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
       </script>
       <script src="assets/app.js?v=<?= e($assetVer) ?>"></script>
       <script src="assets/team-year-workspace.js?v=<?= e($assetVer) ?>"></script>
+      <script src="assets/room-booking.js?v=<?= e($assetVer) ?>"></script>
     <?php endif; ?>
   </body>
 </html>
