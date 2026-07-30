@@ -1048,6 +1048,32 @@ document.querySelectorAll(".start-step[data-go], .text-link[data-go], .button[da
   item.addEventListener("click", () => activateSection(item.dataset.go));
 });
 
+document.querySelectorAll(".quick-nav-item[data-section]").forEach((item) => {
+  item.addEventListener("click", () => activateSection(item.dataset.section));
+});
+
+const focusActiveSectionSearch = (query = "") => {
+  const section = document.querySelector(".section.active");
+  if (!section) return;
+  const search = section.querySelector("data-table .search, #smsFilterBar [data-filter='q']");
+  if (!search) return;
+  search.focus();
+  if (query) {
+    search.value = query;
+    search.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+};
+
+document.getElementById("globalSearch")?.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter") return;
+  event.preventDefault();
+  focusActiveSectionSearch(event.target.value.trim());
+});
+
+document.getElementById("globalSearch")?.addEventListener("focus", () => {
+  focusActiveSectionSearch();
+});
+
 document.getElementById("themeToggle")?.addEventListener("click", () => {
   const html = document.documentElement;
   const next = html.getAttribute("data-theme") === "dark" ? "light" : "dark";
@@ -1201,12 +1227,44 @@ const renderDebtChart = (rows) => {
     : `<div class="empty">مطالبه ثبت‌شده‌ای از نهادها نیست.</div>`;
 };
 
+const renderDashboardHero = (cards = {}, team = null) => {
+  const titleEl = document.getElementById("dashboardHeroTitle");
+  const subtitleEl = document.getElementById("dashboardHeroSubtitle");
+  const heroMeta = document.getElementById("dashboardHeroMeta");
+  if (!titleEl) return;
+
+  const username = window.MECHINNO?.username || "";
+  const greeting = username ? `سلام، ${username}` : "خوش آمدید";
+
+  if (panelMode === "team" && team?.name) {
+    titleEl.textContent = team.name;
+    subtitleEl.textContent = "وضعیت نهاد، اعضا، میزها و شارژ در یک نگاه";
+  } else {
+    titleEl.textContent = greeting;
+    subtitleEl.textContent = "نمای کلی عملکرد مرکز، اقدامات فوری و وضعیت مالی";
+  }
+
+  if (!heroMeta) return;
+  const debt = cards?.debt_total ?? cards?.total_debt;
+  const teams = cards?.teams;
+  const extra = [];
+  if (teams !== undefined) extra.push(`<div class="dashboard-hero-stat"><span>نهادها</span><strong>${escapeHtml(formatNumber(teams))}</strong></div>`);
+  if (debt !== undefined) extra.push(`<div class="dashboard-hero-stat"><span>مطالبات</span><strong>${escapeHtml(formatMoney(debt))}</strong></div>`);
+  if (extra.length) {
+    heroMeta.innerHTML = `
+      <div class="dashboard-hero-stat"><span>تاریخ امروز</span><strong>${escapeHtml(window.MECHINNO?.today || "—")}</strong></div>
+      <div class="dashboard-hero-stat"><span>سال مالی</span><strong>${escapeHtml(window.MECHINNO?.fiscalYear || "—")}</strong></div>
+      ${extra.join("")}`;
+  }
+};
+
 const loadDashboard = async () => {
   const data = await fetchJson("api.php?resource=summary");
   if (panelMode === "team") {
     renderTeamDashboard(data);
     return;
   }
+  renderDashboardHero(data.cards || {});
   renderCurrentMonth(data.current_month || {});
   renderActionItems(data.action_items || []);
   renderCards(data.cards || {}, adminCardConfig, "cards");
@@ -1254,6 +1312,7 @@ const renderRecentApprovals = (items, actionItems = []) => {
 const renderTeamDashboard = (data) => {
   const cards = document.getElementById("cards");
   const team = data.team || {};
+  renderDashboardHero(data.cards || {}, team);
   if (cards) {
     renderCards({ ...data.cards, desk_numbers: data.cards?.desk_numbers || "—" }, teamCardConfig);
   }

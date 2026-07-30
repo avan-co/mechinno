@@ -30,7 +30,7 @@ $assetVer = (string) max(
     <?= Brand::headTags() ?>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="assets/styles.css?v=<?= e($assetVer) ?>" />
     <script>
       (function () {
@@ -95,12 +95,15 @@ $assetVer = (string) max(
 
       <div class="shell">
         <aside class="sidebar" id="sidebar">
+          <div class="sidebar-inner">
+          <div class="sidebar-brand-strip">
           <div class="brand">
             <?= Brand::mark('panel') ?>
             <div class="brand-copy">
               <strong>Mechinno</strong>
               <small>مرکز نوآوری مکانیک</small>
             </div>
+          </div>
           </div>
 
           <nav class="nav" aria-label="منوی اصلی">
@@ -191,6 +194,22 @@ $assetVer = (string) max(
             </button>
             <?php endif; ?>
           </nav>
+
+          <div class="sidebar-user">
+            <div class="user-pill">
+              <span class="user-avatar" aria-hidden="true"><?= e(avatar_initial((string) ($authContext['username'] ?? ''), 'م')) ?></span>
+              <div class="user-pill-copy">
+                <strong><?= e($authContext['username'] ?: 'مدیر') ?></strong>
+                <small><?= e(match ($authContext['role']) {
+                    'admin_editor' => 'مدیر ویرایشگر',
+                    'admin_viewer' => 'مدیر مشاهده‌گر',
+                    default => 'مدیر سیستم',
+                }) ?></small>
+              </div>
+            </div>
+            <a class="sidebar-logout" href="logout.php">خروج از پنل</a>
+          </div>
+          </div>
         </aside>
 
         <div class="main-wrap">
@@ -204,11 +223,14 @@ $assetVer = (string) max(
               <p class="topbar-eyebrow" id="pageEyebrow">داشبورد</p>
               <h1 id="pageTitle">مدیریت مرکز نوآوری</h1>
             </div>
+            <div class="global-search" role="search">
+              <span class="global-search-icon" aria-hidden="true">⌕</span>
+              <input type="search" id="globalSearch" placeholder="جست‌وجو در بخش فعلی…" autocomplete="off" aria-label="جست‌وجوی سریع" />
+            </div>
             <div class="topbar-actions">
-              <a class="logout-top" href="logout.php" title="خروج از پنل">خروج</a>
               <span class="role-chip"><?= e(match ($authContext['role']) {
-                  'admin_editor' => 'مدیر — ویرایش',
-                  'admin_viewer' => 'مدیر — مشاهده',
+                  'admin_editor' => 'ویرایشگر',
+                  'admin_viewer' => 'مشاهده‌گر',
                   default => 'مدیر',
               }) ?></span>
               <span class="date-chip" id="todayChip"><?= e($today['formatted']) ?></span>
@@ -227,6 +249,29 @@ $assetVer = (string) max(
             <p class="page-subtitle" id="pageSubtitle">خلاصه وضعیت مرکز و اقدامات پیشنهادی</p>
 
             <section id="overview" class="section active">
+            <div class="dashboard-hero" id="dashboardHero">
+              <div class="dashboard-hero-copy">
+                <p class="dashboard-hero-eyebrow">مرکز نوآوری مکانیک</p>
+                <h2 id="dashboardHeroTitle">خوش آمدید</h2>
+                <p id="dashboardHeroSubtitle">نمای کلی عملکرد مرکز، اقدامات فوری و وضعیت مالی</p>
+              </div>
+              <div class="dashboard-hero-meta" id="dashboardHeroMeta">
+                <div class="dashboard-hero-stat"><span>تاریخ امروز</span><strong id="heroToday"><?= e($today['formatted']) ?></strong></div>
+                <div class="dashboard-hero-stat"><span>سال مالی</span><strong id="heroFiscalYear"><?= e((string) $today['year']) ?></strong></div>
+              </div>
+            </div>
+
+            <nav class="quick-nav" id="quickNav" aria-label="دسترسی سریع">
+              <button type="button" class="quick-nav-item" data-section="teams"><span class="quick-nav-icon">◆</span>نهادها</button>
+              <button type="button" class="quick-nav-item" data-section="members"><span class="quick-nav-icon">◇</span>اعضا</button>
+              <button type="button" class="quick-nav-item" data-section="desks"><span class="quick-nav-icon">▣</span>میزها</button>
+              <button type="button" class="quick-nav-item" data-section="charges"><span class="quick-nav-icon">◈</span>شارژ</button>
+              <button type="button" class="quick-nav-item" data-section="transactions"><span class="quick-nav-icon">◎</span>مالی</button>
+              <?php if (Access::isAdmin()): ?>
+              <button type="button" class="quick-nav-item" data-section="reports"><span class="quick-nav-icon">▤</span>گزارش</button>
+              <?php endif; ?>
+            </nav>
+
             <?php if (Access::canWrite()): ?>
             <article class="panel panel--accent welcome-panel" id="welcomePanel">
               <h2>شروع سریع</h2>
@@ -261,7 +306,7 @@ $assetVer = (string) max(
             </section>
 
             <section id="teams" class="section">
-              <p class="hint">هر نهاد را از دکمه <strong>پروفایل</strong> باز کنید — قرارداد، میز و بدهی هر سال در یکجا مدیریت می‌شود. ستون «وضعیت سال جاری» خلاصه قرارداد، میز و بدهی را نشان می‌دهد.</p>
+              <div class="section-intro"><p>هر نهاد را از دکمه <strong>پروفایل</strong> باز کنید — قرارداد، میز و بدهی هر سال در یکجا مدیریت می‌شود.</p></div>
               <?php if (Access::canWrite()): ?>
               <article class="panel">
                 <div class="panel-head">

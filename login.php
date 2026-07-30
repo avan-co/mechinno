@@ -54,7 +54,7 @@ $assetVer = (string) max(
     <?= Brand::headTags() ?>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="assets/styles.css?v=<?= e($assetVer) ?>" />
     <script>
       (function () {
@@ -91,6 +91,7 @@ $assetVer = (string) max(
         </div>
 
         <h1>ورود به پنل</h1>
+        <p class="hint" style="margin: -12px 0 20px; text-align: center;">پنل مدیریت مرکز نوآوری مکانیک</p>
 
         <?php if (!$configured): ?>
           <div class="notice danger">فایل <code>config.php</code> هنوز ساخته نشده است.</div>

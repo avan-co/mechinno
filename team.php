@@ -50,7 +50,7 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
     <?= Brand::headTags() ?>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="assets/styles.css?v=<?= e($assetVer) ?>" />
     <script>
       (function () {
@@ -115,12 +115,15 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
 
       <div class="shell">
         <aside class="sidebar" id="sidebar">
+          <div class="sidebar-inner">
+          <div class="sidebar-brand-strip">
           <div class="brand">
             <?= Brand::mark('panel') ?>
             <div class="brand-copy">
               <strong><?= e($team['name']) ?></strong>
               <small><?= e($entityLabel) ?> — <?= e($team['entity_code'] ?? '') ?></small>
             </div>
+          </div>
           </div>
           <nav class="nav" aria-label="منوی نهاد">
             <button class="nav-item active" data-section="overview" type="button">
@@ -152,6 +155,17 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
               اعلام واریز
             </button>
           </nav>
+          <div class="sidebar-user">
+            <div class="user-pill">
+              <span class="user-avatar" aria-hidden="true"><?= e(avatar_initial((string) ($team['name'] ?? ''), 'ن')) ?></span>
+              <div class="user-pill-copy">
+                <strong><?= e($team['name']) ?></strong>
+                <small><?= e($entityLabel) ?> — پورتال نهاد</small>
+              </div>
+            </div>
+            <a class="sidebar-logout" href="logout.php">خروج از پنل</a>
+          </div>
+          </div>
         </aside>
 
         <div class="main-wrap">
@@ -165,9 +179,12 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
               <p class="topbar-eyebrow" id="pageEyebrow"><?= e($entityLabel) ?> — <?= e($team['entity_code'] ?? '') ?></p>
               <h1 id="pageTitle"><?= e($team['name']) ?></h1>
             </div>
+            <div class="global-search" role="search">
+              <span class="global-search-icon" aria-hidden="true">⌕</span>
+              <input type="search" id="globalSearch" placeholder="جست‌وجو در بخش فعلی…" autocomplete="off" aria-label="جست‌وجوی سریع" />
+            </div>
             <div class="topbar-actions">
-              <a class="logout-top" href="logout.php" title="خروج از پنل">خروج</a>
-              <span class="role-chip entity-name-chip"><?= e($team['name']) ?></span>
+              <span class="role-chip entity-name-chip"><?= e($entityLabel) ?></span>
               <span class="date-chip"><?= e($today['formatted']) ?></span>
               <button class="theme-toggle" id="themeToggle" type="button" title="تغییر تم" aria-label="تغییر تم">
                 <span class="theme-toggle-track" aria-hidden="true">
@@ -183,6 +200,24 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
             <p class="page-subtitle" id="pageSubtitle">مشاهده وضعیت نهاد، ثبت عضو و اعلام واریز</p>
 
             <section id="overview" class="section active">
+              <div class="dashboard-hero" id="dashboardHero">
+                <div class="dashboard-hero-copy">
+                  <p class="dashboard-hero-eyebrow"><?= e($entityLabel) ?> — <?= e($team['entity_code'] ?? '') ?></p>
+                  <h2 id="dashboardHeroTitle"><?= e($team['name']) ?></h2>
+                  <p id="dashboardHeroSubtitle">وضعیت نهاد، اعضا، میزها و شارژ در یک نگاه</p>
+                </div>
+                <div class="dashboard-hero-meta" id="dashboardHeroMeta">
+                  <div class="dashboard-hero-stat"><span>مسئول</span><strong><?= e($team['leader'] ?? '—') ?></strong></div>
+                  <div class="dashboard-hero-stat"><span>تاریخ امروز</span><strong><?= e($today['formatted']) ?></strong></div>
+                </div>
+              </div>
+              <nav class="quick-nav" aria-label="دسترسی سریع">
+                <button type="button" class="quick-nav-item" data-section="profile"><span class="quick-nav-icon">◆</span>پروفایل</button>
+                <button type="button" class="quick-nav-item" data-section="members"><span class="quick-nav-icon">◇</span>اعضا</button>
+                <button type="button" class="quick-nav-item" data-section="desks"><span class="quick-nav-icon">▣</span>میزها</button>
+                <button type="button" class="quick-nav-item" data-section="charges"><span class="quick-nav-icon">◈</span>شارژ</button>
+                <button type="button" class="quick-nav-item" data-section="payments"><span class="quick-nav-icon">◎</span>واریز</button>
+              </nav>
               <div id="cards" class="stat-cards"></div>
               <div class="grid two">
                 <article class="panel">

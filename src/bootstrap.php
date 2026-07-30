@@ -68,6 +68,22 @@ function e(mixed $value): string
     return htmlspecialchars((string) $value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 
+function avatar_initial(string $text, string $fallback = 'م'): string
+{
+    $text = trim($text);
+    if ($text === '') {
+        return $fallback;
+    }
+    if (function_exists('mb_substr')) {
+        return mb_substr($text, 0, 1);
+    }
+    if (preg_match('/^\X/u', $text, $match)) {
+        return $match[0];
+    }
+
+    return $fallback;
+}
+
 function json_response(mixed $payload, int $status = 200): never
 {
     http_response_code($status);
