@@ -36,6 +36,7 @@ $assetVer = (string) max(
     filemtime(__DIR__ . '/assets/styles.css'),
     filemtime(__DIR__ . '/assets/app.js'),
     filemtime(__DIR__ . '/assets/room-booking.js'),
+    filemtime(__DIR__ . '/assets/room.css'),
     filemtime(__DIR__ . '/assets/team-year-workspace.js'),
     (int) Brand::version()
 );
@@ -51,8 +52,9 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
     <?= Brand::headTags() ?>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="assets/styles.css?v=<?= e($assetVer) ?>" />
+    <link rel="stylesheet" href="assets/room.css?v=<?= e($assetVer) ?>" />
     <script>
       (function () {
         try {
@@ -313,20 +315,22 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
 
             <section id="room-reservations" class="section">
               <div class="section-intro section-intro--blue">
-                <span class="section-intro-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 4h7v7H4V4Zm9 0h7v7h-7V4ZM4 13h7v7H4v-7Zm9 3h7v4h-7v-4Z" fill="currentColor"/></svg></span>
                 <div class="section-intro-copy"><p>رزرو اتاق جلسه برای نهاد — حداکثر ۲ ساعت در روز برای هر شماره موبایل.</p></div>
               </div>
-              <article class="panel room-booking-panel">
-                <div class="panel-head"><h2>رزرو جدید</h2></div>
-                <form id="panelRoomBookingForm" class="room-public-form">
-                  <div class="crud-grid">
+              <article class="room-card room-booking-panel">
+                <h2>رزرو جدید</h2>
+                <p class="room-card-lead">اتاق و بازه زمانی را انتخاب کنید.</p>
+                <form id="panelRoomBookingForm">
+                  <div class="room-field-row">
                     <label><span>اتاق</span><select name="room_id" required></select></label>
                     <label><span>تاریخ</span><input name="reserved_date" type="text" required placeholder="1404/01/01" value="<?= e($today['formatted']) ?>" /></label>
                     <label><span>نام *</span><input name="booker_name" type="text" required /></label>
                     <label><span>موبایل *</span><input name="booker_phone" type="tel" required dir="ltr" class="ltr-input" /></label>
                     <label class="wide"><span>موضوع</span><textarea name="purpose" rows="2"></textarea></label>
-                    <label class="wide"><span>بازه‌های آزاد</span><div id="panelRoomSlotGrid" class="room-slot-grid"></div><p class="hint" id="panelRoomTimePreview"></p></label>
                   </div>
+                  <div class="room-slot-legend"><span class="free">آزاد</span><span class="pending">انتظار</span><span class="busy">پر</span></div>
+                  <div id="panelRoomSlotGrid" class="room-slot-grid"></div>
+                  <p class="hint" id="panelRoomTimePreview"></p>
                   <div class="form-actions"><button class="button" type="submit">ثبت رزرو</button></div>
                 </form>
               </article>

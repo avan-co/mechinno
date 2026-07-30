@@ -197,3 +197,37 @@ function require_database(): PDO
 
     return $pdo;
 }
+
+/** Lightweight DB bootstrap for public pages (no auth user sync). */
+function public_database(): PDO
+{
+    $pdo = Database::connect();
+    Schema::migrate($pdo);
+
+    return $pdo;
+}
+
+function public_page_error(Throwable $exception): string
+{
+    log_exception($exception);
+    if ($exception instanceof PDOException) {
+        $message = strtolower($exception->getMessage());
+        if (str_contains($message, 'no such column')
+            || str_contains($message, 'unknown column')
+            || str_contains($message, 'room_')) {
+            return 'ماژول رزرو اتاق هنوز روی سرور به‌روز نشده است. لطفاً با مدیر فنی تماس بگیرید.';
+        }
+
+        return 'در حال حاضر امکان اتصال به سامانه رزرو وجود ندارد. چند دقیقه بعد دوباره تلاش کنید.';
+    }
+
+    try {
+        $config = app_configured() ? app_config() : [];
+        if ((bool) ($config['debug'] ?? false)) {
+            return $exception->getMessage();
+        }
+    } catch (Throwable) {
+    }
+
+    return 'خطایی رخ داد. لطفاً بعداً دوباره تلاش کنید.';
+}

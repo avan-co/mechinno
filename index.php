@@ -19,6 +19,7 @@ $assetVer = (string) max(
     filemtime(__DIR__ . '/assets/sms-editor.js'),
     filemtime(__DIR__ . '/assets/sms-settings.js'),
     filemtime(__DIR__ . '/assets/room-booking.js'),
+    filemtime(__DIR__ . '/assets/room.css'),
     (int) Brand::version()
 );
 ?>
@@ -31,8 +32,9 @@ $assetVer = (string) max(
     <?= Brand::headTags() ?>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="assets/styles.css?v=<?= e($assetVer) ?>" />
+    <link rel="stylesheet" href="assets/room.css?v=<?= e($assetVer) ?>" />
     <script>
       (function () {
         try {
@@ -265,8 +267,8 @@ $assetVer = (string) max(
             <div class="dashboard-hero" id="dashboardHero">
               <div class="dashboard-hero-copy">
                 <p class="dashboard-hero-eyebrow">مرکز نوآوری مکانیک</p>
-                <h2 id="dashboardHeroTitle">خوش آمدید</h2>
-                <p id="dashboardHeroSubtitle">نمای کلی عملکرد مرکز، اقدامات فوری و وضعیت مالی</p>
+                <h2 id="dashboardHeroTitle">خلاصه وضعیت امروز</h2>
+                <p id="dashboardHeroSubtitle">نمای کلی نهادها، شارژ، میزها و اقدام‌های در انتظار</p>
               </div>
               <div class="dashboard-hero-meta" id="dashboardHeroMeta">
                 <div class="dashboard-hero-stat"><span>تاریخ امروز</span><strong id="heroToday"><?= e($today['formatted']) ?></strong></div>
@@ -493,31 +495,39 @@ $assetVer = (string) max(
 
             <section id="meeting-rooms" class="section">
               <div class="section-intro section-intro--blue">
-                <span class="section-intro-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 4h7v7H4V4Zm9 0h7v7h-7V4ZM4 13h7v7H4v-7Zm9 3h7v4h-7v-4Z" fill="currentColor"/></svg></span>
-                <div class="section-intro-copy"><p>مدیریت اتاق‌های جلسه، رزروها و تنظیمات — صفحه <a href="reserve.php" target="_blank" rel="noopener">رزرو عمومی</a> بدون ورود در دسترس است.</p></div>
+                <div class="section-intro-copy"><p>رزرو اتاق جلسه، مدیریت اتاق‌ها و تأیید درخواست‌ها — <a href="reserve.php" target="_blank" rel="noopener">صفحه رزرو عمومی</a></p></div>
                 <?php if (Access::canWrite()): ?>
-                <button type="button" class="button ghost section-intro-action" data-go="room-settings">تنظیمات رزرو</button>
+                <button type="button" class="button ghost section-intro-action" data-go="room-settings">تنظیمات</button>
                 <?php endif; ?>
               </div>
               <?php if (Access::isAdmin()): ?>
               <data-table title="رزرو — در انتظار تأیید" endpoint="api.php?resource=pending-room-reservations" data-workflow="meeting-rooms" data-workflow-type="room-reservation" data-table-key="pending-room-reservations" data-readonly></data-table>
               <?php endif; ?>
               <?php if (Access::canWrite()): ?>
-              <article class="panel room-booking-panel">
-                <div class="panel-head"><h2>رزرو سریع (مدیر)</h2></div>
-                <form id="panelRoomBookingForm" class="room-public-form">
-                  <div class="crud-grid">
-                    <label><span>اتاق</span><select name="room_id" required></select></label>
-                    <label><span>تاریخ</span><input name="reserved_date" type="text" required placeholder="1404/01/01" value="<?= e($today['formatted']) ?>" /></label>
-                    <label><span>نام *</span><input name="booker_name" type="text" required /></label>
-                    <label><span>موبایل *</span><input name="booker_phone" type="tel" required dir="ltr" class="ltr-input" /></label>
-                    <label><span>سازمان</span><input name="booker_org" type="text" /></label>
-                    <label class="wide"><span>موضوع</span><textarea name="purpose" rows="2"></textarea></label>
-                    <label class="wide"><span>بازه‌های آزاد</span><div id="panelRoomSlotGrid" class="room-slot-grid"></div><p class="hint" id="panelRoomTimePreview"></p></label>
-                  </div>
-                  <div class="form-actions"><button class="button" type="submit">ثبت رزرو</button></div>
-                </form>
-              </article>
+              <div class="room-booking-shell">
+                <article class="room-card room-booking-panel">
+                  <h2>رزرو سریع</h2>
+                  <p class="room-card-lead">اتاق، تاریخ و بازه را انتخاب کنید.</p>
+                  <form id="panelRoomBookingForm">
+                    <div class="room-field-row">
+                      <label><span>اتاق</span><select name="room_id" required></select></label>
+                      <label><span>تاریخ</span><input name="reserved_date" type="text" required placeholder="1404/01/01" value="<?= e($today['formatted']) ?>" /></label>
+                      <label><span>نام *</span><input name="booker_name" type="text" required /></label>
+                      <label><span>موبایل *</span><input name="booker_phone" type="tel" required dir="ltr" class="ltr-input" /></label>
+                      <label><span>سازمان</span><input name="booker_org" type="text" /></label>
+                      <label class="wide"><span>موضوع</span><textarea name="purpose" rows="2"></textarea></label>
+                    </div>
+                    <div class="room-slot-legend"><span class="free">آزاد</span><span class="pending">انتظار</span><span class="busy">پر</span></div>
+                    <div id="panelRoomSlotGrid" class="room-slot-grid"></div>
+                    <p class="hint" id="panelRoomTimePreview"></p>
+                    <div class="form-actions"><button class="button" type="submit">ثبت رزرو</button></div>
+                  </form>
+                </article>
+                <aside class="room-card">
+                  <h2>راهنما</h2>
+                  <p class="room-card-lead">حداکثر ۲ ساعت در روز برای هر شماره موبایل. رزروهای عمومی از <a href="reserve.php" target="_blank" rel="noopener">صفحه رزرو</a> ثبت می‌شوند.</p>
+                </aside>
+              </div>
               <?php endif; ?>
               <data-table title="رزروهای اتاق" endpoint="api.php?resource=room-reservations" data-no-add data-readonly></data-table>
               <data-table title="اتاق‌های جلسه" endpoint="api.php?resource=meeting-rooms"></data-table>

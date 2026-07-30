@@ -15,11 +15,24 @@ final class RoomReservations
      */
     public function settings(): array
     {
+        $defaults = [
+            'room_auto_approve' => true,
+            'room_max_advance_days' => 14,
+            'room_max_hours_per_day' => 2,
+            'room_slot_minutes' => 60,
+            'room_public_enabled' => true,
+        ];
+
         $this->ensureSettingsColumns();
-        $row = $this->pdo->query(
-            'SELECT room_auto_approve, room_max_advance_days, room_max_hours_per_day, room_slot_minutes, room_public_enabled
-             FROM center_settings WHERE id = 1'
-        )->fetch() ?: [];
+
+        try {
+            $row = $this->pdo->query(
+                'SELECT room_auto_approve, room_max_advance_days, room_max_hours_per_day, room_slot_minutes, room_public_enabled
+                 FROM center_settings WHERE id = 1'
+            )->fetch() ?: [];
+        } catch (PDOException) {
+            return $defaults;
+        }
 
         return [
             'room_auto_approve' => (int) ($row['room_auto_approve'] ?? 1) === 1,

@@ -9,7 +9,7 @@ try {
         json_response(['error' => 'سیستم هنوز راه‌اندازی نشده است.'], 503);
     }
 
-    $pdo = require_database();
+    $pdo = public_database();
     $rooms = new RoomReservations($pdo);
     $settings = $rooms->settings();
 
