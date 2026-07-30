@@ -992,7 +992,11 @@ const activateSection = (id, options = {}) => {
     }
   }
   if (id === "members" && panelMode === "admin") {
-    initMemberFilters().catch(() => {});
+    initMemberFilters()
+      .then(() => {
+        document.querySelectorAll("#members data-table:not(#membersTable)").forEach((table) => table.load?.());
+      })
+      .catch(() => {});
   } else {
     reloadSectionTables(id);
   }
@@ -2477,6 +2481,13 @@ const openDepositModal = async ({ teamId, teamName, fiscalYear, monthIndex, mont
     resource: "transactions",
     definition,
     title: `ثبت مستقیم دریافت — ${teamName}`,
+    extraPayload: {
+      payment_plan: [{
+        fiscal_year: String(fiscalYear),
+        month_index: Number(monthIndex),
+        amount: remaining || Number(amountDue),
+      }],
+    },
     record: {
       category: "واریز تیم",
       team_id: String(teamId),
@@ -2675,7 +2686,7 @@ const openResetPortalModal = (teamId, teamName = "") => new Promise((resolve, re
   trapFocus(modal);
 });
 
-const openRecordModal = ({ resource, definition, record = null, onSaved, title = null }) => {
+const openRecordModal = ({ resource, definition, record = null, onSaved, title = null, extraPayload = null }) => {
   const modal = ensureModal();
   const form = modal.querySelector("#crudForm");
   const isEdit = Boolean(record?.id);
@@ -2720,6 +2731,7 @@ const openRecordModal = ({ resource, definition, record = null, onSaved, title =
       const payload = Object.fromEntries(new FormData(form).entries());
       if (isEdit) payload.id = payload.id || record.id;
       if (portalPasswordBlock) Object.assign(payload, collectPortalPasswordPayload(form));
+      if (extraPayload && typeof extraPayload === "object") Object.assign(payload, extraPayload);
       await postJson(`api.php?resource=${encodeURIComponent(resource)}&action=${isEdit ? "update" : "create"}`, payload);
       closeModal();
       await onSaved();

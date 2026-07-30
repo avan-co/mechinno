@@ -443,7 +443,7 @@ final class Crud
         $deskAssignmentDates = $this->extractDeskAssignmentDates($resource, $payload);
         $data = $this->sanitizePayload(['fields' => $fields], $payload, true);
         $this->stripDeskAssignmentColumns($resource, $data);
-        if (Access::isTeam() && $resource === 'transactions') {
+        if ($resource === 'transactions' && array_key_exists('payment_plan', $payload)) {
             $data['payment_plan'] = $payload['payment_plan'] ?? '';
         }
         if (Access::isTeam() && $resource === 'member_requests') {
@@ -1155,6 +1155,11 @@ final class Crud
             } else {
                 $data['payment_status'] = 'approved';
                 $data['confirmed'] = (int) ($data['confirmed'] ?? 1);
+                if ($creating && !empty($data['payment_plan'])) {
+                    $plan = $this->normalizeTeamPaymentPlan((int) ($data['team_id'] ?? 0), $data['payment_plan']);
+                    $data['payment_plan'] = json_encode($plan, JSON_UNESCAPED_UNICODE);
+                    $data['amount'] = array_sum(array_column($plan, 'amount'));
+                }
                 $description = trim((string) ($data['description'] ?? ''));
                 if ($description !== '' && !str_starts_with($description, 'ثبت مستقیم مدیر')) {
                     $data['description'] = 'ثبت مستقیم مدیر — ' . $description;

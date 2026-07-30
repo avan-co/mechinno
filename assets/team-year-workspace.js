@@ -201,6 +201,9 @@
     const year = selectedYear && years.includes(String(selectedYear)) ? String(selectedYear) : years[0];
     const summary = yearSummary(profile, year);
     const team = profile.team || {};
+    const memberColumns = S().panelMode === "team"
+      ? ["member_code", "full_name", "phone", "national_id"]
+      : ["member_code", "full_name", "access_code", "phone", "national_id"];
 
     return `
       <div class="team-year-workspace" data-team-workspace data-team-id="${teamId}" data-selected-year="${S().escapeHtml(year)}">
@@ -225,7 +228,7 @@
         </div>
         <details class="year-extra-section">
           <summary>اعضا، کمدها و پرداخت‌ها</summary>
-          ${S().profileSection("اعضا", profile.members || [], ["member_code", "full_name", "access_code", "phone", "national_id"])}
+          ${S().profileSection("اعضا", profile.members || [], memberColumns)}
           ${S().profileSection("کمدها", profile.lockers || [], ["locker_number", "status", "delivered_at", "key_number"])}
           ${S().profileSection("دریافت شارژ از نهاد", profile.payments || [], ["tx_date", "fiscal_year", "month_name", "amount"])}
         </details>

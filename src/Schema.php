@@ -15,6 +15,7 @@ final class Schema
         self::ensureWorkflowTables($pdo);
         self::ensureMemberRequestsTable($pdo);
         self::ensureTeamContractsTable($pdo);
+        (new TeamContracts($pdo))->migrateFromLegacyTeamDates();
         self::dropLegacyColumns($pdo);
         self::dropUnusedTables($pdo);
         self::ensureDataIntegrity($pdo);

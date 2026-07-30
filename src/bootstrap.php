@@ -110,6 +110,9 @@ function require_auth(): void
 
 function require_auth_json(): void
 {
+    if (!app_configured()) {
+        json_response(['error' => 'سامانه هنوز راه‌اندازی نشده است. ابتدا config.php را ایجاد و نصب را اجرا کنید.'], 503);
+    }
     $config = app_config();
     if (!Auth::isEnabled($config) || Auth::check()) {
         return;

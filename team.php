@@ -261,7 +261,7 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
                 <div class="panel-head"><h2>اعلام واریز</h2></div>
                 <div id="teamPaymentWizard">در حال بارگذاری…</div>
               </article>
-              <data-table title="اعلام‌های در انتظار تأیید" endpoint="api.php?resource=transactions" data-payment-filter="pending"></data-table>
+              <data-table title="اعلام‌های در انتظار تأیید" endpoint="api.php?resource=transactions" data-payment-filter="pending" data-no-add></data-table>
               <data-table title="سوابق پرداخت" endpoint="api.php?resource=payment-history" data-readonly></data-table>
             </section>
           </main>

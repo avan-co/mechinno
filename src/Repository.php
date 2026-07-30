@@ -1788,12 +1788,13 @@ final class Repository
 
         $like = '%' . addcslashes($q, '%_\\') . '%';
         $quoted = $this->pdo->quote($like);
+        $numericTextType = $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? 'CHAR' : 'TEXT';
         $expr = match ($name) {
             'teams' => "t.name LIKE {$quoted} OR t.leader LIKE {$quoted} OR t.phone LIKE {$quoted} OR t.entity_code LIKE {$quoted} OR COALESCE(u.username, '') LIKE {$quoted}",
             'team_contracts' => "t.name LIKE {$quoted} OR COALESCE(tc.fiscal_year, '') LIKE {$quoted} OR COALESCE(tc.notes, '') LIKE {$quoted}",
             'members' => "m.full_name LIKE {$quoted} OR COALESCE(m.phone, '') LIKE {$quoted} OR COALESCE(m.national_id, '') LIKE {$quoted} OR COALESCE(m.member_code, '') LIKE {$quoted} OR COALESCE(t.name, '') LIKE {$quoted}",
-            'desks' => "CAST(d.number AS TEXT) LIKE {$quoted} OR COALESCE(t.name, '') LIKE {$quoted} OR COALESCE(d.notes, '') LIKE {$quoted}",
-            'lockers' => "CAST(l.locker_number AS TEXT) LIKE {$quoted} OR COALESCE(t.name, '') LIKE {$quoted} OR COALESCE(l.notes, '') LIKE {$quoted}",
+            'desks' => "CAST(d.number AS {$numericTextType}) LIKE {$quoted} OR COALESCE(t.name, '') LIKE {$quoted} OR COALESCE(d.notes, '') LIKE {$quoted}",
+            'lockers' => "CAST(l.locker_number AS {$numericTextType}) LIKE {$quoted} OR COALESCE(t.name, '') LIKE {$quoted} OR COALESCE(l.notes, '') LIKE {$quoted}",
             'charges' => "COALESCE(t.name, '') LIKE {$quoted} OR COALESCE(c.note, '') LIKE {$quoted} OR COALESCE(c.fiscal_year, '') LIKE {$quoted}",
             'transactions' => "COALESCE(t.description, '') LIKE {$quoted} OR COALESCE(t.notes, '') LIKE {$quoted} OR COALESCE(tm.name, '') LIKE {$quoted} OR COALESCE(t.payment_reference, '') LIKE {$quoted}",
             'rate_settings' => "COALESCE(title, '') LIKE {$quoted} OR COALESCE(fiscal_year, '') LIKE {$quoted} OR COALESCE(notes, '') LIKE {$quoted}",
