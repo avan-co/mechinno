@@ -91,7 +91,7 @@ $assetVer = (string) max(
         </div>
 
         <h1>ورود به پنل</h1>
-        <p class="hint" style="margin: -12px 0 20px; text-align: center;">پنل مدیریت مرکز نوآوری مکانیک</p>
+        <p class="login-subtitle">پنل مدیریت مرکز نوآوری مکانیک</p>
 
         <?php if (!$configured): ?>
           <div class="notice danger">فایل <code>config.php</code> هنوز ساخته نشده است.</div>

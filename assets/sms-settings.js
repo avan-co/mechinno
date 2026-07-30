@@ -20,7 +20,7 @@ const renderSmsCredentialsForm = (data) => {
       <label><span>رمز عبور API</span><input name="sms_password" type="password" placeholder="${data.sms_password_set ? "برای تغییر وارد کنید" : "رمز API"}" ${canWrite ? "" : "readonly"} /></label>
     </div>
     <p class="hint">نام کاربری و رمز REST پنل ملی‌پیامک (نه رمز ورود وب‌سایت).</p>
-    ${canWrite ? `<div class="modal-actions"><button class="button" type="submit">ذخیره حساب API</button></div>` : `<p class="hint">فقط مشاهده</p>`}`;
+    ${canWrite ? `<div class="panel-actions"><button class="button" type="submit">ذخیره حساب API</button></div>` : `<p class="hint">فقط مشاهده</p>`}`;
 
   if (!canWrite) return;
   host.onsubmit = async (event) => {
@@ -56,7 +56,7 @@ const renderSmsLineForm = (data) => {
     </div>
     <p class="hint">شماره خط را از پنل ملی‌پیامک کپی و اینجا دستی وارد کنید. بدون خط ذخیره‌شده، وضعیت اتصال «ناقص» می‌ماند.</p>
     ${!data.sms_configured ? `<p class="hint">پس از وارد کردن خط، دکمه «ذخیره خط و محدودیت» را بزنید.</p>` : ""}
-    ${canWrite ? `<div class="modal-actions"><button class="button" type="submit">ذخیره خط و محدودیت</button></div>` : `<p class="hint">فقط مشاهده</p>`}`;
+    ${canWrite ? `<div class="panel-actions"><button class="button" type="submit">ذخیره خط و محدودیت</button></div>` : `<p class="hint">فقط مشاهده</p>`}`;
 
   if (!canWrite) return;
   host.onsubmit = async (event) => {

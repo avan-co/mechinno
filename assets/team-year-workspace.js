@@ -100,7 +100,7 @@
     const isPast = String(year) !== String(currentFiscalYear());
     if (!writable) {
       if (!contract) {
-        return `<article class="year-panel"><h3>قرارداد</h3><div class="empty">قراردادی برای این سال ثبت نشده است.</div></article>`;
+        return `<article class="year-panel"><h3>قرارداد</h3>${window.renderEmptyState?.("قراردادی برای این سال ثبت نشده است.", { icon: "inbox" }) || '<div class="empty">قراردادی برای این سال ثبت نشده است.</div>'}</article>`;
       }
       return `<article class="year-panel">
         <h3>قرارداد</h3>
@@ -241,7 +241,8 @@
       container.classList.add("is-ready");
       return profile;
     } catch (error) {
-      container.innerHTML = `<div class="empty">خطا در بارگذاری پروفایل: ${S().escapeHtml(error.message)}</div>`;
+      container.innerHTML = window.renderEmptyState?.(`خطا در بارگذاری پروفایل: ${S().escapeHtml(error.message)}`, { icon: "error" })
+        || `<div class="empty">خطا در بارگذاری پروفایل: ${S().escapeHtml(error.message)}</div>`;
       container.classList.add("is-ready");
       throw error;
     }
@@ -538,7 +539,8 @@
     try {
       await reloadWorkspace(inner, teamId, currentFiscalYear());
     } catch (error) {
-      inner.innerHTML = `<div class="empty">خطا در بارگذاری پروفایل: ${S().escapeHtml(error.message)}</div>`;
+      inner.innerHTML = window.renderEmptyState?.(`خطا در بارگذاری پروفایل: ${S().escapeHtml(error.message)}`, { icon: "error" })
+        || `<div class="empty">خطا در بارگذاری پروفایل: ${S().escapeHtml(error.message)}</div>`;
       inner.classList.add("is-ready");
       throw error;
     }

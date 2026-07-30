@@ -61,18 +61,40 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
       })();
     </script>
   </head>
-  <body class="app-body">
+  <body class="<?= ($pageError || !$isConfigured || !$team) ? 'standalone-page' : 'app-body' ?>">
     <?php if ($pageError): ?>
+      <div class="bg-blobs" aria-hidden="true">
+        <span class="blob blob-a"></span>
+        <span class="blob blob-b"></span>
+      </div>
       <main class="setup-screen">
         <section class="setup-card">
+          <div class="setup-brand">
+            <?= Brand::mark('hero') ?>
+            <div class="setup-brand-copy">
+              <strong>Mechinno</strong>
+              <small>پنل نهاد</small>
+            </div>
+          </div>
           <h1>خطا</h1>
           <div class="notice danger"><?= e($pageError) ?></div>
           <a class="button" href="logout.php">خروج</a>
         </section>
       </main>
     <?php elseif (!$isConfigured || !$team): ?>
+      <div class="bg-blobs" aria-hidden="true">
+        <span class="blob blob-a"></span>
+        <span class="blob blob-b"></span>
+      </div>
       <main class="setup-screen">
         <section class="setup-card">
+          <div class="setup-brand">
+            <?= Brand::mark('hero') ?>
+            <div class="setup-brand-copy">
+              <strong>Mechinno</strong>
+              <small>پنل نهاد</small>
+            </div>
+          </div>
           <h1>خطا</h1>
           <p>حساب نهاد به تیمی متصل نیست یا پنل پیکربندی نشده است.</p>
           <a class="button" href="logout.php">خروج</a>
@@ -342,6 +364,8 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
           canTeamSubmit: true,
           teamId: <?= (int) $teamId ?>,
           teamName: "<?= e($team['name'] ?? '') ?>",
+          teamEyebrow: "<?= e($entityLabel) ?> — <?= e($team['entity_code'] ?? '') ?>",
+          teamSubtitle: "مشاهده وضعیت نهاد، ثبت عضو و اعلام واریز",
           username: "<?= e($authContext['username']) ?>",
         };
       </script>

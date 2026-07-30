@@ -62,19 +62,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $configured) {
 }
 ?>
 <!doctype html>
-<html lang="fa" dir="rtl">
+<html lang="fa" dir="rtl" data-theme="light">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>نصب پنل Mechinno</title>
     <?= Brand::headTags() ?>
-    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;600;700&display=swap" rel="stylesheet" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="assets/styles.css?v=<?= e((string) filemtime(__DIR__ . '/assets/styles.css')) ?>" />
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem("mechinno-theme");
+          if (t === "dark" || t === "light") document.documentElement.setAttribute("data-theme", t);
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body class="standalone-page">
     <div class="bg-blobs" aria-hidden="true">
       <span class="blob blob-a"></span>
       <span class="blob blob-b"></span>
+      <span class="blob blob-c"></span>
     </div>
     <main class="setup-screen">
       <section class="setup-card wide">
@@ -82,7 +93,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $configured) {
           <?= Brand::mark('hero') ?>
           <div class="setup-brand-copy">
             <strong>Mechinno</strong>
-            <small>مرکز نوآوری مکانیک — ICAUT</small>
+            <small>مرکز نوآوری مکانیک</small>
           </div>
         </div>
         <h1>راه‌اندازی پنل</h1>

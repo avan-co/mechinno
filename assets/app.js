@@ -498,6 +498,9 @@ const renderSkeletonTable = (rows = 5, cols = 5) => `
     `).join("")}
   </div>`;
 
+window.renderEmptyState = renderEmptyState;
+window.renderSkeletonTable = renderSkeletonTable;
+
 const loadCrudMeta = () => {
   if (!crudMetaPromise) {
     crudMetaPromise = fetchJson("api.php?resource=crud-meta");
@@ -637,7 +640,14 @@ const syncMobileClass = () => {
 
 const updatePageHeader = (sectionId) => {
   const metaSource = panelMode === "team" ? teamSectionMeta : sectionMeta;
-  const meta = metaSource[sectionId] || metaSource.overview;
+  let meta = metaSource[sectionId] || metaSource.overview;
+  if (panelMode === "team" && sectionId === "overview" && window.MECHINNO?.teamName) {
+    meta = {
+      eyebrow: window.MECHINNO.teamEyebrow || meta.eyebrow,
+      title: window.MECHINNO.teamName,
+      subtitle: window.MECHINNO.teamSubtitle || meta.subtitle,
+    };
+  }
   const eyebrow = document.getElementById("pageEyebrow");
   const title = document.getElementById("pageTitle");
   const subtitle = document.getElementById("pageSubtitle");
@@ -851,21 +861,23 @@ const previewReport = async () => {
     if (data.debts) {
       blocks.push(`<h3 class="report-preview-title">مطالبات</h3>`);
       blocks.push(renderReportPreviewTable(
-        ["نهاد", "ماه", "مستحق", "دریافت", "مانده", "وضعیت"],
+        ["نهاد", "سال", "ماه", "مستحق", "دریافت", "مانده", "وضعیت"],
         data.debts.map((row) => [
-          row.team_name, row.month_name, row.amount_due, row.amount_paid, row.amount_remaining, row.status,
+          row.team_name, row.fiscal_year, row.month_name, row.amount_due, row.amount_paid, row.amount_remaining, row.status,
         ]),
         "مطالبه‌ای در این بازه نیست.",
-        ["text", "text", "money", "money", "money", "text"]
+        ["text", "text", "text", "money", "money", "money", "text"]
       ));
     }
     if (data.charges) {
       blocks.push(`<h3 class="report-preview-title">شارژ</h3>`);
       blocks.push(renderReportPreviewTable(
-        ["نهاد", "ماه", "شارژ", "اجاره", "جمع"],
-        data.charges.map((row) => [row.team_name, row.month_name, row.charge_amount, row.rent_amount, row.amount]),
+        ["نهاد", "سال", "ماه", "شارژ", "اجاره", "جمع", "یادداشت"],
+        data.charges.map((row) => [
+          row.team_name, row.fiscal_year, row.month_name, row.charge_amount, row.rent_amount, row.amount, row.note || "—",
+        ]),
         "شارژی در این بازه نیست.",
-        ["text", "text", "money", "money", "money"]
+        ["text", "text", "text", "money", "money", "money", "text"]
       ));
     }
     if (data.transactions) {
@@ -1213,7 +1225,7 @@ const renderActionItems = (items) => {
   const container = document.getElementById("actionItems");
   if (!container) return;
   if (!items?.length) {
-    container.innerHTML = `<div class="empty">همه‌چیز مرتب است — مورد فوری نیست.</div>`;
+    container.innerHTML = renderEmptyState("همه‌چیز مرتب است — مورد فوری نیست.", { icon: "inbox" });
     return;
   }
   container.innerHTML = items.map((item) => `
@@ -1233,12 +1245,14 @@ const renderChargeChart = (rows) => {
   const source = compact ? rows.slice(-6) : rows.slice(-10);
   const max = Math.max(...source.map((r) => Number(r.amount || 0)), 1);
   container.classList.toggle("bar-chart--compact", compact);
-  container.innerHTML = source.map((row) => `
+  container.innerHTML = source.length
+    ? source.map((row) => `
     <div class="bar-row ${compact ? "bar-row--compact" : ""}">
       <span>${escapeHtml(row.fiscal_year)} ${escapeHtml(row.month_name)}</span>
       <div class="bar-track"><div class="bar-fill" style="width:${(Number(row.amount || 0) / max) * 100}%"></div></div>
       <strong>${escapeHtml(formatMoney(row.amount))}</strong>
-    </div>`).join("") || `<div class="empty">داده‌ای موجود نیست.</div>`;
+    </div>`).join("")
+    : renderEmptyState("داده‌ای موجود نیست.", { icon: "chart" });
 };
 
 const renderDebtChart = (rows) => {
@@ -1252,7 +1266,7 @@ const renderDebtChart = (rows) => {
         <div class="bar-track"><div class="bar-fill danger-fill" style="width:${(Number(row.debt || 0) / max) * 100}%"></div></div>
         <strong>${escapeHtml(formatMoney(row.debt))}</strong>
       </div>`).join("")
-    : `<div class="empty">مطالبه ثبت‌شده‌ای از نهادها نیست.</div>`;
+    : renderEmptyState("مطالبه ثبت‌شده‌ای از نهادها نیست.", { icon: "chart" });
 };
 
 const renderDashboardHero = (cards = {}, team = null) => {
@@ -1316,7 +1330,7 @@ const renderRecentApprovals = (items, actionItems = []) => {
       <span>${escapeHtml(item.detail || "")}</span>
     </button>`).join("");
   if (!items?.length && !actionHtml) {
-    container.innerHTML = `<div class="empty">هنوز تأیید یا ردی از مرکز ثبت نشده است.</div>`;
+    container.innerHTML = renderEmptyState("هنوز تأیید یا ردی از مرکز ثبت نشده است.", { icon: "inbox" });
     return;
   }
   const approvalHtml = (items || []).map((item) => {
@@ -1403,7 +1417,7 @@ const loadLedger = async (page = ledgerPage) => {
 
   const rows = data.rows || [];
   if (!rows.length) {
-    tableBody.innerHTML = `<tr><td colspan="7" class="empty">هنوز گردش نقدی ثبت نشده است.</td></tr>`;
+    tableBody.innerHTML = `<tr><td colspan="7" class="empty-cell">${renderEmptyState("هنوز گردش نقدی ثبت نشده است.", { icon: "chart" })}</td></tr>`;
     if (pager) pager.innerHTML = "";
     return;
   }
@@ -1445,7 +1459,7 @@ const loadTeamDeskAssignments = async () => {
   const { rows } = await fetchResource("api.php?resource=desk-assignments", { page: 1, perPage: 200 });
   if (!rows.length) {
     host.classList.add("is-ready");
-    host.innerHTML = `<div class="empty">هنوز سابقه تخصیص میزی برای نهاد شما ثبت نشده است.</div>`;
+    host.innerHTML = renderEmptyState("هنوز سابقه تخصیص میزی برای نهاد شما ثبت نشده است.", { icon: "desk" });
     return;
   }
 
@@ -1472,7 +1486,7 @@ const loadTeamDeskAssignments = async () => {
         <h3>میزهای فعال${currentYear ? ` سال ${escapeHtml(currentYear)}` : ""}</h3>
         <div class="desk-assignment-grid">${activeRows.map((row) => renderCard(row, true)).join("")}</div>
       </div>`
-    : `<div class="desk-assignment-section"><h3>میزهای فعال</h3><div class="empty">در حال حاضر میز فعالی ثبت نشده است.</div></div>`;
+    : `<div class="desk-assignment-section"><h3>میزهای فعال</h3>${renderEmptyState("در حال حاضر میز فعالی ثبت نشده است.", { icon: "desk" })}</div>`;
 
   const historyHtml = historyRows.length
     ? `<div class="desk-assignment-section">
@@ -2067,7 +2081,7 @@ const loadDeskGrid = async () => {
   const container = document.getElementById("deskGrid");
   if (!container) return;
   if (!desks.length) {
-    container.innerHTML = `<div class="empty">نقشه میزها بارگذاری نشد.</div>`;
+    container.innerHTML = renderEmptyState("نقشه میزها بارگذاری نشد.", { icon: "error" });
     return;
   }
   const rows = { 1: [], 2: [], 3: [] };
@@ -2228,7 +2242,7 @@ const loadTeamChargeRates = async () => {
       ${billing?.has_billing_adjustments ? `<div class="team-billing-badges team-billing-badges--compact">${teamBillingBadges(billing, { compact: true })}</div>` : ""}
       <p class="hint">نرخ‌های سال‌های گذشته در کلاژ همان سال نمایش داده می‌شود. بدهی هر ماه فقط برای ماه‌هایی که میز فعال دارید محاسبه می‌شود.</p>`;
   } catch (error) {
-    host.innerHTML = `<div class="empty">نرخ سال جاری در دسترس نیست.</div>`;
+    host.innerHTML = renderEmptyState("نرخ سال جاری در دسترس نیست.", { icon: "chart" });
   }
 };
 
@@ -2266,7 +2280,7 @@ const loadChargesCollage = async () => {
     const emptyMessage = panelMode === "team"
       ? "برای این سال قرارداد، میز یا شارژ ثبت‌شده‌ای ندارید."
       : "برای این سال نهادی با قرارداد و میز فعال نیست — قرارداد سالانه و میز را بررسی کنید.";
-    container.innerHTML = `<div class="empty">${escapeHtml(emptyMessage)}</div>`;
+    container.innerHTML = renderEmptyState(emptyMessage, { icon: "search" });
     return;
   }
 
@@ -2502,7 +2516,7 @@ const loadTeamPaymentWizard = async () => {
   const monthsData = await fetchJson("api.php?resource=team-payable-months");
   const months = monthsData.months || [];
   if (!months.length) {
-    host.innerHTML = `<div class="empty">ماه بدهی باز ندارید.</div>`;
+    host.innerHTML = renderEmptyState("ماه بدهی باز ندارید.", { icon: "inbox" });
     return;
   }
   host.innerHTML = `

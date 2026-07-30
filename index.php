@@ -668,7 +668,10 @@ $assetVer = (string) max(
                   <span class="hint" id="reportPreviewMeta">هنوز گزارشی ساخته نشده است</span>
                 </div>
                 <div id="reportPreview" class="report-preview">
-                  <div class="empty">نوع گزارش و بازه را انتخاب کنید، سپس «پیش‌نمایش گزارش» را بزنید.</div>
+                  <div class="empty-state">
+                    <span class="empty-state-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm8 1.5V8h4.5L14 3.5ZM8 12h8v2H8v-2Zm0 4h8v2H8v-2Zm0-8h4v2H8V8Z" fill="currentColor"/></svg></span>
+                    <p class="empty-state-text">نوع گزارش و بازه را انتخاب کنید، سپس «پیش‌نمایش گزارش» را بزنید.</p>
+                  </div>
                 </div>
               </article>
             </section>

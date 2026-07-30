@@ -127,7 +127,7 @@ const renderSmsRecipients = () => {
       <td>${escapeHtml(row.phone || "—")}</td>
       <td>${Number(row.wants_access) === 1 ? "بله" : "خیر"}</td>
     </tr>`;
-  }).join("") || `<tr><td colspan="5">گیرنده‌ای یافت نشد.</td></tr>`;
+  }).join("") || `<tr class="empty-row"><td colspan="5">گیرنده‌ای با این فیلتر یافت نشد.</td></tr>`;
   tbody.querySelectorAll("[data-sms-member]").forEach((input) => {
     input.addEventListener("change", () => {
       const id = Number(input.dataset.smsMember);
@@ -200,7 +200,7 @@ const loadSmsHistory = async () => {
     <td>${Number(row.api_confirmed) === 1 ? "بله" : "خیر"}</td>
     <td>${formatMoney(row.cost_rial || 0)}</td>
     <td title="${escapeHtml(row.message_text || "")}">${escapeHtml((row.message_text || "").slice(0, 40))}${(row.message_text || "").length > 40 ? "…" : ""}</td>
-  </tr>`).join("") || `<tr><td colspan="10">تاریخچه‌ای ثبت نشده است.</td></tr>`;
+  </tr>`).join("") || `<tr class="empty-row"><td colspan="10">تاریخچه‌ای ثبت نشده است.</td></tr>`;
 };
 
 document.getElementById("smsRecipientsPager")?.addEventListener("click", (event) => {
