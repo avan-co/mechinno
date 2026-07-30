@@ -423,7 +423,7 @@ $assetVer = (string) max(
               <article class="panel">
                 <div class="panel-head"><h2>آمار و همگام‌سازی</h2></div>
                 <div id="smsSettingsStats">در حال بارگذاری…</div>
-                <div class="modal-actions">
+                <div class="panel-actions">
                   <?php if (Access::canWrite()): ?>
                   <button class="button ghost" type="button" id="smsTestConnection">تست اتصال API</button>
                   <button class="button ghost" type="button" id="smsRefreshLiveStats">بروزرسانی موجودی و تعرفه از API</button>
