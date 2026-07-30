@@ -71,7 +71,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $configured) {
     <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="assets/styles.css?v=<?= e((string) filemtime(__DIR__ . '/assets/styles.css')) ?>" />
   </head>
-  <body>
+  <body class="standalone-page">
+    <div class="bg-blobs" aria-hidden="true">
+      <span class="blob blob-a"></span>
+      <span class="blob blob-b"></span>
+    </div>
     <main class="setup-screen">
       <section class="setup-card wide">
         <div class="setup-brand">

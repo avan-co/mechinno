@@ -459,9 +459,14 @@ const showToast = (message, type = "info") => {
     console.warn("[mechinno:toast] toastHost element missing — message was:", message);
     return;
   }
+  const icons = {
+    success: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2Z" fill="currentColor"/></svg>',
+    error: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm1 14h-2v-2h2v2Zm0-4h-2V7h2v5Z" fill="currentColor"/></svg>',
+    info: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm1 15h-2v-6h2v6Zm0-8h-2V7h2v2Z" fill="currentColor"/></svg>',
+  };
   const toast = document.createElement("div");
   toast.className = `toast toast-${type}`;
-  toast.textContent = message;
+  toast.innerHTML = `<span class="toast-icon">${icons[type] || icons.info}</span><span class="toast-text">${escapeHtml(message)}</span>`;
   host.appendChild(toast);
   requestAnimationFrame(() => toast.classList.add("show"));
   setTimeout(() => {
@@ -469,6 +474,29 @@ const showToast = (message, type = "info") => {
     setTimeout(() => toast.remove(), 220);
   }, 3200);
 };
+
+const EMPTY_ICONS = {
+  default: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4V4Zm2 2v12h12V6H6Zm2 2h8v2H8V8Zm0 4h5v2H8v-2Z" fill="currentColor"/></svg>',
+  search: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.5 3a7.5 7.5 0 1 1 4.73 13.35l4.35 4.35-1.41 1.41-4.35-4.35A7.5 7.5 0 0 1 10.5 3Zm0 2a5.5 5.5 0 1 0 5.5 5.5A5.5 5.5 0 0 0 10.5 5Z" fill="currentColor"/></svg>',
+  inbox: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Zm0 2v4.5L12 13l8-6.5V6H4Z" fill="currentColor"/></svg>',
+  chart: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19h16v2H4v-2Zm3-8h2v6H7v-6Zm5-4h2v10h-2V7Zm5 6h2v4h-2v-4Z" fill="currentColor"/></svg>',
+  desk: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16a1 1 0 0 1 1 1v3H3V6a1 1 0 0 1 1-1Zm17 6v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-8h18Z" fill="currentColor"/></svg>',
+  error: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm1 14h-2v-2h2v2Zm0-4h-2V7h2v5Z" fill="currentColor"/></svg>',
+};
+
+const renderEmptyState = (message, { icon = "default", cta = "", className = "" } = {}) => `
+  <div class="empty-state ${className}">
+    <span class="empty-state-icon" aria-hidden="true">${EMPTY_ICONS[icon] || EMPTY_ICONS.default}</span>
+    <p class="empty-state-text">${escapeHtml(String(message))}</p>
+    ${cta}
+  </div>`;
+
+const renderSkeletonTable = (rows = 5, cols = 5) => `
+  <div class="skeleton-table" aria-busy="true" aria-label="در حال بارگذاری">
+    ${Array.from({ length: rows }, () => `
+      <div class="skeleton-row">${Array.from({ length: cols }, () => `<span class="skeleton-cell"></span>`).join("")}</div>
+    `).join("")}
+  </div>`;
 
 const loadCrudMeta = () => {
   if (!crudMetaPromise) {
@@ -753,7 +781,7 @@ const renderReportTypeCards = () => {
 
 const renderReportPreviewTable = (headers, rows, emptyText, columnKinds = []) => {
   if (!rows?.length) {
-    return `<div class="empty">${escapeHtml(emptyText || "داده‌ای نیست.")}</div>`;
+    return renderEmptyState(emptyText || "داده‌ای نیست.", { icon: "chart" });
   }
   return `<div class="table-wrap"><table class="data-table">
     <thead><tr>${headers.map((h) => `<th>${escapeHtml(h)}</th>`).join("")}</tr></thead>
@@ -773,7 +801,7 @@ const previewReport = async () => {
   if (!host) return;
   const filters = collectReportFilters();
   reportLastFilters = filters;
-  host.innerHTML = `<div class="empty">در حال ساخت گزارش…</div>`;
+  host.innerHTML = renderSkeletonTable(4, 5);
   try {
     const data = await fetchJson(`api.php?resource=reports&${reportQueryString(filters)}`);
     const info = data.meta || {};
@@ -890,9 +918,9 @@ const previewReport = async () => {
         ["count", "text", "text"]
       ));
     }
-    host.innerHTML = blocks.join("") || `<div class="empty">برای این انتخاب داده‌ای یافت نشد.</div>`;
+    host.innerHTML = blocks.join("") || renderEmptyState("برای این انتخاب داده‌ای یافت نشد.", { icon: "search" });
   } catch (error) {
-    host.innerHTML = `<div class="empty">ساخت گزارش ناموفق بود.</div>`;
+    host.innerHTML = renderEmptyState("ساخت گزارش ناموفق بود.", { icon: "error" });
     showToast(error.message || "خطا در ساخت گزارش", "error");
   }
 };
@@ -3545,7 +3573,7 @@ class DataTable extends HTMLElement {
             <input class="search" type="search" placeholder="جست‌وجو... ( / )" />
           </div>
         </div>
-        <div class="table-wrap"><div class="empty">در حال بارگذاری...</div></div>
+        <div class="table-wrap">${renderSkeletonTable()}</div>
         <div class="mobile-cards"></div>
         <div class="table-pagination" hidden>
           <span class="pager-info"></span>
@@ -3634,7 +3662,7 @@ class DataTable extends HTMLElement {
       this.render();
       this.renderPager();
     } catch (error) {
-      this.querySelector(".table-wrap").innerHTML = `<div class="empty">خطا: ${escapeHtml(error.message)}</div>`;
+      this.querySelector(".table-wrap").innerHTML = renderEmptyState(`خطا: ${error.message}`, { icon: "error" });
       this.querySelector(".table-pagination").hidden = true;
     }
   }
@@ -3699,7 +3727,7 @@ class DataTable extends HTMLElement {
         return `<article class="mobile-card ${highlighted ? "highlighted" : ""}">${fields}
           <div class="row-actions">${profileBtn}${workflowBtns}${rowEditBtns}</div></article>`;
       }).join("")
-      : `<div class="empty">رکوردی یافت نشد.</div>`;
+      : renderEmptyState("رکوردی یافت نشد.", { icon: "search" });
     return true;
   }
 
@@ -3717,7 +3745,7 @@ class DataTable extends HTMLElement {
     if (!rows.length) {
       const cta = tableAllowsAdd(this, this.definition)
         ? `<div class="empty-state-cta"><button class="button add-inline" type="button">+ افزودن اولین رکورد</button></div>` : "";
-      wrap.innerHTML = `<div class="empty">رکوردی یافت نشد.${cta}</div>`;
+      wrap.innerHTML = renderEmptyState("رکوردی یافت نشد.", { icon: "inbox", cta });
       wrap.querySelector(".add-inline")?.addEventListener("click", () => this.querySelector(".add-button")?.click());
       if (mobile) mobile.innerHTML = "";
       return;

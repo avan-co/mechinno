@@ -41,8 +41,12 @@ $assetVer = (string) max(
       })();
     </script>
   </head>
-  <body class="app-body">
+  <body class="<?= $isConfigured ? 'app-body' : 'standalone-page' ?>">
     <?php if (!$isConfigured): ?>
+      <div class="bg-blobs" aria-hidden="true">
+        <span class="blob blob-a"></span>
+        <span class="blob blob-b"></span>
+      </div>
       <main class="setup-screen">
         <section class="setup-card">
           <div class="setup-brand">
