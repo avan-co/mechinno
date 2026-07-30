@@ -85,6 +85,19 @@ function avatar_initial(string $text, string $fallback = 'م'): string
     return $fallback;
 }
 
+/**
+ * Convert Latin digits in a display string to Persian digits so that
+ * dates/years shown as chips match the Persian-formatted numbers used
+ * elsewhere in the panel. Use only for display, never for input values.
+ */
+function fa_digits(string $value): string
+{
+    return strtr($value, [
+        '0' => '۰', '1' => '۱', '2' => '۲', '3' => '۳', '4' => '۴',
+        '5' => '۵', '6' => '۶', '7' => '۷', '8' => '۸', '9' => '۹',
+    ]);
+}
+
 function json_response(mixed $payload, int $status = 200): never
 {
     http_response_code($status);

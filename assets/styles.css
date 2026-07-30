@@ -12,6 +12,7 @@
   --surface-solid: #ffffff;
   --surface-elevated: #ffffff;
   --surface-muted: #f1f5f9;
+  --panel: var(--surface);
   --line: rgba(15, 23, 42, 0.08);
   --line-strong: rgba(15, 23, 42, 0.14);
   --border: rgba(15, 23, 42, 0.08);
@@ -46,7 +47,7 @@
   --radius-pill: 999px;
   --sidebar-width: 272px;
   --topbar-height: 68px;
-  --bottom-nav-height: 116px;
+  --bottom-nav-height: 66px;
   --glass: blur(20px) saturate(1.15);
   font-family: "Vazirmatn", "Segoe UI", Tahoma, sans-serif;
   font-size: 14px;
@@ -60,6 +61,7 @@
   --surface: rgba(28, 26, 24, 0.92);
   --surface-2: rgba(36, 33, 30, 0.78);
   --surface-solid: #1c1a18;
+  --panel: var(--surface);
   --line: rgba(245, 240, 232, 0.08);
   --line-strong: rgba(245, 240, 232, 0.14);
   --text: #f5f0e8;
@@ -84,6 +86,11 @@
 }
 
 *, *::before, *::after { box-sizing: border-box; }
+
+/* The `hidden` attribute must always win, even over class-based display rules
+   like `.crud-grid label { display: grid }` (higher specificity than the UA
+   `[hidden]` rule). Without this, JS-toggled wrappers never actually hide. */
+[hidden] { display: none !important; }
 
 body {
   margin: 0;
@@ -906,7 +913,7 @@ a.nav-item {
 .panel-head-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 
 .grid { display: grid; gap: 14px; margin-bottom: 14px; }
-.grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
 
 .button, .mini-button {
   border: none;
@@ -1355,6 +1362,9 @@ textarea[dir="ltr"] {
 }
 .collage-table { width: 100%; min-width: 900px; border-collapse: collapse; font-size: 12px; }
 .collage-table th, .collage-table td { padding: 8px; border: 1px solid var(--line); text-align: center; }
+.collage-table td { white-space: nowrap; }
+.collage-table td > div { font-size: 11px; font-weight: 700; line-height: 1.25; }
+.collage-table td small { display: block; margin-top: 1px; font-size: 9.5px; opacity: 0.82; white-space: nowrap; }
 .collage-table th { background: var(--surface-2); color: var(--primary); font-weight: 700; }
 .collage-table thead th { position: sticky; top: 0; z-index: 2; }
 .collage-table .team-col {
@@ -1556,14 +1566,17 @@ textarea[dir="ltr"] {
 
 .stat-card--payments .stat-icon { background: color-mix(in srgb, var(--amber) 20%, transparent); }
 
-.row-actions { display: flex; gap: 6px; flex-wrap: wrap; white-space: nowrap; }
+.row-actions { display: flex; gap: 6px; flex-wrap: wrap; white-space: nowrap; justify-content: center; }
+.row-actions .mini-button { padding: 5px 9px; }
 .mini-button {
+  min-width: 46px;
   padding: 5px 10px;
   border: 1px solid var(--line);
   background: var(--surface);
   color: var(--text);
   font-size: 12px;
   font-weight: 600;
+  text-align: center;
 }
 .mini-button:hover { border-color: var(--primary); color: var(--primary); }
 .mini-button.danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 35%, var(--line)); }
@@ -2112,7 +2125,7 @@ body.is-mobile .mobile-card .row-actions {
   position: fixed;
   bottom: 0; left: 0; right: 0;
   z-index: 50;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(7, 1fr);
   border-top: 1px solid var(--line);
   background: color-mix(in srgb, var(--surface) 95%, transparent);
   backdrop-filter: blur(12px);
@@ -2120,20 +2133,26 @@ body.is-mobile .mobile-card .row-actions {
 }
 .bottom-nav-item {
   display: grid;
-  gap: 3px;
+  gap: 2px;
   justify-items: center;
   align-content: center;
   min-height: 44px;
-  padding: 6px 4px;
+  padding: 6px 1px;
   border: none;
   background: transparent;
   color: var(--muted);
   font: inherit;
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 700;
   cursor: pointer;
 }
-.bottom-nav-item svg { width: 20px; height: 20px; }
+.bottom-nav-item svg { width: 19px; height: 19px; }
+.bottom-nav-item span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 .setup-screen {
   position: relative;
@@ -3352,6 +3371,10 @@ body.is-mobile .mobile-card .row-actions {
 .dashboard-hero-eyebrow { color: var(--muted); letter-spacing: 0.06em; font-size: 10px; text-transform: uppercase; }
 .dashboard-hero h2 { font-size: clamp(18px, 2.4vw, 24px); font-weight: 800; letter-spacing: -0.02em; }
 .dashboard-hero p { color: var(--muted); opacity: 1; font-size: 13px; }
+.dashboard-hero-meta {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: center;
+}
 .dashboard-hero-stat {
   background: var(--bg-2);
   border: 1px solid var(--line);
@@ -3377,7 +3400,10 @@ body.is-mobile .mobile-card .row-actions {
 
 .quick-nav { gap: 8px; margin-bottom: 20px; }
 .quick-nav-item {
-  padding: 10px 14px;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 14px;
   border-radius: var(--radius-pill);
   border: 1px solid var(--line);
   background: var(--surface-solid);

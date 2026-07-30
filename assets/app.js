@@ -449,7 +449,7 @@ const hiddenColumns = new Set([
   "row_number", "lockers", "power_strips", "rent_rate",
 ]);
 const plainColumns = new Set([
-  "phone", "national_id", "access_code", "member_code", "entity_code",
+  "phone", "booker_phone", "national_id", "access_code", "member_code", "entity_code",
   "fiscal_year", "tx_date", "effective_from", "joined_at", "delivered_at",
   "key_number", "number", "locker_number", "desk_numbers", "desk_number", "month_index", "month_name",
   "assigned_from", "assigned_until",

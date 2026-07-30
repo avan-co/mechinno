@@ -283,7 +283,7 @@ $assetVer = (string) max(
                   'admin_viewer' => 'مشاهده‌گر',
                   default => 'مدیر',
               }) ?></span>
-              <span class="date-chip" id="todayChip"><?= e($today['formatted']) ?></span>
+              <span class="date-chip" id="todayChip"><?= e(fa_digits($today['formatted'])) ?></span>
               <button class="theme-toggle" id="themeToggle" type="button" title="تغییر تم" aria-label="تغییر تم">
                 <span class="theme-toggle-track" aria-hidden="true">
                   <svg class="icon-sun" viewBox="0 0 24 24"><path d="M12 18a6 6 0 1 1 6-6 6 6 0 0 1-6 6Zm0-16h2v3h-2V2Zm0 19h2v3h-2v-3ZM2 11h3v2H2v-2Zm19 0h3v2h-3v-2ZM4.2 4.2l2.1 2.1-1.4 1.4-2.1-2.1 1.4-1.4Zm13.1 13.1 2.1 2.1-1.4 1.4-2.1-2.1 1.4-1.4ZM4.2 19.8l1.4-1.4 2.1 2.1-1.4 1.4-2.1-2.1Zm13.1-13.1 1.4-1.4 2.1 2.1-1.4 1.4-2.1-2.1Z" fill="currentColor"/></svg>
@@ -306,8 +306,8 @@ $assetVer = (string) max(
                 <p id="dashboardHeroSubtitle">نمای کلی نهادها، شارژ، میزها و اقدام‌های در انتظار</p>
               </div>
               <div class="dashboard-hero-meta" id="dashboardHeroMeta">
-                <div class="dashboard-hero-stat"><span>تاریخ امروز</span><strong id="heroToday"><?= e($today['formatted']) ?></strong></div>
-                <div class="dashboard-hero-stat"><span>سال مالی</span><strong id="heroFiscalYear"><?= e((string) $today['year']) ?></strong></div>
+                <div class="dashboard-hero-stat"><span>تاریخ امروز</span><strong id="heroToday"><?= e(fa_digits($today['formatted'])) ?></strong></div>
+                <div class="dashboard-hero-stat"><span>سال مالی</span><strong id="heroFiscalYear"><?= e(fa_digits((string) $today['year'])) ?></strong></div>
               </div>
             </div>
 
