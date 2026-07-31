@@ -322,11 +322,14 @@ $pdo->prepare(
     'assigned_until' => $untilMonth7,
 ]);
 $duplicateAmounts = (new Seeder($pdo))->monthlyAmountsForTeam($teamId, '1405');
-$assert(count($duplicateAmounts) === 3, 'charges: duplicate desk rows still charge only assigned months');
+// Overlapping duplicate rows: bill the union of months, still one desk per month.
+$assert(count($duplicateAmounts) === 5, 'charges: overlapping desk rows bill union of months');
 $assert(($duplicateAmounts[5]['charge_amount'] ?? 0) === 300, 'charges: duplicate rows count one desk per month');
 (new Seeder($pdo))->recalculateCharges('1405');
 $afterGlobalRecalc = (new Seeder($pdo))->monthlyAmountsForTeam($teamId, '1405');
 $assert(($afterGlobalRecalc[5]['charge_amount'] ?? 0) === 300, 'charges: global recalc keeps single-desk amounts');
+$assert(($afterGlobalRecalc[3]['charge_amount'] ?? 0) === 300, 'charges: early uncovered segment still billed');
+$assert(($afterGlobalRecalc[7]['charge_amount'] ?? 0) === 300, 'charges: late uncovered segment still billed');
 // Remove intentional duplicate so later assignment updates are not blocked by overlap checks.
 $pdo->exec('DELETE FROM desk_assignments WHERE desk_id = 1 AND id <> ' . (int) $assignmentId);
 Schema::reconcileDeskAssignments($pdo);
@@ -771,6 +774,15 @@ $memberRequest = $crud->create('member_requests', [
     'notes' => 'درخواست تست',
 ]);
 $assert(($memberRequest['status'] ?? '') === 'pending', 'member_requests: team update request pending');
+$pdo->prepare("UPDATE member_requests SET status = 'rejected', reviewed_at = '1405/01/02' WHERE id = :id")
+    ->execute(['id' => (int) $memberRequest['id']]);
+$deleteRequest = $crud->create('member_requests', [
+    'member_id' => (string) ($member['id'] ?? 0),
+    'request_type' => 'delete',
+    'notes' => 'درخواست حذف تست',
+]);
+$assert(($deleteRequest['request_type'] ?? '') === 'delete', 'member_requests: team delete request accepted');
+$assert(($deleteRequest['status'] ?? '') === 'pending', 'member_requests: team delete request pending');
 $_SESSION['mechinno_role'] = Access::ROLE_ADMIN_EDITOR;
 
 $settings = new CenterSettings($pdo);
@@ -934,6 +946,18 @@ $txBefore = (int) $pdo->query('SELECT COUNT(*) FROM transactions WHERE team_id =
 $assert($membersBefore >= 1, 'entity: team has members before cascade delete');
 $assert($chargesBefore >= 1, 'entity: team has charges before cascade delete');
 $assert($txBefore >= 1, 'entity: team has transactions before cascade delete');
+$pdo->exec("INSERT INTO meeting_rooms (name, code, capacity, open_time, close_time, slot_minutes, is_active, created_at, updated_at)
+            VALUES ('اتاق تست', 'R-TEST', 6, '08:00', '20:00', 60, 1, '1405/01/01', '1405/01/01')");
+$roomId = (int) $pdo->lastInsertId();
+$pdo->exec("INSERT INTO room_reservations (
+                room_id, reserved_date, start_time, end_time, duration_minutes,
+                team_id, booker_name, booker_phone, status, source, public_token, submitted_at, created_at, updated_at
+            ) VALUES (
+                {$roomId}, '1405/08/01', '10:00', '11:00', 60,
+                {$teamId}, 'تست', '09120000000', 'pending', 'team', 'MN-TEST01', '1405/01/01', '1405/01/01', '1405/01/01'
+            )");
+$reservationsBefore = (int) $pdo->query('SELECT COUNT(*) FROM room_reservations WHERE team_id = ' . $teamId)->fetchColumn();
+$assert($reservationsBefore === 1, 'entity: team has room reservation before cascade delete');
 $crud->delete('teams', $teamId);
 $userAfter = (int) $pdo->query('SELECT COUNT(*) FROM panel_users WHERE team_id = ' . $teamId)->fetchColumn();
 $membersAfter = (int) $pdo->query('SELECT COUNT(*) FROM members WHERE team_id = ' . $teamId)->fetchColumn();
@@ -941,12 +965,14 @@ $chargesAfter = (int) $pdo->query('SELECT COUNT(*) FROM charges WHERE team_id = 
 $txAfter = (int) $pdo->query('SELECT COUNT(*) FROM transactions WHERE team_id = ' . $teamId)->fetchColumn();
 $contractsAfter = (int) $pdo->query('SELECT COUNT(*) FROM team_contracts WHERE team_id = ' . $teamId)->fetchColumn();
 $desksAfter = (int) $pdo->query('SELECT COUNT(*) FROM desks WHERE team_id = ' . $teamId)->fetchColumn();
+$reservationsAfter = (int) $pdo->query('SELECT COUNT(*) FROM room_reservations WHERE team_id = ' . $teamId)->fetchColumn();
 $assert($userAfter === 0, 'entity: portal user deleted with team');
 $assert($membersAfter === 0, 'entity: members deleted with team');
 $assert($chargesAfter === 0, 'entity: charges deleted with team');
 $assert($txAfter === 0, 'entity: transactions deleted with team');
 $assert($contractsAfter === 0, 'entity: contracts deleted with team');
 $assert($desksAfter === 0, 'entity: desks released when team deleted');
+$assert($reservationsAfter === 0, 'entity: room reservations deleted with team');
 
 // --- Charge uniqueness / dedupe ---
 $uniqTeam = $crud->create('teams', [
@@ -985,6 +1011,163 @@ $indexExists = (int) $pdo->query(
     "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'uniq_charges_team_year_month'"
 )->fetchColumn();
 $assert($indexExists === 1, 'schema: unique charge index exists');
+
+// Partial charge update must keep rent when only charge_amount changes.
+$crud->update('charges', (int) $pdo->query(
+    "SELECT id FROM charges WHERE team_id = {$uniqTeamId} AND fiscal_year = '1405' AND month_index = 3"
+)->fetchColumn(), [
+    'charge_amount' => '2000',
+    'rent_amount' => '500',
+    'amount' => '2500',
+]);
+$partialId = (int) $pdo->query(
+    "SELECT id FROM charges WHERE team_id = {$uniqTeamId} AND fiscal_year = '1405' AND month_index = 3"
+)->fetchColumn();
+$crud->update('charges', $partialId, ['charge_amount' => '2200']);
+$partial = $pdo->query("SELECT charge_amount, rent_amount, amount FROM charges WHERE id = {$partialId}")->fetch();
+$assert((int) ($partial['charge_amount'] ?? 0) === 2200, 'charges: partial update keeps new charge');
+$assert((int) ($partial['rent_amount'] ?? 0) === 500, 'charges: partial update preserves rent');
+$assert((int) ($partial['amount'] ?? 0) === 2700, 'charges: partial update recomputes amount from charge+rent');
+
+// Admin deposit pins allocation to selected month via payment_plan.
+$crud->create('team_contracts', [
+    'team_id' => (string) $uniqTeamId,
+    'fiscal_year' => '1405',
+    'contract_start' => '1405/01/01',
+    'contract_end' => '1405/12/29',
+    'formal_contract_amount' => '1000000',
+]);
+$adminDeposit = $crud->create('transactions', [
+    'tx_date' => '1405/03/15',
+    'category' => 'واریز تیم',
+    'team_id' => (string) $uniqTeamId,
+    'fiscal_year' => '1405',
+    'month_index' => '3',
+    'amount' => '2700',
+    'description' => 'دریافت شارژ خرداد',
+    'confirmed' => '1',
+]);
+$assert(($adminDeposit['payment_status'] ?? '') === 'approved', 'admin deposit: auto-approved');
+$planRaw = (string) ($pdo->query('SELECT payment_plan FROM transactions WHERE id = ' . (int) $adminDeposit['id'])->fetchColumn() ?: '');
+$planDecoded = json_decode($planRaw, true);
+$assert(is_array($planDecoded) && (int) ($planDecoded[0]['month_index'] ?? 0) === 3, 'admin deposit: payment_plan targets selected month');
+
+// Sequential desk segments in one year must both bill (legacy/multi-row data).
+$segTeam = $crud->create('teams', [
+    'entity_type' => 'team',
+    'name' => 'نهاد سگمنت میز',
+    'leader' => 'تست',
+    'phone' => '09120002222',
+    'joined_at' => '1405/01/01',
+]);
+$segTeamId = (int) $segTeam['id'];
+$crud->create('team_contracts', [
+    'team_id' => (string) $segTeamId,
+    'fiscal_year' => '1405',
+    'contract_start' => '1405/01/01',
+    'contract_end' => '1405/12/29',
+    'formal_contract_amount' => '2000000',
+]);
+$segDeskId = (int) ($pdo->query('SELECT id FROM desks WHERE number = 5')->fetchColumn() ?: 0);
+$pdo->exec('DELETE FROM desk_assignments WHERE desk_id = ' . $segDeskId);
+$pdo->exec(
+    "INSERT INTO desk_assignments (desk_id, desk_number, team_id, usage_type, assigned_from, assigned_until)
+     VALUES ({$segDeskId}, 5, {$segTeamId}, 'formal', '1405/01/01', '" . JalaliDate::monthEnd('1405', 6) . "')"
+);
+$pdo->exec(
+    "INSERT INTO desk_assignments (desk_id, desk_number, team_id, usage_type, assigned_from, assigned_until)
+     VALUES ({$segDeskId}, 5, {$segTeamId}, 'formal', '" . JalaliDate::monthStart('1405', 7) . "', '" . JalaliDate::monthEnd('1405', 12) . "')"
+);
+$segMonths = (new Seeder($pdo))->monthlyAmountsForTeam($segTeamId, '1405');
+$assert(isset($segMonths[1], $segMonths[7]), 'billing: sequential desk segments bill early and late months');
+$assert((int) ($segMonths[1]['amount'] ?? 0) > 0, 'billing: early segment charged');
+$assert((int) ($segMonths[7]['amount'] ?? 0) > 0, 'billing: late segment charged');
+
+// Bulk CSV desk_numbers path creates assignments.
+$bulkTeam = $crud->create('teams', [
+    'entity_type' => 'company',
+    'name' => 'نهاد CSV میز',
+    'leader' => 'تست',
+    'phone' => '09120003333',
+    'joined_at' => '1404/01/01',
+]);
+$bulk = (new YearBackfill($pdo, $crud))->import([
+    'fiscal_year' => '1404',
+    'recalculate' => false,
+    'rows' => [[
+        'team_name' => 'نهاد CSV میز',
+        'contract_start' => '1404/01/01',
+        'contract_end' => '1404/12/29',
+        'formal_contract_amount' => '9000000',
+        'desk_numbers' => '6,7',
+    ]],
+]);
+$assert((int) ($bulk['imported'] ?? 0) === 1, 'bulk import: team imported');
+$assert((int) ($bulk['results'][0]['desk_assignments'] ?? 0) === 2, 'bulk import: desk_numbers parsed into assignments');
+$bulkAssignCount = (int) $pdo->query(
+    'SELECT COUNT(*) FROM desk_assignments WHERE team_id = ' . (int) $bulkTeam['id']
+)->fetchColumn();
+$assert($bulkAssignCount === 2, 'bulk import: two desk assignments persisted');
+
+// Mid-year desk handoff must keep prior team segment and clear its ghost charges after reassign.
+$handA = $crud->create('teams', [
+    'entity_type' => 'team',
+    'name' => 'نهاد واگذاری الف',
+    'leader' => 'الف',
+    'phone' => '09120004444',
+    'joined_at' => '1405/01/01',
+]);
+$handB = $crud->create('teams', [
+    'entity_type' => 'team',
+    'name' => 'نهاد واگذاری ب',
+    'leader' => 'ب',
+    'phone' => '09120005555',
+    'joined_at' => '1405/01/01',
+]);
+$handAId = (int) $handA['id'];
+$handBId = (int) $handB['id'];
+foreach ([$handAId, $handBId] as $hid) {
+    $crud->create('team_contracts', [
+        'team_id' => (string) $hid,
+        'fiscal_year' => '1405',
+        'contract_start' => '1405/01/01',
+        'contract_end' => '1405/12/29',
+        'formal_contract_amount' => '3000000',
+    ]);
+}
+$handDeskId = (int) ($pdo->query('SELECT id FROM desks WHERE number = 8')->fetchColumn() ?: 0);
+$pdo->exec('DELETE FROM desk_assignments WHERE desk_id = ' . $handDeskId);
+$handFirst = $crud->create('desk_assignments', [
+    'desk_id' => (string) $handDeskId,
+    'team_id' => (string) $handAId,
+    'usage_type' => 'formal',
+    'fiscal_year' => '1405',
+    'assigned_from_month' => '1',
+    'assigned_until_month' => '6',
+]);
+$handSecond = $crud->create('desk_assignments', [
+    'desk_id' => (string) $handDeskId,
+    'team_id' => (string) $handBId,
+    'usage_type' => 'formal',
+    'fiscal_year' => '1405',
+    'assigned_from_month' => '7',
+    'assigned_until_month' => '12',
+]);
+$assert((int) ($handFirst['id'] ?? 0) > 0 && (int) ($handSecond['id'] ?? 0) > 0, 'handoff: both segments created');
+$assert((int) ($handFirst['id'] ?? 0) !== (int) ($handSecond['id'] ?? 0), 'handoff: second segment is a new row');
+$handCount = (int) $pdo->query('SELECT COUNT(*) FROM desk_assignments WHERE desk_id = ' . $handDeskId)->fetchColumn();
+$assert($handCount === 2, 'handoff: non-overlapping segments kept after reconcile');
+(new Seeder($pdo))->recalculateChargesForTeam($handAId, '1405');
+(new Seeder($pdo))->recalculateChargesForTeam($handBId, '1405');
+$handAMonths = (new Seeder($pdo))->monthlyAmountsForTeam($handAId, '1405');
+$handBMonths = (new Seeder($pdo))->monthlyAmountsForTeam($handBId, '1405');
+$assert(isset($handAMonths[1], $handAMonths[6]) && !isset($handAMonths[7]), 'handoff: team A bills early months only');
+$assert(isset($handBMonths[7], $handBMonths[12]) && !isset($handBMonths[1]), 'handoff: team B bills late months only');
+
+$crud->delete('teams', $segTeamId);
+$crud->delete('teams', (int) $bulkTeam['id']);
+$crud->delete('teams', $handAId);
+$crud->delete('teams', $handBId);
 $crud->delete('teams', $uniqTeamId);
 
 // --- Unused tables dropped ---

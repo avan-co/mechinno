@@ -494,6 +494,8 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
           canTeamSubmit: true,
           teamId: <?= (int) $teamId ?>,
           teamName: "<?= e($team['name'] ?? '') ?>",
+          teamLeader: "<?= e($team['leader'] ?? '') ?>",
+          teamPhone: "<?= e($team['phone'] ?? '') ?>",
           teamEyebrow: "<?= e($entityLabel) ?> — <?= e($team['entity_code'] ?? '') ?>",
           teamSubtitle: "مشاهده وضعیت نهاد، ثبت عضو و اعلام واریز",
           username: "<?= e($authContext['username']) ?>",

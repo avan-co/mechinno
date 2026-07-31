@@ -436,17 +436,18 @@ final class Crud
             unset($fields['is_active']);
         }
         if (Access::isTeam() && $resource === 'member_requests') {
+            // full_name/phone/national_id required only for update — enforced in applyResourceRules.
             return [
                 'request_type' => $fields['request_type'],
-                'full_name' => array_merge($fields['full_name'], ['required' => true]),
-                'phone' => array_merge($fields['phone'], ['required' => true]),
-                'national_id' => array_merge($fields['national_id'], ['required' => true]),
+                'full_name' => $fields['full_name'],
+                'phone' => $fields['phone'],
+                'national_id' => $fields['national_id'],
                 'wants_access' => $fields['wants_access'],
                 'notes' => $fields['notes'],
             ];
         }
         if (Access::isTeam() && $resource === 'desks') {
-            unset($fields['assignment_from'], $fields['assignment_until']);
+            unset($fields['assignment_from_month'], $fields['assignment_until_month']);
         }
         if ($resource === 'development_plans' && !Access::isTeam()) {
             return array_intersect_key($fields, array_flip(['title', 'status', 'priority', 'due_date', 'notes']));
@@ -496,7 +497,9 @@ final class Crud
             $existingId = $deskAssignments->findExistingRecordId(
                 (int) ($data['desk_id'] ?? 0),
                 JalaliDate::fiscalYearFromDate((string) ($data['assigned_from'] ?? '')),
-                (int) ($data['team_id'] ?? 0)
+                (int) ($data['team_id'] ?? 0),
+                (string) ($data['assigned_from'] ?? ''),
+                (string) ($data['assigned_until'] ?? '')
             );
             if ($existingId !== null) {
                 return $this->update($resource, $existingId, $payload);
@@ -552,8 +555,14 @@ final class Crud
         }
         if ($resource === 'desk_assignments') {
             $record = $this->find($resource, $id);
-            (new DeskAssignments($this->pdo))->applyAssignmentRecord($record);
-            $this->syncChargesForTeam((int) ($record['team_id'] ?? 0), $record);
+            $affectedTeams = (new DeskAssignments($this->pdo))->applyAssignmentRecord($record);
+            $teamIds = array_unique(array_filter(array_merge(
+                [(int) ($record['team_id'] ?? 0)],
+                $affectedTeams
+            )));
+            foreach ($teamIds as $teamId) {
+                $this->syncChargesForTeam((int) $teamId, $record);
+            }
         }
         if ($resource === 'teams') {
             $record = $this->find($resource, $id);
@@ -608,6 +617,13 @@ final class Crud
             return $this->find($resource, $id);
         }
 
+        if ($resource === 'desk_assignments') {
+            $existingAssignment = $this->find($resource, $id);
+            $previousTeamId = (int) ($existingAssignment['team_id'] ?? 0);
+        } else {
+            $existingAssignment = null;
+            $previousTeamId = 0;
+        }
         if ($data !== []) {
             $assignments = array_map(
                 static fn (string $column): string => Sql::quoteIdentifier($column) . " = :{$column}",
@@ -639,8 +655,14 @@ final class Crud
         }
         if ($resource === 'desk_assignments') {
             $record = $this->find($resource, $id);
-            (new DeskAssignments($this->pdo))->applyAssignmentRecord($record, $id);
-            $this->syncChargesForTeam((int) ($record['team_id'] ?? 0), $record);
+            $affectedTeams = (new DeskAssignments($this->pdo))->applyAssignmentRecord($record, $id);
+            $teamIds = array_unique(array_filter(array_merge(
+                [$previousTeamId, (int) ($record['team_id'] ?? 0)],
+                $affectedTeams
+            )));
+            foreach ($teamIds as $teamId) {
+                $this->syncChargesForTeam((int) $teamId, $record);
+            }
         }
         if ($resource === 'teams' && isset($data['leader'])) {
             EntityAccounts::syncLeaderName($this->pdo, $id, (string) $data['leader']);
@@ -747,6 +769,7 @@ final class Crud
                 'DELETE FROM transactions WHERE team_id = :id',
                 'DELETE FROM members WHERE team_id = :id',
                 'DELETE FROM team_contracts WHERE team_id = :id',
+                'DELETE FROM room_reservations WHERE team_id = :id',
                 'DELETE FROM sms_logs WHERE team_id = :id',
             ] as $sql) {
                 try {
@@ -1190,6 +1213,15 @@ final class Crud
                 } elseif ($description === '') {
                     $data['description'] = 'ثبت مستقیم مدیر — دریافت شارژ';
                 }
+                // Pin allocation to the selected month so collage deposits don't FIFO to older debts.
+                $fy = JalaliDate::normalizeDigits((string) ($data['fiscal_year'] ?? ''));
+                $mi = (int) ($data['month_index'] ?? 0);
+                $amount = abs((int) ($data['amount'] ?? 0));
+                if ($fy !== '' && $mi >= 1 && $mi <= 12 && $amount > 0 && Schema::hasColumn($this->pdo, 'transactions', 'payment_plan')) {
+                    $data['payment_plan'] = json_encode([
+                        ['fiscal_year' => $fy, 'month_index' => $mi, 'amount' => $amount],
+                    ], JSON_UNESCAPED_UNICODE);
+                }
             }
         }
         if ($resource === 'charges') {
@@ -1210,11 +1242,32 @@ final class Crud
                     $data['team_name'] = (string) $teamName;
                 }
             }
-            $charge = (int) ($data['charge_amount'] ?? 0);
-            $rent = (int) ($data['rent_amount'] ?? 0);
-            if (!isset($data['amount']) && ($charge > 0 || $rent > 0)) {
-                $data['amount'] = $charge + $rent;
-            } elseif (isset($data['amount']) && $data['amount'] === '' && ($charge > 0 || $rent > 0)) {
+            $charge = array_key_exists('charge_amount', $data)
+                ? (int) $data['charge_amount']
+                : null;
+            $rent = array_key_exists('rent_amount', $data)
+                ? (int) $data['rent_amount']
+                : null;
+            if (!$creating && $recordId > 0 && ($charge === null || $rent === null)) {
+                $existingCharge = $this->pdo->prepare(
+                    'SELECT charge_amount, rent_amount, amount FROM charges WHERE id = :id'
+                );
+                $existingCharge->execute(['id' => $recordId]);
+                $existingRow = $existingCharge->fetch() ?: [];
+                if ($charge === null) {
+                    $charge = (int) ($existingRow['charge_amount'] ?? 0);
+                }
+                if ($rent === null) {
+                    $rent = (int) ($existingRow['rent_amount'] ?? 0);
+                }
+            }
+            $charge = (int) ($charge ?? 0);
+            $rent = (int) ($rent ?? 0);
+            if (!array_key_exists('amount', $data) || $data['amount'] === '' || $data['amount'] === null) {
+                if ($charge > 0 || $rent > 0 || !$creating) {
+                    $data['amount'] = $charge + $rent;
+                }
+            } elseif ((int) $data['amount'] === 0 && ($charge > 0 || $rent > 0)) {
                 $data['amount'] = $charge + $rent;
             }
         }
