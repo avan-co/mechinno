@@ -407,7 +407,7 @@ final class ExcelExporter
         $rows = [
             ['نهادها', (int) $cards['teams']],
             ['اعضا', (int) $cards['members']],
-            ['میز اشغال', (int) $cards['desks_occupied'] . ' از 24'],
+            ['میز اشغال', (int) $cards['desks_occupied'] . ' از ' . (int) ($cards['desks_total'] ?? 0)],
             ['کمدها', (int) $cards['lockers']],
             ['کمد آزاد', (int) $cards['available_lockers']],
             ['جمع شارژ قراردادها (ریال)', (int) $cards['charge_total']],

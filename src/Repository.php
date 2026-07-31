@@ -21,61 +21,48 @@ final class Repository
             return $this->teamSummary($teamId);
         }
 
+        $desksTotal = (int) $this->scalar('SELECT COUNT(*) FROM desks');
+        $desksOccupied = (int) $this->scalar('SELECT COUNT(*) FROM desks WHERE team_id IS NOT NULL');
+        $incomeYear = $this->incomeForPeriod($this->currentFiscalYear());
+        $expenseYear = $this->expenseForPeriod($this->currentFiscalYear());
+
         return [
             'cards' => [
+                // Dashboard KPIs
+                'ledger_balance' => (new CenterLedger($this->pdo))->balance(),
+                'debt_total' => $this->totalContractDebt(),
+                'income_month' => $this->incomeForPeriod($this->currentFiscalYear(), $this->currentMonthIndex()),
+                'expense_month' => $this->expenseForPeriod($this->currentFiscalYear(), $this->currentMonthIndex()),
+                'pending_payments' => $this->scalar("SELECT COUNT(*) FROM transactions WHERE category = 'واریز تیم' AND payment_status = 'pending'"),
+                'pending_members' => $this->scalar("SELECT COUNT(*) FROM members WHERE approval_status = 'pending'"),
+                'desks_occupied' => $desksOccupied,
+                'desks_total' => $desksTotal,
+                'available_lockers' => $this->scalar("SELECT COUNT(*) FROM lockers WHERE status = 'خالی'"),
+                // Supporting counts / exports (not all shown on the home strip)
                 'members' => $this->scalar("SELECT COUNT(*) FROM members WHERE approval_status = 'approved' OR approval_status IS NULL"),
                 'teams' => $this->scalar('SELECT COUNT(*) FROM teams'),
-                'desks_occupied' => $this->scalar('SELECT COUNT(*) FROM desks WHERE team_id IS NOT NULL'),
-                'desks_total' => 24,
                 'lockers' => $this->scalar('SELECT COUNT(*) FROM lockers'),
-                'available_lockers' => $this->scalar("SELECT COUNT(*) FROM lockers WHERE status = 'خالی'"),
-                'income_year' => $this->incomeForPeriod($this->currentFiscalYear()),
-                'income_month' => $this->incomeForPeriod($this->currentFiscalYear(), $this->currentMonthIndex()),
-                'expense_year' => $this->expenseForPeriod($this->currentFiscalYear()),
-                'expense_month' => $this->expenseForPeriod($this->currentFiscalYear(), $this->currentMonthIndex()),
-                'debt_total' => $this->totalContractDebt(),
+                'income_year' => $incomeYear,
+                'expense_year' => $expenseYear,
+                'income_total' => $incomeYear,
+                'expense_total' => abs($expenseYear),
                 'charge_total' => $this->totalContractCharge(),
-                'income_total' => $this->incomeForPeriod($this->currentFiscalYear()),
-                'expense_total' => abs($this->expenseForPeriod($this->currentFiscalYear())),
                 'paid_total' => $this->scalar(
                     "SELECT COALESCE(SUM(amount), 0) FROM transactions
                      WHERE category = 'واریز تیم' AND payment_status = 'approved' AND confirmed = 1"
                 ),
-                'paid_total_year' => $this->incomeTeamDepositsForPeriod($this->currentFiscalYear()),
-                'ledger_balance' => (new CenterLedger($this->pdo))->balance(),
                 'formal_contract_year' => $this->totalFormalContractAmount($this->currentFiscalYear()),
-                'pending_members' => $this->scalar("SELECT COUNT(*) FROM members WHERE approval_status = 'pending'"),
-                'pending_payments' => $this->scalar("SELECT COUNT(*) FROM transactions WHERE category = 'واریز تیم' AND payment_status = 'pending'"),
-                'pending_locker_requests' => $this->scalar("SELECT COUNT(*) FROM locker_requests WHERE status = 'pending'"),
             ],
-            'locker_status' => $this->rows('SELECT status, COUNT(*) AS count FROM lockers GROUP BY status ORDER BY count DESC'),
             'monthly_charges' => $this->rows(
                 'SELECT fiscal_year, month_index, month_name, SUM(amount) AS amount
                  FROM charges GROUP BY fiscal_year, month_index, month_name
                  ORDER BY fiscal_year, month_index'
             ),
-            'finance_by_category' => $this->rows(
-                "SELECT category, COUNT(*) AS count, COALESCE(SUM(amount), 0) AS amount
-                 FROM transactions
-                 WHERE confirmed = 1
-                   AND (category <> 'واریز تیم' OR payment_status = 'approved')
-                 GROUP BY category ORDER BY amount DESC"
-            ),
             'debt_by_team' => $this->debtByTeamRows(),
-            'finance_monthly' => $this->rows(
-                "SELECT substr(tx_date, 1, 7) AS period,
-                        SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END) AS income,
-                        SUM(CASE WHEN amount < 0 THEN ABS(amount) ELSE 0 END) AS expense
-                 FROM transactions
-                 WHERE tx_date IS NOT NULL AND tx_date <> '' AND confirmed = 1
-                   AND (category <> 'واریز تیم' OR payment_status = 'approved')
-                 GROUP BY substr(tx_date, 1, 7)
-                 ORDER BY period"
-            ),
             'occupancy' => [
-                'desks_total' => 24,
-                'desks_occupied' => $this->scalar('SELECT COUNT(*) FROM desks WHERE team_id IS NOT NULL'),
-                'desks_free' => $this->scalar('SELECT COUNT(*) FROM desks WHERE team_id IS NULL'),
+                'desks_total' => $desksTotal,
+                'desks_occupied' => $desksOccupied,
+                'desks_free' => max(0, $desksTotal - $desksOccupied),
                 'lockers_assigned' => $this->scalar("SELECT COUNT(*) FROM lockers WHERE status = 'تخصیص یافته'"),
             ],
             'current_month' => $this->currentMonthSummary(),
