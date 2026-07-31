@@ -36,7 +36,7 @@
   if (!Range) {
     console.error("MechinnoRoomRange is required. Load assets/room-range.js first.");
   }
-  const { minutesToTime, timeToMinutes, inRange, resolveRange, canUseAsEnd, durationLabel } = Range || {};
+  const { minutesToTime, timeToMinutes, resolveRange, canUseAsEnd, durationLabel, slotPresentation } = Range || {};
 
   const weekdayOffset = (weekdayName) => {
     const map = {
@@ -247,9 +247,9 @@
       }
 
       const choosingEnd = pickingEnd();
+      const complete = Boolean(state.selectedStart && state.selectedEnd);
       const slotTimes = new Set(state.slots.map((slot) => slot.time));
       const buttons = state.slots.map((slot) => {
-        const busy = slot.status !== "free";
         const validEnd = choosingEnd && canUseAsEnd({
           anchor: state.rangeAnchor,
           candidate: slot.time,
@@ -257,36 +257,40 @@
           maxHours: state.maxHours,
           slots: state.slots,
         });
-        const inSelected = state.selectedStart && state.selectedEnd
-          && inRange(slot.time, state.selectedStart, state.selectedEnd);
-        const isAnchor = state.rangeAnchor === slot.time;
-        let label = slot.time;
-        if (choosingEnd && validEnd) label = `تا ${slot.time}`;
-        else if (slot.status === "busy") label = "پر";
-        else if (slot.status === "pending") label = "انتظار";
-
-        const classes = ["room-slot", `room-slot--${slot.status}`];
-        if (inSelected || isAnchor) classes.push("is-in-range");
-        if (isAnchor || state.selectedStart === slot.time) classes.push("is-selected");
-        if (choosingEnd && validEnd) classes.push("is-end-candidate");
-
-        // While picking end: only valid exclusive-end times are clickable (even if that slot is busy).
-        const disabled = choosingEnd ? !validEnd : busy;
-        return `<button type="button" class="${classes.join(" ")}" data-time="${slot.time}" data-end="${slot.end}" ${disabled ? "disabled" : ""}>${label}</button>`;
+        const visual = slotPresentation({
+          time: slot.time,
+          status: slot.status,
+          selectedStart: state.selectedStart,
+          selectedEnd: state.selectedEnd,
+          rangeAnchor: state.rangeAnchor,
+          choosingEnd,
+          validEnd,
+        });
+        return `<button type="button" class="${visual.classes.join(" ")}" data-time="${slot.time}" data-end="${slot.end}" ${visual.disabled ? "disabled" : ""}>${visual.label}</button>`;
       });
 
-      // Closing time as exclusive end (e.g. 20:00) when it is not itself a slot start.
-      if (choosingEnd && state.closeTime && !slotTimes.has(state.closeTime)) {
-        const validClose = canUseAsEnd({
+      // Closing / exclusive end marker when it is not a normal slot start.
+      const endMarker = complete ? state.selectedEnd : (choosingEnd ? state.closeTime : "");
+      if (endMarker && !slotTimes.has(endMarker)) {
+        const validClose = !complete && canUseAsEnd({
           anchor: state.rangeAnchor,
-          candidate: state.closeTime,
+          candidate: endMarker,
           slotMinutes: state.slotMinutes,
           maxHours: state.maxHours,
           slots: state.slots,
         });
-        if (validClose) {
+        if (complete || validClose) {
+          const visual = slotPresentation({
+            time: endMarker,
+            status: "free",
+            selectedStart: state.selectedStart,
+            selectedEnd: state.selectedEnd,
+            rangeAnchor: state.rangeAnchor,
+            choosingEnd,
+            validEnd: validClose,
+          });
           buttons.push(
-            `<button type="button" class="room-slot is-end-candidate" data-time="${state.closeTime}" data-end-only="1">تا ${state.closeTime}</button>`
+            `<button type="button" class="${visual.classes.join(" ")}" data-time="${endMarker}" data-end-only="1" ${visual.disabled ? "disabled" : ""}>${visual.label}</button>`
           );
         }
       }

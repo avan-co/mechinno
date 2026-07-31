@@ -148,6 +148,20 @@ if (!twoHours.ok || twoHours.end !== "12:00" || twoHours.minutes !== 120) {
   console.error("room-range must treat second click as exclusive end (10:00–12:00 = 2h)", twoHours);
   process.exit(1);
 }
+if (!Range.inRangeDisplay("12:00", "10:00", "12:00") || Range.inRange("12:00", "10:00", "12:00")) {
+  console.error("display range must include end button; booking range must exclude it");
+  process.exit(1);
+}
+const endVisual = Range.slotPresentation({
+  time: "12:00",
+  status: "free",
+  selectedStart: "10:00",
+  selectedEnd: "12:00",
+});
+if (!endVisual.isEnd || !String(endVisual.label).includes("پایان")) {
+  console.error("completed range must label exclusive end as پایان", endVisual);
+  process.exit(1);
+}
 const tooLong = Range.resolveRange({
   anchor: "10:00",
   clicked: "12:30",

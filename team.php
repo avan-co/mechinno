@@ -420,7 +420,7 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
                       </div>
                       <div class="room-slot-legend">
                         <span class="free">آزاد</span>
-                        <span class="range">انتخاب‌شده</span>
+                        <span class="range">بازه</span>
                         <span class="pending">انتظار</span>
                         <span class="busy">پر</span>
                       </div>
