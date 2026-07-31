@@ -112,7 +112,7 @@ $maxHours = (int) ($settings['room_max_hours_per_day'] ?? 2);
               <p class="hint" id="publicSelectedDayLabel">روز: <?= e(fa_digits($today['formatted'])) ?></p>
               <div class="room-slot-legend">
                 <span class="free">آزاد</span>
-                <span class="range">انتخاب‌شده</span>
+                <span class="range">بازه</span>
                 <span class="pending">انتظار</span>
                 <span class="busy">پر</span>
               </div>

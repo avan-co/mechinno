@@ -30,10 +30,77 @@
     return true;
   };
 
+  /** Occupied slot starts inside [start, end) — used for booking logic. */
   const inRange = (time, start, endExclusive) => {
     if (!start || !endExclusive) return false;
     const t = timeToMinutes(time);
     return t >= timeToMinutes(start) && t < timeToMinutes(endExclusive);
+  };
+
+  /**
+   * Visual highlight for UI: include the exclusive end button so
+   * 08:00→10:00 lights 08:00 … 10:00 (not only through 09:30).
+   */
+  const inRangeDisplay = (time, start, endExclusive) => {
+    if (!start || !endExclusive) return false;
+    const t = timeToMinutes(time);
+    return t >= timeToMinutes(start) && t <= timeToMinutes(endExclusive);
+  };
+
+  /**
+   * Label/classes for a slot button while selecting or after a range is chosen.
+   * Booking still uses exclusive end; display marks start + end clearly.
+   */
+  const slotPresentation = ({
+    time,
+    status = "free",
+    selectedStart = "",
+    selectedEnd = "",
+    rangeAnchor = "",
+    choosingEnd = false,
+    validEnd = false,
+  }) => {
+    const busy = status !== "free";
+    const complete = Boolean(selectedStart && selectedEnd);
+    const isStart = complete
+      ? time === selectedStart
+      : (rangeAnchor === time || selectedStart === time);
+    const isEnd = complete && time === selectedEnd;
+    const highlighted = complete
+      ? inRangeDisplay(time, selectedStart, selectedEnd)
+      : (rangeAnchor === time);
+
+    let label = time;
+    if (complete && isStart && isEnd) {
+      label = time; // zero-width shouldn't happen; keep clock
+    } else if (complete && isStart) {
+      label = `شروع ${time}`;
+    } else if (complete && isEnd) {
+      label = `پایان ${time}`;
+    } else if (choosingEnd && validEnd) {
+      label = time === rangeAnchor ? `شروع ${time}` : `تا ${time}`;
+    } else if (status === "busy") {
+      label = "پر";
+    } else if (status === "pending") {
+      label = "انتظار";
+    }
+
+    const classes = ["room-slot", `room-slot--${status}`];
+    if (highlighted) classes.push("is-in-range");
+    if (isStart) classes.push("is-selected", "is-range-start");
+    if (isEnd) classes.push("is-selected", "is-range-end");
+    if (choosingEnd && validEnd) classes.push("is-end-candidate");
+    if (choosingEnd && !validEnd && !busy) classes.push("is-out-of-reach");
+
+    return {
+      label,
+      classes,
+      highlighted,
+      isStart,
+      isEnd,
+      // While picking end only valid ends are clickable; otherwise only free starts.
+      disabled: choosingEnd ? !validEnd : busy,
+    };
   };
 
   /**
@@ -106,6 +173,8 @@
     timeToMinutes,
     isFreeBetween,
     inRange,
+    inRangeDisplay,
+    slotPresentation,
     resolveRange,
     canUseAsEnd,
     durationLabel,

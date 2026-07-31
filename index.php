@@ -506,7 +506,7 @@ $assetVer = (string) max(
                   <div class="desk-legend">
                     <span class="legend-item legend-free">آزاد</span>
                     <span class="legend-item legend-occupied">اشغال</span>
-                    <span class="legend-item legend-highlight">انتخاب‌شده</span>
+                    <span class="legend-item legend-highlight">بازه</span>
                   </div>
                 </div>
                 <p class="hint">۳ ردیف × ۸ میز — <?php if (Access::canWrite()): ?>روی هر میز کلیک کنید تا تخصیص سال جاری را ویرایش کنید.<?php else: ?>میزها به نهاد تخصیص می‌یابند.<?php endif; ?></p>
@@ -615,7 +615,7 @@ $assetVer = (string) max(
                         </div>
                         <div class="room-slot-legend">
                           <span class="free">آزاد</span>
-                          <span class="range">انتخاب‌شده</span>
+                          <span class="range">بازه</span>
                           <span class="pending">انتظار</span>
                           <span class="busy">پر</span>
                           <span class="closed">تعطیل</span>
