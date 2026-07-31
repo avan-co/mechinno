@@ -1164,6 +1164,104 @@ $handBMonths = (new Seeder($pdo))->monthlyAmountsForTeam($handBId, '1405');
 $assert(isset($handAMonths[1], $handAMonths[6]) && !isset($handAMonths[7]), 'handoff: team A bills early months only');
 $assert(isset($handBMonths[7], $handBMonths[12]) && !isset($handBMonths[1]), 'handoff: team B bills late months only');
 
+// Deleting a dated desk assignment must free desks.team_id when no other current row remains.
+$freeDeskId = (int) ($pdo->query('SELECT id FROM desks WHERE number = 9')->fetchColumn() ?: 0);
+$pdo->exec('DELETE FROM desk_assignments WHERE desk_id = ' . $freeDeskId);
+$freeAssign = $crud->create('desk_assignments', [
+    'desk_id' => (string) $freeDeskId,
+    'team_id' => (string) $handAId,
+    'usage_type' => 'formal',
+    'fiscal_year' => '1405',
+    'assigned_from_month' => '1',
+    'assigned_until_month' => '12',
+]);
+$deskBeforeDelete = $crud->find('desks', $freeDeskId);
+$assert((int) ($deskBeforeDelete['team_id'] ?? 0) === $handAId, 'desk delete: desk owned before assignment delete');
+$crud->delete('desk_assignments', (int) $freeAssign['id']);
+$deskAfterDelete = $crud->find('desks', $freeDeskId);
+$assert((int) ($deskAfterDelete['team_id'] ?? 0) === 0, 'desk delete: dated assignment delete frees desk map');
+
+// Admin update of team deposit must not collapse multi-month payment_plan or re-approve.
+$multiPlanTx = $crud->create('transactions', [
+    'tx_date' => '1405/04/01',
+    'category' => 'واریز تیم',
+    'team_id' => (string) $handAId,
+    'fiscal_year' => '1405',
+    'month_index' => '1',
+    'amount' => '600',
+    'description' => 'دریافت تست چندماهه',
+    'confirmed' => '1',
+]);
+$pdo->prepare('UPDATE transactions SET payment_plan = :plan WHERE id = :id')->execute([
+    'plan' => json_encode([
+        ['fiscal_year' => '1405', 'month_index' => 1, 'amount' => 300],
+        ['fiscal_year' => '1405', 'month_index' => 3, 'amount' => 300],
+    ], JSON_UNESCAPED_UNICODE),
+    'id' => (int) $multiPlanTx['id'],
+]);
+$pdo->prepare("UPDATE transactions SET payment_status = 'rejected', confirmed = 0 WHERE id = :id")
+    ->execute(['id' => (int) $multiPlanTx['id']]);
+$crud->update('transactions', (int) $multiPlanTx['id'], [
+    'notes' => 'ویرایش یادداشت',
+    'amount' => '600',
+    'fiscal_year' => '1405',
+    'month_index' => '2',
+    'category' => 'واریز تیم',
+    'team_id' => (string) $handAId,
+    'tx_date' => '1405/04/01',
+    'description' => 'دریافت تست چندماهه',
+]);
+$afterEdit = $pdo->query('SELECT payment_status, confirmed, payment_plan, notes FROM transactions WHERE id = ' . (int) $multiPlanTx['id'])->fetch();
+$assert(($afterEdit['payment_status'] ?? '') === 'rejected', 'admin tx update: does not re-approve rejected deposit');
+$assert((int) ($afterEdit['confirmed'] ?? 1) === 0, 'admin tx update: keeps confirmed=0 on rejected');
+$planAfter = json_decode((string) ($afterEdit['payment_plan'] ?? ''), true);
+$assert(is_array($planAfter) && count($planAfter) === 2, 'admin tx update: keeps multi-month payment_plan');
+$assert((int) ($planAfter[0]['month_index'] ?? 0) === 1 && (int) ($planAfter[1]['month_index'] ?? 0) === 3, 'admin tx update: plan months unchanged');
+$assert(($afterEdit['notes'] ?? '') === 'ویرایش یادداشت', 'admin tx update: notes still save');
+
+// Public booking must ignore client-supplied team_id.
+$rooms = new RoomReservations($pdo);
+$publicRoomId = (int) ($pdo->query('SELECT id FROM meeting_rooms ORDER BY id ASC LIMIT 1')->fetchColumn() ?: 0);
+$publicDate = JalaliDate::addDays(JalaliDate::todayParts()['formatted'], 2);
+$publicBooking = $rooms->createFromPayload([
+    'room_id' => $publicRoomId,
+    'reserved_date' => $publicDate,
+    'start_time' => '10:00',
+    'end_time' => '11:00',
+    'booker_name' => 'مهمان',
+    'booker_phone' => '09121230000',
+    'team_id' => (string) $handAId,
+    'member_id' => '999',
+], 'public');
+$assert(($publicBooking['team_id'] ?? null) === null || (int) ($publicBooking['team_id'] ?? 0) === 0, 'public booking: team_id ignored');
+$assert(($publicBooking['member_id'] ?? null) === null || (int) ($publicBooking['member_id'] ?? 0) === 0, 'public booking: member_id ignored');
+
+// Second locker request cannot reuse an already assigned locker.
+$_SESSION = [
+    'mechinno_authenticated' => true,
+    'mechinno_role' => Access::ROLE_TEAM,
+    'mechinno_team_id' => $handAId,
+    'mechinno_user' => 'handa',
+    'mechinno_user_id' => 1,
+];
+$firstLockerReq = $crud->create('locker_requests', ['notes' => 'کمد اول']);
+$_SESSION['mechinno_team_id'] = $handBId;
+$_SESSION['mechinno_user'] = 'handb';
+$secondLockerReq = $crud->create('locker_requests', ['notes' => 'کمد تکراری']);
+$_SESSION['mechinno_role'] = Access::ROLE_ADMIN_EDITOR;
+$workflowLocker = new Workflow($pdo);
+$approvedFirstLocker = $workflowLocker->approveLockerRequest((int) $firstLockerReq['id'], 15);
+$assert(($approvedFirstLocker['status'] ?? '') === 'approved', 'workflow: first locker approve ok');
+$lockerDupFailed = false;
+try {
+    $workflowLocker->approveLockerRequest((int) $secondLockerReq['id'], 15);
+} catch (InvalidArgumentException) {
+    $lockerDupFailed = true;
+}
+$assert($lockerDupFailed, 'workflow: cannot approve second request onto occupied locker');
+$pdo->exec("UPDATE locker_requests SET status = 'rejected', reviewed_at = '1405/05/09' WHERE team_id IN ({$handAId}, {$handBId}) AND status = 'pending'");
+$pdo->exec("UPDATE transactions SET payment_status = 'rejected', confirmed = 0 WHERE team_id IN ({$handAId}, {$handBId}) AND payment_status = 'pending'");
+
 $crud->delete('teams', $segTeamId);
 $crud->delete('teams', (int) $bulkTeam['id']);
 $crud->delete('teams', $handAId);

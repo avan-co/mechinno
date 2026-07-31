@@ -161,12 +161,16 @@ final class DeskAssignments
     {
         $deskId = (int) ($record['desk_id'] ?? 0);
         $teamId = (int) ($record['team_id'] ?? 0);
-        if ($deskId <= 0 || !$this->isOpenEnded((string) ($record['assigned_until'] ?? ''))) {
+        if ($deskId <= 0) {
             return;
         }
 
+        // Dated assignments (normal after month-end backfill) must also free the desk map.
         $this->clearDeskIfMatches($deskId, $teamId);
-        $fallback = $this->findActiveAssignment($deskId);
+        $fallback = $this->findCurrentAssignment($deskId);
+        if ($fallback === null) {
+            $fallback = $this->findActiveAssignment($deskId);
+        }
         if ($fallback !== null) {
             $this->syncDeskFromAssignment($deskId, $fallback);
         }

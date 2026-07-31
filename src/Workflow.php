@@ -106,22 +106,6 @@ final class Workflow
         $teamId = (int) ($row['team_id'] ?? 0);
         Schema::ensureLockerNumbers($this->pdo, [$lockerNumber]);
 
-        $lockerStatement = $this->pdo->prepare('SELECT id, status, team_id FROM lockers WHERE locker_number = :number');
-        $lockerStatement->execute(['number' => $lockerNumber]);
-        $locker = $lockerStatement->fetch();
-        if ($locker === false) {
-            throw new InvalidArgumentException('کمد پیدا نشد.');
-        }
-        $lockerId = (int) $locker['id'];
-        $status = (string) ($locker['status'] ?? 'خالی');
-        if ($status === 'خراب') {
-            throw new InvalidArgumentException('این کمد خراب است و قابل تخصیص نیست.');
-        }
-        $assignedTeam = (int) ($locker['team_id'] ?? 0);
-        if (in_array($status, ['تخصیص یافته', 'رزرو'], true) && $assignedTeam > 0 && $assignedTeam !== $teamId) {
-            throw new InvalidArgumentException('این کمد قبلاً به نهاد دیگری تخصیص یافته است.');
-        }
-
         $today = JalaliDate::todayParts()['formatted'];
         $startedTransaction = false;
         if (!$this->pdo->inTransaction()) {
@@ -130,13 +114,58 @@ final class Workflow
         }
 
         try {
-            $this->pdo->prepare(
-                "UPDATE lockers SET team_id = :team_id, status = 'تخصیص یافته', delivered_at = :delivered_at WHERE id = :id"
-            )->execute(['team_id' => $teamId, 'delivered_at' => $today, 'id' => $lockerId]);
+            $lockerStatement = $this->pdo->prepare('SELECT id, status, team_id FROM lockers WHERE locker_number = :number');
+            $lockerStatement->execute(['number' => $lockerNumber]);
+            $locker = $lockerStatement->fetch();
+            if ($locker === false) {
+                throw new InvalidArgumentException('کمد پیدا نشد.');
+            }
+            $lockerId = (int) $locker['id'];
+            $status = (string) ($locker['status'] ?? 'خالی');
+            $assignedTeam = (int) ($locker['team_id'] ?? 0);
+            if ($status === 'خراب') {
+                throw new InvalidArgumentException('این کمد خراب است و قابل تخصیص نیست.');
+            }
+            if ($status !== 'خالی' || $assignedTeam > 0) {
+                throw new InvalidArgumentException('این کمد خالی نیست و قابل تخصیص نیست.');
+            }
 
-            $this->pdo->prepare(
-                "UPDATE locker_requests SET status = 'approved', locker_id = :locker_id, reviewed_at = :reviewed_at, rejection_reason = NULL WHERE id = :id"
-            )->execute(['locker_id' => $lockerId, 'reviewed_at' => $today, 'id' => $id]);
+            $linked = $this->pdo->prepare(
+                "SELECT id FROM locker_requests
+                 WHERE locker_id = :locker_id AND status = 'approved' AND id <> :id LIMIT 1"
+            );
+            $linked->execute(['locker_id' => $lockerId, 'id' => $id]);
+            if ($linked->fetchColumn() !== false) {
+                throw new InvalidArgumentException('این کمد قبلاً به درخواست دیگری متصل شده است.');
+            }
+
+            $requestUpdate = $this->pdo->prepare(
+                "UPDATE locker_requests
+                 SET status = 'approved', locker_id = :locker_id, reviewed_at = :reviewed_at, rejection_reason = NULL
+                 WHERE id = :id AND status = 'pending'"
+            );
+            $requestUpdate->execute([
+                'locker_id' => $lockerId,
+                'reviewed_at' => $today,
+                'id' => $id,
+            ]);
+            if ($requestUpdate->rowCount() < 1) {
+                throw new InvalidArgumentException('این درخواست کمد در انتظار تأیید نیست.');
+            }
+
+            $lockerUpdate = $this->pdo->prepare(
+                "UPDATE lockers
+                 SET team_id = :team_id, status = 'تخصیص یافته', delivered_at = :delivered_at
+                 WHERE id = :id AND status = 'خالی' AND (team_id IS NULL OR team_id = 0)"
+            );
+            $lockerUpdate->execute([
+                'team_id' => $teamId,
+                'delivered_at' => $today,
+                'id' => $lockerId,
+            ]);
+            if ($lockerUpdate->rowCount() < 1) {
+                throw new InvalidArgumentException('این کمد خالی نیست و قابل تخصیص نیست.');
+            }
 
             if ($startedTransaction) {
                 $this->pdo->commit();

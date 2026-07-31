@@ -1205,22 +1205,27 @@ final class Crud
                     $data['amount'] = abs((int) $data['amount']);
                 }
             } else {
-                $data['payment_status'] = 'approved';
-                $data['confirmed'] = (int) ($data['confirmed'] ?? 1);
-                $description = trim((string) ($data['description'] ?? ''));
-                if ($description !== '' && !str_starts_with($description, 'ثبت مستقیم مدیر')) {
-                    $data['description'] = 'ثبت مستقیم مدیر — ' . $description;
-                } elseif ($description === '') {
-                    $data['description'] = 'ثبت مستقیم مدیر — دریافت شارژ';
-                }
-                // Pin allocation to the selected month so collage deposits don't FIFO to older debts.
-                $fy = JalaliDate::normalizeDigits((string) ($data['fiscal_year'] ?? ''));
-                $mi = (int) ($data['month_index'] ?? 0);
-                $amount = abs((int) ($data['amount'] ?? 0));
-                if ($fy !== '' && $mi >= 1 && $mi <= 12 && $amount > 0 && Schema::hasColumn($this->pdo, 'transactions', 'payment_plan')) {
-                    $data['payment_plan'] = json_encode([
-                        ['fiscal_year' => $fy, 'month_index' => $mi, 'amount' => $amount],
-                    ], JSON_UNESCAPED_UNICODE);
+                // Admin «واریز تیم»: pin status/plan only on create (direct deposit).
+                // Updates must not auto-approve pending/rejected rows or collapse multi-month plans.
+                if ($creating) {
+                    $data['payment_status'] = 'approved';
+                    $data['confirmed'] = (int) ($data['confirmed'] ?? 1);
+                    $description = trim((string) ($data['description'] ?? ''));
+                    if ($description !== '' && !str_starts_with($description, 'ثبت مستقیم مدیر')) {
+                        $data['description'] = 'ثبت مستقیم مدیر — ' . $description;
+                    } elseif ($description === '') {
+                        $data['description'] = 'ثبت مستقیم مدیر — دریافت شارژ';
+                    }
+                    $fy = JalaliDate::normalizeDigits((string) ($data['fiscal_year'] ?? ''));
+                    $mi = (int) ($data['month_index'] ?? 0);
+                    $amount = abs((int) ($data['amount'] ?? 0));
+                    if ($fy !== '' && $mi >= 1 && $mi <= 12 && $amount > 0 && Schema::hasColumn($this->pdo, 'transactions', 'payment_plan')) {
+                        $data['payment_plan'] = json_encode([
+                            ['fiscal_year' => $fy, 'month_index' => $mi, 'amount' => $amount],
+                        ], JSON_UNESCAPED_UNICODE);
+                    }
+                } else {
+                    unset($data['payment_status'], $data['confirmed'], $data['payment_plan']);
                 }
             }
         }
