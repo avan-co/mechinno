@@ -372,6 +372,12 @@ final class RoomReservations
         $teamId = (int) ($payload['team_id'] ?? 0);
         $memberId = (int) ($payload['member_id'] ?? 0);
 
+        if ($source === 'public') {
+            // Public endpoint must not accept client-supplied team/member linkage.
+            $teamId = 0;
+            $memberId = 0;
+        }
+
         if ($source === 'team') {
             $scopedTeamId = Access::scopedTeamId();
             if ($scopedTeamId === null || $scopedTeamId <= 0) {
