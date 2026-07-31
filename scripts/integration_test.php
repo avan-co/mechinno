@@ -686,6 +686,19 @@ $assert(($partial['sms_username'] ?? '') === 'testuser', 'sms: partial update pr
 $sendSettings = $smsCenter->smsSettingsForSend();
 $assert(($sendSettings['sms_password'] ?? '') === 'testpass', 'sms: partial update preserves password');
 
+$smsCenter->updateSms(['sms_charge_template' => '12345@{team_name}##{debt_total}##shared']);
+$templateSettings = $smsCenter->smsSettings();
+$assert(($templateSettings['sms_charge_template'] ?? '') === '12345@{team_name}##{debt_total}##shared', 'sms: charge template saved');
+$rendered = SmsService::renderChargeTemplate(
+    '12345@{team_name}##{debt_total}##shared',
+    ['team_name' => 'نهاد تست', 'leader_name' => 'علی', 'debt_total' => 450000, 'debt_summary' => 'مرداد 1405'],
+    ['bank_name' => 'بانک تست', 'card_number' => '6037-1234']
+);
+$assert($rendered === '12345@نهاد تست##450,000##shared', 'sms: charge template variables rendered');
+$chargeDebtors = (new SmsService($pdo))->chargeDebtors();
+$assert(is_array($chargeDebtors['debtors'] ?? null), 'sms: charge debtors endpoint data');
+$assert(($chargeDebtors['template_configured'] ?? false) === true, 'sms: charge template configured flag');
+
 $debtors = $repo->debtorTeamsForSms();
 $teamDebtor = null;
 foreach ($debtors as $debtorRow) {

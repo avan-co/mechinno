@@ -300,6 +300,18 @@ try {
         json_response(['ok' => true, 'result' => (new SmsService($pdo))->sendAnnouncement($message, $memberIds)]);
     }
 
+    if ($resource === 'sms-charge-debtors') {
+        json_response((new SmsService($pdo))->chargeDebtors());
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && $resource === 'sms-send-charge-reminders') {
+        require_csrf_json();
+        Access::requireWriteJson();
+        $payload = read_json_body();
+        $teamIds = array_map('intval', (array) ($payload['team_ids'] ?? []));
+        json_response(['ok' => true, 'result' => (new SmsService($pdo))->sendChargeReminders($teamIds)]);
+    }
+
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && $resource === 'teams' && $action === 'reset-portal-password') {
         require_csrf_json();
         Access::requireWriteJson();

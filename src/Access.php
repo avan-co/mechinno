@@ -79,6 +79,8 @@ final class Access
         'sms-check-deliveries',
         'sms-test',
         'sms-send',
+        'sms-charge-debtors',
+        'sms-send-charge-reminders',
         'health',
         'meeting-rooms',
         'meeting_rooms',

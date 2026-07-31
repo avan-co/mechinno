@@ -456,6 +456,28 @@ $assetVer = (string) max(
                 <button type="button" class="button" id="smsSendAnnouncement">ارسال به انتخاب‌شده‌ها</button>
                 <?php endif; ?>
               </article>
+              <article class="panel" id="smsChargeReminderPanel">
+                <div class="panel-head">
+                  <h2>یادآوری شارژ بدهکاران</h2>
+                  <div class="panel-head-actions sms-selection-actions">
+                    <button type="button" class="button ghost" id="smsSelectAllDebtors">انتخاب همه</button>
+                    <button type="button" class="button ghost" id="smsClearDebtorSelection">پاک کردن انتخاب</button>
+                  </div>
+                </div>
+                <p class="hint">لیست نهادهای بدهکار از ماتریس شارژ خوانده می‌شود. الگوی پیامک را در <button type="button" class="text-link" data-go="sms-settings">تنظیمات پیامک</button> ذخیره کنید.</p>
+                <div class="charge-reminder-layout">
+                  <div>
+                    <p class="hint" id="smsDebtorSelectionInfo">۰ نهاد انتخاب شده</p>
+                    <div class="charge-debtor-list" id="smsChargeDebtorList">در حال بارگذاری…</div>
+                  </div>
+                  <div>
+                    <div id="smsChargePreview"></div>
+                    <?php if (Access::canWrite()): ?>
+                    <button type="button" class="button" id="smsSendChargeReminders">ارسال یادآوری به انتخاب‌شده‌ها</button>
+                    <?php endif; ?>
+                  </div>
+                </div>
+              </article>
               <article class="panel">
                 <div class="panel-head"><h2>تاریخچه پیامک‌ها</h2></div>
                 <div class="table-wrap table-scroll">
@@ -479,6 +501,17 @@ $assetVer = (string) max(
               <article class="panel">
                 <div class="panel-head"><h2>خط ارسال و محدودیت روزانه</h2></div>
                 <form id="smsLineForm" class="payment-settings-form">در حال بارگذاری…</form>
+              </article>
+              <article class="panel">
+                <div class="panel-head"><h2>الگوی یادآوری شارژ</h2></div>
+                <div id="smsChargeTemplateEditor"></div>
+                <form id="smsChargeTemplateForm" class="payment-settings-form">
+                  <div class="panel-actions">
+                    <?php if (Access::canWrite()): ?>
+                    <button class="button" type="submit">ذخیره الگوی شارژ</button>
+                    <?php endif; ?>
+                  </div>
+                </form>
               </article>
               <article class="panel">
                 <div class="panel-head"><h2>آمار و همگام‌سازی</h2></div>

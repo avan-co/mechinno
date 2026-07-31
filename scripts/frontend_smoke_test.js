@@ -73,6 +73,16 @@ if (!apiSource.includes("sms-query-lines") || !apiSource.includes("sms-check-del
   process.exit(1);
 }
 
+if (!apiSource.includes("sms-charge-debtors") || !apiSource.includes("sms-send-charge-reminders")) {
+  console.error("api.php must expose sms-charge-debtors and sms-send-charge-reminders");
+  process.exit(1);
+}
+
+if (!indexSource.includes('id="smsChargeReminderPanel"')) {
+  console.error("index.php must include sms charge reminder panel");
+  process.exit(1);
+}
+
 if (!apiSource.includes("'desk-assignments' => 'desk_assignments'")) {
   console.error("api.php must map desk-assignments to desk_assignments for CRUD");
   process.exit(1);

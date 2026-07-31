@@ -138,6 +138,9 @@ final class SmsService
                 'sms_from_number' => $payload['sms_from_number'] ?? '',
                 'sms_daily_limit' => $payload['sms_daily_limit'] ?? $current['sms_daily_limit'] ?? 500,
             ],
+            'charge_template' => [
+                'sms_charge_template' => $payload['sms_charge_template'] ?? '',
+            ],
             default => $payload,
         };
 
@@ -285,6 +288,188 @@ final class SmsService
         $this->assertDailyCapacity(count($recipients));
 
         return $this->dispatchBatch($batchUid, 'announcement', $recipients, static fn (array $member): string => $message);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function chargeDebtors(): array
+    {
+        $center = new CenterSettings($this->pdo);
+        $template = trim((string) ($center->smsSettings()['sms_charge_template'] ?? ''));
+        $bank = $center->get();
+        $debtors = [];
+
+        foreach ((new Repository($this->pdo))->debtorTeamsForSms() as $row) {
+            $teamId = (int) ($row['team_id'] ?? 0);
+            if ($teamId <= 0) {
+                continue;
+            }
+            $leader = $this->leaderContactForTeam($teamId);
+            $phone = TeamLeaders::normalizePhone((string) ($leader['phone'] ?? ''));
+            $entry = [
+                'team_id' => $teamId,
+                'team_name' => (string) ($row['team_name'] ?? ''),
+                'debt_total' => (int) ($row['debt_total'] ?? 0),
+                'debt_summary' => (string) ($row['debt_summary'] ?? ''),
+                'leader_name' => (string) ($leader['name'] ?? ''),
+                'phone' => $phone,
+                'phone_valid' => $phone !== '' && preg_match('/^09\d{9}$/', $phone) === 1,
+            ];
+            $entry['preview_message'] = $template !== ''
+                ? self::renderChargeTemplate($template, $entry, $bank)
+                : '';
+            $debtors[] = $entry;
+        }
+
+        return [
+            'debtors' => $debtors,
+            'template' => $template,
+            'template_configured' => $template !== '',
+            'total_debt' => array_sum(array_map(static fn (array $row): int => (int) ($row['debt_total'] ?? 0), $debtors)),
+        ];
+    }
+
+    /**
+     * @param list<int> $teamIds
+     * @return array<string, mixed>
+     */
+    public function sendChargeReminders(array $teamIds): array
+    {
+        Access::requireWriteJson();
+        $center = new CenterSettings($this->pdo);
+        $template = trim((string) ($center->smsSettings()['sms_charge_template'] ?? ''));
+        if ($template === '') {
+            throw new InvalidArgumentException('الگوی یادآوری شارژ را در تنظیمات پیامک ذخیره کنید.');
+        }
+        if ($teamIds === []) {
+            throw new InvalidArgumentException('حداقل یک نهاد بدهکار انتخاب کنید.');
+        }
+
+        $bank = $center->get();
+        $selected = array_fill_keys(array_values(array_unique(array_filter(array_map('intval', $teamIds), static fn (int $id): bool => $id > 0))), true);
+        $recipients = [];
+
+        foreach ((new Repository($this->pdo))->debtorTeamsForSms() as $row) {
+            $teamId = (int) ($row['team_id'] ?? 0);
+            if ($teamId <= 0 || !isset($selected[$teamId])) {
+                continue;
+            }
+            $leader = $this->leaderContactForTeam($teamId);
+            $phone = TeamLeaders::normalizePhone((string) ($leader['phone'] ?? ''));
+            $debtor = [
+                'team_id' => $teamId,
+                'team_name' => (string) ($row['team_name'] ?? ''),
+                'debt_total' => (int) ($row['debt_total'] ?? 0),
+                'debt_summary' => (string) ($row['debt_summary'] ?? ''),
+                'leader_name' => (string) ($leader['name'] ?? ''),
+                'phone' => $phone,
+            ];
+            $recipients[] = [
+                'id' => 0,
+                'team_id' => $teamId,
+                'team_label' => $debtor['team_name'],
+                'full_name' => $debtor['leader_name'],
+                'phone' => $phone,
+                'is_leader' => 1,
+                'debtor' => $debtor,
+            ];
+        }
+
+        if ($recipients === []) {
+            throw new InvalidArgumentException('نهاد بدهکار معتبری برای ارسال یافت نشد.');
+        }
+
+        $this->assertDailyCapacity(count($recipients));
+
+        return $this->dispatchBatch(
+            $this->newBatchUid(),
+            'charge_reminder',
+            $recipients,
+            fn (array $recipient): string => self::renderChargeTemplate(
+                $template,
+                $recipient['debtor'],
+                $bank
+            )
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $debtor
+     * @param array<string, string> $center
+     */
+    public static function renderChargeTemplate(string $template, array $debtor, array $center): string
+    {
+        $replacements = [
+            '{team_name}' => (string) ($debtor['team_name'] ?? ''),
+            '{leader_name}' => (string) ($debtor['leader_name'] ?? ''),
+            '{debt_total}' => number_format((int) ($debtor['debt_total'] ?? 0)),
+            '{debt_summary}' => (string) ($debtor['debt_summary'] ?? ''),
+            '{bank_info}' => self::formatBankInfo($center),
+            '{card_number}' => (string) ($center['card_number'] ?? ''),
+            '{account_number}' => (string) ($center['account_number'] ?? ''),
+            '{sheba}' => (string) ($center['sheba'] ?? ''),
+        ];
+
+        return str_replace(array_keys($replacements), array_values($replacements), $template);
+    }
+
+    /**
+     * @param array<string, string> $center
+     */
+    private static function formatBankInfo(array $center): string
+    {
+        $parts = [];
+        if (trim((string) ($center['bank_name'] ?? '')) !== '') {
+            $parts[] = trim((string) $center['bank_name']);
+        }
+        if (trim((string) ($center['account_holder'] ?? '')) !== '') {
+            $parts[] = trim((string) $center['account_holder']);
+        }
+        if (trim((string) ($center['card_number'] ?? '')) !== '') {
+            $parts[] = 'کارت: ' . trim((string) $center['card_number']);
+        }
+        if (trim((string) ($center['account_number'] ?? '')) !== '') {
+            $parts[] = 'حساب: ' . trim((string) $center['account_number']);
+        }
+        if (trim((string) ($center['sheba'] ?? '')) !== '') {
+            $parts[] = 'شبا: ' . trim((string) $center['sheba']);
+        }
+
+        return implode(' — ', $parts);
+    }
+
+    /**
+     * @return array{name:string, phone:string}
+     */
+    private function leaderContactForTeam(int $teamId): array
+    {
+        $statement = $this->pdo->prepare(
+            "SELECT t.leader, t.phone AS team_phone, m.full_name, m.phone AS member_phone
+             FROM teams t
+             LEFT JOIN members m ON m.team_id = t.id AND m.is_leader = 1
+                AND (m.approval_status = 'approved' OR m.approval_status IS NULL)
+             WHERE t.id = :team_id
+             ORDER BY m.id
+             LIMIT 1"
+        );
+        $statement->execute(['team_id' => $teamId]);
+        $row = $statement->fetch();
+        if ($row === false) {
+            return ['name' => '', 'phone' => ''];
+        }
+
+        $name = trim((string) ($row['full_name'] ?? ''));
+        if ($name === '') {
+            $name = trim((string) ($row['leader'] ?? ''));
+        }
+
+        $phone = TeamLeaders::normalizePhone((string) ($row['member_phone'] ?? ''));
+        if ($phone === '') {
+            $phone = TeamLeaders::normalizePhone((string) ($row['team_phone'] ?? ''));
+        }
+
+        return ['name' => $name, 'phone' => $phone];
     }
 
     /**

@@ -1,13 +1,15 @@
-/* global fetchJson, postJson, showToast, escapeHtml, formatMoney, canWrite */
+/* global fetchJson, postJson, showToast, escapeHtml, formatMoney, canWrite, createSmsEditor, SMS_CHARGE_VARS */
 
 let smsSettingsState = null;
 let smsSettingsReady = false;
+let chargeTemplateEditor = null;
 
 const loadSmsSettingsPage = async (withLive = false) => {
   const data = await fetchJson(`api.php?resource=sms-settings${withLive ? "&live=1" : ""}`);
   smsSettingsState = data;
   renderSmsCredentialsForm(data);
   renderSmsLineForm(data);
+  renderSmsChargeTemplateEditor(data);
   renderSmsSettingsStats(data);
 };
 
@@ -37,6 +39,41 @@ const renderSmsCredentialsForm = (data) => {
       renderSmsCredentialsForm(smsSettingsState);
       renderSmsLineForm(smsSettingsState);
       renderSmsSettingsStats(smsSettingsState);
+    } catch (error) {
+      showToast(error.message, "error");
+    }
+  };
+};
+
+const renderSmsChargeTemplateEditor = (data) => {
+  const host = document.getElementById("smsChargeTemplateEditor");
+  const form = document.getElementById("smsChargeTemplateForm");
+  if (!host) return;
+  if (!chargeTemplateEditor) {
+    chargeTemplateEditor = createSmsEditor(host, {
+      label: "الگوی پیامک یادآوری شارژ",
+      placeholder: "مثال: 12345@{team_name}##{debt_total}##shared",
+      value: data.sms_charge_template || "",
+      readonly: !canWrite,
+      variables: SMS_CHARGE_VARS,
+      rows: 5,
+    });
+  } else {
+    chargeTemplateEditor.setValue(data.sms_charge_template || "");
+  }
+  if (!form || form.dataset.ready) return;
+  form.dataset.ready = "1";
+  if (!canWrite) return;
+  form.onsubmit = async (event) => {
+    event.preventDefault();
+    try {
+      const result = await postJson("api.php?resource=sms-settings", {
+        section: "charge_template",
+        sms_charge_template: chargeTemplateEditor?.getValue() || "",
+      });
+      smsSettingsState = result.settings || result;
+      showToast("الگوی یادآوری شارژ ذخیره شد.", "success");
+      renderSmsChargeTemplateEditor(smsSettingsState);
     } catch (error) {
       showToast(error.message, "error");
     }

@@ -7,6 +7,17 @@ window.SMS_EDITOR_VARS = [
   { key: "{card_number}", label: "شماره کارت" },
 ];
 
+window.SMS_CHARGE_VARS = [
+  { key: "{team_name}", label: "نام نهاد" },
+  { key: "{leader_name}", label: "نام مسئول" },
+  { key: "{debt_total}", label: "مبلغ بدهی" },
+  { key: "{debt_summary}", label: "ماه‌های بدهی" },
+  { key: "{bank_info}", label: "اطلاعات بانکی" },
+  { key: "{card_number}", label: "شماره کارت" },
+  { key: "{account_number}", label: "شماره حساب" },
+  { key: "{sheba}", label: "شماره شبا" },
+];
+
 window.createSmsEditor = (host, options = {}) => {
   if (!host) return null;
   const {
