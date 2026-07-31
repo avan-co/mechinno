@@ -277,17 +277,19 @@ const updateChargePreview = () => {
   if (!preview) return;
   const selected = smsState.debtors.filter((row) => smsState.selectedDebtors.has(Number(row.team_id)));
   const sample = selected[0] || smsState.debtors.find((row) => row.phone_valid) || smsState.debtors[0];
-  if (!sample?.preview_message) {
+  const humanPreview = sample?.preview_human || "";
+  if (!humanPreview && !sample?.preview_message) {
     preview.innerHTML = `<p class="hint">پس از انتخاب نهاد، پیش‌نمایش پیامک نمایش داده می‌شود.</p>`;
     return;
   }
   preview.innerHTML = `
     <div class="charge-reminder-card">
       <div class="charge-reminder-head">
-        <strong>پیش‌نمایش</strong>
+        <strong>پیش‌نمایش پیامک</strong>
         <span class="hint">${escapeHtml(sample.team_name || "")}</span>
       </div>
-      <textarea readonly dir="auto">${escapeHtml(sample.preview_message)}</textarea>
+      ${humanPreview ? `<textarea readonly dir="rtl">${escapeHtml(humanPreview)}</textarea>` : ""}
+      ${sample.preview_message ? `<p class="hint" dir="ltr">الگوی API: ${escapeHtml(sample.preview_message)}</p>` : ""}
     </div>`;
 };
 

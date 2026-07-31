@@ -711,6 +711,14 @@ $workflowRendered = SmsService::renderTemplate(
 $assert(str_contains($workflowRendered, 'اتاق الف'), 'sms: workflow template renders room name');
 $patternRows = (int) $pdo->query('SELECT COUNT(*) FROM sms_patterns')->fetchColumn();
 $assert($patternRows === 9, 'sms: pattern registry seeded in database');
+foreach (SmsPatterns::definitions() as $key => $definition) {
+    $assert(
+        !SmsPatterns::panelTextEndsWithVariable((string) $definition['panel_text']),
+        'sms: panel text must not end with variable (' . $key . ')'
+    );
+    $preview = SmsPatterns::renderPanelPreview($key);
+    $assert(str_contains($preview, SmsPatterns::BRAND_SUFFIX), 'sms: panel preview includes brand suffix (' . $key . ')');
+}
 $chargeDebtors = (new SmsService($pdo))->chargeDebtors();
 $assert(is_array($chargeDebtors['debtors'] ?? null), 'sms: charge debtors endpoint data');
 $assert(($chargeDebtors['template_configured'] ?? false) === true, 'sms: charge template configured flag');

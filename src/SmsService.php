@@ -317,6 +317,16 @@ final class SmsService
         }
         if ($rows === []) {
             $rows = SmsPatterns::panelRegistrationGuide();
+        } else {
+            foreach ($rows as &$row) {
+                $variables = is_array($row['variables'] ?? null) ? $row['variables'] : [];
+                $row['panel_preview'] = SmsPatterns::renderPanelText(
+                    (string) ($row['panel_text'] ?? ''),
+                    $variables
+                );
+                $row['panel_valid'] = !SmsPatterns::panelTextEndsWithVariable((string) ($row['panel_text'] ?? ''));
+            }
+            unset($row);
         }
 
         $settings = (new CenterSettings($this->pdo))->smsSettings();
@@ -327,8 +337,10 @@ final class SmsService
             'workflow_templates' => (array) ($settings['sms_workflow_templates'] ?? []),
             'registration_notes' => [
                 'نوع خط: خط خدماتی اشتراکی (shared)',
+                'متغیرها در پنل به‌صورت {0}، {1}، ... و به ترتیب قرار گیرند.',
+                'متغیر نباید در انتهای متن باشد؛ پس از آخرین متغیر متن ثابت (مثلاً ' . SmsPatterns::BRAND_SUFFIX . ') بگذارید.',
+                'برای کد فعالسازی، تأیید سفارش و موارد مشابه، نام وب‌سایت معتبر در انتهای متن الزامی است.',
                 'پس از تأیید الگو در پنل، body_id واقعی را در تنظیمات پیامک جایگزین کنید.',
-                'ترتیب متغیرها در پنل ({0}، {1}، ...) باید دقیقاً مطابق جدول زیر باشد.',
             ],
         ];
     }
@@ -359,9 +371,15 @@ final class SmsService
                 'phone' => $phone,
                 'phone_valid' => $phone !== '' && preg_match('/^09\d{9}$/', $phone) === 1,
             ];
+            $debtTotal = (int) ($entry['debt_total'] ?? 0);
             $entry['preview_message'] = $template !== ''
                 ? self::renderChargeTemplate($template, $entry, $bank)
                 : '';
+            $entry['preview_human'] = SmsPatterns::renderPanelPreview('charge_reminder', [
+                'team_name' => (string) ($entry['team_name'] ?? ''),
+                'debt_total' => number_format($debtTotal),
+                'debt_summary' => (string) ($entry['debt_summary'] ?? ''),
+            ]);
             $debtors[] = $entry;
         }
 
@@ -471,6 +489,13 @@ final class SmsService
         return str_replace(array_keys($replacements), array_values($replacements), $template);
     }
 
+    public static function optionalSmsValue(string $value, string $fallback = 'ندارد'): string
+    {
+        $trimmed = trim($value);
+
+        return $trimmed !== '' ? $trimmed : $fallback;
+    }
+
     public function notifyRoomReservation(array $reservation, string $event): void
     {
         $templateKey = match ($event) {
@@ -484,7 +509,7 @@ final class SmsService
             return;
         }
 
-        $reason = trim((string) ($reservation['rejection_reason'] ?? $reservation['cancel_reason'] ?? ''));
+        $reason = self::optionalSmsValue((string) ($reservation['rejection_reason'] ?? $reservation['cancel_reason'] ?? ''));
         $this->notifyWorkflow(
             $templateKey,
             TeamLeaders::normalizePhone((string) ($reservation['booker_phone'] ?? '')),
@@ -499,9 +524,7 @@ final class SmsService
                 'team_name' => (string) ($reservation['team_name'] ?? $reservation['booker_org'] ?? ''),
                 'purpose' => (string) ($reservation['purpose'] ?? ''),
                 'rejection_reason' => $reason,
-                'rejection_reason_line' => $reason !== '' ? (' دلیل: ' . $reason) : '',
                 'cancel_reason' => $reason,
-                'cancel_reason_line' => $reason !== '' ? (' دلیل: ' . $reason) : '',
             ],
             'room_' . $event,
             [
@@ -525,11 +548,8 @@ final class SmsService
             return;
         }
 
-        $code = trim($accessCode);
-        if ($code === '') {
-            $code = trim((string) ($member['access_code'] ?? ''));
-        }
-        $reason = trim((string) ($member['rejection_reason'] ?? ''));
+        $code = self::optionalSmsValue(trim($accessCode) !== '' ? $accessCode : (string) ($member['access_code'] ?? ''));
+        $reason = self::optionalSmsValue((string) ($member['rejection_reason'] ?? ''));
         $teamName = $this->teamName((int) ($member['team_id'] ?? 0), (string) ($member['team_label'] ?? ''));
 
         $this->notifyWorkflow(
@@ -540,9 +560,7 @@ final class SmsService
                 'full_name' => (string) ($member['full_name'] ?? ''),
                 'team_name' => $teamName,
                 'access_code' => $code,
-                'access_code_line' => $code !== '' ? (' کد تردد: ' . $code) : '',
                 'rejection_reason' => $reason,
-                'rejection_reason_line' => $reason !== '' ? (' دلیل: ' . $reason) : '',
             ],
             'member_' . $event,
             [
@@ -569,7 +587,7 @@ final class SmsService
 
         $teamId = (int) ($request['team_id'] ?? 0);
         $leader = $this->leaderContactForTeam($teamId);
-        $reason = trim((string) ($request['rejection_reason'] ?? ''));
+        $reason = self::optionalSmsValue((string) ($request['rejection_reason'] ?? ''));
         $type = (string) ($request['request_type'] ?? '');
         $typeLabel = match ($type) {
             'update' => 'ویرایش',
@@ -587,7 +605,6 @@ final class SmsService
                 'request_type' => $type,
                 'request_type_label' => $typeLabel,
                 'rejection_reason' => $reason,
-                'rejection_reason_line' => $reason !== '' ? (' دلیل: ' . $reason) : '',
             ],
             'member_request_' . $event,
             [

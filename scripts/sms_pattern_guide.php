@@ -24,6 +24,8 @@ foreach (SmsPatterns::panelRegistrationGuide() as $index => $row) {
     echo "   متغیرها (به ترتیب): " . implode(' → ', $row['variables']) . "\n";
     echo "   متن ثبت در پنل ملی‌پیامک:\n";
     echo '   ' . $row['panel_text'] . "\n";
+    echo "   پیش‌نمایش نمونه:\n";
+    echo '   ' . ($row['panel_preview'] ?? SmsPatterns::renderPanelPreview((string) $row['pattern_key'])) . "\n";
     echo "   الگوی ذخیره‌شده در سیستم:\n";
     echo '   ' . $row['system_template'] . "\n";
 }

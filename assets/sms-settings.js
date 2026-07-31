@@ -136,16 +136,22 @@ const renderSmsPatternGuide = async () => {
   if (!host) return;
   try {
     const data = await fetchJson("api.php?resource=sms-patterns");
-    host.innerHTML = (data.patterns || []).map((row) => `
+    const notes = (data.registration_notes || []).map((note) => `<li>${escapeHtml(note)}</li>`).join("");
+    host.innerHTML = `
+      ${notes ? `<ul class="hint sms-pattern-notes">${notes}</ul>` : ""}
+      ${(data.patterns || []).map((row) => `
       <div class="charge-reminder-card">
         <div class="charge-reminder-head">
           <strong>${escapeHtml(row.title || row.pattern_key || "")}</strong>
           <span class="hint" dir="ltr">bodyId: ${escapeHtml(String(row.body_id || ""))}</span>
         </div>
         <p class="hint">متغیرهای سیستم: ${escapeHtml((row.variables || []).join("، "))}</p>
+        <p class="hint">متن ثبت در پنل ملی‌پیامک:</p>
         <textarea readonly rows="3" dir="rtl">${escapeHtml(row.panel_text || "")}</textarea>
+        <p class="hint">پیش‌نمایش پیامک (نمونه):</p>
+        <textarea readonly rows="3" dir="rtl" class="sms-pattern-preview">${escapeHtml(row.panel_preview || "")}</textarea>
         <p class="hint" dir="ltr">الگوی سیستم: ${escapeHtml(row.system_template || "")}</p>
-      </div>`).join("") || `<div class="empty">الگویی ثبت نشده است.</div>`;
+      </div>`).join("") || `<div class="empty">الگویی ثبت نشده است.</div>`}`;
   } catch (error) {
     host.innerHTML = `<div class="empty">خطا در بارگذاری راهنما: ${escapeHtml(error.message)}</div>`;
   }
