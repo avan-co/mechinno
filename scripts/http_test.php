@@ -177,6 +177,7 @@ if (!is_file($root . '/config.php')) {
             $bookingId = (int) ($book['json']['record']['id'] ?? 0);
             $bookingToken = (string) ($book['json']['record']['public_token'] ?? '');
             $assert($bookingId > 0 && $bookingToken !== '', 'http: public room book returns token');
+            $assert(preg_match('/^MN-\d{6}$/', $bookingToken) === 1, 'http: public token is short MN-###### format');
 
             $badCancel = $request('POST', '/public-api.php?resource=cancel', json_encode([
                 'id' => $bookingId,
