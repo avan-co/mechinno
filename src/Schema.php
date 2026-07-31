@@ -99,6 +99,9 @@ final class Schema
     {
         $tables = [
             'sms_logs',
+            'room_reservations',
+            'room_closed_days',
+            'meeting_rooms',
             'development_plans',
             'panel_users',
             'transactions',

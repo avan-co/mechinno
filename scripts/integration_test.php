@@ -920,10 +920,24 @@ $assert(method_exists($exporter, 'output'), 'export: ExcelExporter available');
 
 // --- Database backup roundtrip ---
 require_once dirname(__DIR__) . '/src/DatabaseBackup.php';
+$backupRoomId = (int) ($pdo->query('SELECT id FROM meeting_rooms ORDER BY id ASC LIMIT 1')->fetchColumn() ?: 0);
+$assert($backupRoomId > 0, 'backup: seeded meeting room exists');
+$pdo->exec("INSERT INTO room_closed_days (closed_date, note, created_at)
+            VALUES ('1405/05/20', 'تعطیل تست بک‌آپ', '1405/05/09')");
+$pdo->exec("INSERT INTO room_reservations (
+                room_id, reserved_date, start_time, end_time, duration_minutes,
+                team_id, booker_name, booker_phone, status, source, public_token, submitted_at, created_at, updated_at
+            ) VALUES (
+                {$backupRoomId}, '1405/05/21', '10:00', '11:00', 60,
+                {$teamId}, 'بک‌آپ', '09120009999', 'approved', 'admin', 'MN-BACKUP1', '1405/05/09', '1405/05/09', '1405/05/09'
+            )");
 $backupService = new DatabaseBackup($pdo);
 $exportPayload = $backupService->export();
 $assert(($exportPayload['format'] ?? '') === DatabaseBackup::FORMAT, 'backup: export format');
 $assert(($exportPayload['counts']['teams'] ?? 0) >= 1, 'backup: export includes teams');
+$assert((int) ($exportPayload['counts']['meeting_rooms'] ?? 0) >= 1, 'backup: export includes meeting_rooms');
+$assert((int) ($exportPayload['counts']['room_reservations'] ?? 0) >= 1, 'backup: export includes room_reservations');
+$assert((int) ($exportPayload['counts']['room_closed_days'] ?? 0) >= 1, 'backup: export includes room_closed_days');
 $roundtripDb = dirname(__DIR__) . '/data/integration_backup_roundtrip.sqlite3';
 if (is_file($roundtripDb)) {
     unlink($roundtripDb);
@@ -934,8 +948,12 @@ Schema::migrate($roundtripPdo);
 $roundtripBackup = new DatabaseBackup($roundtripPdo);
 $imported = $roundtripBackup->import($exportPayload);
 $assert(($imported['teams'] ?? 0) >= 1, 'backup: restore imports teams');
+$assert(($imported['room_reservations'] ?? 0) >= 1, 'backup: restore imports room_reservations');
+$assert(($imported['room_closed_days'] ?? 0) >= 1, 'backup: restore imports room_closed_days');
 $restoredTeamCount = (int) $roundtripPdo->query('SELECT COUNT(*) FROM teams')->fetchColumn();
 $assert($restoredTeamCount === (int) ($exportPayload['counts']['teams'] ?? 0), 'backup: restored team count matches export');
+$restoredRoomReservations = (int) $roundtripPdo->query('SELECT COUNT(*) FROM room_reservations')->fetchColumn();
+$assert($restoredRoomReservations === (int) ($exportPayload['counts']['room_reservations'] ?? 0), 'backup: restored room reservations match export');
 
 // --- Delete team cascades related finance/member data ---
 $userBefore = (int) $pdo->query('SELECT COUNT(*) FROM panel_users WHERE team_id = ' . $teamId)->fetchColumn();
@@ -957,7 +975,7 @@ $pdo->exec("INSERT INTO room_reservations (
                 {$teamId}, 'تست', '09120000000', 'pending', 'team', 'MN-TEST01', '1405/01/01', '1405/01/01', '1405/01/01'
             )");
 $reservationsBefore = (int) $pdo->query('SELECT COUNT(*) FROM room_reservations WHERE team_id = ' . $teamId)->fetchColumn();
-$assert($reservationsBefore === 1, 'entity: team has room reservation before cascade delete');
+$assert($reservationsBefore >= 1, 'entity: team has room reservation before cascade delete');
 $crud->delete('teams', $teamId);
 $userAfter = (int) $pdo->query('SELECT COUNT(*) FROM panel_users WHERE team_id = ' . $teamId)->fetchColumn();
 $membersAfter = (int) $pdo->query('SELECT COUNT(*) FROM members WHERE team_id = ' . $teamId)->fetchColumn();
