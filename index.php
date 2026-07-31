@@ -245,15 +245,6 @@ $assetVer = (string) max(
             <?php endif; ?>
           </nav>
 
-          <div class="sidebar-user">
-            <div class="user-pill">
-              <span class="user-avatar" aria-hidden="true"><?= e(avatar_initial((string) ($authContext['username'] ?? ''), 'م')) ?></span>
-              <div class="user-pill-copy">
-                <strong><?= e($authContext['username'] ?: 'مدیر') ?></strong>
-                <small><?= e(Access::roleLabel($authContext['role'] ?? '')) ?></small>
-              </div>
-            </div>
-          </div>
           </div>
         </aside>
 
@@ -586,28 +577,73 @@ $assetVer = (string) max(
               <?php if (Access::canWrite()): ?>
               <div class="room-booking-shell">
                 <article class="room-card room-booking-panel">
-                  <h2>رزرو سریع</h2>
-                  <p class="room-card-lead">اتاق، تاریخ و بازه را انتخاب کنید.</p>
+                  <h2>رزرو جدید</h2>
+                  <p class="room-card-lead">روز را از تقویم انتخاب کنید، سپس ساعت شروع و مدت جلسه را مشخص کنید.</p>
                   <form id="panelRoomBookingForm">
                     <label class="wide"><span>انتخاب اتاق</span></label>
                     <div id="panelRoomCardGrid" class="room-room-grid room-room-grid--panel" role="listbox" aria-label="انتخاب اتاق"></div>
                     <input type="hidden" name="room_id" required />
-                    <div class="room-field-row">
-                      <label><span>تاریخ</span><input name="reserved_date" type="text" required placeholder="1404/01/01" value="<?= e($today['formatted']) ?>" /></label>
-                      <label><span>نام *</span><input name="booker_name" type="text" required /></label>
-                      <label><span>موبایل *</span><input name="booker_phone" type="tel" required dir="ltr" class="ltr-input" /></label>
-                      <label><span>سازمان</span><input name="booker_org" type="text" /></label>
-                      <label class="wide"><span>موضوع</span><textarea name="purpose" rows="2"></textarea></label>
+                    <input type="hidden" name="reserved_date" id="panelReservedDate" value="<?= e($today['formatted']) ?>" />
+
+                    <div class="room-booking-layout">
+                      <div class="room-month-picker" id="panelRoomMonthPicker">
+                        <div class="room-month-toolbar">
+                          <button type="button" class="button ghost" id="panelMonthPrev" aria-label="ماه قبل">‹</button>
+                          <strong id="panelMonthLabel">—</strong>
+                          <button type="button" class="button ghost" id="panelMonthNext" aria-label="ماه بعد">›</button>
+                        </div>
+                        <div class="room-month-weekdays" aria-hidden="true">
+                          <span>ش</span><span>ی</span><span>د</span><span>س</span><span>چ</span><span>پ</span><span>ج</span>
+                        </div>
+                        <div id="panelMonthGrid" class="room-month-grid"></div>
+                        <p class="hint" id="panelMonthHint">روی یک روز قابل‌رزرو کلیک کنید.</p>
+                      </div>
+
+                      <div class="room-booking-fields">
+                        <div class="room-field-row">
+                          <label>
+                            <span>نهاد (از فهرست)</span>
+                            <select name="team_id" id="panelTeamSelect">
+                              <option value="">— بدون نهاد / مهمان —</option>
+                            </select>
+                          </label>
+                          <label>
+                            <span>مدت جلسه</span>
+                            <select id="panelDurationSlots" name="duration_slots">
+                              <option value="1">۳۰ دقیقه</option>
+                              <option value="2" selected>۱ ساعت</option>
+                              <option value="3">۱٫۵ ساعت</option>
+                              <option value="4">۲ ساعت</option>
+                            </select>
+                          </label>
+                          <label><span>نام *</span><input name="booker_name" type="text" required /></label>
+                          <label><span>موبایل *</span><input name="booker_phone" type="tel" required dir="ltr" class="ltr-input" placeholder="09xxxxxxxxx" /></label>
+                          <label><span>سازمان / نهاد</span><input name="booker_org" type="text" /></label>
+                          <label class="wide"><span>موضوع</span><textarea name="purpose" rows="2"></textarea></label>
+                        </div>
+                        <div class="room-slot-legend">
+                          <span class="free">آزاد</span>
+                          <span class="pending">انتظار</span>
+                          <span class="busy">پر</span>
+                          <span class="closed">تعطیل</span>
+                        </div>
+                        <p class="hint" id="panelSelectedDayLabel">روز انتخاب‌شده: <?= e(fa_digits($today['formatted'])) ?></p>
+                        <div id="panelRoomSlotGrid" class="room-slot-grid"></div>
+                        <p class="hint" id="panelRoomTimePreview"></p>
+                        <div class="form-actions"><button class="button" type="submit">ثبت رزرو</button></div>
+                      </div>
                     </div>
-                    <div class="room-slot-legend"><span class="free">آزاد</span><span class="pending">انتظار</span><span class="busy">پر</span></div>
-                    <div id="panelRoomSlotGrid" class="room-slot-grid"></div>
-                    <p class="hint" id="panelRoomTimePreview"></p>
-                    <div class="form-actions"><button class="button" type="submit">ثبت رزرو</button></div>
                   </form>
                 </article>
-                <aside class="room-card">
-                  <h2>راهنما</h2>
-                  <p class="room-card-lead">حداکثر ۲ ساعت در روز برای هر شماره موبایل. روی تقویم کلیک کنید تا تاریخ انتخاب شود.</p>
+                <aside class="room-card" id="roomClosedDaysPanel">
+                  <h2>روزهای تعطیل</h2>
+                  <p class="room-card-lead">روزهایی که رزرو (عمومی و پنل) در آن‌ها غیرفعال است.</p>
+                  <form id="roomClosedDayForm" class="room-closed-form">
+                    <label><span>تاریخ</span><input name="date" type="text" required placeholder="1404/01/01" /></label>
+                    <label><span>توضیح</span><input name="note" type="text" placeholder="مثلاً تعطیل رسمی" /></label>
+                    <button class="button" type="submit">تعطیل کردن</button>
+                  </form>
+                  <div id="roomClosedDaysList" class="room-closed-list"></div>
                 </aside>
               </div>
               <?php endif; ?>
@@ -618,7 +654,7 @@ $assetVer = (string) max(
             <section id="room-settings" class="section">
               <div class="section-intro section-intro--blue">
                 <span class="section-intro-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 8a1 1 0 0 1 1 1v3h3a1 1 0 1 1 0 2h-4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Zm8-3H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Z" fill="currentColor"/></svg></span>
-                <div class="section-intro-copy"><p>قوانین رزرو عمومی و تأیید خودکار — حداکثر ساعت روزانه و بازه‌های زمانی.</p></div>
+                <div class="section-intro-copy"><p>قوانین رزرو عمومی و تأیید خودکار — حداکثر ساعت روزانه، بازه‌های ۳۰/۶۰ دقیقه‌ای و روزهای تعطیل.</p></div>
               </div>
               <?php if (Access::canWrite()): ?>
               <article class="panel">

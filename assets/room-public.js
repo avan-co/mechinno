@@ -103,6 +103,43 @@
     }
   };
 
+  const minutesToTime = (minutes) => {
+    const hour = Math.floor(minutes / 60);
+    const minute = minutes % 60;
+    return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+  };
+
+  const timeToMinutes = (time) => {
+    const [hour, minute] = String(time || "0:0").split(":").map(Number);
+    return (hour * 60) + minute;
+  };
+
+  const durationLabel = (slots, slotMinutes) => {
+    const minutes = slots * slotMinutes;
+    if (minutes < 60) return `${minutes} دقیقه`;
+    if (minutes % 60 === 0) return `${minutes / 60} ساعت`;
+    return `${Math.floor(minutes / 60)}.۵ ساعت`;
+  };
+
+  const fillDurationOptions = () => {
+    const select = $("#durationSlots");
+    if (!select) return;
+    const room = selectedRoom();
+    const slotMinutes = Number(room?.slot_minutes || state.settings.room_slot_minutes || 30);
+    const maxHours = Number(state.settings.room_max_hours_per_day || 2);
+    const maxSlots = Math.max(1, Math.floor((maxHours * 60) / slotMinutes));
+    const current = Number(select.value || 0);
+    select.innerHTML = "";
+    for (let slots = 1; slots <= maxSlots; slots += 1) {
+      const option = document.createElement("option");
+      option.value = String(slots);
+      option.textContent = durationLabel(slots, slotMinutes);
+      select.appendChild(option);
+    }
+    const preferred = Math.min(Math.max(1, Math.round(60 / slotMinutes)), maxSlots);
+    select.value = String(current >= 1 && current <= maxSlots ? current : preferred);
+  };
+
   const renderSlots = () => {
     const grid = $("#slotGrid");
     if (!grid) return;
@@ -110,15 +147,28 @@
       grid.innerHTML = '<p class="hint">برای این روز بازه‌ای موجود نیست.</p>';
       return;
     }
+    const room = selectedRoom();
+    const slotMinutes = Number(room?.slot_minutes || state.settings.room_slot_minutes || 30);
+    const needed = Math.max(1, Number($("#durationSlots")?.value || 1));
+    const byTime = new Map(state.slots.map((slot) => [slot.time, slot]));
+    const canStartAt = (startTime) => {
+      let cursor = timeToMinutes(startTime);
+      for (let i = 0; i < needed; i += 1) {
+        const key = minutesToTime(cursor);
+        const slot = byTime.get(key);
+        if (!slot || slot.status !== "free") return false;
+        cursor += slotMinutes;
+      }
+      return true;
+    };
     grid.innerHTML = state.slots.map((slot) => {
-      const disabled = slot.status !== "free";
-      const label = slot.status === "busy" ? "پر" : slot.status === "pending" ? "انتظار" : slot.time;
+      const disabled = slot.status !== "free" || !canStartAt(slot.time);
+      const label = slot.status === "busy" ? "پر" : slot.status === "pending" ? "انتظار" : (disabled ? "کوتاه" : slot.time);
       return `<button type="button" class="room-slot room-slot--${slot.status}${state.selectedStart === slot.time ? " is-selected" : ""}" data-time="${slot.time}" data-end="${slot.end}" ${disabled ? "disabled" : ""}>${label}</button>`;
     }).join("");
     grid.querySelectorAll(".room-slot:not([disabled])").forEach((button) => {
       button.addEventListener("click", () => {
         state.selectedStart = button.dataset.time || "";
-        $("#durationSlots").value = "1";
         updateEndTime();
         renderSlots();
         setStep(2);
@@ -130,10 +180,8 @@
     if (!state.selectedStart) return;
     const slotCount = Number($("#durationSlots")?.value || 1);
     const room = selectedRoom();
-    const slotMinutes = Number(room?.slot_minutes || state.settings.room_slot_minutes || 60);
-    const [hour, minute] = state.selectedStart.split(":").map(Number);
-    const endMinutes = (hour * 60 + minute) + (slotCount * slotMinutes);
-    state.selectedEnd = `${String(Math.floor(endMinutes / 60)).padStart(2, "0")}:${String(endMinutes % 60).padStart(2, "0")}`;
+    const slotMinutes = Number(room?.slot_minutes || state.settings.room_slot_minutes || 30);
+    state.selectedEnd = minutesToTime(timeToMinutes(state.selectedStart) + (slotCount * slotMinutes));
     const preview = $("#timePreview");
     if (preview) preview.textContent = `بازه انتخابی: ${state.selectedStart} تا ${state.selectedEnd}`;
     updateSummary();
@@ -146,9 +194,18 @@
     if (grid) grid.innerHTML = '<p class="hint">در حال بارگذاری بازه‌ها…</p>';
     try {
       const data = await fetchJson(`public-api.php?resource=availability&room_id=${state.selectedRoomId}&date=${encodeURIComponent(state.selectedDate)}`);
+      if (data.closed) {
+        state.slots = [];
+        state.selectedStart = "";
+        state.selectedEnd = "";
+        if (grid) grid.innerHTML = `<p class="hint room-closed-hint">${data.closed_note || "این روز تعطیل است."}</p>`;
+        updateSummary();
+        return;
+      }
       state.slots = data.slots || [];
       state.selectedStart = "";
       state.selectedEnd = "";
+      fillDurationOptions();
       renderSlots();
       updateSummary();
     } catch (error) {
@@ -262,6 +319,7 @@
       state.selectedDate = state.today;
       const dateInput = $("#reserveDate");
       if (dateInput) dateInput.value = state.today;
+      fillDurationOptions();
       renderRooms();
       bindForm();
       bindLookup();

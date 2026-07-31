@@ -31,6 +31,8 @@ final class Access
         'room-settings',
         'room-calendar',
         'meeting-rooms',
+        'room-month',
+        'room-closed-days',
         'crud-meta',
         'health',
     ];
@@ -85,6 +87,8 @@ final class Access
         'room-availability',
         'room-settings',
         'room-calendar',
+        'room-month',
+        'room-closed-days',
     ];
 
     public static function role(): string

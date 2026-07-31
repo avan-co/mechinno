@@ -100,8 +100,10 @@ $assetVer = (string) max(
                 <label>
                   <span>مدت رزرو</span>
                   <select id="durationSlots" name="duration_slots">
-                    <option value="1">۱ ساعت</option>
-                    <option value="2">۲ ساعت</option>
+                    <option value="1">۳۰ دقیقه</option>
+                    <option value="2" selected>۱ ساعت</option>
+                    <option value="3">۱٫۵ ساعت</option>
+                    <option value="4">۲ ساعت</option>
                   </select>
                 </label>
               </div>

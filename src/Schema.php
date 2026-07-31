@@ -4,13 +4,14 @@ declare(strict_types=1);
 
 final class Schema
 {
-    private const VERSION = 17;
+    private const VERSION = 18;
 
     public static function migrate(PDO $pdo): void
     {
         if (self::storedVersion($pdo) >= self::VERSION) {
             self::ensureColumns($pdo);
             self::ensureMeetingRoomTables($pdo);
+            self::ensureRoomClosedDaysTable($pdo);
             self::reconcileDeskAssignments($pdo);
             return;
         }
@@ -24,6 +25,8 @@ final class Schema
         self::ensureWorkflowTables($pdo);
         self::ensureMemberRequestsTable($pdo);
         self::ensureMeetingRoomTables($pdo);
+        self::ensureRoomClosedDaysTable($pdo);
+        self::migrateRoomSlotDefaults($pdo);
         self::ensureTeamContractsTable($pdo);
         self::ensureColumns($pdo);
         self::dropLegacyColumns($pdo);
@@ -371,7 +374,7 @@ final class Schema
                 'room_auto_approve' => 'TINYINT NOT NULL DEFAULT 1',
                 'room_max_advance_days' => 'INT NOT NULL DEFAULT 14',
                 'room_max_hours_per_day' => 'INT NOT NULL DEFAULT 2',
-                'room_slot_minutes' => 'INT NOT NULL DEFAULT 60',
+                'room_slot_minutes' => 'INT NOT NULL DEFAULT 30',
                 'room_public_enabled' => 'TINYINT NOT NULL DEFAULT 1',
             ],
             'lockers' => [
@@ -899,7 +902,7 @@ final class Schema
                     equipment TEXT,
                     open_time TEXT NOT NULL DEFAULT '08:00',
                     close_time TEXT NOT NULL DEFAULT '20:00',
-                    slot_minutes INTEGER NOT NULL DEFAULT 60,
+                    slot_minutes INTEGER NOT NULL DEFAULT 30,
                     notes TEXT,
                     is_active INTEGER NOT NULL DEFAULT 1,
                     created_at TEXT,
@@ -941,7 +944,7 @@ final class Schema
                     equipment TEXT NULL,
                     open_time VARCHAR(8) NOT NULL DEFAULT '08:00',
                     close_time VARCHAR(8) NOT NULL DEFAULT '20:00',
-                    slot_minutes INT NOT NULL DEFAULT 60,
+                    slot_minutes INT NOT NULL DEFAULT 30,
                     notes TEXT NULL,
                     is_active TINYINT NOT NULL DEFAULT 1,
                     created_at VARCHAR(32) NULL,
@@ -997,8 +1000,53 @@ final class Schema
         $today = JalaliDate::todayParts()['formatted'];
         $pdo->prepare(
             "INSERT INTO meeting_rooms (name, code, capacity, floor, equipment, open_time, close_time, slot_minutes, is_active, created_at, updated_at)
-             VALUES ('اتاق جلسه اصلی', 'MR-1', 12, 'طبقه اول', 'ویدئو پروژکتور، وایت‌برد', '08:00', '20:00', 60, 1, :today, :today)"
+             VALUES ('اتاق جلسه اصلی', 'MR-1', 12, 'طبقه اول', 'ویدئو پروژکتور، وایت‌برد', '08:00', '20:00', 30, 1, :today, :today)"
         )->execute(['today' => $today]);
+    }
+
+    public static function ensureRoomClosedDaysTable(PDO $pdo): void
+    {
+        $isSqlite = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite';
+        if ($isSqlite) {
+            $pdo->exec(
+                "CREATE TABLE IF NOT EXISTS room_closed_days (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    closed_date TEXT NOT NULL UNIQUE,
+                    note TEXT,
+                    created_by INTEGER,
+                    created_at TEXT
+                )"
+            );
+        } else {
+            $pdo->exec(
+                "CREATE TABLE IF NOT EXISTS room_closed_days (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    closed_date VARCHAR(32) NOT NULL,
+                    note TEXT NULL,
+                    created_by INT NULL,
+                    created_at VARCHAR(32) NULL,
+                    UNIQUE KEY uniq_room_closed_date (closed_date)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+            );
+        }
+        self::ensureUniqueIndex($pdo, 'room_closed_days', 'uniq_room_closed_date', ['closed_date']);
+    }
+
+    /** One-time slot alignment when upgrading to schema v18. */
+    public static function migrateRoomSlotDefaults(PDO $pdo): void
+    {
+        if (self::tableExists($pdo, 'meeting_rooms')) {
+            try {
+                $pdo->exec('UPDATE meeting_rooms SET slot_minutes = 30 WHERE slot_minutes IS NULL OR slot_minutes <= 0 OR slot_minutes = 60');
+            } catch (PDOException) {
+            }
+        }
+        if (self::tableExists($pdo, 'center_settings') && self::columnExists($pdo, 'center_settings', 'room_slot_minutes')) {
+            try {
+                $pdo->exec('UPDATE center_settings SET room_slot_minutes = 30 WHERE id = 1 AND (room_slot_minutes IS NULL OR room_slot_minutes <= 0 OR room_slot_minutes = 60)');
+            } catch (PDOException) {
+            }
+        }
     }
 
     private static function seedDeskAssignments(PDO $pdo): void

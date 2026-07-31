@@ -209,15 +209,6 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
               </div>
             </div>
           </nav>
-          <div class="sidebar-user">
-            <div class="user-pill">
-              <span class="user-avatar" aria-hidden="true"><?= e(avatar_initial((string) ($team['name'] ?? ''), 'ن')) ?></span>
-              <div class="user-pill-copy">
-                <strong><?= e($team['name']) ?></strong>
-                <small><?= e($entityLabel) ?> — پورتال نهاد</small>
-              </div>
-            </div>
-          </div>
           </div>
         </aside>
 
