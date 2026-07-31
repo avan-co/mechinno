@@ -5,6 +5,9 @@ cd "$(dirname "$0")/.."
 echo "==> Smoke tests"
 php scripts/smoke_test.php
 
+echo "==> MelliPayamak API contract tests"
+php scripts/mellipayamak_contract_test.php
+
 echo "==> Integration tests"
 php scripts/integration_test.php
 
