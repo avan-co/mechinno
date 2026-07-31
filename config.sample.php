@@ -11,6 +11,7 @@ return [
     'debug' => false,
 
     // کلید رمزنگاری مقادیر حساس (رمز SMS و …). قبل از لانچ یک رشته تصادفی طولانی بگذارید.
+    // هرگز مقدار CHANGE_ME را در production نگه ندارید — در غیر این صورت کلید ضعیف fallback استفاده می‌شود.
     'app_secret' => 'CHANGE_ME_RANDOM_SECRET_KEY',
 
     // پس از نصب اولیه در production روی false بگذارید تا install.php غیرفعال شود.

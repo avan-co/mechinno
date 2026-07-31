@@ -71,6 +71,11 @@ final class SecretVault
     {
         $secret = trim((string) ($config['app_secret'] ?? ''));
         if ($secret === '' || str_starts_with($secret, 'CHANGE_ME')) {
+            static $warned = false;
+            if (!$warned) {
+                $warned = true;
+                error_log('[Mechinno] app_secret is missing or still CHANGE_ME — using weak fallback key. Set a long random app_secret in config.php.');
+            }
             $db = $config['db'] ?? [];
             $driver = (string) ($db['driver'] ?? 'mysql');
             $fingerprint = $driver === 'sqlite'

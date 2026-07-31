@@ -32,6 +32,7 @@ final class Access
         'room-calendar',
         'meeting-rooms',
         'crud-meta',
+        'health',
     ];
 
     /** @var list<string> */
@@ -76,6 +77,7 @@ final class Access
         'sms-check-deliveries',
         'sms-test',
         'sms-send',
+        'health',
         'meeting-rooms',
         'meeting_rooms',
         'room-reservations',
@@ -95,7 +97,18 @@ final class Access
             return self::ROLE_ADMIN_VIEWER;
         }
 
-        return self::ROLE_ADMIN_EDITOR;
+        // Never imply write access when the session is anonymous.
+        return '';
+    }
+
+    public static function roleLabel(?string $role = null): string
+    {
+        return match ($role ?? self::role()) {
+            self::ROLE_ADMIN_EDITOR => 'مدیر ویرایشگر',
+            self::ROLE_ADMIN_VIEWER => 'مدیر مشاهده‌گر',
+            self::ROLE_TEAM => 'پورتال نهاد',
+            default => 'کاربر',
+        };
     }
 
     /**

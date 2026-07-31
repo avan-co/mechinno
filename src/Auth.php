@@ -60,12 +60,10 @@ final class Auth
      */
     public static function attempt(PDO $pdo, array $config, string $username, string $password): bool
     {
+        // Auth disabled must never auto-login — even in debug — to avoid
+        // accidental production exposure when debug is left on.
         if (!self::isEnabled($config)) {
-            if (!(bool) ($config['debug'] ?? false)) {
-                return false;
-            }
-            self::establishSession('disabled', Access::ROLE_ADMIN_EDITOR, null, 0);
-            return true;
+            return false;
         }
 
         $username = trim($username);

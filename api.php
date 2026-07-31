@@ -23,13 +23,25 @@ try {
         Access::assertResourceAllowed($resource === 'recalculate-charges' ? 'recalculate-charges' : $resource);
     }
 
+    if ($resource === 'health') {
+        $schemaVersion = 0;
+        try {
+            $schemaVersion = (int) $pdo->query('SELECT schema_version FROM center_settings WHERE id = 1')->fetchColumn();
+        } catch (Throwable) {
+        }
+        json_response([
+            'ok' => true,
+            'schema_version' => $schemaVersion,
+            'role' => Access::role(),
+            'panel' => Access::isTeam() ? 'team' : 'admin',
+            'time' => date('c'),
+        ]);
+    }
+
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && $resource === 'recalculate-charges') {
         require_csrf_json();
         Access::requireWriteJson();
-        $payload = json_decode((string) file_get_contents('php://input'), true);
-        if (!is_array($payload)) {
-            $payload = $_POST;
-        }
+        $payload = read_json_body();
         $fiscalYear = JalaliDate::normalizeDigits((string) ($payload['fiscal_year'] ?? $_GET['fiscal_year'] ?? '1404'));
         $teamId = (int) ($payload['team_id'] ?? 0);
         $seeder = new Seeder($pdo);
@@ -44,10 +56,7 @@ try {
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && $resource === 'bulk-year-import') {
         require_csrf_json();
         Access::requireWriteJson();
-        $payload = json_decode((string) file_get_contents('php://input'), true);
-        if (!is_array($payload)) {
-            $payload = $_POST;
-        }
+        $payload = read_json_body();
         $result = (new YearBackfill($pdo, $crud))->import($payload);
         json_response(['ok' => true] + $result);
     }
@@ -136,10 +145,7 @@ try {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             require_csrf_json();
             Access::requireWriteJson();
-            $payload = json_decode((string) file_get_contents('php://input'), true);
-            if (!is_array($payload)) {
-                $payload = $_POST;
-            }
+            $payload = read_json_body();
             json_response(['ok' => true, 'settings' => $settings->update($payload)]);
         }
         json_response($settings->get());
@@ -149,10 +155,7 @@ try {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             require_csrf_json();
             Access::requireWriteJson();
-            $payload = json_decode((string) file_get_contents('php://input'), true);
-            if (!is_array($payload)) {
-                $payload = $_POST;
-            }
+            $payload = read_json_body();
             json_response(['ok' => true, 'settings' => $rooms->updateSettings($payload)]);
         }
         json_response($rooms->settings());
@@ -178,10 +181,7 @@ try {
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && $resource === 'room-reservations' && $action === 'create') {
         require_csrf_json();
         Access::requireWriteOrTeamSubmitJson();
-        $payload = json_decode((string) file_get_contents('php://input'), true);
-        if (!is_array($payload)) {
-            $payload = $_POST;
-        }
+        $payload = read_json_body();
         $source = Access::isTeam() ? 'team' : 'admin';
         json_response(['ok' => true, 'record' => $rooms->createFromPayload($payload, $source)]);
     }
@@ -189,10 +189,7 @@ try {
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && $resource === 'room-reservations' && $action === 'cancel') {
         require_csrf_json();
         Access::requireWriteOrTeamSubmitJson();
-        $payload = json_decode((string) file_get_contents('php://input'), true);
-        if (!is_array($payload)) {
-            $payload = $_POST;
-        }
+        $payload = read_json_body();
         $id = (int) ($payload['id'] ?? 0);
         $reason = trim((string) ($payload['reason'] ?? ''));
         json_response(['ok' => true, 'record' => $rooms->cancel($id, $reason)]);
@@ -201,10 +198,7 @@ try {
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && $resource === 'teams' && $action === 'change-leader') {
         require_csrf_json();
         Access::requireWriteJson();
-        $payload = json_decode((string) file_get_contents('php://input'), true);
-        if (!is_array($payload)) {
-            $payload = $_POST;
-        }
+        $payload = read_json_body();
         $teamId = (int) ($payload['id'] ?? 0);
         $memberId = (int) ($payload['member_id'] ?? 0);
         if ($teamId <= 0 || $memberId <= 0) {
@@ -219,10 +213,7 @@ try {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             require_csrf_json();
             Access::requireWriteJson();
-            $payload = json_decode((string) file_get_contents('php://input'), true);
-            if (!is_array($payload)) {
-                $payload = $_POST;
-            }
+            $payload = read_json_body();
             json_response(['ok' => true, 'settings' => $sms->updateSettings($payload)]);
         }
         json_response($sms->settings(isset($_GET['live']) && (string) $_GET['live'] === '1'));
@@ -257,10 +248,7 @@ try {
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && $resource === 'sms-check-deliveries') {
         require_csrf_json();
         Access::requireWriteJson();
-        $payload = json_decode((string) file_get_contents('php://input'), true);
-        if (!is_array($payload)) {
-            $payload = $_POST;
-        }
+        $payload = read_json_body();
         $logIds = array_map('intval', (array) ($payload['log_ids'] ?? []));
         $batchUid = trim((string) ($payload['batch_uid'] ?? ''));
         json_response([
@@ -275,10 +263,7 @@ try {
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && $resource === 'sms-send') {
         require_csrf_json();
         Access::requireWriteJson();
-        $payload = json_decode((string) file_get_contents('php://input'), true);
-        if (!is_array($payload)) {
-            $payload = $_POST;
-        }
+        $payload = read_json_body();
         $message = trim((string) ($payload['message'] ?? ''));
         $memberIds = array_map('intval', (array) ($payload['member_ids'] ?? []));
         json_response(['ok' => true, 'result' => (new SmsService($pdo))->sendAnnouncement($message, $memberIds)]);
@@ -287,10 +272,7 @@ try {
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && $resource === 'teams' && $action === 'reset-portal-password') {
         require_csrf_json();
         Access::requireWriteJson();
-        $payload = json_decode((string) file_get_contents('php://input'), true);
-        if (!is_array($payload)) {
-            $payload = $_POST;
-        }
+        $payload = read_json_body();
         $teamId = (int) ($payload['id'] ?? 0);
         if ($teamId <= 0) {
             json_response(['error' => 'نهاد معتبر نیست.'], 422);
@@ -303,10 +285,7 @@ try {
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($action, ['approve', 'reject'], true)) {
         require_csrf_json();
         Access::requireWriteJson();
-        $payload = json_decode((string) file_get_contents('php://input'), true);
-        if (!is_array($payload)) {
-            $payload = $_POST;
-        }
+        $payload = read_json_body();
         $id = (int) ($payload['id'] ?? 0);
         $reason = trim((string) ($payload['reason'] ?? ''));
         $accessCode = trim((string) ($payload['access_code'] ?? ''));
@@ -345,10 +324,7 @@ try {
         if ($resource === 'panel_users' && !Access::canWrite()) {
             json_response(['error' => 'مدیریت کاربران فقط برای مدیر ویرایشگر مجاز است.'], 403);
         }
-        $payload = json_decode((string) file_get_contents('php://input'), true);
-        if (!is_array($payload)) {
-            $payload = $_POST;
-        }
+        $payload = read_json_body();
         $id = (int) ($payload['id'] ?? 0);
         $crudResource = match ($resource) {
             'locker-requests' => 'locker_requests',

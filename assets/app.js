@@ -1153,6 +1153,32 @@ document.getElementById("themeToggle")?.addEventListener("click", () => {
   } catch (e) {}
 });
 
+const accountMenu = document.getElementById("accountMenu");
+const accountMenuTrigger = document.getElementById("accountMenuTrigger");
+const accountMenuDropdown = document.getElementById("accountMenuDropdown");
+const setAccountMenuOpen = (open) => {
+  if (!accountMenu || !accountMenuTrigger || !accountMenuDropdown) return;
+  accountMenu.classList.toggle("is-open", open);
+  accountMenuTrigger.setAttribute("aria-expanded", open ? "true" : "false");
+  accountMenuDropdown.hidden = !open;
+};
+accountMenuTrigger?.addEventListener("click", (event) => {
+  event.stopPropagation();
+  setAccountMenuOpen(accountMenuDropdown?.hidden !== false);
+});
+document.addEventListener("click", (event) => {
+  if (!accountMenu || accountMenu.contains(event.target)) return;
+  setAccountMenuOpen(false);
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") setAccountMenuOpen(false);
+});
+accountMenuDropdown?.addEventListener("click", (event) => {
+  // Keep menu open when toggling theme; close for other actions / navigation.
+  if (event.target.closest("#themeToggle")) return;
+  if (event.target.closest("a, button")) setAccountMenuOpen(false);
+});
+
 const teamLink = (teamId, label) => {
   if (!teamId || !label) return escapeHtml(label || "—");
   return `<button type="button" class="text-link" data-team-id="${escapeHtml(teamId)}">${escapeHtml(label)}</button>`;
@@ -3686,7 +3712,10 @@ class DataTable extends HTMLElement {
     });
     this.addEventListener("click", (e) => this.handleClick(e));
     this.addEventListener("change", (e) => this.handleChange(e));
-    this.load();
+    // Lazy-load: only fetch when the parent section is already active.
+    if (this.closest(".section.active")) {
+      this.load();
+    }
   }
 
   async load() {
@@ -4070,6 +4099,20 @@ document.body.classList.add(panelMode === "team" ? "panel-team" : "panel-admin")
 const hashSection = (location.hash || "").replace(/^#/, "");
 const initialSection = hashSection && document.getElementById(hashSection) ? hashSection : "overview";
 activateSection(initialSection);
+
+window.addEventListener("hashchange", () => {
+  const id = (location.hash || "").replace(/^#/, "");
+  if (!id || !document.getElementById(id)) return;
+  activateSection(id, { updateHash: false });
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" && event.key !== " ") return;
+  const card = event.target.closest(".card-clickable[data-nav-section]");
+  if (!card || event.target !== card) return;
+  event.preventDefault();
+  activateSection(card.dataset.navSection);
+});
 
 const memberApprovalTabs = document.getElementById("memberApprovalTabs");
 const membersTable = document.getElementById("membersTable");
