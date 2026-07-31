@@ -45,7 +45,7 @@ final class ExcelExporter
             'desks' => [
                 'title' => 'میزها',
                 'query' => "SELECT d.number,
-                    CASE d.usage_type WHEN 'formal' THEN 'رسمی' WHEN 'informal' THEN 'غیررسمی' WHEN 'mixed' THEN 'ترکیبی' ELSE d.usage_type END,
+                    CASE d.usage_type WHEN 'formal' THEN 'رسمی' WHEN 'informal' THEN 'موقت' WHEN 'mixed' THEN 'ترکیبی' ELSE d.usage_type END,
                     COALESCE(t.name, 'آزاد'),
                     CASE t.entity_type WHEN 'team' THEN 'تیم' WHEN 'company' THEN 'شرکت' WHEN 'student' THEN 'دانشجو' ELSE COALESCE(t.entity_type, '') END,
                     d.notes, d.row_index, d.col_index
@@ -57,7 +57,7 @@ final class ExcelExporter
             'desk_assignments' => [
                 'title' => 'تخصیص میز',
                 'query' => "SELECT da.desk_number, t.name AS team_name,
-                    CASE da.usage_type WHEN 'formal' THEN 'رسمی' WHEN 'informal' THEN 'غیررسمی' ELSE da.usage_type END,
+                    CASE da.usage_type WHEN 'formal' THEN 'رسمی' WHEN 'informal' THEN 'موقت' ELSE da.usage_type END,
                     da.assigned_from, da.assigned_until, da.notes
                     FROM desk_assignments da
                     LEFT JOIN teams t ON t.id = da.team_id
@@ -77,7 +77,7 @@ final class ExcelExporter
                 'title' => 'نرخ‌ها',
                 'query' => 'SELECT fiscal_year, title, charge_rate, informal_rent_rate, effective_from, notes
                             FROM rate_settings ORDER BY fiscal_year, id',
-                'headers' => ['سال مالی', 'عنوان', 'نرخ شارژ هر میز', 'نرخ اجاره غیررسمی', 'تاریخ اثر', 'توضیحات'],
+                'headers' => ['سال مالی', 'عنوان', 'نرخ شارژ هر میز', 'نرخ اجاره موقت', 'تاریخ اثر', 'توضیحات'],
             ],
             'charges' => [
                 'title' => 'شارژ ماهانه',
@@ -87,7 +87,7 @@ final class ExcelExporter
                             FROM charges c
                             LEFT JOIN teams t ON t.id = c.team_id
                             ORDER BY c.fiscal_year, t.name, c.month_index',
-                'headers' => ['سال', 'نهاد', 'نوع نهاد', 'ماه', 'شماره ماه', 'شارژ', 'اجاره غیررسمی', 'جمع', 'یادداشت'],
+                'headers' => ['سال', 'نهاد', 'نوع نهاد', 'ماه', 'شماره ماه', 'شارژ', 'اجاره موقت', 'جمع', 'یادداشت'],
             ],
             'debts' => [
                 'title' => 'مطالبات مرکز',
@@ -378,7 +378,7 @@ final class ExcelExporter
 
         if ($key === 'desks' && isset($this->filters['team_id'])) {
             $sql = "SELECT d.number,
-                    CASE d.usage_type WHEN 'formal' THEN 'رسمی' WHEN 'informal' THEN 'غیررسمی' WHEN 'mixed' THEN 'ترکیبی' ELSE d.usage_type END,
+                    CASE d.usage_type WHEN 'formal' THEN 'رسمی' WHEN 'informal' THEN 'موقت' WHEN 'mixed' THEN 'ترکیبی' ELSE d.usage_type END,
                     COALESCE(t.name, 'آزاد'),
                     CASE t.entity_type WHEN 'team' THEN 'تیم' WHEN 'company' THEN 'شرکت' WHEN 'student' THEN 'دانشجو' ELSE COALESCE(t.entity_type, '') END,
                     d.notes, d.row_index, d.col_index
@@ -394,7 +394,7 @@ final class ExcelExporter
 
         if ($key === 'desk_assignments' && isset($this->filters['team_id'])) {
             $sql = "SELECT da.desk_number, t.name AS team_name,
-                    CASE da.usage_type WHEN 'formal' THEN 'رسمی' WHEN 'informal' THEN 'غیررسمی' ELSE da.usage_type END,
+                    CASE da.usage_type WHEN 'formal' THEN 'رسمی' WHEN 'informal' THEN 'موقت' ELSE da.usage_type END,
                     da.assigned_from, da.assigned_until, da.notes
                     FROM desk_assignments da
                     LEFT JOIN teams t ON t.id = da.team_id

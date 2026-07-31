@@ -12,7 +12,7 @@ final class ReportData
 
     private const USAGE_LABELS = [
         'formal' => 'رسمی',
-        'informal' => 'غیررسمی',
+        'informal' => 'موقت',
         'mixed' => 'ترکیبی',
     ];
 

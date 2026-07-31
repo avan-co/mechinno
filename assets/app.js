@@ -21,7 +21,7 @@ const labels = {
   leader: "مسئول",
   phone: "تماس",
   desk_count: "تعداد میز",
-  informal_seats: "صندلی غیررسمی",
+  informal_seats: "صندلی موقت",
   assigned_from: "از ماه",
   assigned_until: "تا ماه",
   assignment_period: "بازه تخصیص",
@@ -42,7 +42,7 @@ const labels = {
   month_index: "ماه",
   month_name: "ماه",
   charge_amount: "شارژ",
-  rent_amount: "اجاره غیررسمی",
+  rent_amount: "اجاره موقت",
   amount: "مبلغ",
   note: "یادداشت",
   notes: "توضیحات",
@@ -52,7 +52,7 @@ const labels = {
   category: "دسته",
   confirmed: "تأیید",
   charge_rate: "نرخ شارژ",
-  informal_rent_rate: "نرخ اجاره غیررسمی",
+  informal_rent_rate: "نرخ اجاره موقت",
   charge_rate_override: "نرخ شارژ اختصاصی",
   informal_rent_rate_override: "نرخ اجاره اختصاصی",
   charge_exempt: "معاف شارژ",
@@ -124,7 +124,7 @@ const requestTypeLabel = (type) => ({
   update: "ویرایش",
   delete: "حذف",
 }[type] || type || "—");
-const usageLabels = { formal: "رسمی", informal: "غیررسمی", mixed: "ترکیبی" };
+const usageLabels = { formal: "رسمی", informal: "موقت", mixed: "ترکیبی" };
 
 const billingExemptionBadges = (row = {}) => {
   const bits = [];
@@ -2302,7 +2302,7 @@ const loadTeamChargeRates = async () => {
         <div class="month-stat"><span>سال</span><strong>${escapeHtml(year)}</strong></div>
         <div class="month-stat"><span>شارژ هر میز (ماهانه)</span><strong>${escapeHtml(formatMoney(chargeRate))}${contract?.charge_rate_override ? " <small class='hint'>(اختصاصی)</small>" : ""}</strong></div>
         ${profile.has_informal_desk
-          ? `<div class="month-stat"><span>اجاره غیررسمی هر میز</span><strong>${escapeHtml(formatMoney(rentRate))}${contract?.informal_rent_rate_override ? " <small class='hint'>(اختصاصی)</small>" : ""}</strong></div>`
+          ? `<div class="month-stat"><span>اجاره موقت هر میز</span><strong>${escapeHtml(formatMoney(rentRate))}${contract?.informal_rent_rate_override ? " <small class='hint'>(اختصاصی)</small>" : ""}</strong></div>`
           : ""}
       </div>
       ${billing?.has_billing_adjustments ? `<div class="team-billing-badges team-billing-badges--compact">${teamBillingBadges(billing, { compact: true })}</div>` : ""}
