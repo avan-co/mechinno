@@ -224,32 +224,29 @@ const cardNavMap = {
   desks_occupied: "desks",
 };
 
-const adminCardConfig = [
-  ["income_year", "درآمد سال (واریز+دستی)", "↓", "income"],
-  ["income_month", "درآمد ماه (واریز+دستی)", "↓", "income"],
-  ["expense_year", "هزینه سال", "↑", "expense"],
-  ["expense_month", "هزینه ماه", "↑", "expense"],
-  ["ledger_balance", "موجودی نقد مرکز", "₡", "income"],
-  ["formal_contract_year", "جمع قراردادهای رسمی سال", "📄", "income"],
-  ["debt_total", "مطالبات نهادها", "!", "debt"],
-];
-
 const statIconSvg = {
   members: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm-7 8a7 7 0 0 1 14 0Z" fill="currentColor"/></svg>',
   desks: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16a1 1 0 0 1 1 1v3H3V6a1 1 0 0 1 1-1Zm17 6v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-8h18ZM8 17h2v-3H8v3Zm6 0h2v-3h-2v3Z" fill="currentColor"/></svg>',
+  lockers: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h5v18H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm7 0h5a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5V3Zm1.5 7h2v3h-2v-3Z" fill="currentColor"/></svg>',
   charges: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 4 6v6c0 5 3.4 9.7 8 11 4.6-1.3 8-6 8-11V6l-8-4Zm0 6.5A2.5 2.5 0 1 1 9.5 6 2.5 2.5 0 0 1 12 8.5Z" fill="currentColor"/></svg>',
   debt: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm1 5v4h4v2h-6V7Z" fill="currentColor"/></svg>',
   paid: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4Z" fill="currentColor"/></svg>',
   payments: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4Zm2 2v2h12V7Zm0 4v2h8v-2Z" fill="currentColor"/></svg>',
+  income: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12.2l3.6-3.6L17 13l-5 5-5-5 1.4-1.4L11 15.2V3h1Zm-7 16h14v2H5v-2Z" fill="currentColor"/></svg>',
+  expense: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21V8.8l-3.6 3.6L7 11l5-5 5 5-1.4 1.4L13 8.8V21h-1Zm-7-2h14v2H5v-2Z" fill="currentColor"/></svg>',
+  balance: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18v3H3V6Zm0 5h18v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-8Zm3 3h4v2H6v-2Z" fill="currentColor"/></svg>',
 };
 
-const adminOpsCardConfig = [
-  ["teams", "نهادها", statIconSvg.members, "teams"],
-  ["members", "اعضای فعال", statIconSvg.members, "members"],
-  ["desks_occupied", "میز اشغال", statIconSvg.desks, "desks"],
-  ["available_lockers", "کمد خالی", statIconSvg.desks, "lockers"],
-  ["pending_payments", "واریز معلق", statIconSvg.payments, "transactions"],
+/** Compact admin KPI strip — only keys that summary() always provides. */
+const adminCardConfig = [
+  ["ledger_balance", "موجودی نقد", statIconSvg.balance, "income"],
+  ["debt_total", "مطالبات نهادها", statIconSvg.debt, "debt"],
+  ["income_month", "درآمد این ماه", statIconSvg.income, "income"],
+  ["expense_month", "هزینه این ماه", statIconSvg.expense, "expense"],
+  ["pending_payments", "واریز معلق", statIconSvg.payments, "payments"],
   ["pending_members", "عضو معلق", statIconSvg.members, "members"],
+  ["desks_occupied", "میز اشغال", statIconSvg.desks, "desks"],
+  ["available_lockers", "کمد خالی", statIconSvg.lockers, "lockers"],
 ];
 
 const teamCardConfig = [
@@ -1245,18 +1242,25 @@ const resolveCardSection = (key) => {
 const renderCards = (cards, config = cardConfig, containerId = "cards") => {
   const container = document.getElementById(containerId);
   if (!container) return;
+  const source = cards && typeof cards === "object" ? cards : {};
   container.innerHTML = config
     .map(([key, title, icon, tone]) => {
-      let value = cards?.[key];
-      if (key === "desks" && panelMode === "team" && cards?.desk_numbers) value = cards.desk_numbers || "—";
-      else if (key === "desks" && panelMode === "team") value = formatNumber(cards?.desks ?? value);
-      else if (key === "desks_occupied") value = `${formatNumber(cards?.desks_occupied ?? 0)} / ${formatNumber(cards?.desks_total ?? 24)}`;
-      else if (moneyCards.has(key)) value = formatMoney(value);
-      else value = formatNumber(value);
+      const raw = source[key];
+      const missing = raw === undefined || raw === null || raw === "";
+      let value = "—";
+      if (!missing) {
+        if (key === "desks" && panelMode === "team" && source.desk_numbers) value = source.desk_numbers || "—";
+        else if (key === "desks" && panelMode === "team") value = formatNumber(source.desks ?? raw);
+        else if (key === "desks_occupied") {
+          value = `${formatNumber(source.desks_occupied ?? 0)} / ${formatNumber(source.desks_total ?? 0)}`;
+        } else if (moneyCards.has(key)) value = formatMoney(raw);
+        else value = formatNumber(raw);
+      }
       const section = resolveCardSection(key);
-      return `<article class="stat-card stat-card--${tone} card-clickable" data-nav-section="${section}" tabindex="0" role="button">
+      const alert = !missing && ["pending_payments", "pending_members", "debt_total"].includes(key) && Number(raw) > 0;
+      return `<article class="stat-card stat-card--${tone}${alert ? " is-alert" : ""}${missing ? " is-empty" : ""} card-clickable" data-nav-section="${section}" tabindex="0" role="button">
         <span class="stat-icon" aria-hidden="true">${icon}</span>
-        <div><span class="stat-label">${escapeHtml(title)}</span><strong>${escapeHtml(value ?? "—")}</strong></div>
+        <div><span class="stat-label">${escapeHtml(title)}</span><strong>${escapeHtml(value)}</strong></div>
       </article>`;
     })
     .join("");
@@ -1336,23 +1340,23 @@ const renderDashboardHero = (cards = {}, team = null) => {
 
   if (panelMode === "team" && team?.name) {
     titleEl.textContent = team.name;
-    subtitleEl.textContent = "وضعیت نهاد، اعضا، میزها و شارژ در یک نگاه";
+    if (subtitleEl) subtitleEl.textContent = "اعضا، میز و وضعیت شارژ";
   } else {
     titleEl.textContent = greeting;
-    subtitleEl.textContent = "نمای کلی عملکرد مرکز، اقدامات فوری و وضعیت مالی";
+    const pending = Number(cards?.pending_payments || 0) + Number(cards?.pending_members || 0);
+    if (subtitleEl) {
+      subtitleEl.textContent = pending > 0
+        ? `${formatNumber(pending)} مورد در انتظار رسیدگی`
+        : "وضعیت مالی و ظرفیت مرکز";
+    }
   }
 
-  if (!heroMeta) return;
-  const debt = cards?.debt_total ?? cards?.total_debt;
-  const teams = cards?.teams;
-  const extra = [];
-  if (teams !== undefined) extra.push(`<div class="dashboard-hero-stat"><span>نهادها</span><strong>${escapeHtml(formatNumber(teams))}</strong></div>`);
-  if (debt !== undefined) extra.push(`<div class="dashboard-hero-stat"><span>مطالبات</span><strong>${escapeHtml(formatMoney(debt))}</strong></div>`);
-  if (extra.length) {
-    heroMeta.innerHTML = `
-      <div class="dashboard-hero-stat"><span>تاریخ امروز</span><strong>${escapeHtml(window.MECHINNO?.today || "—")}</strong></div>
-      <div class="dashboard-hero-stat"><span>سال مالی</span><strong>${escapeHtml(window.MECHINNO?.fiscalYear || "—")}</strong></div>
-      ${extra.join("")}`;
+  // Keep hero meta to date + fiscal year only (KPIs live in the card strip).
+  if (heroMeta && panelMode !== "team") {
+    const todayEl = document.getElementById("heroToday");
+    const yearEl = document.getElementById("heroFiscalYear");
+    if (todayEl) todayEl.textContent = window.MECHINNO?.today || todayEl.textContent || "—";
+    if (yearEl) yearEl.textContent = window.MECHINNO?.fiscalYear || yearEl.textContent || "—";
   }
 };
 
@@ -1366,9 +1370,8 @@ const loadDashboard = async () => {
   renderCurrentMonth(data.current_month || {});
   renderActionItems(data.action_items || []);
   renderCards(data.cards || {}, adminCardConfig, "cards");
-  renderCards(data.cards || {}, adminOpsCardConfig, "opsCards");
   renderChargeChart(data.monthly_charges || []);
-  renderDebtChart(data.debt_by_team || []);
+  renderDebtChart((data.debt_by_team || []).slice(0, 6));
   const welcome = document.getElementById("welcomePanel");
   if (welcome) welcome.hidden = Number(data.cards?.teams || 0) > 0;
 };

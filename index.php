@@ -319,10 +319,10 @@ $assetVer = (string) max(
               <div class="dashboard-hero-copy">
                 <p class="dashboard-hero-eyebrow">مرکز نوآوری مکانیک</p>
                 <h2 id="dashboardHeroTitle">خلاصه وضعیت امروز</h2>
-                <p id="dashboardHeroSubtitle">نمای کلی نهادها، شارژ، میزها و اقدام‌های در انتظار</p>
+                <p id="dashboardHeroSubtitle">وضعیت مالی، ظرفیت و اقدام‌های فوری</p>
               </div>
               <div class="dashboard-hero-meta" id="dashboardHeroMeta">
-                <div class="dashboard-hero-stat"><span>تاریخ امروز</span><strong id="heroToday"><?= e(fa_digits($today['formatted'])) ?></strong></div>
+                <div class="dashboard-hero-stat"><span>امروز</span><strong id="heroToday"><?= e(fa_digits($today['formatted'])) ?></strong></div>
                 <div class="dashboard-hero-stat"><span>سال مالی</span><strong id="heroFiscalYear"><?= e(fa_digits((string) $today['year'])) ?></strong></div>
               </div>
             </div>
@@ -339,35 +339,33 @@ $assetVer = (string) max(
             </nav>
 
             <?php if (Access::canWrite()): ?>
-            <article class="panel panel--accent welcome-panel" id="welcomePanel">
+            <article class="panel panel--accent welcome-panel" id="welcomePanel" hidden>
               <h2>شروع سریع</h2>
               <div class="start-steps" id="startSteps">
                 <button class="start-step" data-go="teams" type="button"><span>۱</span>ثبت نهادها</button>
-                <button class="start-step" data-go="members" type="button"><span>۲</span>افزودن اعضا به نهاد</button>
-                <button class="start-step" data-go="desks" type="button"><span>۳</span>تخصیص میز به نهاد</button>
-                <button class="start-step" data-go="lockers" type="button"><span>۴</span>تعریف کمدها</button>
-                <button class="start-step" data-go="charges" type="button"><span>۵</span>نرخ و شارژ</button>
+                <button class="start-step" data-go="members" type="button"><span>۲</span>افزودن اعضا</button>
+                <button class="start-step" data-go="desks" type="button"><span>۳</span>تخصیص میز</button>
+                <button class="start-step" data-go="charges" type="button"><span>۴</span>نرخ و شارژ</button>
               </div>
             </article>
             <?php endif; ?>
 
-              <div id="cards" class="stat-cards"></div>
-              <div id="opsCards" class="stat-cards stat-cards--ops"></div>
+              <div id="cards" class="stat-cards" aria-label="شاخص‌های کلیدی"></div>
 
-              <div class="grid two">
+              <div class="grid two dashboard-panels">
                 <article class="panel">
-                  <div class="panel-head"><h2>خلاصه ماه جاری</h2><span id="currentMonthLabel" class="hint"></span></div>
+                  <div class="panel-head"><h2>ماه جاری</h2><span id="currentMonthLabel" class="hint"></span></div>
                   <div id="currentMonthSummary" class="month-grid"></div>
                 </article>
                 <article class="panel">
-                  <div class="panel-head"><h2>کارهای امروز</h2><span class="hint">اولویت‌بندی اقدامات فوری</span></div>
+                  <div class="panel-head"><h2>اقدام‌های فوری</h2><span class="hint">موارد نیازمند رسیدگی</span></div>
                   <div id="actionItems" class="action-list"></div>
                 </article>
               </div>
 
-              <div class="grid two">
-                <article class="panel"><div class="panel-head"><h2>شارژ ماهانه</h2></div><div id="chargeChart" class="bar-chart"></div></article>
-                <article class="panel"><div class="panel-head"><h2>طلب از نهادها</h2><span class="hint">مطالبات مرکز — نهاد بدهکار، مرکز طلبکار</span></div><div id="debtChart" class="bar-chart"></div></article>
+              <div class="grid two dashboard-panels">
+                <article class="panel"><div class="panel-head"><h2>روند شارژ</h2></div><div id="chargeChart" class="bar-chart"></div></article>
+                <article class="panel"><div class="panel-head"><h2>بیشترین مطالبات</h2></div><div id="debtChart" class="bar-chart"></div></article>
               </div>
             </section>
 
