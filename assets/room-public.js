@@ -1,7 +1,6 @@
 (() => {
   const cfg = window.MECHINNO_PUBLIC || {};
   const state = {
-    step: 1,
     rooms: [],
     settings: {},
     today: cfg.today || "",
@@ -17,6 +16,7 @@
     month: Number(cfg.month || String(cfg.today || "1404/01/01").slice(5, 7)),
     monthData: null,
     weekRoomId: 0,
+    weekMeta: { day_start: "08:00", day_end: "20:00" },
   };
 
   const $ = (selector) => document.querySelector(selector);
@@ -52,6 +52,7 @@
     host.textContent = text;
     host.className = `room-alert room-alert--${type}`;
     host.hidden = !text;
+    if (text) host.scrollIntoView({ behavior: "smooth", block: "nearest" });
   };
 
   const fetchJson = async (url, options = {}) => {
@@ -70,6 +71,18 @@
     state.rangeAnchor = "";
     state.selectedStart = "";
     state.selectedEnd = "";
+    syncHiddenFields();
+  };
+
+  const syncHiddenFields = () => {
+    const roomInput = $("#formRoomId");
+    const startInput = $("#formStartTime");
+    const endInput = $("#formEndTime");
+    const dateInput = $("#reserveDate");
+    if (roomInput) roomInput.value = state.selectedRoomId > 0 ? String(state.selectedRoomId) : "";
+    if (dateInput) dateInput.value = state.selectedDate || "";
+    if (startInput) startInput.value = state.selectedStart || "";
+    if (endInput) endInput.value = state.selectedEnd || "";
   };
 
   const updateSummary = () => {
@@ -77,8 +90,6 @@
     const summaryRoom = $("#summaryRoom");
     const summaryDate = $("#summaryDate");
     const summaryTime = $("#summaryTime");
-    const bottomSummary = $("#bottomSummary");
-    const bottomHint = $("#bottomHint");
     if (summaryRoom) summaryRoom.textContent = room ? room.name : "—";
     if (summaryDate) summaryDate.textContent = state.selectedDate || "—";
     if (summaryTime) {
@@ -86,43 +97,23 @@
         ? `${state.selectedStart} – ${state.selectedEnd}`
         : "—";
     }
-    if (bottomSummary) {
-      if (state.step === 1) bottomSummary.textContent = room ? room.name : "اتاق را انتخاب کنید";
-      else if (state.step === 2) {
-        bottomSummary.textContent = state.selectedStart && state.selectedEnd
-          ? `${state.selectedDate} · ${state.selectedStart}–${state.selectedEnd}`
-          : (state.selectedDate || "زمان را انتخاب کنید");
-      } else {
-        bottomSummary.textContent = "ثبت نهایی رزرو";
-      }
-    }
-    if (bottomHint) bottomHint.textContent = `مرحله ${state.step} از ۳`;
+    syncHiddenFields();
   };
 
-  const setStep = (step) => {
-    state.step = step;
-    $$("[data-step-pill]").forEach((pill) => {
-      const pillStep = Number(pill.dataset.stepPill || 0);
-      pill.classList.toggle("is-active", pillStep === step);
-      pill.classList.toggle("is-done", pillStep < step);
-    });
-    $("#stepRooms")?.toggleAttribute("hidden", step !== 1);
-    $("#stepSchedule")?.toggleAttribute("hidden", step !== 2);
-    $("#stepDetails")?.toggleAttribute("hidden", step !== 3);
-    $("#weekStatusCard")?.classList.toggle("is-collapsed", step === 3);
-
-    const nextButton = $("#nextStepButton");
-    const bottomBar = $("#pubBottomBar");
-    if (bottomBar) bottomBar.hidden = step === 3;
-    if (!nextButton) return;
-    if (step === 1) {
-      nextButton.textContent = "انتخاب زمان";
-      nextButton.disabled = state.selectedRoomId <= 0;
-    } else if (step === 2) {
-      nextButton.textContent = "اطلاعات رزرو";
-      nextButton.disabled = !(state.selectedStart && state.selectedEnd);
+  const updateTimePreview = () => {
+    const preview = $("#timePreview");
+    if (!preview) return;
+    if (state.selectedStart && state.selectedEnd) {
+      const minutes = timeToMinutes(state.selectedEnd) - timeToMinutes(state.selectedStart);
+      const label = minutes < 60 ? `${minutes} دقیقه` : `${(minutes / 60).toFixed(minutes % 60 ? 1 : 0)} ساعت`;
+      preview.textContent = `بازه انتخابی: ${state.selectedStart} تا ${state.selectedEnd} (${label})`;
+      return;
     }
-    updateSummary();
+    if (state.rangeAnchor) {
+      preview.textContent = `شروع: ${state.rangeAnchor} — حالا ساعت پایان را بزنید`;
+      return;
+    }
+    preview.textContent = "۱) شروع  ۲) پایان";
   };
 
   const renderRooms = () => {
@@ -146,16 +137,25 @@
     grid.querySelectorAll(".room-room-option").forEach((button) => {
       button.addEventListener("click", () => {
         state.selectedRoomId = Number(button.dataset.roomId || 0);
+        state.weekRoomId = state.selectedRoomId;
         state.slotMinutes = Number(selectedRoom()?.slot_minutes || state.settings.room_slot_minutes || 30);
         clearRange();
         renderRooms();
-        setStep(1);
+        updateSummary();
+        const filter = $("#weekRoomFilter");
+        if (filter) {
+          filter.value = String(state.weekRoomId);
+          filter.dataset.ready = "0";
+        }
         loadWeek();
+        loadAvailability();
       });
     });
     if (state.selectedRoomId <= 0 && state.rooms[0]) {
       state.selectedRoomId = Number(state.rooms[0].id);
+      state.weekRoomId = state.selectedRoomId;
       renderRooms();
+      updateSummary();
     }
   };
 
@@ -193,7 +193,7 @@
           state.selectedEnd = "";
           paintSlots();
           updateTimePreview();
-          setStep(2);
+          updateSummary();
           return;
         }
 
@@ -225,25 +225,9 @@
         state.rangeAnchor = start;
         paintSlots();
         updateTimePreview();
-        setStep(2);
+        updateSummary();
       });
     });
-  };
-
-  const updateTimePreview = () => {
-    const preview = $("#timePreview");
-    if (!preview) return;
-    if (state.selectedStart && state.selectedEnd) {
-      const minutes = timeToMinutes(state.selectedEnd) - timeToMinutes(state.selectedStart);
-      const label = minutes < 60 ? `${minutes} دقیقه` : `${(minutes / 60).toFixed(minutes % 60 ? 1 : 0)} ساعت`;
-      preview.textContent = `بازه: ${state.selectedStart} تا ${state.selectedEnd} (${label})`;
-      return;
-    }
-    if (state.rangeAnchor) {
-      preview.textContent = `شروع: ${state.rangeAnchor} — حالا پایان را بزنید`;
-      return;
-    }
-    preview.textContent = "۱) شروع  ۲) پایان";
   };
 
   const renderMonth = () => {
@@ -267,13 +251,13 @@
     grid.querySelectorAll(".room-month-day[data-date]:not([disabled])").forEach((button) => {
       button.addEventListener("click", () => {
         state.selectedDate = button.dataset.date || "";
-        const dateInput = $("#reserveDate");
-        if (dateInput) dateInput.value = state.selectedDate;
         const dayLabel = $("#publicSelectedDayLabel");
         if (dayLabel) dayLabel.textContent = `روز: ${state.selectedDate}`;
         clearRange();
         renderMonth();
+        updateSummary();
         loadAvailability();
+        loadWeek();
       });
     });
   };
@@ -298,7 +282,7 @@
         clearRange();
         if (grid) grid.innerHTML = `<p class="hint room-closed-hint">${escapeHtml(data.closed_note || "این روز تعطیل است.")}</p>`;
         updateTimePreview();
-        setStep(2);
+        updateSummary();
         return;
       }
       state.slots = data.slots || [];
@@ -306,20 +290,37 @@
       state.maxHours = Number(data.max_hours || state.settings.room_max_hours_per_day || state.maxHours || 2);
       paintSlots();
       updateTimePreview();
-      setStep(2);
+      updateSummary();
     } catch (error) {
       showMessage(error.message, "error");
       if (grid) grid.innerHTML = "";
     }
   };
 
+  const levelLabel = (day) => {
+    if (day.is_closed) return "تعطیل";
+    if (day.is_past) return "گذشته";
+    if (day.level === "busy") return "پر";
+    if (day.level === "light") return "نیمه‌پر";
+    return "آزاد";
+  };
+
   const renderWeek = (data) => {
-    const strip = $("#weekStrip");
+    const list = $("#weekStrip");
     const rangeLabel = $("#weekRangeLabel");
     const filter = $("#weekRoomFilter");
-    if (!strip) return;
-    if (rangeLabel) rangeLabel.textContent = `از ${data.from || ""} تا ${data.to || ""}`;
-    if (filter && !(filter.dataset.ready === "1")) {
+    if (!list) return;
+
+    state.weekMeta = {
+      day_start: data.day_start || "08:00",
+      day_end: data.day_end || "20:00",
+    };
+
+    if (rangeLabel) {
+      rangeLabel.textContent = `${data.from || ""} تا ${data.to || ""} · ${state.weekMeta.day_start}–${state.weekMeta.day_end}`;
+    }
+
+    if (filter && filter.dataset.ready !== "1") {
       filter.innerHTML = '<option value="0">همه اتاق‌ها</option>' + (data.rooms || []).map(
         (room) => `<option value="${room.id}">${escapeHtml(room.name)}</option>`
       ).join("");
@@ -327,31 +328,43 @@
       filter.dataset.ready = "1";
     }
 
-    strip.innerHTML = (data.days || []).map((day) => {
-      const classes = ["pub-week-day", `is-${day.level || "free"}`];
+    list.innerHTML = (data.days || []).map((day) => {
+      const classes = ["pub-week-row", `is-${day.level || "free"}`];
       if (day.is_today) classes.push("is-today");
       if (day.is_past) classes.push("is-past");
       if (day.date === state.selectedDate) classes.push("is-selected");
       const disabled = day.is_closed || day.is_past;
-      const statusText = day.is_closed
-        ? "تعطیل"
-        : (day.is_past ? "گذشته" : (day.busy_count > 0 ? `${day.busy_count} رزرو` : "آزاد"));
-      const blocks = (day.blocks || []).slice(0, 3).map((block) =>
-        `<small>${escapeHtml(block.start_time)}–${escapeHtml(block.end_time)}${state.weekRoomId ? "" : ` ${escapeHtml(block.room_name || "")}`}</small>`
+      const pct = day.is_closed ? 100 : Number(day.occupancy_pct || 0);
+      const blocks = (day.blocks || []).map((block) => {
+        const title = `${block.start_time}–${block.end_time}${block.room_name ? ` · ${block.room_name}` : ""}`;
+        return `<span class="pub-week-seg pub-week-seg--${block.status === "pending" ? "pending" : "busy"}" style="inset-inline-start:${block.left_pct}%;width:${block.width_pct}%" title="${escapeHtml(title)}"></span>`;
+      }).join("");
+      const hours = (day.blocks || []).slice(0, 4).map((block) =>
+        `<li>${escapeHtml(block.start_time)}–${escapeHtml(block.end_time)}${state.weekRoomId ? "" : ` <em>${escapeHtml(block.room_name || "")}</em>`}</li>`
       ).join("");
+
       return `<button type="button" class="${classes.join(" ")}" data-date="${day.date}" ${disabled ? "disabled" : ""}>
-        <span class="pub-week-weekday">${escapeHtml(day.weekday || "")}</span>
-        <strong>${day.day}</strong>
-        <span class="pub-week-status">${statusText}</span>
-        <div class="pub-week-blocks">${blocks || "<small>—</small>"}</div>
+        <div class="pub-week-row-meta">
+          <div class="pub-week-row-day">
+            <strong>${escapeHtml(day.weekday || "")}</strong>
+            <span>${day.day}</span>
+          </div>
+          <div class="pub-week-row-status">
+            <b>${levelLabel(day)}</b>
+            <small>${day.is_closed ? "رزرو غیرفعال" : (day.busy_count ? `${day.busy_count} بازه · ${pct}٪ اشغال` : "بدون رزرو")}</small>
+          </div>
+        </div>
+        <div class="pub-week-track" aria-hidden="true">
+          <span class="pub-week-track-fill" style="width:${pct}%"></span>
+          ${blocks}
+        </div>
+        <ul class="pub-week-hours">${hours || "<li class=\"is-empty\">—</li>"}</ul>
       </button>`;
     }).join("");
 
-    strip.querySelectorAll(".pub-week-day[data-date]:not([disabled])").forEach((button) => {
+    list.querySelectorAll(".pub-week-row[data-date]:not([disabled])").forEach((button) => {
       button.addEventListener("click", () => {
         state.selectedDate = button.dataset.date || "";
-        const dateInput = $("#reserveDate");
-        if (dateInput) dateInput.value = state.selectedDate;
         const dayLabel = $("#publicSelectedDayLabel");
         if (dayLabel) dayLabel.textContent = `روز: ${state.selectedDate}`;
         const parts = String(state.selectedDate).split("/");
@@ -360,13 +373,10 @@
           state.month = Number(parts[1]);
         }
         clearRange();
-        if (state.selectedRoomId > 0) {
-          setStep(2);
-          loadMonth().then(loadAvailability).catch((error) => showMessage(error.message, "error"));
-        } else {
-          showMessage("ابتدا یک اتاق انتخاب کنید.", "error");
-          setStep(1);
-        }
+        updateSummary();
+        loadMonth().then(loadAvailability).catch((error) => showMessage(error.message, "error"));
+        loadWeek();
+        $("#publicMonthPicker")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
       });
     });
   };
@@ -379,26 +389,34 @@
       );
       renderWeek(data);
     } catch {
-      const strip = $("#weekStrip");
-      if (strip) strip.innerHTML = '<p class="hint">وضعیت هفته در دسترس نیست.</p>';
+      const list = $("#weekStrip");
+      if (list) list.innerHTML = '<p class="hint">وضعیت هفته در دسترس نیست.</p>';
     }
   };
 
   const showSuccess = (record) => {
-    $("#bookingLayout")?.setAttribute("hidden", "");
-    $("#pubBottomBar")?.setAttribute("hidden", "");
-    $("#weekStatusCard")?.setAttribute("hidden", "");
-    $$(".pub-step").forEach((pill) => pill.classList.add("is-done"));
+    $("#bookingFormShell")?.setAttribute("hidden", "");
     const card = $("#bookingSuccess");
     if (!card) return;
     card.hidden = false;
+    const token = record.public_token || "";
     card.innerHTML = `
       <div class="room-success-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="28" height="28"><path d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4Z" fill="currentColor"/></svg></div>
       <h2>رزرو ثبت شد</h2>
       <p class="room-card-lead">${record.status === "approved" ? "رزرو تأیید شد." : "رزرو در انتظار تأیید مدیر است."}</p>
-      <div class="room-token-box">${escapeHtml(record.public_token || "")}</div>
+      <p class="pub-token-label">کد پیگیری شما</p>
+      <div class="room-token-box room-token-box--short" id="successToken">${escapeHtml(token)}</div>
+      <button type="button" class="button ghost" id="copyTokenBtn">کپی کد</button>
       <p><strong>${escapeHtml(record.room_name || "")}</strong><br>${escapeHtml(record.reserved_date || "")} · ${escapeHtml(record.start_time || "")} تا ${escapeHtml(record.end_time || "")}</p>
-      <p class="hint">کد بالا را برای پیگیری یا لغو نگه دارید.</p>`;
+      <p class="hint">این کد را برای پیگیری یا لغو نگه دارید — مثلاً MN-482917</p>`;
+    card.querySelector("#copyTokenBtn")?.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(token);
+        showMessage("کد پیگیری کپی شد.", "success");
+      } catch {
+        showMessage("کپی نشد؛ کد را دستی بردارید.", "error");
+      }
+    });
     card.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
@@ -415,6 +433,7 @@
         result.hidden = false;
         result.innerHTML = `
           <div class="pub-summary-inline">
+            <div><span>کد</span><strong dir="ltr">${escapeHtml(record.public_token || token)}</strong></div>
             <div><span>اتاق</span><strong>${escapeHtml(record.room_name || "—")}</strong></div>
             <div><span>تاریخ</span><strong>${escapeHtml(record.reserved_date || "—")}</strong></div>
             <div><span>ساعت</span><strong>${escapeHtml(record.start_time || "")} – ${escapeHtml(record.end_time || "")}</strong></div>
@@ -440,6 +459,10 @@
   const bindForm = () => {
     $("#bookingForm")?.addEventListener("submit", async (event) => {
       event.preventDefault();
+      if (!state.selectedRoomId) {
+        showMessage("ابتدا اتاق را انتخاب کنید.", "error");
+        return;
+      }
       if (!state.selectedStart || !state.selectedEnd) {
         showMessage("بازه ساعت را کامل انتخاب کنید.", "error");
         return;
@@ -459,6 +482,7 @@
         });
         showSuccess(data.record || {});
         showMessage("", "success");
+        loadWeek();
       } catch (error) {
         showMessage(error.message, "error");
       } finally {
@@ -468,15 +492,6 @@
   };
 
   const bindControls = () => {
-    $("#nextStepButton")?.addEventListener("click", () => {
-      if (state.step === 1) {
-        setStep(2);
-        loadMonth().then(loadAvailability).catch((error) => showMessage(error.message, "error"));
-        return;
-      }
-      if (state.step === 2) setStep(3);
-    });
-    $("#backToSchedule")?.addEventListener("click", () => setStep(2));
     $("#publicMonthPrev")?.addEventListener("click", () => {
       state.month -= 1;
       if (state.month < 1) {
@@ -523,14 +538,13 @@
       state.selectedDate = state.today;
       state.slotMinutes = Number(state.settings.room_slot_minutes || state.slotMinutes || 30);
       state.maxHours = Number(state.settings.room_max_hours_per_day || state.maxHours || 2);
-      const dateInput = $("#reserveDate");
-      if (dateInput) dateInput.value = state.today;
       renderRooms();
       bindForm();
       bindLookup();
       bindControls();
-      setStep(1);
-      await loadWeek();
+      updateSummary();
+      await Promise.all([loadWeek(), loadMonth()]);
+      await loadAvailability();
     } catch (error) {
       showMessage(error.message, "error");
     }

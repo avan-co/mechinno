@@ -172,6 +172,33 @@ final class RoomReservations
         $closedMap = array_fill_keys($calendar['closed_dates'] ?? [], true);
         $today = (string) ($calendar['today'] ?? JalaliDate::todayParts()['formatted']);
 
+        $dayStart = '08:00';
+        $dayEnd = '20:00';
+        if ($roomId > 0) {
+            foreach ($rooms as $room) {
+                if ((int) ($room['id'] ?? 0) === $roomId) {
+                    $dayStart = self::normalizeTime((string) ($room['open_time'] ?? $dayStart));
+                    $dayEnd = self::normalizeTime((string) ($room['close_time'] ?? $dayEnd));
+                    break;
+                }
+            }
+        } elseif ($rooms !== []) {
+            $opens = array_map(
+                static fn (array $room): int => self::timeToMinutes((string) ($room['open_time'] ?? '08:00')),
+                $rooms
+            );
+            $closes = array_map(
+                static fn (array $room): int => self::timeToMinutes((string) ($room['close_time'] ?? '20:00')),
+                $rooms
+            );
+            $dayStart = self::minutesToTime(min($opens));
+            $dayEnd = self::minutesToTime(max($closes));
+        }
+
+        $windowStart = self::timeToMinutes($dayStart);
+        $windowEnd = self::timeToMinutes($dayEnd);
+        $windowMinutes = max(1, $windowEnd - $windowStart);
+
         $dayCards = [];
         foreach ($days as $date) {
             $dayEvents = array_values(array_filter(
@@ -179,18 +206,41 @@ final class RoomReservations
                 static fn (array $event): bool => ($event['reserved_date'] ?? '') === $date
                     && ($roomId <= 0 || (int) ($event['room_id'] ?? 0) === $roomId)
             ));
-            $busyBlocks = array_map(static fn (array $event): array => [
-                'room_id' => (int) ($event['room_id'] ?? 0),
-                'room_name' => (string) ($event['room_name'] ?? ''),
-                'start_time' => (string) ($event['start_time'] ?? ''),
-                'end_time' => (string) ($event['end_time'] ?? ''),
-                'status' => (string) ($event['status'] ?? ''),
-            ], $dayEvents);
+            $busyBlocks = array_map(static function (array $event) use ($windowStart, $windowMinutes): array {
+                $start = self::timeToMinutes((string) ($event['start_time'] ?? '00:00'));
+                $end = self::timeToMinutes((string) ($event['end_time'] ?? '00:00'));
+                $left = max(0, min(100, (($start - $windowStart) / $windowMinutes) * 100));
+                $right = max(0, min(100, (($end - $windowStart) / $windowMinutes) * 100));
+                if ($right < $left) {
+                    $right = $left;
+                }
+
+                return [
+                    'room_id' => (int) ($event['room_id'] ?? 0),
+                    'room_name' => (string) ($event['room_name'] ?? ''),
+                    'start_time' => (string) ($event['start_time'] ?? ''),
+                    'end_time' => (string) ($event['end_time'] ?? ''),
+                    'status' => (string) ($event['status'] ?? ''),
+                    'left_pct' => round($left, 2),
+                    'width_pct' => round(max(1.5, $right - $left), 2),
+                ];
+            }, $dayEvents);
+
+            $occupied = 0;
+            foreach ($busyBlocks as $block) {
+                $occupied += max(
+                    0,
+                    self::timeToMinutes($block['end_time']) - self::timeToMinutes($block['start_time'])
+                );
+            }
+            $occupancyPct = (int) min(100, round(($occupied / $windowMinutes) * 100));
 
             $isClosed = isset($closedMap[$date]);
             $isPast = JalaliDate::compare($date, $today) < 0;
             $busyCount = count($busyBlocks);
-            $level = $isClosed ? 'closed' : ($busyCount === 0 ? 'free' : ($busyCount <= 2 ? 'light' : 'busy'));
+            $level = $isClosed
+                ? 'closed'
+                : ($busyCount === 0 ? 'free' : ($occupancyPct >= 55 || $busyCount >= 4 ? 'busy' : 'light'));
 
             $dayCards[] = [
                 'date' => $date,
@@ -200,6 +250,7 @@ final class RoomReservations
                 'is_past' => $isPast,
                 'is_closed' => $isClosed,
                 'busy_count' => $busyCount,
+                'occupancy_pct' => $occupancyPct,
                 'level' => $level,
                 'blocks' => $busyBlocks,
             ];
@@ -209,10 +260,14 @@ final class RoomReservations
             'from' => $fromDate,
             'to' => $toDate,
             'today' => $today,
+            'day_start' => $dayStart,
+            'day_end' => $dayEnd,
             'rooms' => array_map(static fn (array $room): array => [
                 'id' => (int) $room['id'],
                 'name' => (string) $room['name'],
                 'code' => (string) ($room['code'] ?? ''),
+                'open_time' => (string) ($room['open_time'] ?? '08:00'),
+                'close_time' => (string) ($room['close_time'] ?? '20:00'),
             ], $rooms),
             'days' => $dayCards,
         ];
@@ -368,7 +423,7 @@ final class RoomReservations
         $duration = self::timeToMinutes($endTime) - self::timeToMinutes($startTime);
         $status = $settings['room_auto_approve'] ? 'approved' : 'pending';
         $today = JalaliDate::todayParts()['formatted'];
-        $token = bin2hex(random_bytes(16));
+        $token = $this->generatePublicToken();
 
         $statement = $this->pdo->prepare(
             'INSERT INTO room_reservations (
@@ -404,14 +459,45 @@ final class RoomReservations
         return $this->findById((int) $this->pdo->lastInsertId());
     }
 
+    /** Short tracking code like MN-482917 (legacy 32-hex tokens still valid). */
+    private function generatePublicToken(): string
+    {
+        $check = $this->pdo->prepare('SELECT 1 FROM room_reservations WHERE public_token = :token LIMIT 1');
+        for ($attempt = 0; $attempt < 12; $attempt++) {
+            $token = 'MN-' . str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+            $check->execute(['token' => $token]);
+            if ($check->fetchColumn() === false) {
+                return $token;
+            }
+        }
+
+        throw new RuntimeException('ساخت کد پیگیری ممکن نشد. دوباره تلاش کنید.');
+    }
+
+    /** Normalize user-entered tracking codes (MN-482917 / mn 482917 / legacy hex). */
+    public static function normalizePublicToken(string $token): string
+    {
+        $token = JalaliDate::normalizeDigits(trim($token));
+        $token = preg_replace('/\s+/', '', $token) ?? $token;
+        if (preg_match('/^mn-?(\d{6})$/i', $token, $matches) === 1) {
+            return 'MN-' . $matches[1];
+        }
+
+        return $token;
+    }
+
     /**
      * @return array<string, mixed>
      */
     public function cancel(int $id, string $reason = '', ?string $publicToken = null): array
     {
         $row = $this->findById($id);
-        if ($publicToken !== null && !hash_equals((string) ($row['public_token'] ?? ''), $publicToken)) {
-            throw new InvalidArgumentException('کد پیگیری معتبر نیست.');
+        if ($publicToken !== null) {
+            $expected = (string) ($row['public_token'] ?? '');
+            $given = self::normalizePublicToken($publicToken);
+            if ($expected === '' || !hash_equals($expected, $given)) {
+                throw new InvalidArgumentException('کد پیگیری معتبر نیست.');
+            }
         }
         if (!in_array((string) ($row['status'] ?? ''), ['pending', 'approved'], true)) {
             throw new InvalidArgumentException('این رزرو قابل لغو نیست.');
@@ -505,7 +591,7 @@ final class RoomReservations
      */
     public function findByToken(string $token): array
     {
-        $token = trim($token);
+        $token = self::normalizePublicToken($token);
         if ($token === '') {
             throw new InvalidArgumentException('کد پیگیری معتبر نیست.');
         }
