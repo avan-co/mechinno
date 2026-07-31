@@ -1,6 +1,8 @@
 (() => {
   const csrfToken = window.MECHINNO?.csrfToken || "";
   const today = window.MECHINNO?.today || "";
+  const todayYear = Number(window.MECHINNO?.fiscalYear || String(today).slice(0, 4) || 1404);
+  const todayMonth = Number(window.MECHINNO?.monthIndex || String(today).slice(5, 7) || 1);
 
   const postJson = async (url, payload) => {
     const response = await fetch(url, {
@@ -13,41 +15,61 @@
       body: JSON.stringify(payload),
     });
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      throw new Error(data.error || "خطا در ثبت رزرو");
-    }
+    if (!response.ok) throw new Error(data.error || "خطا در ثبت رزرو");
     return data;
   };
 
   const fetchJson = async (url) => {
     const response = await fetch(url, { headers: { Accept: "application/json" } });
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      throw new Error(data.error || "خطا در دریافت اطلاعات");
-    }
+    if (!response.ok) throw new Error(data.error || "خطا در دریافت اطلاعات");
     return data;
   };
 
-  const renderSlots = (container, slots, onSelect) => {
-    if (!container) return;
-    if (!slots.length) {
-      container.innerHTML = '<p class="hint">برای این روز بازه‌ای موجود نیست.</p>';
-      return;
+  const escapeHtml = (value) => String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+
+  const minutesToTime = (minutes) => {
+    const hour = Math.floor(minutes / 60);
+    const minute = minutes % 60;
+    return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+  };
+
+  const timeToMinutes = (time) => {
+    const [hour, minute] = String(time || "0:0").split(":").map(Number);
+    return (hour * 60) + minute;
+  };
+
+  const durationLabel = (slots, slotMinutes) => {
+    const minutes = slots * slotMinutes;
+    if (minutes < 60) return `${minutes} دقیقه`;
+    if (minutes % 60 === 0) return `${minutes / 60} ساعت`;
+    return `${Math.floor(minutes / 60)}.۵ ساعت`;
+  };
+
+  const fillDurationOptions = (select, slotMinutes, maxHours) => {
+    if (!select) return;
+    const maxSlots = Math.max(1, Math.floor((maxHours * 60) / slotMinutes));
+    const current = Number(select.value || 0);
+    select.innerHTML = "";
+    for (let slots = 1; slots <= maxSlots; slots += 1) {
+      const option = document.createElement("option");
+      option.value = String(slots);
+      option.textContent = durationLabel(slots, slotMinutes);
+      select.appendChild(option);
     }
-    container.innerHTML = slots
-      .map((slot) => {
-        const disabled = slot.status !== "free";
-        const label = slot.status === "busy" ? "رزرو" : slot.status === "pending" ? "انتظار" : slot.time;
-        return `<button type="button" class="room-slot room-slot--${slot.status}" data-time="${slot.time}" data-end="${slot.end}" ${disabled ? "disabled" : ""}>${label}</button>`;
-      })
-      .join("");
-    container.querySelectorAll(".room-slot:not([disabled])").forEach((button) => {
-      button.addEventListener("click", () => {
-        container.querySelectorAll(".room-slot").forEach((el) => el.classList.remove("is-selected"));
-        button.classList.add("is-selected");
-        onSelect(button.dataset.time || "", button.dataset.end || "");
-      });
-    });
+    const preferred = Math.min(Math.max(1, Math.round(60 / slotMinutes)), maxSlots);
+    select.value = String(current >= 1 && current <= maxSlots ? current : preferred);
+  };
+
+  const weekdayOffset = (weekdayName) => {
+    const map = {
+      شنبه: 0, یکشنبه: 1, دوشنبه: 2, سه‌شنبه: 3, "سه شنبه": 3, چهارشنبه: 4, پنجشنبه: 5, جمعه: 6,
+    };
+    return map[weekdayName] ?? 0;
   };
 
   const renderRoomCards = (grid, rooms, selectedRoomId, onSelect) => {
@@ -61,16 +83,14 @@
       return `<button type="button" class="room-room-option${selected ? " is-selected" : ""}" data-room-id="${room.id}" role="option" aria-selected="${selected}">
         <span class="room-room-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 4h7v7H4V4Zm9 0h7v7h-7V4ZM4 13h7v7H4v-7Zm9 3h7v4h-7v-4Z" fill="currentColor"/></svg></span>
         <span class="room-room-copy">
-          <strong>${room.name}${room.code ? ` · ${room.code}` : ""}</strong>
-          <small>${room.floor ? `${room.floor} · ` : ""}${room.open_time || "08:00"} تا ${room.close_time || "20:00"}</small>
+          <strong>${escapeHtml(room.name)}${room.code ? ` · ${escapeHtml(room.code)}` : ""}</strong>
+          <small>${room.floor ? `${escapeHtml(room.floor)} · ` : ""}${room.open_time || "08:00"} تا ${room.close_time || "20:00"} · بازه ${room.slot_minutes || 30}د</small>
         </span>
         <span class="room-room-capacity">${room.capacity} نفر</span>
       </button>`;
     }).join("");
     grid.querySelectorAll(".room-room-option").forEach((button) => {
-      button.addEventListener("click", () => {
-        onSelect(Number(button.dataset.roomId || 0));
-      });
+      button.addEventListener("click", () => onSelect(Number(button.dataset.roomId || 0)));
     });
   };
 
@@ -83,14 +103,13 @@
     const todayEvents = events.filter((event) => event.reserved_date === todayDate);
     container.innerHTML = rooms.map((room) => {
       const count = todayEvents.filter((event) => Number(event.room_id) === Number(room.id)).length;
-      const status = count > 0 ? `${count} رزرو امروز` : "آزاد امروز";
       return `<article class="room-overview-card">
         <span class="room-room-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 4h7v7H4V4Zm9 0h7v7h-7V4ZM4 13h7v7H4v-7Zm9 3h7v4h-7v-4Z" fill="currentColor"/></svg></span>
         <div class="room-overview-copy">
-          <strong>${room.name}</strong>
-          <small>${room.floor ? `${room.floor} · ` : ""}${room.capacity} نفر · ${room.open_time || "08:00"}–${room.close_time || "20:00"}</small>
+          <strong>${escapeHtml(room.name)}</strong>
+          <small>${room.floor ? `${escapeHtml(room.floor)} · ` : ""}${room.capacity} نفر · ${room.open_time || "08:00"}–${room.close_time || "20:00"}</small>
         </div>
-        <span class="room-overview-badge${count > 0 ? " is-busy" : ""}">${status}</span>
+        <span class="room-overview-badge${count > 0 ? " is-busy" : ""}">${count > 0 ? `${count} رزرو امروز` : "آزاد امروز"}</span>
       </article>`;
     }).join("");
   };
@@ -104,9 +123,10 @@
         form.room_public_enabled.value = settings.room_public_enabled ? "1" : "0";
         form.room_max_advance_days.value = settings.room_max_advance_days || 14;
         form.room_max_hours_per_day.value = settings.room_max_hours_per_day || 2;
-        form.room_slot_minutes.value = String(settings.room_slot_minutes || 60);
+        form.room_slot_minutes.value = String(settings.room_slot_minutes || 30);
       })
       .catch((error) => window.showToast?.(error.message, "error"));
+
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
       const payload = Object.fromEntries(new FormData(form).entries());
@@ -114,7 +134,7 @@
       button.disabled = true;
       try {
         await postJson("api.php?resource=room-settings", payload);
-        window.showToast?.("تنظیمات ذخیره شد.", "success");
+        window.showToast?.("تنظیمات ذخیره شد. بازه‌های اتاق‌ها همگام شد.", "success");
       } catch (error) {
         window.showToast?.(error.message, "error");
       } finally {
@@ -123,78 +143,59 @@
     });
   };
 
-  const initPanelBooking = () => {
-    const form = document.getElementById("panelRoomBookingForm");
-    if (!form) return;
-    const roomInput = form.querySelector('[name="room_id"]');
-    const cardGrid = document.getElementById("panelRoomCardGrid");
-    const dateInput = form.querySelector('[name="reserved_date"]');
-    const slotGrid = document.getElementById("panelRoomSlotGrid");
-    const preview = document.getElementById("panelRoomTimePreview");
-    let rooms = [];
-    let selectedRoomId = 0;
-    let selectedStart = "";
-    let selectedEnd = "";
+  const initClosedDays = () => {
+    const form = document.getElementById("roomClosedDayForm");
+    const list = document.getElementById("roomClosedDaysList");
+    if (!form || !list) return;
 
-    const selectRoom = (roomId) => {
-      selectedRoomId = roomId;
-      if (roomInput) roomInput.value = roomId > 0 ? String(roomId) : "";
-      renderRoomCards(cardGrid, rooms, selectedRoomId, selectRoom);
-      loadSlots();
-    };
-
-    const loadRooms = async () => {
-      const data = await fetchJson("api.php?resource=meeting-rooms&per_page=100");
-      rooms = (data.rows || []).filter((room) => Number(room.is_active) === 1);
-      if (!selectedRoomId && rooms[0]) {
-        selectedRoomId = Number(rooms[0].id);
+    const load = async () => {
+      const data = await fetchJson("api.php?resource=room-closed-days");
+      const rows = data.rows || [];
+      if (!rows.length) {
+        list.innerHTML = '<p class="hint">روز تعطیلی ثبت نشده است.</p>';
+        return;
       }
-      if (roomInput) roomInput.value = selectedRoomId > 0 ? String(selectedRoomId) : "";
-      renderRoomCards(cardGrid, rooms, selectedRoomId, selectRoom);
-    };
-
-    const loadSlots = async () => {
-      const roomId = selectedRoomId || roomInput?.value;
-      const date = dateInput.value || today;
-      if (!roomId || !date) return;
-      const data = await fetchJson(
-        `api.php?resource=room-availability&room_id=${encodeURIComponent(roomId)}&date=${encodeURIComponent(date)}`
-      );
-      selectedStart = "";
-      selectedEnd = "";
-      if (preview) preview.textContent = "";
-      renderSlots(slotGrid, data.slots || [], (start, end) => {
-        selectedStart = start;
-        selectedEnd = end;
-        if (preview) preview.textContent = `بازه: ${start} تا ${end}`;
+      list.innerHTML = rows.map((row) => `
+        <div class="room-closed-item">
+          <div>
+            <strong>${escapeHtml(row.closed_date)}</strong>
+            <small>${escapeHtml(row.note || "بدون توضیح")}</small>
+          </div>
+          <button type="button" class="mini-button" data-remove-closed="${row.id}">حذف</button>
+        </div>`).join("");
+      list.querySelectorAll("[data-remove-closed]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          try {
+            await postJson("api.php?resource=room-closed-days", {
+              action: "remove",
+              id: Number(button.dataset.removeClosed || 0),
+            });
+            window.showToast?.("روز تعطیل حذف شد.", "success");
+            await load();
+            window.refreshPanelMonthPicker?.();
+            window.refreshRoomCalendar?.();
+          } catch (error) {
+            window.showToast?.(error.message, "error");
+          }
+        });
       });
     };
 
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
-      if (!selectedRoomId) {
-        window.showToast?.("یک اتاق انتخاب کنید.", "error");
-        return;
-      }
-      if (!selectedStart || !selectedEnd) {
-        window.showToast?.("یک بازه زمانی انتخاب کنید.", "error");
-        return;
-      }
       const payload = Object.fromEntries(new FormData(form).entries());
-      payload.room_id = selectedRoomId;
-      payload.start_time = selectedStart;
-      payload.end_time = selectedEnd;
       const button = form.querySelector('button[type="submit"]');
       button.disabled = true;
       try {
-        await postJson("api.php?resource=room-reservations&action=create", payload);
-        window.showToast?.("رزرو ثبت شد.", "success");
+        await postJson("api.php?resource=room-closed-days", {
+          action: "add",
+          date: payload.date,
+          note: payload.note || "",
+        });
         form.reset();
-        if (roomInput) roomInput.value = String(selectedRoomId);
-        dateInput.value = today;
-        await loadSlots();
-        document.querySelector('#meeting-rooms data-table[endpoint*="room-reservations"]')?.load?.();
-        document.querySelector('#room-reservations data-table')?.load?.();
+        window.showToast?.("روز تعطیل ثبت شد.", "success");
+        await load();
+        window.refreshPanelMonthPicker?.();
         window.refreshRoomCalendar?.();
       } catch (error) {
         window.showToast?.(error.message, "error");
@@ -203,20 +204,303 @@
       }
     });
 
-    dateInput?.addEventListener("change", loadSlots);
-    if (dateInput && !dateInput.value) dateInput.value = today;
+    load().catch((error) => {
+      list.innerHTML = `<p class="hint">${escapeHtml(error.message)}</p>`;
+    });
+  };
+
+  const initPanelBooking = () => {
+    const form = document.getElementById("panelRoomBookingForm");
+    if (!form) return;
+
+    const roomInput = form.querySelector('[name="room_id"]');
+    const dateInput = form.querySelector('[name="reserved_date"]');
+    const cardGrid = document.getElementById("panelRoomCardGrid");
+    const slotGrid = document.getElementById("panelRoomSlotGrid");
+    const preview = document.getElementById("panelRoomTimePreview");
+    const durationSelect = document.getElementById("panelDurationSlots");
+    const teamSelect = document.getElementById("panelTeamSelect");
+    const dayLabel = document.getElementById("panelSelectedDayLabel");
+    const monthLabel = document.getElementById("panelMonthLabel");
+    const monthGrid = document.getElementById("panelMonthGrid");
+
+    const state = {
+      rooms: [],
+      teams: [],
+      selectedRoomId: 0,
+      selectedStart: "",
+      selectedEnd: "",
+      slots: [],
+      slotMinutes: 30,
+      maxHours: 2,
+      year: todayYear,
+      month: todayMonth,
+      monthData: null,
+    };
+
+    const selectedRoom = () => state.rooms.find((room) => Number(room.id) === Number(state.selectedRoomId));
+
+    const computeEnd = (start) => {
+      if (!start) return "";
+      const slots = Number(durationSelect?.value || 1);
+      return minutesToTime(timeToMinutes(start) + (slots * state.slotMinutes));
+    };
+
+    const updatePreview = () => {
+      if (!preview) return;
+      preview.textContent = state.selectedStart && state.selectedEnd
+        ? `بازه انتخابی: ${state.selectedStart} تا ${state.selectedEnd}`
+        : "ابتدا ساعت شروع را انتخاب کنید.";
+    };
+
+    const paintSlots = () => {
+      if (!slotGrid) return;
+      const slots = state.slots;
+      const needed = Math.max(1, Number(durationSelect?.value || 1));
+      const byTime = new Map(slots.map((slot) => [slot.time, slot]));
+      const canStartAt = (startTime) => {
+        let cursor = timeToMinutes(startTime);
+        for (let i = 0; i < needed; i += 1) {
+          const key = minutesToTime(cursor);
+          const slot = byTime.get(key);
+          if (!slot || slot.status !== "free") return false;
+          cursor += state.slotMinutes;
+        }
+        return true;
+      };
+
+      if (!slots.length) {
+        slotGrid.innerHTML = '<p class="hint">برای این روز بازه‌ای موجود نیست.</p>';
+        return;
+      }
+
+      slotGrid.innerHTML = slots.map((slot) => {
+        const disabled = slot.status !== "free" || !canStartAt(slot.time);
+        const selected = state.selectedStart === slot.time;
+        let label = slot.time;
+        if (slot.status === "busy") label = "رزرو";
+        else if (slot.status === "pending") label = "انتظار";
+        else if (disabled) label = "کوتاه";
+        return `<button type="button" class="room-slot room-slot--${slot.status}${selected ? " is-selected" : ""}${disabled && slot.status === "free" ? " room-slot--short" : ""}" data-time="${slot.time}" ${disabled ? "disabled" : ""}>${label}</button>`;
+      }).join("");
+
+      slotGrid.querySelectorAll(".room-slot:not([disabled])").forEach((button) => {
+        button.addEventListener("click", () => {
+          state.selectedStart = button.dataset.time || "";
+          state.selectedEnd = computeEnd(state.selectedStart);
+          paintSlots();
+          updatePreview();
+        });
+      });
+    };
+
+    const renderMonth = () => {
+      const data = state.monthData;
+      if (!monthGrid || !data) return;
+      if (monthLabel) monthLabel.textContent = `${data.month_name || ""} ${data.year || ""}`;
+      const days = data.days || [];
+      const firstOffset = days[0] ? weekdayOffset(days[0].weekday) : 0;
+      const blanks = Array.from({ length: firstOffset }, () => '<span class="room-month-day is-empty"></span>');
+      const cells = days.map((day) => {
+        const classes = ["room-month-day"];
+        if (day.is_today) classes.push("is-today");
+        if (day.is_past || day.is_beyond || !day.bookable) classes.push("is-disabled");
+        if (day.is_closed) classes.push("is-closed");
+        if (day.date === dateInput?.value) classes.push("is-selected");
+        const title = day.is_closed ? (day.closed_note || "تعطیل") : (day.bookable ? "قابل رزرو" : "غیرقابل رزرو");
+        return `<button type="button" class="${classes.join(" ")}" data-date="${day.date}" ${day.bookable ? "" : "disabled"} title="${escapeHtml(title)}"><span>${day.day}</span></button>`;
+      });
+      monthGrid.innerHTML = blanks.join("") + cells.join("");
+      monthGrid.querySelectorAll(".room-month-day[data-date]:not([disabled])").forEach((button) => {
+        button.addEventListener("click", () => {
+          dateInput.value = button.dataset.date || "";
+          if (dayLabel) dayLabel.textContent = `روز انتخاب‌شده: ${dateInput.value}`;
+          state.selectedStart = "";
+          state.selectedEnd = "";
+          renderMonth();
+          loadSlots();
+        });
+      });
+    };
+
+    const loadMonth = async () => {
+      state.monthData = await fetchJson(
+        `api.php?resource=room-month&year=${encodeURIComponent(state.year)}&month=${encodeURIComponent(state.month)}`
+      );
+      renderMonth();
+    };
+
+    const loadSlots = async () => {
+      const roomId = state.selectedRoomId || roomInput?.value;
+      const date = dateInput?.value || today;
+      if (!roomId || !date || !slotGrid) return;
+      slotGrid.innerHTML = '<p class="hint">در حال بارگذاری بازه‌ها…</p>';
+      try {
+        const data = await fetchJson(
+          `api.php?resource=room-availability&room_id=${encodeURIComponent(roomId)}&date=${encodeURIComponent(date)}`
+        );
+        if (data.closed) {
+          state.slots = [];
+          state.selectedStart = "";
+          state.selectedEnd = "";
+          slotGrid.innerHTML = `<p class="hint room-closed-hint">${escapeHtml(data.closed_note || "این روز تعطیل است.")}</p>`;
+          updatePreview();
+          return;
+        }
+        if (data.error) {
+          state.slots = [];
+          state.selectedStart = "";
+          state.selectedEnd = "";
+          slotGrid.innerHTML = `<p class="hint">${escapeHtml(data.error)}</p>`;
+          updatePreview();
+          return;
+        }
+        state.slots = data.slots || [];
+        state.slotMinutes = Number(data.slot_minutes || data.room?.slot_minutes || state.slotMinutes || 30);
+        state.maxHours = Number(data.max_hours || state.maxHours || 2);
+        fillDurationOptions(durationSelect, state.slotMinutes, state.maxHours);
+        if (state.selectedStart) state.selectedEnd = computeEnd(state.selectedStart);
+        paintSlots();
+        updatePreview();
+      } catch (error) {
+        slotGrid.innerHTML = `<p class="hint">${escapeHtml(error.message)}</p>`;
+      }
+    };
+
+    const selectRoom = (roomId) => {
+      state.selectedRoomId = roomId;
+      if (roomInput) roomInput.value = roomId > 0 ? String(roomId) : "";
+      const room = selectedRoom();
+      state.slotMinutes = Number(room?.slot_minutes || state.slotMinutes || 30);
+      fillDurationOptions(durationSelect, state.slotMinutes, state.maxHours);
+      renderRoomCards(cardGrid, state.rooms, state.selectedRoomId, selectRoom);
+      loadSlots();
+    };
+
+    const loadRooms = async () => {
+      const data = await fetchJson("api.php?resource=meeting-rooms&per_page=100");
+      state.rooms = (data.rows || []).filter((room) => Number(room.is_active) === 1);
+      if (!state.selectedRoomId && state.rooms[0]) state.selectedRoomId = Number(state.rooms[0].id);
+      if (roomInput) roomInput.value = state.selectedRoomId > 0 ? String(state.selectedRoomId) : "";
+      const room = selectedRoom();
+      state.slotMinutes = Number(room?.slot_minutes || state.slotMinutes || 30);
+      fillDurationOptions(durationSelect, state.slotMinutes, state.maxHours);
+      renderRoomCards(cardGrid, state.rooms, state.selectedRoomId, selectRoom);
+    };
+
+    const loadTeams = async () => {
+      if (!teamSelect) return;
+      const data = await fetchJson("api.php?resource=teams&per_page=200");
+      state.teams = (data.rows || []).filter((team) => Number(team.is_active ?? 1) === 1);
+      teamSelect.innerHTML = '<option value="">— بدون نهاد / مهمان —</option>' + state.teams.map((team) => {
+        const label = `${team.name || "—"}${team.entity_code ? ` (${team.entity_code})` : ""}`;
+        return `<option value="${team.id}">${escapeHtml(label)}</option>`;
+      }).join("");
+    };
+
+    const applyTeamDefaults = () => {
+      const teamId = Number(teamSelect?.value || 0);
+      const team = state.teams.find((row) => Number(row.id) === teamId);
+      if (!team) return;
+      const orgInput = form.querySelector('[name="booker_org"]');
+      const nameInput = form.querySelector('[name="booker_name"]');
+      const phoneInput = form.querySelector('[name="booker_phone"]');
+      if (orgInput) orgInput.value = team.name || "";
+      if (nameInput && team.leader) nameInput.value = team.leader;
+      if (phoneInput && team.phone) phoneInput.value = team.phone;
+    };
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!state.selectedRoomId) {
+        window.showToast?.("یک اتاق انتخاب کنید.", "error");
+        return;
+      }
+      if (!dateInput?.value) {
+        window.showToast?.("یک روز از تقویم انتخاب کنید.", "error");
+        return;
+      }
+      if (!state.selectedStart || !state.selectedEnd) {
+        window.showToast?.("ساعت شروع را انتخاب کنید.", "error");
+        return;
+      }
+      const payload = Object.fromEntries(new FormData(form).entries());
+      payload.room_id = state.selectedRoomId;
+      payload.reserved_date = dateInput.value;
+      payload.start_time = state.selectedStart;
+      payload.end_time = state.selectedEnd;
+      if (!payload.team_id) delete payload.team_id;
+      const button = form.querySelector('button[type="submit"]');
+      button.disabled = true;
+      try {
+        await postJson("api.php?resource=room-reservations&action=create", payload);
+        window.showToast?.("رزرو ثبت شد.", "success");
+        ["booker_name", "booker_phone", "booker_org", "purpose"].forEach((name) => {
+          const field = form.querySelector(`[name="${name}"]`);
+          if (field) field.value = "";
+        });
+        if (teamSelect) teamSelect.value = "";
+        state.selectedStart = "";
+        state.selectedEnd = "";
+        await loadSlots();
+        document.querySelector('#meeting-rooms data-table[endpoint*="room-reservations"]')?.load?.();
+        document.querySelector('#meeting-rooms data-table[endpoint*="pending-room-reservations"]')?.load?.();
+        window.refreshRoomCalendar?.();
+      } catch (error) {
+        window.showToast?.(error.message, "error");
+      } finally {
+        button.disabled = false;
+      }
+    });
+
+    durationSelect?.addEventListener("change", () => {
+      if (state.selectedStart) state.selectedEnd = computeEnd(state.selectedStart);
+      paintSlots();
+      updatePreview();
+    });
+    teamSelect?.addEventListener("change", applyTeamDefaults);
+
+    document.getElementById("panelMonthPrev")?.addEventListener("click", () => {
+      state.month -= 1;
+      if (state.month < 1) {
+        state.month = 12;
+        state.year -= 1;
+      }
+      loadMonth().catch((error) => window.showToast?.(error.message, "error"));
+    });
+    document.getElementById("panelMonthNext")?.addEventListener("click", () => {
+      state.month += 1;
+      if (state.month > 12) {
+        state.month = 1;
+        state.year += 1;
+      }
+      loadMonth().catch((error) => window.showToast?.(error.message, "error"));
+    });
 
     window.setPanelBookingDate = (date) => {
       if (!dateInput) return;
       dateInput.value = date;
-      loadSlots();
+      if (dayLabel) dayLabel.textContent = `روز انتخاب‌شده: ${date}`;
+      const parts = String(date).split("/");
+      if (parts.length === 3) {
+        state.year = Number(parts[0]);
+        state.month = Number(parts[1]);
+      }
+      loadMonth().then(loadSlots).catch((error) => window.showToast?.(error.message, "error"));
     };
+    window.setPanelBookingRoom = (roomId) => selectRoom(Number(roomId));
+    window.refreshPanelMonthPicker = () => loadMonth().catch(() => {});
 
-    window.setPanelBookingRoom = (roomId) => {
-      selectRoom(Number(roomId));
-    };
-
-    loadRooms()
+    Promise.all([
+      fetchJson("api.php?resource=room-settings").then((settings) => {
+        state.slotMinutes = Number(settings.room_slot_minutes || 30);
+        state.maxHours = Number(settings.room_max_hours_per_day || 2);
+        fillDurationOptions(durationSelect, state.slotMinutes, state.maxHours);
+      }).catch(() => {}),
+      loadRooms(),
+      loadTeams(),
+      loadMonth(),
+    ])
       .then(loadSlots)
       .catch((error) => window.showToast?.(error.message, "error"));
   };
@@ -235,6 +519,7 @@
   document.addEventListener("DOMContentLoaded", () => {
     initRoomSettings();
     initPanelBooking();
+    initClosedDays();
     loadRoomOverview();
   });
 

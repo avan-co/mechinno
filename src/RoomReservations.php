@@ -19,7 +19,7 @@ final class RoomReservations
             'room_auto_approve' => true,
             'room_max_advance_days' => 14,
             'room_max_hours_per_day' => 2,
-            'room_slot_minutes' => 60,
+            'room_slot_minutes' => 30,
             'room_public_enabled' => true,
         ];
 
@@ -38,9 +38,9 @@ final class RoomReservations
             'room_auto_approve' => (int) ($row['room_auto_approve'] ?? 1) === 1,
             'room_max_advance_days' => max(1, (int) ($row['room_max_advance_days'] ?? 14)),
             'room_max_hours_per_day' => max(1, (int) ($row['room_max_hours_per_day'] ?? 2)),
-            'room_slot_minutes' => in_array((int) ($row['room_slot_minutes'] ?? 60), [30, 60], true)
-                ? (int) ($row['room_slot_minutes'] ?? 60)
-                : 60,
+            'room_slot_minutes' => in_array((int) ($row['room_slot_minutes'] ?? 30), [30, 60], true)
+                ? (int) ($row['room_slot_minutes'] ?? 30)
+                : 30,
             'room_public_enabled' => (int) ($row['room_public_enabled'] ?? 1) === 1,
         ];
     }
@@ -114,6 +114,17 @@ final class RoomReservations
             ? [array_intersect_key($this->roomRow($roomId), array_flip(['id', 'name', 'code', 'capacity', 'floor', 'open_time', 'close_time', 'is_active']))]
             : $this->listActiveRooms();
 
+        $closedRows = $this->listClosedDays($fromDate, $toDate);
+        $closedMap = [];
+        foreach ($closedRows as $row) {
+            $closedMap[(string) $row['closed_date']] = (string) ($row['note'] ?? '');
+        }
+        foreach ($daysDetail as &$detail) {
+            $detail['is_closed'] = isset($closedMap[$detail['date']]);
+            $detail['closed_note'] = $closedMap[$detail['date']] ?? '';
+        }
+        unset($detail);
+
         $placeholders = implode(',', array_fill(0, count(self::ACTIVE_STATUSES), '?'));
         $sql = "SELECT rr.id, rr.room_id, rr.reserved_date, rr.start_time, rr.end_time, rr.status,
                        rr.booker_name, rr.booker_phone, rr.booker_org, rr.purpose, rr.source,
@@ -139,12 +150,13 @@ final class RoomReservations
             'rooms' => $rooms,
             'days' => $days,
             'days_detail' => $daysDetail,
+            'closed_dates' => array_keys($closedMap),
             'events' => $events,
         ];
     }
 
     /**
-     * @return array{date: string, room: array<string, mixed>, slots: list<array<string, mixed>>}
+     * @return array{date: string, room: array<string, mixed>, slots: list<array<string, mixed>>, closed?: bool, closed_note?: string}
      */
     public function availability(int $roomId, string $date): array
     {
@@ -154,9 +166,30 @@ final class RoomReservations
         }
 
         $normalizedDate = JalaliDate::normalize($date);
-        $this->assertBookableDate($normalizedDate);
+        $closed = $this->closedDay($normalizedDate);
+        if ($closed !== null) {
+            return [
+                'date' => $normalizedDate,
+                'room' => $room,
+                'slots' => [],
+                'closed' => true,
+                'closed_note' => (string) ($closed['note'] ?? 'تعطیل — رزرو غیرفعال است.'),
+            ];
+        }
 
-        $slotMinutes = max(15, (int) ($room['slot_minutes'] ?? $this->settings()['room_slot_minutes']));
+        try {
+            $this->assertBookableDate($normalizedDate, false);
+        } catch (InvalidArgumentException $exception) {
+            return [
+                'date' => $normalizedDate,
+                'room' => $room,
+                'slots' => [],
+                'closed' => false,
+                'error' => $exception->getMessage(),
+            ];
+        }
+
+        $slotMinutes = $this->effectiveSlotMinutes($room);
         $open = self::normalizeTime((string) ($room['open_time'] ?? '08:00'));
         $close = self::normalizeTime((string) ($room['close_time'] ?? '20:00'));
         $slots = self::buildSlots($open, $close, $slotMinutes);
@@ -191,6 +224,9 @@ final class RoomReservations
             'date' => $normalizedDate,
             'room' => $room,
             'slots' => $result,
+            'closed' => false,
+            'slot_minutes' => $slotMinutes,
+            'max_hours' => $this->settings()['room_max_hours_per_day'],
         ];
     }
 
@@ -448,7 +484,7 @@ final class RoomReservations
 
         $open = self::normalizeTime((string) ($room['open_time'] ?? '08:00'));
         $close = self::normalizeTime((string) ($room['close_time'] ?? '20:00'));
-        $slotMinutes = max(15, (int) ($room['slot_minutes'] ?? $this->settings()['room_slot_minutes']));
+        $slotMinutes = $this->effectiveSlotMinutes($room);
         $settings = $this->settings();
 
         $startMin = self::timeToMinutes($startTime);
@@ -461,6 +497,9 @@ final class RoomReservations
         }
         if ($startMin < $openMin || $endMin > $closeMin) {
             throw new InvalidArgumentException('بازه خارج از ساعات کاری اتاق است.');
+        }
+        if (($startMin - $openMin) % $slotMinutes !== 0) {
+            throw new InvalidArgumentException('ساعت شروع باید روی بازه ' . $slotMinutes . ' دقیقه‌ای باشد (مثلاً ' . $open . '، ' . self::minutesToTime($openMin + $slotMinutes) . ').');
         }
 
         $duration = $endMin - $startMin;
@@ -475,7 +514,7 @@ final class RoomReservations
         $this->assertNoOverlap((int) $room['id'], $date, $startTime, $endTime, $ignoreReservationId);
     }
 
-    private function assertBookableDate(string $date): void
+    private function assertBookableDate(string $date, bool $checkClosed = true): void
     {
         $settings = $this->settings();
         $today = JalaliDate::todayParts()['formatted'];
@@ -486,6 +525,13 @@ final class RoomReservations
         $maxDate = JalaliDate::addDays($today, $settings['room_max_advance_days']);
         if (JalaliDate::compare($date, $maxDate) > 0) {
             throw new InvalidArgumentException('حداکثر ' . $settings['room_max_advance_days'] . ' روز جلو می‌توانید رزرو کنید.');
+        }
+
+        if ($checkClosed && $this->isClosedDay($date)) {
+            $note = (string) ($this->closedDay($date)['note'] ?? '');
+            throw new InvalidArgumentException(
+                $note !== '' ? ('این روز تعطیل است: ' . $note) : 'این روز توسط مدیر تعطیل اعلام شده و رزرو غیرفعال است.'
+            );
         }
     }
 
@@ -648,7 +694,7 @@ final class RoomReservations
                 ? max(1, (int) $payload['room_max_hours_per_day'])
                 : $current['room_max_hours_per_day'],
             'room_slot_minutes' => array_key_exists('room_slot_minutes', $payload)
-                ? (in_array((int) $payload['room_slot_minutes'], [30, 60], true) ? (int) $payload['room_slot_minutes'] : 60)
+                ? (in_array((int) $payload['room_slot_minutes'], [30, 60], true) ? (int) $payload['room_slot_minutes'] : 30)
                 : $current['room_slot_minutes'],
             'room_public_enabled' => array_key_exists('room_public_enabled', $payload)
                 ? ((int) $payload['room_public_enabled'] === 1 ? 1 : 0)
@@ -665,7 +711,166 @@ final class RoomReservations
              WHERE id = 1'
         )->execute($data);
 
+        // Keep room grids aligned with the global slot setting.
+        if (Schema::tableExists($this->pdo, 'meeting_rooms')) {
+            $this->pdo->prepare('UPDATE meeting_rooms SET slot_minutes = :slot')
+                ->execute(['slot' => $data['room_slot_minutes']]);
+        }
+
         return $this->settings();
+    }
+
+    /**
+     * @param array<string, mixed> $room
+     */
+    private function effectiveSlotMinutes(array $room): int
+    {
+        $fromRoom = (int) ($room['slot_minutes'] ?? 0);
+        $fromSettings = (int) $this->settings()['room_slot_minutes'];
+        $slot = $fromRoom > 0 ? $fromRoom : $fromSettings;
+
+        return in_array($slot, [30, 60], true) ? $slot : 30;
+    }
+
+    public function isClosedDay(string $date): bool
+    {
+        return $this->closedDay($date) !== null;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    public function closedDay(string $date): ?array
+    {
+        $normalized = JalaliDate::normalize($date);
+        if (!Schema::tableExists($this->pdo, 'room_closed_days')) {
+            return null;
+        }
+        $statement = $this->pdo->prepare('SELECT * FROM room_closed_days WHERE closed_date = :date LIMIT 1');
+        $statement->execute(['date' => $normalized]);
+        $row = $statement->fetch();
+
+        return $row === false ? null : $row;
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    public function listClosedDays(?string $from = null, ?string $to = null): array
+    {
+        if (!Schema::tableExists($this->pdo, 'room_closed_days')) {
+            return [];
+        }
+        $sql = 'SELECT id, closed_date, note, created_at FROM room_closed_days';
+        $params = [];
+        $clauses = [];
+        if ($from) {
+            $clauses[] = 'closed_date >= :from';
+            $params['from'] = JalaliDate::normalize($from);
+        }
+        if ($to) {
+            $clauses[] = 'closed_date <= :to';
+            $params['to'] = JalaliDate::normalize($to);
+        }
+        if ($clauses !== []) {
+            $sql .= ' WHERE ' . implode(' AND ', $clauses);
+        }
+        $sql .= ' ORDER BY closed_date';
+        $statement = $this->pdo->prepare($sql);
+        $statement->execute($params);
+
+        return $statement->fetchAll() ?: [];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function addClosedDay(string $date, string $note = ''): array
+    {
+        Schema::ensureRoomClosedDaysTable($this->pdo);
+        $normalized = JalaliDate::normalize($date);
+        $today = JalaliDate::todayParts()['formatted'];
+        if (JalaliDate::compare($normalized, $today) < 0) {
+            throw new InvalidArgumentException('تعطیل کردن تاریخ گذشته مجاز نیست.');
+        }
+        if ($this->isClosedDay($normalized)) {
+            throw new InvalidArgumentException('این روز قبلاً تعطیل ثبت شده است.');
+        }
+        $this->pdo->prepare(
+            'INSERT INTO room_closed_days (closed_date, note, created_by, created_at)
+             VALUES (:closed_date, :note, :created_by, :created_at)'
+        )->execute([
+            'closed_date' => $normalized,
+            'note' => $note !== '' ? $note : null,
+            'created_by' => Access::userId() > 0 ? Access::userId() : null,
+            'created_at' => $today,
+        ]);
+
+        return $this->closedDay($normalized) ?? ['closed_date' => $normalized, 'note' => $note];
+    }
+
+    public function removeClosedDay(int $id = 0, string $date = ''): void
+    {
+        if (!Schema::tableExists($this->pdo, 'room_closed_days')) {
+            return;
+        }
+        if ($id > 0) {
+            $this->pdo->prepare('DELETE FROM room_closed_days WHERE id = :id')->execute(['id' => $id]);
+            return;
+        }
+        if ($date !== '') {
+            $this->pdo->prepare('DELETE FROM room_closed_days WHERE closed_date = :date')
+                ->execute(['date' => JalaliDate::normalize($date)]);
+        }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function monthPicker(int $year, int $month): array
+    {
+        if ($year < 1300 || $year > 1600 || $month < 1 || $month > 12) {
+            throw new InvalidArgumentException('ماه نامعتبر است.');
+        }
+        $settings = $this->settings();
+        $today = JalaliDate::todayParts()['formatted'];
+        $maxDate = JalaliDate::addDays($today, $settings['room_max_advance_days']);
+        $daysInMonth = (int) substr(JalaliDate::monthEnd((string) $year, $month), 8, 2);
+        $first = sprintf('%04d/%02d/01', $year, $month);
+        $closedRows = $this->listClosedDays($first, sprintf('%04d/%02d/%02d', $year, $month, $daysInMonth));
+        $closedMap = [];
+        foreach ($closedRows as $row) {
+            $closedMap[(string) $row['closed_date']] = (string) ($row['note'] ?? '');
+        }
+
+        $days = [];
+        for ($day = 1; $day <= $daysInMonth; $day++) {
+            $date = sprintf('%04d/%02d/%02d', $year, $month, $day);
+            $isPast = JalaliDate::compare($date, $today) < 0;
+            $isBeyond = JalaliDate::compare($date, $maxDate) > 0;
+            $isClosed = isset($closedMap[$date]);
+            $days[] = [
+                'date' => $date,
+                'day' => $day,
+                'weekday' => JalaliDate::weekdayName($date),
+                'is_today' => $date === $today,
+                'is_past' => $isPast,
+                'is_beyond' => $isBeyond,
+                'is_closed' => $isClosed,
+                'closed_note' => $closedMap[$date] ?? '',
+                'bookable' => !$isPast && !$isBeyond && !$isClosed,
+            ];
+        }
+
+        return [
+            'year' => $year,
+            'month' => $month,
+            'month_name' => JalaliDate::monthName($month),
+            'today' => $today,
+            'max_date' => $maxDate,
+            'days' => $days,
+            'closed_dates' => array_keys($closedMap),
+        ];
     }
 
     private static function minutesToTime(int $minutes): string

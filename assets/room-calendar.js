@@ -62,12 +62,14 @@
       <div class="room-calendar-room-head">اتاق</div>
       ${days.map((day) => {
         const meta = daysMeta.get(day);
-        return `<div class="room-calendar-day-head${day === data.today ? " is-today" : ""}" data-date="${day}">${formatDayLabel(meta)}</div>`;
+        const closed = Boolean(meta?.is_closed);
+        return `<div class="room-calendar-day-head${day === data.today ? " is-today" : ""}${closed ? " is-closed" : ""}" data-date="${day}" title="${escapeHtml(closed ? (meta.closed_note || "تعطیل") : "")}">${formatDayLabel(meta)}${closed ? '<small class="room-calendar-closed-tag">تعطیل</small>' : ""}</div>`;
       }).join("")}
     </div>`;
 
     const rows = rooms.map((room) => {
       const cells = days.map((day) => {
+        const meta = daysMeta.get(day);
         const dayEvents = events.filter(
           (event) => Number(event.room_id) === Number(room.id) && event.reserved_date === day
         );
@@ -79,8 +81,8 @@
             <small>${escapeHtml(event.booker_name || "—")}</small>
           </button>`;
         }).join("");
-        return `<div class="room-calendar-cell${day === data.today ? " is-today" : ""}" data-date="${day}" data-room-id="${room.id}">
-          ${blocks || '<span class="room-calendar-empty">—</span>'}
+        return `<div class="room-calendar-cell${day === data.today ? " is-today" : ""}${meta?.is_closed ? " is-closed" : ""}" data-date="${day}" data-room-id="${room.id}">
+          ${meta?.is_closed ? '<span class="room-calendar-empty">تعطیل</span>' : (blocks || '<span class="room-calendar-empty">—</span>')}
         </div>`;
       }).join("");
       return `<div class="room-calendar-row">

@@ -1347,9 +1347,9 @@ final class Crud
                 $data['created_at'] = $today;
                 $data['is_active'] = $data['is_active'] ?? '1';
                 $data['capacity'] = max(1, (int) ($data['capacity'] ?? 10));
-                $data['slot_minutes'] = in_array((int) ($data['slot_minutes'] ?? 60), [30, 60], true)
+                $data['slot_minutes'] = in_array((int) ($data['slot_minutes'] ?? 30), [30, 60], true)
                     ? (int) $data['slot_minutes']
-                    : 60;
+                    : 30;
             }
             if (isset($data['open_time'])) {
                 $data['open_time'] = RoomReservations::normalizeTime((string) $data['open_time']);
@@ -1362,7 +1362,7 @@ final class Crud
             }
             if (isset($data['slot_minutes'])) {
                 $slot = (int) $data['slot_minutes'];
-                $data['slot_minutes'] = in_array($slot, [30, 60], true) ? $slot : 60;
+                $data['slot_minutes'] = in_array($slot, [30, 60], true) ? $slot : 30;
             }
             if (isset($data['is_active'])) {
                 $data['is_active'] = (int) $data['is_active'] === 1 ? 1 : 0;

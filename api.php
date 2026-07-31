@@ -178,6 +178,37 @@ try {
         json_response($rooms->calendarRange($from, $to, $roomId));
     }
 
+    if ($resource === 'room-month') {
+        $todayParts = JalaliDate::todayParts();
+        $year = (int) ($_GET['year'] ?? $todayParts['year']);
+        $month = (int) ($_GET['month'] ?? $todayParts['month']);
+        json_response($rooms->monthPicker($year, $month));
+    }
+
+    if ($resource === 'room-closed-days') {
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            require_csrf_json();
+            Access::requireWriteJson();
+            $payload = read_json_body();
+            $closedAction = (string) ($payload['action'] ?? $action ?: 'add');
+            if ($closedAction === 'remove') {
+                $rooms->removeClosedDay((int) ($payload['id'] ?? 0), (string) ($payload['date'] ?? ''));
+                json_response(['ok' => true]);
+            }
+            $record = $rooms->addClosedDay(
+                (string) ($payload['date'] ?? $payload['closed_date'] ?? ''),
+                trim((string) ($payload['note'] ?? ''))
+            );
+            json_response(['ok' => true, 'record' => $record]);
+        }
+        json_response([
+            'rows' => $rooms->listClosedDays(
+                isset($_GET['from']) ? (string) $_GET['from'] : null,
+                isset($_GET['to']) ? (string) $_GET['to'] : null
+            ),
+        ]);
+    }
+
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && $resource === 'room-reservations' && $action === 'create') {
         require_csrf_json();
         Access::requireWriteOrTeamSubmitJson();
