@@ -23,6 +23,9 @@ final class DatabaseBackup
         'locker_requests',
         'member_requests',
         'development_plans',
+        'meeting_rooms',
+        'room_closed_days',
+        'room_reservations',
         'sms_logs',
     ];
 
