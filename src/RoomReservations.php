@@ -372,8 +372,28 @@ final class RoomReservations
         $teamId = (int) ($payload['team_id'] ?? 0);
         $memberId = (int) ($payload['member_id'] ?? 0);
 
-        if ($source === 'public') {
-            self::assertPublicRateLimit($bookerPhone);
+        if ($source === 'team') {
+            $scopedTeamId = Access::scopedTeamId();
+            if ($scopedTeamId === null || $scopedTeamId <= 0) {
+                throw new InvalidArgumentException('نهاد معتبر نیست.');
+            }
+            $teamId = $scopedTeamId;
+            $teamRow = $this->pdo->prepare('SELECT name, leader, phone FROM teams WHERE id = :id');
+            $teamRow->execute(['id' => $teamId]);
+            $team = $teamRow->fetch() ?: [];
+            if ($bookerOrg === '') {
+                $bookerOrg = (string) ($team['name'] ?? '');
+            }
+            if ($bookerName === '') {
+                $bookerName = trim((string) ($team['leader'] ?? ''));
+            }
+            if ($bookerPhone === '') {
+                $bookerPhone = self::normalizePhone((string) ($team['phone'] ?? ''));
+            }
+        } elseif ($teamId > 0 && $bookerOrg === '') {
+            $teamRow = $this->pdo->prepare('SELECT name FROM teams WHERE id = :id');
+            $teamRow->execute(['id' => $teamId]);
+            $bookerOrg = (string) ($teamRow->fetchColumn() ?: '');
         }
 
         if ($bookerName === '') {
@@ -383,21 +403,8 @@ final class RoomReservations
             throw new InvalidArgumentException('شماره موبایل معتبر وارد کنید.');
         }
 
-        if ($source === 'team') {
-            $scopedTeamId = Access::scopedTeamId();
-            if ($scopedTeamId === null || $scopedTeamId <= 0) {
-                throw new InvalidArgumentException('نهاد معتبر نیست.');
-            }
-            $teamId = $scopedTeamId;
-            if ($bookerOrg === '') {
-                $teamRow = $this->pdo->prepare('SELECT name FROM teams WHERE id = :id');
-                $teamRow->execute(['id' => $teamId]);
-                $bookerOrg = (string) ($teamRow->fetchColumn() ?: '');
-            }
-        } elseif ($teamId > 0 && $bookerOrg === '') {
-            $teamRow = $this->pdo->prepare('SELECT name FROM teams WHERE id = :id');
-            $teamRow->execute(['id' => $teamId]);
-            $bookerOrg = (string) ($teamRow->fetchColumn() ?: '');
+        if ($source === 'public') {
+            self::assertPublicRateLimit($bookerPhone);
         }
 
         $room = $this->roomRow($roomId);

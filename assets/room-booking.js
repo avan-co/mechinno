@@ -432,16 +432,31 @@
       }).join("");
     };
 
+    const isTeamPanel = window.MECHINNO?.panel === "team";
+
+    const setBookerField = (name, value) => {
+      const field = form.querySelector(`[name="${name}"]`);
+      if (field) field.value = value || "";
+    };
+
+    const restoreTeamLeaderDefaults = () => {
+      setBookerField("booker_name", window.MECHINNO?.teamLeader || "");
+      setBookerField("booker_phone", window.MECHINNO?.teamPhone || "");
+      setBookerField("purpose", "");
+    };
+
     const applyTeamDefaults = () => {
       const teamId = Number(teamSelect?.value || 0);
       const team = state.teams.find((row) => Number(row.id) === teamId);
-      if (!team) return;
-      const orgInput = form.querySelector('[name="booker_org"]');
-      const nameInput = form.querySelector('[name="booker_name"]');
-      const phoneInput = form.querySelector('[name="booker_phone"]');
-      if (orgInput) orgInput.value = team.name || "";
-      if (nameInput && team.leader) nameInput.value = team.leader;
-      if (phoneInput && team.phone) phoneInput.value = team.phone;
+      if (!team) {
+        setBookerField("booker_org", "");
+        setBookerField("booker_name", "");
+        setBookerField("booker_phone", "");
+        return;
+      }
+      setBookerField("booker_org", team.name || "");
+      if (team.leader) setBookerField("booker_name", team.leader);
+      if (team.phone) setBookerField("booker_phone", team.phone);
     };
 
     form.addEventListener("submit", async (event) => {
@@ -469,11 +484,13 @@
       try {
         await postJson("api.php?resource=room-reservations&action=create", payload);
         window.showToast?.("رزرو ثبت شد.", "success");
-        ["booker_name", "booker_phone", "booker_org", "purpose"].forEach((name) => {
-          const field = form.querySelector(`[name="${name}"]`);
-          if (field) field.value = "";
-        });
-        if (teamSelect) teamSelect.value = "";
+        if (isTeamPanel) {
+          // Keep leader name/phone for the next booking; only clear purpose.
+          restoreTeamLeaderDefaults();
+        } else {
+          ["booker_name", "booker_phone", "booker_org", "purpose"].forEach((name) => setBookerField(name, ""));
+          if (teamSelect) teamSelect.value = "";
+        }
         clearRange();
         await loadSlots();
         document.querySelector('#meeting-rooms data-table[endpoint*="room-reservations"]')?.load?.();

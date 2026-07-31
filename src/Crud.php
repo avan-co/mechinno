@@ -446,7 +446,7 @@ final class Crud
             ];
         }
         if (Access::isTeam() && $resource === 'desks') {
-            unset($fields['assignment_from'], $fields['assignment_until']);
+            unset($fields['assignment_from_month'], $fields['assignment_until_month']);
         }
         if ($resource === 'development_plans' && !Access::isTeam()) {
             return array_intersect_key($fields, array_flip(['title', 'status', 'priority', 'due_date', 'notes']));

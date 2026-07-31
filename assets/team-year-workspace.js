@@ -391,7 +391,7 @@
     const form = modal.querySelector("#crudForm");
     modal.querySelector("#crudModalTitle").textContent = "ورود سریع سال (CSV)";
     form.innerHTML = `
-      <p class="hint">هر خط: <code>نام نهاد,شروع قرارداد,پایان,مبلغ قرارداد,میزها</code> — میزها با کاما جدا شوند.</p>
+      <p class="hint">هر خط: <code>نام نهاد,شروع قرارداد,پایان,مبلغ قرارداد,میزها</code> — مبلغ بدون جداکننده هزارگان؛ میزها با کاما جدا شوند.</p>
       <div class="crud-grid">
         <label><span>سال مالی</span><input name="fiscal_year" type="text" required value="${S().escapeHtml(currentFiscalYear())}" /></label>
         <label class="wide"><span>داده CSV</span>
@@ -416,9 +416,34 @@
         return;
       }
       const lines = csv.split("\n").filter(Boolean);
+      const asciiDigits = (value) => String(value || "")
+        .replace(/[۰-۹]/g, (d) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(d)))
+        .replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)));
       const rows = lines.map((line) => {
         const parts = line.split(",").map((part) => part.trim());
-        const [teamName, contractStart, contractEnd, formalAmount, ...deskParts] = parts;
+        const teamName = parts[0] || "";
+        const contractStart = parts[1] || "";
+        const contractEnd = parts[2] || "";
+        const rest = parts.slice(3);
+        // Amount may use thousand separators (120,000,000); desks are small ints after that.
+        let formalAmount = "";
+        let deskStart = 0;
+        if (rest.length) {
+          const amountChunks = [];
+          for (let i = 0; i < rest.length; i += 1) {
+            const digits = asciiDigits(rest[i]).replace(/\D/g, "");
+            if (!digits) break;
+            const asNum = Number(digits);
+            if (amountChunks.length > 0 && asNum > 0 && asNum <= 200 && digits.length <= 3) {
+              break;
+            }
+            amountChunks.push(digits);
+            deskStart = i + 1;
+            if (amountChunks.length === 1 && digits.length >= 4) break;
+          }
+          formalAmount = amountChunks.join("");
+        }
+        const deskParts = rest.slice(deskStart);
         return {
           team_name: teamName,
           contract_start: contractStart || `${fiscalYear}/01/01`,

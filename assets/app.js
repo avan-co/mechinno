@@ -332,6 +332,11 @@ const teamPanelHiddenColumns = {
 
 const createDefaults = {
   teams: () => ({ is_active: "1" }),
+  team_contracts: () => ({
+    fiscal_year: window.MECHINNO?.fiscalYear || "",
+    contract_start: window.MECHINNO?.fiscalYear ? `${window.MECHINNO.fiscalYear}/01/01` : "",
+    contract_end: window.MECHINNO?.fiscalYear ? `${window.MECHINNO.fiscalYear}/12/29` : "",
+  }),
   desk_assignments: () => {
     const year = window.MECHINNO?.fiscalYear || "1405";
     return {
@@ -1837,7 +1842,7 @@ const openDeskHistoryAssignModal = async (prefill = {}) => {
         const match = [...contractSelect.options].find((opt) => opt.dataset.year === state.fiscalYear);
         if (match) contractSelect.value = match.value;
       }
-      syncContractSelection();
+      applyContractDefaults();
     };
 
     const syncDeskInputsFromState = () => {
@@ -2229,6 +2234,7 @@ const collageCellMeta = (cell, row, year, months) => {
          data-month-name="${escapeHtml(monthName)}"
          data-amount-due="${cell.amount_due}" data-amount-paid="${cell.amount_paid}"
          data-charge-amount="${cell.charge_amount}" data-rent-amount="${cell.rent_amount}"
+         data-note="${escapeHtml(cell.note || "")}"
          data-deposit="${depositClickable ? "1" : "0"}" data-charge-edit="${chargeEditable ? "1" : "0"}"
          data-informal-desk="${row.team?.has_informal_desk ? "1" : "0"}"`
       : "",
@@ -2265,6 +2271,7 @@ const bindCollageCells = (container) => {
           chargeAmount: Number(cell.dataset.chargeAmount),
           rentAmount: Number(cell.dataset.rentAmount),
           amount: Number(cell.dataset.amountDue),
+          note: cell.dataset.note || "",
           hasInformalDesk: cell.dataset.informalDesk === "1",
         });
       }
@@ -2504,7 +2511,7 @@ const openTeamProfile = async (teamId, options = {}) => {
   trapFocus(modal);
 };
 
-const openChargeModal = async ({ teamId, teamName, fiscalYear, monthIndex, monthName, chargeAmount, rentAmount, amount, hasInformalDesk }) => {
+const openChargeModal = async ({ teamId, teamName, fiscalYear, monthIndex, monthName, chargeAmount, rentAmount, amount, note = "", hasInformalDesk }) => {
   const meta = await loadCrudMeta();
   const definition = meta.resources.charges;
   const resolvedMonthName = monthName || monthNames[monthIndex] || "";
@@ -2523,7 +2530,7 @@ const openChargeModal = async ({ teamId, teamName, fiscalYear, monthIndex, month
       charge_amount: chargeAmount || "",
       rent_amount: hasInformalDesk ? (rentAmount || "") : "0",
       amount: amount || "",
-      note: "",
+      note: note || "",
     },
     onSaved: async () => {
       await refreshAfterMutation("charges");
@@ -2906,10 +2913,11 @@ const openRecordModal = ({ resource, definition, record = null, onSaved, title =
   const modal = ensureModal();
   const form = modal.querySelector("#crudForm");
   const isEdit = Boolean(record?.id);
-  const formRecord = { ...(record || {}) };
-  if (!isEdit && createDefaults[crudResourceKey(resource)]) {
-    Object.assign(formRecord, createDefaults[crudResourceKey(resource)]());
-  }
+  // Defaults first, then caller prefill — so collage/deposit forms keep the selected year/month.
+  const defaults = (!isEdit && createDefaults[crudResourceKey(resource)])
+    ? createDefaults[crudResourceKey(resource)]()
+    : {};
+  const formRecord = { ...defaults, ...(record || {}) };
   modal.querySelector("#crudModalTitle").textContent = title || `${isEdit ? "ویرایش" : "افزودن"} ${definition.title}`;
   const paymentHint = resource === "transactions" && panelMode === "team"
     ? `<p class="hint payment-allocation-hint">ماه اعلام‌شده برای پیگیری شماست. پس از تأیید مدیر، مبلغ <strong>ابتدا به قدیمی‌ترین ماه‌های بدهکار</strong> شما تخصیص می‌یابد و ممکن است با ماهی که اعلام کردید متفاوت باشد.</p>`
@@ -4002,6 +4010,8 @@ class DataTable extends HTMLElement {
           fiscal_year: record.fiscal_year,
           assigned_from_month: validAssignmentMonth(record.assigned_from_month || monthIndexFromDate(record.assigned_from), "1"),
           assigned_until_month: validAssignmentMonth(record.assigned_until_month || monthIndexFromDate(record.assigned_until), "12"),
+          charge_exempt: record.charge_exempt,
+          rent_exempt: record.rent_exempt,
           notes: record.notes,
         }).catch((error) => showToast(error.message, "error"));
         return;

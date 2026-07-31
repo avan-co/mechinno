@@ -380,7 +380,7 @@ $assetVer = (string) max(
                   <h2>ورود گروهی سابقه</h2>
                   <button type="button" class="button ghost" id="bulkYearImportButton">ورود CSV سال</button>
                 </div>
-                <p class="hint">برای ثبت یک‌باره چند نهاد در یک سال — فرمت: <code>نام نهاد,شروع,پایان,میزها</code></p>
+                <p class="hint">برای ثبت یک‌باره چند نهاد در یک سال — فرمت: <code>نام نهاد,شروع,پایان,مبلغ قرارداد,میزها</code> (مبلغ بدون جداکننده هزارگان)</p>
               </article>
               <?php endif; ?>
               <data-table title="نهادها" endpoint="api.php?resource=teams"></data-table>

@@ -139,6 +139,7 @@ final class YearBackfill
                 'contract_end' => $contractEnd,
                 'notes' => $notes,
             ];
+            // Only overwrite amount when CSV provided a positive value (missing → 0 must not wipe).
             if ($formalContractAmount > 0) {
                 $payload['formal_contract_amount'] = (string) $formalContractAmount;
             }

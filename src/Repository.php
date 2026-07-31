@@ -946,12 +946,17 @@ final class Repository
                     'charge_amount' => (int) ($row['charge_amount'] ?? 0),
                     'rent_amount' => (int) ($row['rent_amount'] ?? 0),
                     'amount' => $dueAmount,
+                    'note' => (string) ($row['note'] ?? ''),
                 ];
                 continue;
             }
             $chargeMap[$teamKey][$monthKey]['charge_amount'] += (int) ($row['charge_amount'] ?? 0);
             $chargeMap[$teamKey][$monthKey]['rent_amount'] += (int) ($row['rent_amount'] ?? 0);
             $chargeMap[$teamKey][$monthKey]['amount'] += $dueAmount;
+            $extraNote = trim((string) ($row['note'] ?? ''));
+            if ($extraNote !== '' && $chargeMap[$teamKey][$monthKey]['note'] === '') {
+                $chargeMap[$teamKey][$monthKey]['note'] = $extraNote;
+            }
         }
         $rows = [];
         foreach ($teams as $team) {
@@ -976,6 +981,7 @@ final class Repository
                         'rent_amount' => 0,
                         'amount_due' => 0,
                         'amount_paid' => 0,
+                        'note' => '',
                         'status' => '—',
                     ];
                     continue;
@@ -989,6 +995,7 @@ final class Repository
                     'rent_amount' => (int) ($due['rent_amount'] ?? 0),
                     'amount_due' => $amountDue,
                     'amount_paid' => $paid,
+                    'note' => (string) ($due['note'] ?? ''),
                     'status' => $amountDue <= 0 ? '—' : ($paid >= $amountDue ? 'پرداخت‌شده' : ($paid > 0 ? 'ناقص' : 'بدهکار به مرکز')),
                 ];
             }
@@ -1860,7 +1867,7 @@ final class Repository
     private function chargesForFiscalYear(string $fiscalYear, ?int $teamId = null): array
     {
         $fiscalYear = JalaliDate::normalizeDigits($fiscalYear);
-        $sql = 'SELECT team_id, month_index, charge_amount, rent_amount, amount, fiscal_year FROM charges';
+        $sql = 'SELECT team_id, month_index, charge_amount, rent_amount, amount, fiscal_year, note FROM charges';
         $params = [];
         if ($teamId !== null) {
             $sql .= ' WHERE team_id = :team_id';
