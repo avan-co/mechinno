@@ -48,14 +48,14 @@ const renderSmsLineForm = (data) => {
   if (!host) return;
   host.innerHTML = `
     <div class="crud-grid">
-      <label><span>شماره خط ارسال</span>
-        <input name="sms_from_number" type="text" inputmode="numeric" placeholder="مثلاً 3000xxxx یا 5000xxxx" value="${escapeHtml(data.sms_from_number || "")}" ${canWrite ? "required" : "readonly"} />
+      <label><span>شماره خط ارسال (متن آزاد)</span>
+        <input name="sms_from_number" type="text" inputmode="numeric" placeholder="مثلاً 3000xxxx یا 5000xxxx" value="${escapeHtml(data.sms_from_number || "")}" ${canWrite ? "" : "readonly"} />
       </label>
       <label><span>سقف ارسال روزانه (پنل)</span><input name="sms_daily_limit" type="number" min="1" value="${escapeHtml(data.sms_daily_limit || 500)}" ${canWrite ? "" : "readonly"} /></label>
       <label><span>هزینه هر پیامک (ریال — از API)</span><input name="sms_unit_cost" type="number" value="${escapeHtml(data.sms_base_price || data.sms_unit_cost || 0)}" readonly /></label>
     </div>
-    <p class="hint">شماره خط را از پنل ملی‌پیامک کپی و اینجا دستی وارد کنید. بدون خط ذخیره‌شده، وضعیت اتصال «ناقص» می‌ماند.</p>
-    ${!data.sms_configured ? `<p class="hint">پس از وارد کردن خط، دکمه «ذخیره خط و محدودیت» را بزنید.</p>` : ""}
+    <p class="hint">برای پیامک متن‌آزاد، شماره خط اختصاصی لازم است. برای الگوی اشتراکی (BaseServiceNumber) فقط حساب API کافی است و خط لازم نیست.</p>
+    ${!data.sms_configured ? `<p class="hint">ابتدا نام کاربری و رمز API را ذخیره کنید.</p>` : ""}
     ${canWrite ? `<div class="panel-actions"><button class="button" type="submit">ذخیره خط و محدودیت</button></div>` : `<p class="hint">فقط مشاهده</p>`}`;
 
   if (!canWrite) return;

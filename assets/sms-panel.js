@@ -24,7 +24,7 @@ const renderSmsSetupBanner = (settings = null) => {
   host.innerHTML = `
     <article class="panel panel--accent">
       <h2>تنظیمات پیامک ناقص است</h2>
-      <p class="hint">برای ارسال پیامک، ابتدا نام کاربری، رمز API و خط ارسال ملی‌پیامک را در بخش تنظیمات وارد کنید.</p>
+      <p class="hint">برای ارسال پیامک، ابتدا نام کاربری و رمز API ملی‌پیامک را در بخش تنظیمات وارد کنید. برای متن آزاد، شماره خط هم لازم است؛ الگوی اشتراکی با ##shared بدون خط کار می‌کند.</p>
       <button type="button" class="button" data-go="sms-settings">رفتن به تنظیمات پیامک</button>
     </article>`;
 };
@@ -49,10 +49,16 @@ const initSmsEditors = () => {
     announcementHost.dataset.ready = "1";
     announcementEditor = createSmsEditor(announcementHost, {
       label: "متن اطلاعیه",
-      placeholder: "متن پیامک اطلاعیه را بنویسید…",
+      placeholder: "متن آزاد، یا الگوی اشتراکی: 12345@مقدار۱;مقدار۲##shared",
       readonly: !canWrite,
       rows: 6,
     });
+    if (!announcementHost.querySelector(".sms-pattern-hint")) {
+      const hint = document.createElement("p");
+      hint.className = "hint sms-pattern-hint";
+      hint.textContent = "الگوی ملی‌پیامک: کدالگو@متغیر۱;متغیر۲##shared — در غیر این صورت متن به‌صورت آزاد از خط اختصاصی ارسال می‌شود.";
+      announcementHost.appendChild(hint);
+    }
   }
 };
 

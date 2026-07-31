@@ -663,6 +663,21 @@ $assert($leaderMembers['total'] >= 1, 'members: leader filter returns leaders');
 $assert(MelliPayamak::deliveryLabel(4) === 'رسیده به گوشی', 'sms: delivery label mapping');
 $assert(MelliPayamak::deliveryLabel(0) === 'ارسال شده به مخابرات', 'sms: delivery code 0 label');
 $assert(MelliPayamak::deliveryLabel(-2) === 'شناسه پیامک نامعتبر یا هنوز ثبت نشده', 'sms: delivery error code label');
+
+$patternPayload = MelliPayamak::parseMessagePayload('12345@علی;کد۱۲##shared');
+$assert(($patternPayload['mode'] ?? '') === 'pattern', 'sms: pattern mode detected');
+$assert(($patternPayload['body_id'] ?? null) === 12345, 'sms: pattern bodyId parsed');
+$assert(($patternPayload['vars'] ?? '') === 'علی;کد۱۲', 'sms: pattern vars parsed');
+
+$plainPayload = MelliPayamak::parseMessagePayload('سلام همکاران');
+$assert(($plainPayload['mode'] ?? '') === 'plain', 'sms: plain mode detected');
+$assert(($plainPayload['text'] ?? '') === 'سلام همکاران', 'sms: plain text preserved');
+
+$assert(MelliPayamak::isRetSuccess(['RetStatus' => 1, 'StrRetStatus' => 'Ok', 'Value' => '998877']) === true, 'sms: RetStatus 1 is success');
+$assert(MelliPayamak::isRetSuccess(['RetStatus' => 'success', 'Value' => '1']) === true, 'sms: RetStatus success string');
+$assert(MelliPayamak::isRetSuccess(['RetStatus' => 0, 'StrRetStatus' => 'Invalid']) === false, 'sms: RetStatus 0 is failure');
+$assert(str_contains(MelliPayamak::retErrorMessage(['RetStatus' => 0, 'StrRetStatus' => 'Invalid Username']), 'Invalid Username'), 'sms: ret error uses StrRetStatus');
+
 $adminAllowed = Access::allowedResources();
 $assert(in_array('sms-send', $adminAllowed, true), 'access: admin can send sms announcements');
 

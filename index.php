@@ -417,7 +417,7 @@ $assetVer = (string) max(
               <div class="section-intro section-intro--green">
                 <span class="section-intro-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2Zm0 2v.5L12 13 4 6.5V6ZM4 18V8.2l7.4 6.5a1 1 0 0 0 1.2 0L20 8.2V18Z" fill="currentColor"/></svg></span>
                 <div class="section-intro-copy">
-                  <p>ارسال پیامک از طریق <strong>ملی‌پیامک</strong>. تنظیمات API در بخش <button type="button" class="text-link" data-go="sms-settings">تنظیمات پیامک</button>. مدیر مشاهده‌گر فقط آمار و تاریخچه را می‌بیند.</p>
+                  <p>ارسال پیامک از طریق <strong>ملی‌پیامک</strong> — متن آزاد یا الگوی اشتراکی (<code>##shared</code>). تنظیمات API در بخش <button type="button" class="text-link" data-go="sms-settings">تنظیمات پیامک</button>.</p>
                 </div>
                 <?php if (Access::canWrite()): ?>
                 <button type="button" class="button ghost section-intro-action" data-go="sms-settings">تنظیمات پیامک</button>
@@ -470,7 +470,7 @@ $assetVer = (string) max(
             <section id="sms-settings" class="section">
               <div class="section-intro section-intro--green">
                 <span class="section-intro-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 8a1 1 0 0 1 1 1v3h3a1 1 0 1 1 0 2h-4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Zm8-3H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Z" fill="currentColor"/></svg></span>
-                <div class="section-intro-copy"><p>اتصال REST ملی‌پیامک. حساب API و شماره خط ارسال را جداگانه وارد و ذخیره کنید.</p></div>
+                <div class="section-intro-copy"><p>اتصال REST ملی‌پیامک. حساب API برای الگوی اشتراکی کافی است؛ شماره خط فقط برای متن آزاد لازم است.</p></div>
               </div>
               <article class="panel">
                 <div class="panel-head"><h2>حساب API ملی‌پیامک</h2></div>

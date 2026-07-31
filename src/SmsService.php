@@ -40,16 +40,30 @@ final class SmsService
     }
 
     /**
+     * Credentials are enough for pattern/shared SMS (BaseServiceNumber).
+     * Dedicated line number is only required for plain SendSMS.
+     *
      * @param array<string, mixed>|null $settings
      */
     public function isApiConfigured(?array $settings = null): bool
     {
-        $send = (new CenterSettings($this->pdo))->smsSettingsForSend();
-        $fromNumber = $settings !== null
-            ? trim((string) ($settings['sms_from_number'] ?? $send['sms_from_number'] ?? ''))
-            : trim((string) ($send['sms_from_number'] ?? ''));
+        if ($settings === null) {
+            $settings = (new CenterSettings($this->pdo))->smsSettingsForSend();
+        }
 
-        return $this->hasApiCredentials($send) && $fromNumber !== '';
+        return $this->hasApiCredentials($settings);
+    }
+
+    /**
+     * @param array<string, mixed>|null $settings
+     */
+    public function hasDedicatedLine(?array $settings = null): bool
+    {
+        if ($settings === null) {
+            $settings = (new CenterSettings($this->pdo))->smsSettingsForSend();
+        }
+
+        return trim((string) ($settings['sms_from_number'] ?? '')) !== '';
     }
 
     /**
@@ -141,9 +155,7 @@ final class SmsService
             default => $payload,
         };
 
-        if ($section === 'line' && trim((string) ($updatePayload['sms_from_number'] ?? '')) === '') {
-            throw new InvalidArgumentException('شماره خط ارسال الزامی است.');
-        }
+        // Dedicated line is optional for pattern/shared SMS; empty clears it.
 
         $settings = $center->updateSms($updatePayload);
 
@@ -278,6 +290,21 @@ final class SmsService
         }
         if ($memberIds === []) {
             throw new InvalidArgumentException('حداقل یک گیرنده انتخاب کنید.');
+        }
+
+        $payload = MelliPayamak::parseMessagePayload($message);
+        if ($payload['mode'] === 'pattern' && ($payload['body_id'] ?? null) === null) {
+            throw new InvalidArgumentException('فرمت الگوی پیامک نامعتبر است. مثال: 12345@مقدار۱;مقدار۲##shared');
+        }
+
+        $settings = (new CenterSettings($this->pdo))->smsSettingsForSend();
+        if (!$this->hasApiCredentials($settings)) {
+            throw new InvalidArgumentException('نام کاربری و رمز API را ابتدا ذخیره کنید.');
+        }
+        if ($payload['mode'] === 'plain' && !$this->hasDedicatedLine($settings)) {
+            throw new InvalidArgumentException(
+                'برای متن آزاد، شماره خط ارسال لازم است. یا از الگوی اشتراکی با پسوند ##shared استفاده کنید.'
+            );
         }
 
         $batchUid = $this->newBatchUid();
@@ -551,6 +578,12 @@ final class SmsService
                 $text
             );
 
+            $logText = $text;
+            $parsed = MelliPayamak::parseMessagePayload($text);
+            if (($response['mode'] ?? $parsed['mode']) === 'pattern') {
+                $logText = '[pattern:' . (int) ($parsed['body_id'] ?? 0) . '] ' . $parsed['vars'];
+            }
+
             $logId = $this->insertLog([
                 'batch_uid' => $batchUid,
                 'message_type' => $messageType,
@@ -560,7 +593,7 @@ final class SmsService
                 'recipient_name' => (string) ($member['full_name'] ?? ''),
                 'phone' => $phone,
                 'is_leader' => (int) ($member['is_leader'] ?? 0),
-                'message_text' => $text,
+                'message_text' => $logText,
                 'status' => $response['ok'] ? 'sent' : 'failed',
                 'error_message' => $response['error'],
                 'provider_rec_id' => $response['rec_id'],
