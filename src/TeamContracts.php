@@ -291,7 +291,9 @@ final class TeamContracts
         ]);
         $rows = $this->normalizeDeskAssignmentRows($assignments->fetchAll());
         if ($rows !== []) {
-            return $this->dedupeAssignmentsByDesk($rows);
+            // Keep sequential segments for the same desk (e.g. Farvardin–Shahrivar then Mehr–Esfand).
+            // Month-level billing/counts already unique by desk_number within each month.
+            return $rows;
         }
 
         if ($fiscalYear !== $this->currentFiscalYear()) {

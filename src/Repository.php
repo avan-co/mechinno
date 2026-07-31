@@ -964,7 +964,10 @@ final class Repository
             if (!$contracts->hasContractInYear($tid, $fiscalYear)) {
                 continue;
             }
-            if (!$contracts->hasDeskInFiscalYear($tid, $fiscalYear)) {
+            $teamChargeMonths = $chargeMap[$tid] ?? [];
+            $hasDesk = $contracts->hasDeskInFiscalYear($tid, $fiscalYear);
+            // Keep teams that have stored charges even if desks were later freed.
+            if (!$hasDesk && $teamChargeMonths === []) {
                 continue;
             }
             $dates = $contracts->contractDatesForYear($tid, $fiscalYear);
@@ -974,7 +977,9 @@ final class Repository
             $teamAllocations = $allocationMap[$tid] ?? [];
             foreach ($months as $month) {
                 $idx = (int) $month['index'];
-                if ($contracts->deskCountForMonth($tid, $fiscalYear, $idx) <= 0) {
+                $due = $teamChargeMonths[$idx] ?? null;
+                $deskCount = $contracts->deskCountForMonth($tid, $fiscalYear, $idx);
+                if ($deskCount <= 0 && $due === null) {
                     $cells[] = [
                         'month_index' => $idx,
                         'charge_amount' => 0,
@@ -986,7 +991,6 @@ final class Repository
                     ];
                     continue;
                 }
-                $due = $chargeMap[$tid][$idx] ?? null;
                 $paid = (int) ($teamAllocations[$fiscalYear . '-' . $idx] ?? 0);
                 $amountDue = (int) ($due['amount'] ?? 0);
                 $cells[] = [
@@ -1033,7 +1037,7 @@ final class Repository
         $byMonth = $allocation['by_month'];
         $chargeMap = [];
         foreach ($this->preparedRows(
-            'SELECT fiscal_year, month_index, month_name, amount FROM charges
+            'SELECT fiscal_year, month_index, month_name, amount, charge_amount, rent_amount FROM charges
              WHERE team_id = :id ORDER BY fiscal_year, month_index',
             ['id' => $teamId]
         ) as $charge) {
@@ -1048,7 +1052,7 @@ final class Repository
                     'amount' => 0,
                 ];
             }
-            $chargeMap[$key]['amount'] += (int) ($charge['amount'] ?? 0);
+            $chargeMap[$key]['amount'] += $this->chargeRowDueAmount($charge);
         }
 
         $rows = [];
@@ -1379,6 +1383,13 @@ final class Repository
             $year = JalaliDate::normalizeDigits($year);
             $contract = $contracts->contractForYear($teamId, $year);
             $deskAssignments = $contracts->deskAssignmentsForTeamInYear($teamId, $year);
+            $uniqueDesks = [];
+            foreach ($deskAssignments as $assignment) {
+                $deskNumber = (int) ($assignment['desk_number'] ?? 0);
+                if ($deskNumber > 0) {
+                    $uniqueDesks[$deskNumber] = true;
+                }
+            }
             $summaries[] = [
                 'fiscal_year' => $year,
                 'has_contract' => is_array($contract),
@@ -1389,7 +1400,7 @@ final class Repository
                 'contract_notes' => is_array($contract) ? ($contract['notes'] ?? null) : null,
                 'charge_rate_override' => is_array($contract) ? ($contract['charge_rate_override'] ?? null) : null,
                 'informal_rent_rate_override' => is_array($contract) ? ($contract['informal_rent_rate_override'] ?? null) : null,
-                'desk_count' => count($deskAssignments),
+                'desk_count' => count($uniqueDesks),
                 'charge_total' => $this->contractChargeTotalForTeamInYear($teamId, $year),
                 'paid_total' => $this->contractPaidAllocatedForTeamInYear($teamId, $year),
                 'debt_total' => $this->contractDebtForTeamInYear($teamId, $year),
@@ -1419,11 +1430,17 @@ final class Repository
             }
 
             $contract = $contracts->contractForYear($teamId, $currentYear);
-            $deskCount = count($contracts->deskAssignmentsForTeamInYear($teamId, $currentYear));
+            $uniqueDesks = [];
+            foreach ($contracts->deskAssignmentsForTeamInYear($teamId, $currentYear) as $assignment) {
+                $deskNumber = (int) ($assignment['desk_number'] ?? 0);
+                if ($deskNumber > 0) {
+                    $uniqueDesks[$deskNumber] = true;
+                }
+            }
             $debt = $this->contractDebtForTeamInYear($teamId, $currentYear);
 
             $row['has_contract_year'] = $contract !== null ? 1 : 0;
-            $row['year_desk_count'] = $deskCount;
+            $row['year_desk_count'] = count($uniqueDesks);
             $row['year_debt'] = $debt;
 
             return $row;

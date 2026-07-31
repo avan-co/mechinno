@@ -436,11 +436,12 @@ final class Crud
             unset($fields['is_active']);
         }
         if (Access::isTeam() && $resource === 'member_requests') {
+            // full_name/phone/national_id required only for update — enforced in applyResourceRules.
             return [
                 'request_type' => $fields['request_type'],
-                'full_name' => array_merge($fields['full_name'], ['required' => true]),
-                'phone' => array_merge($fields['phone'], ['required' => true]),
-                'national_id' => array_merge($fields['national_id'], ['required' => true]),
+                'full_name' => $fields['full_name'],
+                'phone' => $fields['phone'],
+                'national_id' => $fields['national_id'],
                 'wants_access' => $fields['wants_access'],
                 'notes' => $fields['notes'],
             ];
@@ -747,6 +748,7 @@ final class Crud
                 'DELETE FROM transactions WHERE team_id = :id',
                 'DELETE FROM members WHERE team_id = :id',
                 'DELETE FROM team_contracts WHERE team_id = :id',
+                'DELETE FROM room_reservations WHERE team_id = :id',
                 'DELETE FROM sms_logs WHERE team_id = :id',
             ] as $sql) {
                 try {
@@ -1190,6 +1192,15 @@ final class Crud
                 } elseif ($description === '') {
                     $data['description'] = 'ثبت مستقیم مدیر — دریافت شارژ';
                 }
+                // Pin allocation to the selected month so collage deposits don't FIFO to older debts.
+                $fy = JalaliDate::normalizeDigits((string) ($data['fiscal_year'] ?? ''));
+                $mi = (int) ($data['month_index'] ?? 0);
+                $amount = abs((int) ($data['amount'] ?? 0));
+                if ($fy !== '' && $mi >= 1 && $mi <= 12 && $amount > 0 && Schema::hasColumn($this->pdo, 'transactions', 'payment_plan')) {
+                    $data['payment_plan'] = json_encode([
+                        ['fiscal_year' => $fy, 'month_index' => $mi, 'amount' => $amount],
+                    ], JSON_UNESCAPED_UNICODE);
+                }
             }
         }
         if ($resource === 'charges') {
@@ -1210,11 +1221,32 @@ final class Crud
                     $data['team_name'] = (string) $teamName;
                 }
             }
-            $charge = (int) ($data['charge_amount'] ?? 0);
-            $rent = (int) ($data['rent_amount'] ?? 0);
-            if (!isset($data['amount']) && ($charge > 0 || $rent > 0)) {
-                $data['amount'] = $charge + $rent;
-            } elseif (isset($data['amount']) && $data['amount'] === '' && ($charge > 0 || $rent > 0)) {
+            $charge = array_key_exists('charge_amount', $data)
+                ? (int) $data['charge_amount']
+                : null;
+            $rent = array_key_exists('rent_amount', $data)
+                ? (int) $data['rent_amount']
+                : null;
+            if (!$creating && $recordId > 0 && ($charge === null || $rent === null)) {
+                $existingCharge = $this->pdo->prepare(
+                    'SELECT charge_amount, rent_amount, amount FROM charges WHERE id = :id'
+                );
+                $existingCharge->execute(['id' => $recordId]);
+                $existingRow = $existingCharge->fetch() ?: [];
+                if ($charge === null) {
+                    $charge = (int) ($existingRow['charge_amount'] ?? 0);
+                }
+                if ($rent === null) {
+                    $rent = (int) ($existingRow['rent_amount'] ?? 0);
+                }
+            }
+            $charge = (int) ($charge ?? 0);
+            $rent = (int) ($rent ?? 0);
+            if (!array_key_exists('amount', $data) || $data['amount'] === '' || $data['amount'] === null) {
+                if ($charge > 0 || $rent > 0 || !$creating) {
+                    $data['amount'] = $charge + $rent;
+                }
+            } elseif ((int) $data['amount'] === 0 && ($charge > 0 || $rent > 0)) {
                 $data['amount'] = $charge + $rent;
             }
         }

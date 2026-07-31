@@ -62,9 +62,11 @@ final class YearBackfill
                     (int) preg_replace('/\D+/', '', (string) ($row['formal_contract_amount'] ?? '0'))
                 );
 
-                $deskRows = $row['desks'] ?? [];
-                if (!is_array($deskRows) && isset($row['desk_numbers'])) {
-                    $deskRows = $this->parseDeskNumbers((string) $row['desk_numbers'], $fiscalYear);
+                $deskRows = $row['desks'] ?? null;
+                if (!is_array($deskRows)) {
+                    $deskRows = isset($row['desk_numbers'])
+                        ? $this->parseDeskNumbers((string) $row['desk_numbers'], $fiscalYear)
+                        : [];
                 }
                 $assignmentCount = 0;
                 if (is_array($deskRows)) {
@@ -210,13 +212,26 @@ final class YearBackfill
         if ($assignedFrom === '') {
             $assignedFrom = $defaultStart;
         }
+        if ($assignedUntil === '') {
+            $assignedUntil = $defaultEnd;
+        }
+
+        $fromMonth = (int) ($deskRow['assigned_from_month'] ?? JalaliDate::monthIndexFromDate($assignedFrom));
+        $untilMonth = (int) ($deskRow['assigned_until_month'] ?? JalaliDate::monthIndexFromDate($assignedUntil));
+        if ($fromMonth < 1 || $fromMonth > 12) {
+            $fromMonth = 1;
+        }
+        if ($untilMonth < 1 || $untilMonth > 12) {
+            $untilMonth = 12;
+        }
 
         $this->crud->create('desk_assignments', [
             'desk_id' => (string) $deskId,
             'team_id' => (string) $teamId,
             'usage_type' => (string) ($deskRow['usage_type'] ?? 'formal'),
-            'assigned_from' => $assignedFrom,
-            'assigned_until' => $assignedUntil !== '' ? $assignedUntil : $defaultEnd,
+            'fiscal_year' => $fiscalYear,
+            'assigned_from_month' => (string) $fromMonth,
+            'assigned_until_month' => (string) $untilMonth,
             'notes' => (string) ($deskRow['notes'] ?? ''),
         ]);
     }
