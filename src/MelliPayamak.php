@@ -20,6 +20,26 @@ final class MelliPayamak
             return ['ok' => false, 'rec_id' => null, 'error' => 'متن پیامک خالی است.', 'raw' => ''];
         }
 
+        if (preg_match('/##\s*shared\s*$/iu', $text) === 1) {
+            $pattern = self::parsePatternMessage($text);
+            if ($pattern === null) {
+                return [
+                    'ok' => false,
+                    'rec_id' => null,
+                    'error' => 'قالب پیامک خدماتی نامعتبر است. قالب صحیح: bodyId@متغیرها##shared',
+                    'raw' => '',
+                ];
+            }
+
+            return $this->sendPattern(
+                $username,
+                $password,
+                $to,
+                $pattern['body_id'],
+                $pattern['variables']
+            );
+        }
+
         $response = $this->request('SendSMS', [
             'username' => $username,
             'password' => $password,
@@ -39,6 +59,67 @@ final class MelliPayamak
         }
 
         return ['ok' => false, 'rec_id' => null, 'error' => $parsed['error'] ?? 'خطا در ارسال پیامک', 'raw' => $response['raw']];
+    }
+
+    /**
+     * Sends a shared-service pattern through MelliPayamak BaseServiceNumber.
+     *
+     * @return array{ok:bool, rec_id:?string, error:?string, raw:mixed}
+     */
+    public function sendPattern(
+        string $username,
+        string $password,
+        string $to,
+        int $bodyId,
+        string $variables
+    ): array {
+        $to = TeamLeaders::normalizePhone($to);
+        $variables = trim($variables);
+        if ($to === '' || !preg_match('/^09\d{9}$/', $to)) {
+            return ['ok' => false, 'rec_id' => null, 'error' => 'شماره موبایل گیرنده معتبر نیست.', 'raw' => ''];
+        }
+        if ($bodyId <= 0) {
+            return ['ok' => false, 'rec_id' => null, 'error' => 'شناسه الگوی پیامک معتبر نیست.', 'raw' => ''];
+        }
+        if ($variables === '') {
+            return ['ok' => false, 'rec_id' => null, 'error' => 'متغیرهای الگوی پیامک خالی است.', 'raw' => ''];
+        }
+
+        $response = $this->request('BaseServiceNumber', [
+            'username' => $username,
+            'password' => $password,
+            'text' => $variables,
+            'to' => $to,
+            'bodyId' => $bodyId,
+        ], true);
+        if (!$response['ok']) {
+            return ['ok' => false, 'rec_id' => null, 'error' => $response['error'], 'raw' => $response['raw']];
+        }
+
+        $parsed = self::parseSendResponse($response['data']);
+        if ($parsed['ok']) {
+            return $parsed;
+        }
+
+        return ['ok' => false, 'rec_id' => null, 'error' => $parsed['error'] ?? 'خطا در ارسال پیامک خدماتی', 'raw' => $response['raw']];
+    }
+
+    /**
+     * Parses the compatible notation: bodyId@value1;value2##shared.
+     *
+     * @return array{body_id:int, variables:string}|null
+     */
+    public static function parsePatternMessage(string $message): ?array
+    {
+        $message = trim($message);
+        if (preg_match('/^([1-9]\d*)@(.*)##\s*shared\s*$/isu', $message, $matches) !== 1) {
+            return null;
+        }
+
+        return [
+            'body_id' => (int) $matches[1],
+            'variables' => trim($matches[2]),
+        ];
     }
 
     /**
@@ -184,7 +265,7 @@ final class MelliPayamak
      * @param array<string, scalar|null> $fields
      * @return array{ok:bool, data:mixed, error:?string, raw:string}
      */
-    private function request(string $operation, array $fields): array
+    private function request(string $operation, array $fields, bool $json = false): array
     {
         $username = trim((string) ($fields['username'] ?? $fields['UserName'] ?? ''));
         $password = trim((string) ($fields['password'] ?? $fields['PassWord'] ?? ''));
@@ -192,7 +273,10 @@ final class MelliPayamak
             return ['ok' => false, 'data' => null, 'error' => 'تنظیمات پیامک کامل نیست.', 'raw' => ''];
         }
 
-        $payload = http_build_query($fields);
+        $payload = $json ? json_encode($fields, JSON_UNESCAPED_UNICODE) : http_build_query($fields);
+        if ($payload === false) {
+            return ['ok' => false, 'data' => null, 'error' => 'ساخت درخواست پیامک ممکن نشد.', 'raw' => ''];
+        }
         $ch = curl_init(self::BASE . $operation);
         if ($ch === false) {
             return ['ok' => false, 'data' => null, 'error' => 'امکان اتصال به سرویس پیامک وجود ندارد.', 'raw' => ''];
@@ -204,7 +288,9 @@ final class MelliPayamak
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_TIMEOUT => 8,
             CURLOPT_CONNECTTIMEOUT => 5,
-            CURLOPT_HTTPHEADER => ['Content-Type: application/x-www-form-urlencoded'],
+            CURLOPT_HTTPHEADER => $json
+                ? ['Content-Type: application/json; charset=utf-8', 'Accept: application/json']
+                : ['Content-Type: application/x-www-form-urlencoded', 'Accept: application/json'],
         ]);
 
         $response = curl_exec($ch);
@@ -222,6 +308,18 @@ final class MelliPayamak
 
         $decoded = json_decode($raw, true);
         $data = json_last_error() === JSON_ERROR_NONE ? $decoded : $raw;
+        if (is_array($data) && array_key_exists('RetStatus', $data)) {
+            $retStatus = trim((string) $data['RetStatus']);
+            $success = $retStatus === '1' || strtolower($retStatus) === 'success';
+            if (!$success) {
+                $message = trim((string) ($data['StrRetStatus'] ?? ''));
+                if ($message === '') {
+                    $message = 'خطای سرویس پیامک (کد ' . ($retStatus !== '' ? $retStatus : 'نامشخص') . ')';
+                }
+
+                return ['ok' => false, 'data' => $data, 'error' => $message, 'raw' => $raw];
+            }
+        }
         if (is_array($data) && isset($data['StrRetStatus']) && is_string($data['StrRetStatus'])) {
             $status = strtolower($data['StrRetStatus']);
             if (str_contains($status, 'error') || str_contains($status, 'err')) {

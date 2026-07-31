@@ -663,6 +663,20 @@ $assert($leaderMembers['total'] >= 1, 'members: leader filter returns leaders');
 $assert(MelliPayamak::deliveryLabel(4) === 'رسیده به گوشی', 'sms: delivery label mapping');
 $assert(MelliPayamak::deliveryLabel(0) === 'ارسال شده به مخابرات', 'sms: delivery code 0 label');
 $assert(MelliPayamak::deliveryLabel(-2) === 'شناسه پیامک نامعتبر یا هنوز ثبت نشده', 'sms: delivery error code label');
+$patternMessage = MelliPayamak::parsePatternMessage('456@علی;مرکز نوآوری##shared');
+$assert(($patternMessage['body_id'] ?? null) === 456, 'sms: pattern notation parses body id');
+$assert(($patternMessage['variables'] ?? null) === 'علی;مرکز نوآوری', 'sms: pattern notation preserves variables');
+$assert(MelliPayamak::parsePatternMessage('متن عادی حاوی @') === null, 'sms: ordinary text is not treated as pattern');
+$assert(MelliPayamak::parsePatternMessage('0@متغیر##shared') === null, 'sms: pattern rejects invalid body id');
+$patternClient = new MelliPayamak();
+$invalidPattern = $patternClient->send('', '', '', '09121111111', 'bad@متغیر##shared');
+$assert(($invalidPattern['ok'] ?? true) === false, 'sms: malformed pattern is rejected before API request');
+$assert(
+    str_contains((string) ($invalidPattern['error'] ?? ''), 'قالب صحیح'),
+    'sms: malformed pattern returns actionable error'
+);
+$emptyPatternVariables = $patternClient->sendPattern('', '', '09121111111', 456, '');
+$assert(($emptyPatternVariables['ok'] ?? true) === false, 'sms: empty pattern variables are rejected');
 $adminAllowed = Access::allowedResources();
 $assert(in_array('sms-send', $adminAllowed, true), 'access: admin can send sms announcements');
 
