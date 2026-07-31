@@ -70,23 +70,18 @@ $maxHours = (int) ($settings['room_max_hours_per_day'] ?? 2);
         <section class="room-card room-success-card" id="bookingSuccess" hidden></section>
 
         <div id="bookingFormShell">
-          <section class="pub-week-board" id="weekStatusCard" aria-label="وضعیت هفته جاری">
+          <section class="pub-week-board" id="weekStatusCard" aria-label="وضعیت روزهای پیش‌رو">
             <div class="pub-week-head">
               <div>
-                <h2>وضعیت هفته</h2>
+                <h2>۷ روز پیش‌رو</h2>
                 <p class="hint" id="weekRangeLabel">در حال بارگذاری…</p>
               </div>
-              <select id="weekRoomFilter" aria-label="فیلتر اتاق هفته">
+              <select id="weekRoomFilter" aria-label="فیلتر اتاق">
                 <option value="0">همه اتاق‌ها</option>
               </select>
             </div>
-            <div class="pub-week-legend" aria-hidden="true">
-              <span class="free">آزاد</span>
-              <span class="light">نیمه‌پر</span>
-              <span class="busy">پر</span>
-              <span class="closed">تعطیل</span>
-            </div>
-            <div id="weekStrip" class="pub-week-list"></div>
+            <div id="weekStrip" class="pub-week-chips"></div>
+            <p class="pub-week-detail" id="weekDayDetail" hidden></p>
           </section>
 
           <form id="bookingForm" class="pub-form">

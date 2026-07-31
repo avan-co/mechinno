@@ -156,21 +156,23 @@ final class RoomReservations
     }
 
     /**
-     * Public week occupancy (Saturday–Friday) for the booking page.
+     * Public upcoming occupancy (today + next 6 days) for the booking page.
      *
      * @return array<string, mixed>
      */
     public function publicWeekStatus(string $from, int $roomId = 0): array
     {
-        $anchor = JalaliDate::normalize($from !== '' ? $from : JalaliDate::todayParts()['formatted']);
-        $fromDate = self::persianWeekStart($anchor);
+        $today = JalaliDate::todayParts()['formatted'];
+        $anchor = JalaliDate::normalize($from !== '' ? $from : $today);
+        // Never show past days — start from today when anchor is earlier.
+        $fromDate = JalaliDate::compare($anchor, $today) < 0 ? $today : $anchor;
         $toDate = JalaliDate::addDays($fromDate, 6);
         $calendar = $this->calendarRange($fromDate, $toDate, $roomId);
         $rooms = $calendar['rooms'];
         $days = $calendar['days'];
         $events = $calendar['events'];
         $closedMap = array_fill_keys($calendar['closed_dates'] ?? [], true);
-        $today = (string) ($calendar['today'] ?? JalaliDate::todayParts()['formatted']);
+        $today = (string) ($calendar['today'] ?? $today);
 
         $dayStart = '08:00';
         $dayEnd = '20:00';
@@ -271,25 +273,6 @@ final class RoomReservations
             ], $rooms),
             'days' => $dayCards,
         ];
-    }
-
-    /** Saturday start of the Jalali week containing $date. */
-    private static function persianWeekStart(string $date): string
-    {
-        $normalized = JalaliDate::normalize($date);
-        $name = JalaliDate::weekdayName($normalized);
-        $offset = match ($name) {
-            'شنبه' => 0,
-            'یکشنبه' => 1,
-            'دوشنبه' => 2,
-            'سه‌شنبه', 'سه شنبه' => 3,
-            'چهارشنبه' => 4,
-            'پنجشنبه' => 5,
-            'جمعه' => 6,
-            default => 0,
-        };
-
-        return $offset === 0 ? $normalized : JalaliDate::addDays($normalized, -$offset);
     }
 
     /**
