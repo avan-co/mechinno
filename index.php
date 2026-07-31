@@ -514,6 +514,18 @@ $assetVer = (string) max(
                 </form>
               </article>
               <article class="panel">
+                <div class="panel-head"><h2>پیامک‌های خودکار گردش‌کار</h2></div>
+                <p class="hint">با تأیید/رد رزرو اتاق یا درخواست عضو، پیامک به‌صورت خودکار ارسال می‌شود. برای غیرفعال‌کردن هر مورد، متن آن را خالی بگذارید.</p>
+                <div id="smsWorkflowTemplatesEditor" class="charge-reminder-list"></div>
+                <form id="smsWorkflowTemplatesForm" class="payment-settings-form">
+                  <div class="panel-actions">
+                    <?php if (Access::canWrite()): ?>
+                    <button class="button" type="submit">ذخیره پیامک‌های گردش‌کار</button>
+                    <?php endif; ?>
+                  </div>
+                </form>
+              </article>
+              <article class="panel">
                 <div class="panel-head"><h2>آمار و همگام‌سازی</h2></div>
                 <div id="smsSettingsStats">در حال بارگذاری…</div>
                 <div class="panel-actions">

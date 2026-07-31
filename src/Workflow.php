@@ -27,7 +27,7 @@ final class Workflow
             )->execute(['reviewed_at' => $today, 'id' => $id]);
         }
 
-        return $this->fetchMember($id);
+        return $this->notifyMemberAndReturn($id, 'approved', $accessCode);
     }
 
     public function rejectMember(int $id, string $reason = ''): array
@@ -46,7 +46,19 @@ final class Workflow
             'id' => $id,
         ]);
 
-        return $this->fetchMember($id);
+        return $this->notifyMemberAndReturn($id, 'rejected');
+    }
+
+    private function notifyMemberAndReturn(int $id, string $event, string $accessCode = ''): array
+    {
+        $member = $this->fetchMember($id);
+        try {
+            (new SmsService($this->pdo))->notifyMemberStatus($member, $event, $accessCode);
+        } catch (Throwable) {
+            // ارسال پیامک نباید جریان تأیید را متوقف کند.
+        }
+
+        return $member;
     }
 
     public function approvePayment(int $id): array
@@ -246,7 +258,7 @@ final class Workflow
             throw $exception;
         }
 
-        return $this->fetchMemberRequest($id);
+        return $this->notifyMemberRequestAndReturn($id, 'approved');
     }
 
     public function rejectMemberRequest(int $id, string $reason = ''): array
@@ -265,7 +277,19 @@ final class Workflow
             'id' => $id,
         ]);
 
-        return $this->fetchMemberRequest($id);
+        return $this->notifyMemberRequestAndReturn($id, 'rejected');
+    }
+
+    private function notifyMemberRequestAndReturn(int $id, string $event): array
+    {
+        $request = $this->fetchMemberRequest($id);
+        try {
+            (new SmsService($this->pdo))->notifyMemberRequestStatus($request, $event);
+        } catch (Throwable) {
+            // ارسال پیامک نباید جریان تأیید را متوقف کند.
+        }
+
+        return $request;
     }
 
     /**

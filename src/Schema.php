@@ -369,6 +369,7 @@ final class Schema
                 'sms_line_numbers' => 'TEXT NULL',
                 'sms_lines_queried_at' => 'VARCHAR(32) NULL',
                 'sms_charge_template' => 'TEXT NULL',
+                'sms_workflow_templates' => 'TEXT NULL',
                 'sms_history_synced_at' => 'VARCHAR(32) NULL',
                 'sms_panel_credit' => 'BIGINT NULL',
                 'sms_live_synced_at' => 'VARCHAR(32) NULL',

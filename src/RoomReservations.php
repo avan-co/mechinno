@@ -452,7 +452,10 @@ final class RoomReservations
             'updated_at' => $today,
         ]);
 
-        return $this->findById((int) $this->pdo->lastInsertId());
+        $reservation = $this->findById((int) $this->pdo->lastInsertId());
+        $this->notifyReservation($reservation, $status === 'approved' ? 'approved' : 'pending');
+
+        return $reservation;
     }
 
     /** Short tracking code like MN-482917 (legacy 32-hex tokens still valid). */
@@ -518,7 +521,10 @@ final class RoomReservations
             'id' => $id,
         ]);
 
-        return $this->findById($id);
+        $reservation = $this->findById($id);
+        $this->notifyReservation($reservation, 'cancelled');
+
+        return $reservation;
     }
 
     /**
@@ -552,7 +558,10 @@ final class RoomReservations
             'id' => $id,
         ]);
 
-        return $this->findById($id);
+        $reservation = $this->findById($id);
+        $this->notifyReservation($reservation, 'approved');
+
+        return $reservation;
     }
 
     /**
@@ -579,7 +588,10 @@ final class RoomReservations
             'id' => $id,
         ]);
 
-        return $this->findById($id);
+        $reservation = $this->findById($id);
+        $this->notifyReservation($reservation, 'rejected');
+
+        return $reservation;
     }
 
     /**
@@ -1069,5 +1081,17 @@ final class RoomReservations
         $attempts[] = $now;
         $data[$key] = ['attempts' => $attempts];
         file_put_contents($path, json_encode($data, JSON_UNESCAPED_UNICODE));
+    }
+
+    /**
+     * @param array<string, mixed> $reservation
+     */
+    private function notifyReservation(array $reservation, string $event): void
+    {
+        try {
+            (new SmsService($this->pdo))->notifyRoomReservation($reservation, $event);
+        } catch (Throwable) {
+            // ارسال پیامک نباید جریان رزرو را متوقف کند.
+        }
     }
 }

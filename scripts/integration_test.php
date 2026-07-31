@@ -668,7 +668,7 @@ $assert($plainPattern['is_shared_pattern'] === false && $plainPattern['body_id']
 $sharedPattern = MelliPayamak::parsePatternMessage('12345@arg1##arg2##shared');
 $assert($sharedPattern['is_shared_pattern'] === true, 'sms: shared pattern detected');
 $assert($sharedPattern['body_id'] === '12345', 'sms: shared pattern body id parsed');
-$assert($sharedPattern['vars_string'] === 'arg1', 'sms: shared pattern vars use first segment');
+$assert($sharedPattern['vars_string'] === 'arg1;arg2', 'sms: shared pattern vars joined with semicolon');
 $nonSharedPattern = MelliPayamak::parsePatternMessage('12345@متن آزاد##custom');
 $assert($nonSharedPattern['is_shared_pattern'] === false, 'sms: non-shared pattern uses simple send path');
 $assert($nonSharedPattern['text_data'] === 'متن آزاد##custom', 'sms: non-shared pattern keeps full text payload');
@@ -694,7 +694,18 @@ $rendered = SmsService::renderChargeTemplate(
     ['team_name' => 'نهاد تست', 'leader_name' => 'علی', 'debt_total' => 450000, 'debt_summary' => 'مرداد 1405'],
     ['bank_name' => 'بانک تست', 'card_number' => '6037-1234']
 );
-$assert($rendered === '12345@نهاد تست##450,000##shared', 'sms: charge template variables rendered');
+$assert($rendered === '12345@نهاد تست##450000##shared', 'sms: charge template variables rendered');
+$workflowRendered = SmsService::renderTemplate(
+    CenterSettings::WORKFLOW_TEMPLATE_DEFAULTS['room_approved'],
+    [
+        'room_name' => 'اتاق الف',
+        'reserved_date' => '1405/05/01',
+        'start_time' => '10:00',
+        'end_time' => '11:00',
+        'public_token' => 'MN-123456',
+    ]
+);
+$assert(str_contains($workflowRendered, 'اتاق الف'), 'sms: workflow template renders room name');
 $chargeDebtors = (new SmsService($pdo))->chargeDebtors();
 $assert(is_array($chargeDebtors['debtors'] ?? null), 'sms: charge debtors endpoint data');
 $assert(($chargeDebtors['template_configured'] ?? false) === true, 'sms: charge template configured flag');

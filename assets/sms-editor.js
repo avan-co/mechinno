@@ -10,13 +10,25 @@ window.SMS_EDITOR_VARS = [
 window.SMS_CHARGE_VARS = [
   { key: "{team_name}", label: "نام نهاد" },
   { key: "{leader_name}", label: "نام مسئول" },
-  { key: "{debt_total}", label: "مبلغ بدهی" },
+  { key: "{debt_total}", label: "مبلغ بدهی (عدد)" },
+  { key: "{debt_total_formatted}", label: "مبلغ بدهی (با جداکننده)" },
   { key: "{debt_summary}", label: "ماه‌های بدهی" },
   { key: "{bank_info}", label: "اطلاعات بانکی" },
   { key: "{card_number}", label: "شماره کارت" },
   { key: "{account_number}", label: "شماره حساب" },
   { key: "{sheba}", label: "شماره شبا" },
 ];
+
+window.SMS_WORKFLOW_TEMPLATE_LABELS = {
+  room_pending: "رزرو — ثبت درخواست",
+  room_approved: "رزرو — تأیید",
+  room_rejected: "رزرو — رد",
+  room_cancelled: "رزرو — لغو",
+  member_approved: "عضو — تأیید",
+  member_rejected: "عضو — رد",
+  member_request_approved: "درخواست عضو — تأیید",
+  member_request_rejected: "درخواست عضو — رد",
+};
 
 window.createSmsEditor = (host, options = {}) => {
   if (!host) return null;

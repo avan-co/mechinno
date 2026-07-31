@@ -101,13 +101,6 @@ final class SmsService
             'error' => $priceResult['error'],
         ];
 
-        $linesResult = $client->getUserNumbers($username, $password);
-        $checks['lines'] = [
-            'ok' => $linesResult['ok'] && $linesResult['numbers'] !== [],
-            'value' => $linesResult['numbers'],
-            'error' => $linesResult['error'],
-        ];
-
         $ok = ($checks['credit']['ok'] ?? false) || ($checks['base_price']['ok'] ?? false);
 
         return [
@@ -140,6 +133,9 @@ final class SmsService
             ],
             'charge_template' => [
                 'sms_charge_template' => $payload['sms_charge_template'] ?? '',
+            ],
+            'workflow_templates' => [
+                'sms_workflow_templates' => $payload['sms_workflow_templates'] ?? [],
             ],
             default => $payload,
         };
@@ -214,17 +210,6 @@ final class SmsService
     /**
      * @return array<string, mixed>
      */
-    public function queryLines(): array
-    {
-        Access::requireWriteJson();
-        $send = (new CenterSettings($this->pdo))->smsSettingsForSend();
-
-        return $this->refreshLineNumbers($send, false);
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
     public function refreshPricing(?array $send = null): array
     {
         $send ??= (new CenterSettings($this->pdo))->smsSettingsForSend();
@@ -286,8 +271,23 @@ final class SmsService
         $batchUid = $this->newBatchUid();
         $recipients = $this->loadMembersByIds($memberIds);
         $this->assertDailyCapacity(count($recipients));
+        $center = (new CenterSettings($this->pdo))->get();
+        $bankInfo = self::formatBankInfo($center);
 
-        return $this->dispatchBatch($batchUid, 'announcement', $recipients, static fn (array $member): string => $message);
+        return $this->dispatchBatch(
+            $batchUid,
+            'announcement',
+            $recipients,
+            fn (array $member): string => self::renderTemplate($message, [
+                'team_name' => (string) ($member['team_label'] ?? ''),
+                'leader_name' => (string) ($member['full_name'] ?? ''),
+                'full_name' => (string) ($member['full_name'] ?? ''),
+                'bank_info' => $bankInfo,
+                'card_number' => (string) ($center['card_number'] ?? ''),
+                'account_number' => (string) ($center['account_number'] ?? ''),
+                'sheba' => (string) ($center['sheba'] ?? ''),
+            ])
+        );
     }
 
     /**
@@ -400,18 +400,227 @@ final class SmsService
      */
     public static function renderChargeTemplate(string $template, array $debtor, array $center): string
     {
-        $replacements = [
-            '{team_name}' => (string) ($debtor['team_name'] ?? ''),
-            '{leader_name}' => (string) ($debtor['leader_name'] ?? ''),
-            '{debt_total}' => number_format((int) ($debtor['debt_total'] ?? 0)),
-            '{debt_summary}' => (string) ($debtor['debt_summary'] ?? ''),
-            '{bank_info}' => self::formatBankInfo($center),
-            '{card_number}' => (string) ($center['card_number'] ?? ''),
-            '{account_number}' => (string) ($center['account_number'] ?? ''),
-            '{sheba}' => (string) ($center['sheba'] ?? ''),
-        ];
+        $debtTotal = (int) ($debtor['debt_total'] ?? 0);
+
+        return self::renderTemplate($template, [
+            'team_name' => (string) ($debtor['team_name'] ?? ''),
+            'leader_name' => (string) ($debtor['leader_name'] ?? ''),
+            'debt_total' => (string) $debtTotal,
+            'debt_total_formatted' => number_format($debtTotal),
+            'debt_summary' => (string) ($debtor['debt_summary'] ?? ''),
+            'bank_info' => self::formatBankInfo($center),
+            'card_number' => (string) ($center['card_number'] ?? ''),
+            'account_number' => (string) ($center['account_number'] ?? ''),
+            'sheba' => (string) ($center['sheba'] ?? ''),
+        ]);
+    }
+
+    /**
+     * @param array<string, scalar|null> $vars
+     */
+    public static function renderTemplate(string $template, array $vars): string
+    {
+        $replacements = [];
+        foreach ($vars as $key => $value) {
+            $replacements['{' . $key . '}'] = (string) $value;
+        }
 
         return str_replace(array_keys($replacements), array_values($replacements), $template);
+    }
+
+    public function notifyRoomReservation(array $reservation, string $event): void
+    {
+        $templateKey = match ($event) {
+            'pending' => 'room_pending',
+            'approved' => 'room_approved',
+            'rejected' => 'room_rejected',
+            'cancelled' => 'room_cancelled',
+            default => '',
+        };
+        if ($templateKey === '') {
+            return;
+        }
+
+        $reason = trim((string) ($reservation['rejection_reason'] ?? $reservation['cancel_reason'] ?? ''));
+        $this->notifyWorkflow(
+            $templateKey,
+            TeamLeaders::normalizePhone((string) ($reservation['booker_phone'] ?? '')),
+            (string) ($reservation['booker_name'] ?? ''),
+            [
+                'booker_name' => (string) ($reservation['booker_name'] ?? ''),
+                'room_name' => (string) ($reservation['room_name'] ?? ''),
+                'reserved_date' => (string) ($reservation['reserved_date'] ?? ''),
+                'start_time' => (string) ($reservation['start_time'] ?? ''),
+                'end_time' => (string) ($reservation['end_time'] ?? ''),
+                'public_token' => (string) ($reservation['public_token'] ?? ''),
+                'team_name' => (string) ($reservation['team_name'] ?? $reservation['booker_org'] ?? ''),
+                'purpose' => (string) ($reservation['purpose'] ?? ''),
+                'rejection_reason' => $reason,
+                'rejection_reason_line' => $reason !== '' ? (' دلیل: ' . $reason) : '',
+                'cancel_reason' => $reason,
+                'cancel_reason_line' => $reason !== '' ? (' دلیل: ' . $reason) : '',
+            ],
+            'room_' . $event,
+            [
+                'team_id' => (int) ($reservation['team_id'] ?? 0),
+                'team_name' => (string) ($reservation['team_name'] ?? $reservation['booker_org'] ?? ''),
+            ]
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $member
+     */
+    public function notifyMemberStatus(array $member, string $event, string $accessCode = ''): void
+    {
+        $templateKey = match ($event) {
+            'approved' => 'member_approved',
+            'rejected' => 'member_rejected',
+            default => '',
+        };
+        if ($templateKey === '') {
+            return;
+        }
+
+        $code = trim($accessCode);
+        if ($code === '') {
+            $code = trim((string) ($member['access_code'] ?? ''));
+        }
+        $reason = trim((string) ($member['rejection_reason'] ?? ''));
+        $teamName = $this->teamName((int) ($member['team_id'] ?? 0), (string) ($member['team_label'] ?? ''));
+
+        $this->notifyWorkflow(
+            $templateKey,
+            TeamLeaders::normalizePhone((string) ($member['phone'] ?? '')),
+            (string) ($member['full_name'] ?? ''),
+            [
+                'full_name' => (string) ($member['full_name'] ?? ''),
+                'team_name' => $teamName,
+                'access_code' => $code,
+                'access_code_line' => $code !== '' ? (' کد تردد: ' . $code) : '',
+                'rejection_reason' => $reason,
+                'rejection_reason_line' => $reason !== '' ? (' دلیل: ' . $reason) : '',
+            ],
+            'member_' . $event,
+            [
+                'member_id' => (int) ($member['id'] ?? 0),
+                'team_id' => (int) ($member['team_id'] ?? 0),
+                'team_name' => $teamName,
+            ]
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $request
+     */
+    public function notifyMemberRequestStatus(array $request, string $event): void
+    {
+        $templateKey = match ($event) {
+            'approved' => 'member_request_approved',
+            'rejected' => 'member_request_rejected',
+            default => '',
+        };
+        if ($templateKey === '') {
+            return;
+        }
+
+        $teamId = (int) ($request['team_id'] ?? 0);
+        $leader = $this->leaderContactForTeam($teamId);
+        $reason = trim((string) ($request['rejection_reason'] ?? ''));
+        $type = (string) ($request['request_type'] ?? '');
+        $typeLabel = match ($type) {
+            'update' => 'ویرایش',
+            'delete' => 'حذف',
+            default => 'درخواست',
+        };
+
+        $this->notifyWorkflow(
+            $templateKey,
+            (string) ($leader['phone'] ?? ''),
+            (string) ($leader['name'] ?? ''),
+            [
+                'full_name' => (string) ($request['full_name'] ?? $request['current_full_name'] ?? ''),
+                'team_name' => (string) ($request['team_label'] ?? ''),
+                'request_type' => $type,
+                'request_type_label' => $typeLabel,
+                'rejection_reason' => $reason,
+                'rejection_reason_line' => $reason !== '' ? (' دلیل: ' . $reason) : '',
+            ],
+            'member_request_' . $event,
+            [
+                'member_id' => (int) ($request['member_id'] ?? 0),
+                'team_id' => $teamId,
+                'team_name' => (string) ($request['team_label'] ?? ''),
+            ]
+        );
+    }
+
+    /**
+     * @param array<string, scalar|null> $vars
+     * @param array<string, mixed> $logMeta
+     */
+    private function notifyWorkflow(
+        string $templateKey,
+        string $phone,
+        string $recipientName,
+        array $vars,
+        string $messageType,
+        array $logMeta = []
+    ): void {
+        if (!$this->isApiConfigured()) {
+            return;
+        }
+
+        $template = trim((string) ((new CenterSettings($this->pdo))->workflowTemplates()[$templateKey] ?? ''));
+        if ($template === '') {
+            return;
+        }
+
+        $text = trim(self::renderTemplate($template, $vars));
+        if ($text === '') {
+            return;
+        }
+
+        try {
+            $this->assertDailyCapacity(1);
+        } catch (Throwable) {
+            return;
+        }
+
+        $phone = TeamLeaders::normalizePhone($phone);
+        if ($phone === '' || !preg_match('/^09\d{9}$/', $phone)) {
+            return;
+        }
+
+        $settings = (new CenterSettings($this->pdo))->smsSettingsForSend();
+        $client = new MelliPayamak();
+        $response = $client->send(
+            (string) ($settings['sms_username'] ?? ''),
+            (string) ($settings['sms_password'] ?? ''),
+            (string) ($settings['sms_from_number'] ?? ''),
+            $phone,
+            $text
+        );
+        $unitCost = (int) ($settings['sms_unit_cost'] ?? 0);
+
+        $this->insertLog([
+            'batch_uid' => $this->newBatchUid(),
+            'message_type' => $messageType,
+            'member_id' => (int) ($logMeta['member_id'] ?? 0),
+            'team_id' => (int) ($logMeta['team_id'] ?? 0),
+            'team_name' => (string) ($logMeta['team_name'] ?? ''),
+            'recipient_name' => $recipientName,
+            'phone' => $phone,
+            'is_leader' => (int) ($logMeta['is_leader'] ?? 0),
+            'message_text' => $text,
+            'status' => $response['ok'] ? 'sent' : 'failed',
+            'error_message' => $response['error'],
+            'provider_rec_id' => $response['rec_id'],
+            'provider_response' => is_string($response['raw']) ? $response['raw'] : json_encode($response['raw'], JSON_UNESCAPED_UNICODE),
+            'cost_rial' => $response['ok'] ? $unitCost : 0,
+            'delivery_status' => $response['ok'] ? 'در حال ارسال' : null,
+            'api_confirmed' => $response['ok'] && trim((string) ($response['rec_id'] ?? '')) !== '' ? 1 : 0,
+        ]);
     }
 
     /**
@@ -437,6 +646,20 @@ final class SmsService
         }
 
         return implode(' — ', $parts);
+    }
+
+    private function teamName(int $teamId, string $fallback = ''): string
+    {
+        if ($fallback !== '') {
+            return $fallback;
+        }
+        if ($teamId <= 0) {
+            return '';
+        }
+        $statement = $this->pdo->prepare('SELECT name FROM teams WHERE id = :id');
+        $statement->execute(['id' => $teamId]);
+
+        return trim((string) ($statement->fetchColumn() ?: ''));
     }
 
     /**
@@ -856,34 +1079,6 @@ final class SmsService
         ]);
 
         return (int) $this->pdo->lastInsertId();
-    }
-
-    /**
-     * @param array<string, mixed> $send
-     * @return array<string, mixed>
-     */
-    private function refreshLineNumbers(array $send, bool $onlyIfEmpty): array
-    {
-        if ($send['sms_username'] === '' || $send['sms_password'] === '') {
-            throw new InvalidArgumentException('نام کاربری و رمز API را وارد کنید.');
-        }
-
-        $current = (new CenterSettings($this->pdo))->smsSettings();
-        if ($onlyIfEmpty && $current['sms_lines_queried_at'] !== '' && $current['sms_line_numbers'] !== []) {
-            return ['numbers' => $current['sms_line_numbers'], 'cached' => true];
-        }
-
-        $result = (new MelliPayamak())->getUserNumbers(
-            (string) $send['sms_username'],
-            (string) $send['sms_password']
-        );
-        if (!$result['ok'] || $result['numbers'] === []) {
-            throw new InvalidArgumentException($result['error'] ?? 'استعلام خطوط ارسال ناموفق بود.');
-        }
-
-        (new CenterSettings($this->pdo))->storeSmsLineNumbers($result['numbers'], (string) ($send['sms_from_number'] ?? ''));
-
-        return ['numbers' => $result['numbers'], 'cached' => false];
     }
 
     private function newBatchUid(): string

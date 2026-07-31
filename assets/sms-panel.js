@@ -56,6 +56,7 @@ const initSmsEditors = () => {
       placeholder: "متن پیامک اطلاعیه را بنویسید…",
       readonly: !canWrite,
       rows: 6,
+      variables: window.SMS_EDITOR_VARS,
     });
   }
 };
@@ -307,13 +308,26 @@ const sendChargeReminders = async () => {
   scheduleDeliveryCheck(result.result?.batch_uid, result.result?.pending_delivery_log_ids || []);
 };
 
+const messageTypeLabel = (type) => ({
+  announcement: "اطلاعیه",
+  charge_reminder: "یادآوری شارژ",
+  room_pending: "رزرو — ثبت",
+  room_approved: "رزرو — تأیید",
+  room_rejected: "رزرو — رد",
+  room_cancelled: "رزرو — لغو",
+  member_approved: "عضو — تأیید",
+  member_rejected: "عضو — رد",
+  member_request_approved: "درخواست عضو — تأیید",
+  member_request_rejected: "درخواست عضو — رد",
+}[type] || "ارسالی");
+
 const loadSmsHistory = async () => {
   const tbody = document.querySelector("#smsHistoryTable tbody");
   if (!tbody) return;
   const result = await fetchResource("api.php?resource=sms-history", { page: 1, perPage: 100 });
   tbody.innerHTML = (result.rows || []).map((row) => `<tr>
     <td>${escapeHtml(formatPlain(row.created_at))}</td>
-    <td>${row.message_type === "announcement" ? "اطلاعیه" : row.message_type === "charge_reminder" ? "یادآوری شارژ" : "ارسالی"}</td>
+    <td>${escapeHtml(messageTypeLabel(row.message_type))}</td>
     <td>${escapeHtml(row.recipient_name || "—")}</td>
     <td>${escapeHtml(row.phone || "—")}</td>
     <td>${escapeHtml(row.team_name || "—")}</td>

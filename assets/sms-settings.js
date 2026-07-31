@@ -1,8 +1,9 @@
-/* global fetchJson, postJson, showToast, escapeHtml, formatMoney, canWrite, createSmsEditor, SMS_CHARGE_VARS */
+/* global fetchJson, postJson, showToast, escapeHtml, formatMoney, canWrite, createSmsEditor, SMS_CHARGE_VARS, SMS_WORKFLOW_TEMPLATE_LABELS */
 
 let smsSettingsState = null;
 let smsSettingsReady = false;
 let chargeTemplateEditor = null;
+const workflowTemplateEditors = {};
 
 const loadSmsSettingsPage = async (withLive = false) => {
   const data = await fetchJson(`api.php?resource=sms-settings${withLive ? "&live=1" : ""}`);
@@ -10,6 +11,7 @@ const loadSmsSettingsPage = async (withLive = false) => {
   renderSmsCredentialsForm(data);
   renderSmsLineForm(data);
   renderSmsChargeTemplateEditor(data);
+  renderSmsWorkflowTemplatesEditor(data);
   renderSmsSettingsStats(data);
 };
 
@@ -74,6 +76,54 @@ const renderSmsChargeTemplateEditor = (data) => {
       smsSettingsState = result.settings || result;
       showToast("الگوی یادآوری شارژ ذخیره شد.", "success");
       renderSmsChargeTemplateEditor(smsSettingsState);
+    } catch (error) {
+      showToast(error.message, "error");
+    }
+  };
+};
+
+const renderSmsWorkflowTemplatesEditor = (data) => {
+  const host = document.getElementById("smsWorkflowTemplatesEditor");
+  const form = document.getElementById("smsWorkflowTemplatesForm");
+  if (!host) return;
+  const templates = data.sms_workflow_templates || {};
+  host.innerHTML = Object.entries(SMS_WORKFLOW_TEMPLATE_LABELS).map(([key, label]) => {
+    const editorId = `sms-workflow-${key}`;
+    return `<div class="charge-reminder-card" data-workflow-key="${escapeHtml(key)}">
+      <div class="charge-reminder-head"><strong>${escapeHtml(label)}</strong></div>
+      <div id="${escapeHtml(editorId)}"></div>
+    </div>`;
+  }).join("");
+
+  Object.keys(SMS_WORKFLOW_TEMPLATE_LABELS).forEach((key) => {
+    const mount = document.getElementById(`sms-workflow-${key}`);
+    if (!mount) return;
+    workflowTemplateEditors[key] = createSmsEditor(mount, {
+      label: SMS_WORKFLOW_TEMPLATE_LABELS[key],
+      value: templates[key] || "",
+      readonly: !canWrite,
+      rows: 3,
+      showPreview: false,
+    });
+  });
+
+  if (!form || form.dataset.ready) return;
+  form.dataset.ready = "1";
+  if (!canWrite) return;
+  form.onsubmit = async (event) => {
+    event.preventDefault();
+    try {
+      const payload = {};
+      Object.keys(SMS_WORKFLOW_TEMPLATE_LABELS).forEach((key) => {
+        payload[key] = workflowTemplateEditors[key]?.getValue() || "";
+      });
+      const result = await postJson("api.php?resource=sms-settings", {
+        section: "workflow_templates",
+        sms_workflow_templates: payload,
+      });
+      smsSettingsState = result.settings || result;
+      showToast("پیامک‌های گردش‌کار ذخیره شد.", "success");
+      renderSmsWorkflowTemplatesEditor(smsSettingsState);
     } catch (error) {
       showToast(error.message, "error");
     }

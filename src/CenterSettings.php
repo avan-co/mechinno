@@ -13,6 +13,18 @@ final class CenterSettings
         'payment_guide' => "پس از واریز شارژ، مبلغ، تاریخ، سال مالی و ماه را در بخش «اعلام واریز» ثبت کنید تا مدیر مرکز تأیید کند.",
     ];
 
+    /** @var array<string, string> */
+    public const WORKFLOW_TEMPLATE_DEFAULTS = [
+        'room_pending' => 'درخواست رزرو {room_name} در {reserved_date} ساعت {start_time} تا {end_time} ثبت شد. کد پیگیری: {public_token}',
+        'room_approved' => 'رزرو {room_name} در {reserved_date} ساعت {start_time} تا {end_time} تأیید شد. کد پیگیری: {public_token}',
+        'room_rejected' => 'رزرو {room_name} در {reserved_date} رد شد.{rejection_reason_line}',
+        'room_cancelled' => 'رزرو {room_name} در {reserved_date} لغو شد.{cancel_reason_line}',
+        'member_approved' => 'عضویت {full_name} در {team_name} تأیید شد.{access_code_line}',
+        'member_rejected' => 'درخواست عضویت {full_name} در {team_name} رد شد.{rejection_reason_line}',
+        'member_request_approved' => 'درخواست {request_type_label} عضو {full_name} در {team_name} تأیید شد.',
+        'member_request_rejected' => 'درخواست {request_type_label} عضو {full_name} در {team_name} رد شد.{rejection_reason_line}',
+    ];
+
     public function __construct(private readonly PDO $pdo)
     {
     }
@@ -84,7 +96,7 @@ final class CenterSettings
             $statement = $this->pdo->query(
                 'SELECT sms_username, sms_password, sms_from_number, sms_daily_limit, sms_unit_cost, sms_updated_at,
                         sms_line_numbers, sms_lines_queried_at, sms_history_synced_at,
-                        sms_panel_credit, sms_live_synced_at, sms_charge_template
+                        sms_panel_credit, sms_live_synced_at, sms_charge_template, sms_workflow_templates
                  FROM center_settings WHERE id = 1'
             );
             $row = $statement->fetch() ?: [];
@@ -100,6 +112,7 @@ final class CenterSettings
             $row['sms_panel_credit'] = null;
             $row['sms_live_synced_at'] = '';
             $row['sms_charge_template'] = '';
+            $row['sms_workflow_templates'] = '';
         }
 
         return [
@@ -117,7 +130,23 @@ final class CenterSettings
                 : null,
             'sms_live_synced_at' => (string) ($row['sms_live_synced_at'] ?? ''),
             'sms_charge_template' => (string) ($row['sms_charge_template'] ?? ''),
+            'sms_workflow_templates' => $this->decodeWorkflowTemplates((string) ($row['sms_workflow_templates'] ?? '')),
         ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function workflowTemplates(): array
+    {
+        $this->ensureRow();
+        try {
+            $json = (string) $this->pdo->query('SELECT sms_workflow_templates FROM center_settings WHERE id = 1')->fetchColumn();
+        } catch (PDOException) {
+            $json = '';
+        }
+
+        return $this->decodeWorkflowTemplates($json);
     }
 
     /**
@@ -150,7 +179,7 @@ final class CenterSettings
         $this->ensureRow();
         $current = $this->pdo->query(
             'SELECT sms_username, sms_password, sms_from_number, sms_daily_limit, sms_unit_cost,
-                    sms_line_numbers, sms_lines_queried_at, sms_charge_template
+                    sms_line_numbers, sms_lines_queried_at, sms_charge_template, sms_workflow_templates
              FROM center_settings WHERE id = 1'
         )->fetch() ?: [];
 
@@ -192,6 +221,10 @@ final class CenterSettings
             ? trim((string) $payload['sms_charge_template'])
             : trim((string) ($current['sms_charge_template'] ?? ''));
 
+        $workflowTemplates = array_key_exists('sms_workflow_templates', $payload)
+            ? $this->encodeWorkflowTemplates($payload['sms_workflow_templates'])
+            : (string) ($current['sms_workflow_templates'] ?? '');
+
         $statement = $this->pdo->prepare(
             'UPDATE center_settings SET
                 sms_username = :sms_username,
@@ -202,6 +235,7 @@ final class CenterSettings
                 sms_line_numbers = :sms_line_numbers,
                 sms_lines_queried_at = :sms_lines_queried_at,
                 sms_charge_template = :sms_charge_template,
+                sms_workflow_templates = :sms_workflow_templates,
                 sms_updated_at = :sms_updated_at
              WHERE id = 1'
         );
@@ -214,6 +248,7 @@ final class CenterSettings
             'sms_line_numbers' => $lineNumbersJson,
             'sms_lines_queried_at' => $linesQueriedAt,
             'sms_charge_template' => $chargeTemplate,
+            'sms_workflow_templates' => $workflowTemplates,
             'sms_updated_at' => JalaliDate::todayParts()['formatted'],
         ]);
 
@@ -276,6 +311,44 @@ final class CenterSettings
         $this->ensureRow();
         $this->pdo->prepare('UPDATE center_settings SET sms_history_synced_at = :synced_at WHERE id = 1')
             ->execute(['synced_at' => JalaliDate::todayParts()['formatted']]);
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function decodeWorkflowTemplates(string $json): array
+    {
+        $templates = self::WORKFLOW_TEMPLATE_DEFAULTS;
+        if ($json === '') {
+            return $templates;
+        }
+        $decoded = json_decode($json, true);
+        if (!is_array($decoded)) {
+            return $templates;
+        }
+        foreach (self::WORKFLOW_TEMPLATE_DEFAULTS as $key => $default) {
+            if (array_key_exists($key, $decoded)) {
+                $templates[$key] = trim((string) $decoded[$key]);
+            }
+        }
+
+        return $templates;
+    }
+
+    /**
+     * @param array<string, mixed>|string $templates
+     */
+    private function encodeWorkflowTemplates(array|string $templates): string
+    {
+        if (is_string($templates)) {
+            return trim($templates);
+        }
+        $normalized = [];
+        foreach (self::WORKFLOW_TEMPLATE_DEFAULTS as $key => $default) {
+            $normalized[$key] = trim((string) ($templates[$key] ?? $default));
+        }
+
+        return json_encode($normalized, JSON_UNESCAPED_UNICODE);
     }
 
     /**

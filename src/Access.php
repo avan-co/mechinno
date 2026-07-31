@@ -74,7 +74,6 @@ final class Access
         'sms-stats',
         'sms-recipients',
         'sms-history',
-        'sms-query-lines',
         'sms-sync-history',
         'sms-check-deliveries',
         'sms-test',

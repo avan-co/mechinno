@@ -254,12 +254,6 @@ try {
         json_response((new SmsService($pdo))->stats(isset($_GET['live']) && (string) $_GET['live'] === '1'));
     }
 
-    if ($_SERVER['REQUEST_METHOD'] === 'POST' && $resource === 'sms-query-lines') {
-        require_csrf_json();
-        Access::requireWriteJson();
-        json_response(['ok' => true, 'result' => (new SmsService($pdo))->queryLines()]);
-    }
-
     if ($resource === 'sms-test') {
         $sms = new SmsService($pdo);
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {

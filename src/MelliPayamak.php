@@ -19,7 +19,7 @@ final class MelliPayamak
         $bodyId = $parts !== [] ? array_pop($parts) : null;
         $params = explode('##', (string) $textData);
         $key = array_pop($params);
-        $varsString = $params !== [] ? (string) reset($params) : '';
+        $varsString = $params !== [] ? implode(';', $params) : '';
 
         return [
             'is_shared_pattern' => $bodyId !== null && $bodyId !== '' && trim((string) $key) === 'shared',

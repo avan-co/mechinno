@@ -68,8 +68,13 @@ if (!indexSource.includes('id="sms-settings"')) {
   process.exit(1);
 }
 
-if (!apiSource.includes("sms-query-lines") || !apiSource.includes("sms-check-deliveries")) {
-  console.error("api.php must expose sms-query-lines and sms-check-deliveries");
+if (!apiSource.includes("sms-check-deliveries")) {
+  console.error("api.php must expose sms-check-deliveries");
+  process.exit(1);
+}
+
+if (apiSource.includes("sms-query-lines")) {
+  console.error("api.php must not expose sms-query-lines");
   process.exit(1);
 }
 
@@ -80,6 +85,11 @@ if (!apiSource.includes("sms-charge-debtors") || !apiSource.includes("sms-send-c
 
 if (!indexSource.includes('id="smsChargeReminderPanel"')) {
   console.error("index.php must include sms charge reminder panel");
+  process.exit(1);
+}
+
+if (!indexSource.includes('id="smsWorkflowTemplatesEditor"')) {
+  console.error("index.php must include sms workflow templates editor");
   process.exit(1);
 }
 
