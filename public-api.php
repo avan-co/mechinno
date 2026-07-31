@@ -45,6 +45,25 @@ try {
         json_response($rooms->availability($roomId, $date));
     }
 
+    if ($resource === 'month') {
+        if (!$settings['room_public_enabled']) {
+            json_response(['error' => 'رزرو عمومی اتاق جلسه غیرفعال است.'], 403);
+        }
+        $todayParts = JalaliDate::todayParts();
+        $year = (int) ($_GET['year'] ?? $todayParts['year']);
+        $month = (int) ($_GET['month'] ?? $todayParts['month']);
+        json_response($rooms->monthPicker($year, $month));
+    }
+
+    if ($resource === 'week') {
+        if (!$settings['room_public_enabled']) {
+            json_response(['error' => 'رزرو عمومی اتاق جلسه غیرفعال است.'], 403);
+        }
+        $from = (string) ($_GET['from'] ?? JalaliDate::todayParts()['formatted']);
+        $roomId = (int) ($_GET['room_id'] ?? 0);
+        json_response($rooms->publicWeekStatus($from, $roomId));
+    }
+
     if ($resource === 'lookup') {
         $token = trim((string) ($_GET['token'] ?? ''));
         json_response(['record' => $rooms->findByToken($token)]);
