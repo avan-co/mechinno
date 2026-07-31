@@ -685,12 +685,20 @@ $smsCenter = new CenterSettings($pdo);
 $smsCenter->updateSms([
     'sms_username' => 'testuser',
     'sms_password' => 'testpass',
+    'sms_from_number' => '',
+]);
+$assert((new SmsService($pdo))->isApiConfigured() === true, 'sms: credentials alone configure API for pattern');
+$assert((new SmsService($pdo))->hasDedicatedLine() === false, 'sms: empty from means no dedicated line');
+$smsCenter->updateSms([
+    'sms_username' => 'testuser',
+    'sms_password' => 'testpass',
     'sms_from_number' => '30001234',
 ]);
 $partial = $smsCenter->smsSettings();
 $assert(($partial['sms_username'] ?? '') === 'testuser', 'sms: partial update preserves username');
 $sendSettings = $smsCenter->smsSettingsForSend();
 $assert(($sendSettings['sms_password'] ?? '') === 'testpass', 'sms: partial update preserves password');
+$assert((new SmsService($pdo))->hasDedicatedLine() === true, 'sms: from number enables dedicated line');
 
 $debtors = $repo->debtorTeamsForSms();
 $teamDebtor = null;
