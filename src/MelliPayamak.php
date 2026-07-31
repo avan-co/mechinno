@@ -7,6 +7,30 @@ final class MelliPayamak
     private const BASE = 'https://rest.payamak-panel.com/api/SendSMS/';
 
     /**
+     * Parse MeliPayamak pattern message: body_id@text_data##param1##param2##key
+     *
+     * @return array{is_shared_pattern:bool, body_id:?string, text_data:string, vars_string:string, key:?string}
+     */
+    public static function parsePatternMessage(string $message): array
+    {
+        $message = trim($message);
+        $parts = explode('@', $message);
+        $textData = array_pop($parts);
+        $bodyId = $parts !== [] ? array_pop($parts) : null;
+        $params = explode('##', (string) $textData);
+        $key = array_pop($params);
+        $varsString = $params !== [] ? (string) reset($params) : '';
+
+        return [
+            'is_shared_pattern' => $bodyId !== null && $bodyId !== '' && trim((string) $key) === 'shared',
+            'body_id' => $bodyId !== null && $bodyId !== '' ? $bodyId : null,
+            'text_data' => (string) $textData,
+            'vars_string' => $varsString,
+            'key' => $key !== false ? (string) $key : null,
+        ];
+    }
+
+    /**
      * @return array{ok:bool, rec_id:?string, error:?string, raw:mixed}
      */
     public function send(string $username, string $password, string $from, string $to, string $text): array
@@ -20,13 +44,34 @@ final class MelliPayamak
             return ['ok' => false, 'rec_id' => null, 'error' => 'متن پیامک خالی است.', 'raw' => ''];
         }
 
-        $response = $this->request('SendSMS', [
-            'username' => $username,
-            'password' => $password,
+        $pattern = self::parsePatternMessage($text);
+        if ($pattern['is_shared_pattern']) {
+            return $this->sendBaseServiceNumber(
+                $username,
+                $password,
+                $to,
+                (int) $pattern['body_id'],
+                $pattern['vars_string']
+            );
+        }
+
+        $sendText = $pattern['body_id'] !== null ? $pattern['text_data'] : $text;
+
+        return $this->sendSimpleSms($username, $password, $from, $to, $sendText);
+    }
+
+    /**
+     * @return array{ok:bool, rec_id:?string, error:?string, raw:mixed}
+     */
+    private function sendSimpleSms(string $username, string $password, string $from, string $to, string $text): array
+    {
+        $response = $this->requestJson(self::BASE . 'SendSMS', [
+            'username' => trim($username),
+            'password' => trim($password),
             'to' => $to,
             'from' => trim($from),
             'text' => $text,
-            'isflash' => 'false',
+            'isflash' => false,
         ]);
 
         if (!$response['ok']) {
@@ -34,11 +79,38 @@ final class MelliPayamak
         }
 
         $parsed = self::parseSendResponse($response['data']);
-        if ($parsed['ok']) {
-            return $parsed;
+
+        return $parsed['ok']
+            ? $parsed
+            : ['ok' => true, 'rec_id' => null, 'error' => null, 'raw' => $response['raw']];
+    }
+
+    /**
+     * @return array{ok:bool, rec_id:?string, error:?string, raw:mixed}
+     */
+    private function sendBaseServiceNumber(string $username, string $password, string $to, int $bodyId, string $text): array
+    {
+        if ($bodyId <= 0) {
+            return ['ok' => false, 'rec_id' => null, 'error' => 'شناسه الگوی پیامک نامعتبر است.', 'raw' => ''];
         }
 
-        return ['ok' => false, 'rec_id' => null, 'error' => $parsed['error'] ?? 'خطا در ارسال پیامک', 'raw' => $response['raw']];
+        $response = $this->requestJson(self::BASE . 'BaseServiceNumber', [
+            'username' => trim($username),
+            'password' => trim($password),
+            'text' => $text,
+            'to' => $to,
+            'bodyId' => $bodyId,
+        ]);
+
+        if (!$response['ok']) {
+            return ['ok' => false, 'rec_id' => null, 'error' => $response['error'], 'raw' => $response['raw']];
+        }
+
+        $parsed = self::parseSendResponse($response['data']);
+
+        return $parsed['ok']
+            ? $parsed
+            : ['ok' => true, 'rec_id' => null, 'error' => null, 'raw' => $response['raw']];
     }
 
     /**
@@ -232,6 +304,84 @@ final class MelliPayamak
         }
 
         return ['ok' => true, 'data' => $data, 'error' => null, 'raw' => $raw];
+    }
+
+    /**
+     * @param array<string, mixed> $body
+     * @return array{ok:bool, data:mixed, error:?string, raw:string}
+     */
+    private function requestJson(string $url, array $body): array
+    {
+        $username = trim((string) ($body['username'] ?? ''));
+        $password = trim((string) ($body['password'] ?? ''));
+        if ($username === '' || $password === '') {
+            return ['ok' => false, 'data' => null, 'error' => 'تنظیمات پیامک کامل نیست.', 'raw' => ''];
+        }
+
+        $payload = json_encode($body, JSON_UNESCAPED_UNICODE);
+        if ($payload === false) {
+            return ['ok' => false, 'data' => null, 'error' => 'خطا در آماده‌سازی درخواست پیامک.', 'raw' => ''];
+        }
+
+        $ch = curl_init($url);
+        if ($ch === false) {
+            return ['ok' => false, 'data' => null, 'error' => 'امکان اتصال به سرویس پیامک وجود ندارد.', 'raw' => ''];
+        }
+
+        curl_setopt_array($ch, [
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => $payload,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => 15,
+            CURLOPT_CONNECTTIMEOUT => 5,
+            CURLOPT_HTTPHEADER => [
+                'Content-Type: application/json; charset=utf-8',
+                'Accept: application/json',
+            ],
+        ]);
+
+        $response = curl_exec($ch);
+        $curlError = curl_error($ch);
+        curl_close($ch);
+
+        if ($response === false) {
+            return ['ok' => false, 'data' => null, 'error' => $curlError !== '' ? $curlError : 'خطا در ارتباط با ملی‌پیامک', 'raw' => ''];
+        }
+
+        $raw = trim((string) $response);
+        if ($raw === '') {
+            return ['ok' => false, 'data' => null, 'error' => 'پاسخ خالی از سرویس پیامک', 'raw' => ''];
+        }
+
+        $decoded = json_decode($raw, true);
+        if (json_last_error() !== JSON_ERROR_NONE || !is_array($decoded)) {
+            return ['ok' => false, 'data' => $decoded ?? $raw, 'error' => 'پاسخ نامعتبر از سرویس پیامک', 'raw' => $raw];
+        }
+
+        if (!self::isJsonApiSuccess($decoded)) {
+            $message = trim((string) ($decoded['StrRetStatus'] ?? $decoded['Value'] ?? 'خطای سرویس پیامک'));
+            if (isset($decoded['RetStatus'])) {
+                $message .= ' (کد وضعیت: ' . $decoded['RetStatus'] . ')';
+            }
+
+            return ['ok' => false, 'data' => $decoded, 'error' => $message !== '' ? $message : 'خطای سرویس پیامک', 'raw' => $raw];
+        }
+
+        return ['ok' => true, 'data' => $decoded, 'error' => null, 'raw' => $raw];
+    }
+
+    /**
+     * @param array<string, mixed> $result
+     */
+    private static function isJsonApiSuccess(array $result): bool
+    {
+        if (!isset($result['RetStatus'])) {
+            return false;
+        }
+
+        $status = $result['RetStatus'];
+
+        return $status == 1 || (is_string($status) && strtolower($status) === 'success');
     }
 
     /**

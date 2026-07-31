@@ -663,6 +663,15 @@ $assert($leaderMembers['total'] >= 1, 'members: leader filter returns leaders');
 $assert(MelliPayamak::deliveryLabel(4) === 'رسیده به گوشی', 'sms: delivery label mapping');
 $assert(MelliPayamak::deliveryLabel(0) === 'ارسال شده به مخابرات', 'sms: delivery code 0 label');
 $assert(MelliPayamak::deliveryLabel(-2) === 'شناسه پیامک نامعتبر یا هنوز ثبت نشده', 'sms: delivery error code label');
+$plainPattern = MelliPayamak::parsePatternMessage('سلام به همه');
+$assert($plainPattern['is_shared_pattern'] === false && $plainPattern['body_id'] === null, 'sms: plain text is not a shared pattern');
+$sharedPattern = MelliPayamak::parsePatternMessage('12345@arg1##arg2##shared');
+$assert($sharedPattern['is_shared_pattern'] === true, 'sms: shared pattern detected');
+$assert($sharedPattern['body_id'] === '12345', 'sms: shared pattern body id parsed');
+$assert($sharedPattern['vars_string'] === 'arg1', 'sms: shared pattern vars use first segment');
+$nonSharedPattern = MelliPayamak::parsePatternMessage('12345@متن آزاد##custom');
+$assert($nonSharedPattern['is_shared_pattern'] === false, 'sms: non-shared pattern uses simple send path');
+$assert($nonSharedPattern['text_data'] === 'متن آزاد##custom', 'sms: non-shared pattern keeps full text payload');
 $adminAllowed = Access::allowedResources();
 $assert(in_array('sms-send', $adminAllowed, true), 'access: admin can send sms announcements');
 
