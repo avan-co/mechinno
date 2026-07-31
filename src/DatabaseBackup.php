@@ -34,6 +34,14 @@ final class DatabaseBackup
     }
 
     /**
+     * @return list<string>
+     */
+    public static function tableOrder(): array
+    {
+        return self::TABLE_ORDER;
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function export(): array
@@ -43,15 +51,12 @@ final class DatabaseBackup
         foreach ($this->orderedTables() as $table) {
             $rows = $this->pdo->query('SELECT * FROM ' . Sql::quoteIdentifier($table))->fetchAll(PDO::FETCH_ASSOC);
             $tables[$table] = array_map(
-                function (array $row) use ($table): array {
+                static function (array $row) use ($table): array {
                     if ($table === 'panel_users') {
                         unset($row['password_plain']);
                     }
 
-                    return array_map(
-                        static fn (mixed $value): mixed => is_string($value) ? $value : $value,
-                        $row
-                    );
+                    return $row;
                 },
                 $rows
             );
@@ -137,15 +142,32 @@ final class DatabaseBackup
             $this->pdo->exec('SET FOREIGN_KEY_CHECKS = 0');
         }
 
+        // Only wipe/import tables present in the payload. Missing keys keep live data
+        // so older backups (e.g. without meeting rooms) do not erase newer tables.
+        $targets = [];
+        foreach ($this->orderedTables() as $table) {
+            if (array_key_exists($table, $tables)) {
+                $targets[] = $table;
+            }
+        }
+        if ($targets === []) {
+            throw new InvalidArgumentException('هیچ جدول قابل بازیابی در فایل پشتیبان نیست.');
+        }
+
+        $imported = [];
+        $autoIncrements = [];
+
         try {
             $this->pdo->beginTransaction();
-            foreach (array_reverse($this->orderedTables()) as $table) {
+            foreach (array_reverse($targets) as $table) {
                 $this->clearTable($table);
             }
-            $imported = [];
-            foreach ($this->orderedTables() as $table) {
-                $rows = $tables[$table] ?? [];
-                $imported[$table] = $this->importTable($table, $rows);
+            foreach ($targets as $table) {
+                $result = $this->importTable($table, $tables[$table] ?? []);
+                $imported[$table] = $result['count'];
+                if ($result['max_id'] > 0) {
+                    $autoIncrements[$table] = $result['max_id'];
+                }
             }
             $this->pdo->commit();
         } catch (Throwable $exception) {
@@ -159,27 +181,32 @@ final class DatabaseBackup
             }
         }
 
-        Schema::reconcileDeskAssignments($this->pdo);
-        if (app_configured()) {
-            EntityAccounts::syncMissingTeams($this->pdo);
-            TeamLeaders::backfillAll($this->pdo);
+        // MySQL DDL (ALTER AUTO_INCREMENT) must run outside the transaction — DDL commits implicitly.
+        foreach ($autoIncrements as $table => $maxId) {
+            $this->resetAutoIncrement($table, $maxId);
         }
+
+        $this->pinSchemaVersion();
+        Schema::reconcileDeskAssignments($this->pdo);
+        // Do not auto-provision portal users or mutate leaders on restore — keep snapshot fidelity.
+        // Admins can reset passwords from the panel if accounts are missing.
 
         return $imported;
     }
 
     /**
      * @param list<array<string, mixed>> $rows
+     * @return array{count:int,max_id:int}
      */
-    private function importTable(string $table, array $rows): int
+    private function importTable(string $table, array $rows): array
     {
         if ($rows === [] || !$this->tableExists($table)) {
-            return 0;
+            return ['count' => 0, 'max_id' => 0];
         }
 
         $columns = $this->tableColumns($table);
         if ($columns === []) {
-            return 0;
+            return ['count' => 0, 'max_id' => 0];
         }
 
         $inserted = 0;
@@ -211,9 +238,7 @@ final class DatabaseBackup
             }
         }
 
-        $this->resetAutoIncrement($table, $maxId);
-
-        return $inserted;
+        return ['count' => $inserted, 'max_id' => $maxId];
     }
 
     private function clearTable(string $table): void
@@ -226,10 +251,8 @@ final class DatabaseBackup
 
         if ($this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite') {
             $this->pdo->exec('DELETE FROM sqlite_sequence WHERE name = ' . $this->pdo->quote($table));
-            return;
         }
-
-        $this->pdo->exec('ALTER TABLE ' . Sql::quoteIdentifier($table) . ' AUTO_INCREMENT = 1');
+        // MySQL AUTO_INCREMENT is adjusted after commit via resetAutoIncrement().
     }
 
     private function resetAutoIncrement(string $table, int $maxId): void
@@ -237,10 +260,33 @@ final class DatabaseBackup
         if ($maxId <= 0 || $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite') {
             return;
         }
+        if (!$this->tableExists($table)) {
+            return;
+        }
 
         $this->pdo->exec(
             'ALTER TABLE ' . Sql::quoteIdentifier($table) . ' AUTO_INCREMENT = ' . ($maxId + 1)
         );
+    }
+
+    private function pinSchemaVersion(): void
+    {
+        if (!$this->tableExists('center_settings') || !Schema::hasColumn($this->pdo, 'center_settings', 'schema_version')) {
+            return;
+        }
+
+        $exists = (int) $this->pdo->query('SELECT COUNT(*) FROM center_settings WHERE id = 1')->fetchColumn();
+        if ($exists === 0) {
+            $this->pdo->prepare(
+                'INSERT INTO center_settings (id, schema_version) VALUES (1, :version)'
+            )->execute(['version' => Schema::VERSION]);
+
+            return;
+        }
+
+        $this->pdo->prepare(
+            'UPDATE center_settings SET schema_version = :version WHERE id = 1'
+        )->execute(['version' => Schema::VERSION]);
     }
 
     /**

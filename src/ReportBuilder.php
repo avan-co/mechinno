@@ -167,13 +167,20 @@ final class ReportBuilder
             $data['teams'] = $teams;
         }
         if (in_array('members', $sections, true)) {
-            $members = $repo->resource('members');
-            if ($normalized['team_id'] > 0) {
-                $members = array_values(array_filter(
-                    $members,
-                    static fn (array $row): bool => (int) ($row['team_id'] ?? 0) === $normalized['team_id']
-                ));
-            }
+            $members = array_values(array_filter(
+                $repo->resource('members'),
+                static function (array $row) use ($normalized): bool {
+                    $status = (string) ($row['approval_status'] ?? 'approved');
+                    if ($status !== '' && $status !== 'approved') {
+                        return false;
+                    }
+                    if ($normalized['team_id'] > 0 && (int) ($row['team_id'] ?? 0) !== $normalized['team_id']) {
+                        return false;
+                    }
+
+                    return true;
+                }
+            ));
             $data['members'] = $members;
         }
         if (in_array('desks', $sections, true)) {
@@ -340,9 +347,11 @@ final class ReportBuilder
      */
     private function financeTotals(array $period, int $teamId, string $periodType = self::PERIOD_ANNUAL): array
     {
-        $deposits = $this->sumTransactions($period, ['واریز تیم'], $teamId, true);
-        $income = $this->sumTransactions($period, ['درآمد'], 0, false);
-        $expense = abs($this->sumTransactions($period, ['هزینه'], 0, false));
+        // واریزها مثل داشبورد بر اساس سال/ماه مالی تراکنش جمع می‌شوند (نه فقط tx_date).
+        $deposits = $this->sumDepositsByFiscal($period, $teamId);
+        // درآمد/هزینه مرکز به نهاد نسبت داده نمی‌شود؛ در فیلتر تیمی صفر است.
+        $income = $teamId > 0 ? 0 : $this->sumTransactions($period, ['درآمد'], 0, false);
+        $expense = $teamId > 0 ? 0 : abs($this->sumTransactions($period, ['هزینه'], 0, false));
         $chargeTotal = $this->sumCharges($period, $teamId);
         $debtRows = $this->debtsInPeriod($period, $teamId);
         $debtTotal = 0;
@@ -554,6 +563,32 @@ final class ReportBuilder
                 'notes' => (string) ($row['notes'] ?? ''),
             ];
         }, $statement->fetchAll());
+    }
+
+    /**
+     * @param array{fiscal_year:string,months:list<int>} $period
+     */
+    private function sumDepositsByFiscal(array $period, int $teamId): int
+    {
+        if ($period['months'] === []) {
+            return 0;
+        }
+        $placeholders = implode(',', array_fill(0, count($period['months']), '?'));
+        $sql = "SELECT COALESCE(SUM(amount), 0) FROM transactions
+                WHERE confirmed = 1
+                  AND category = 'واریز تیم'
+                  AND payment_status = 'approved'
+                  AND fiscal_year = ?
+                  AND month_index IN ({$placeholders})";
+        $params = array_merge([$period['fiscal_year']], $period['months']);
+        if ($teamId > 0) {
+            $sql .= ' AND team_id = ?';
+            $params[] = $teamId;
+        }
+        $statement = $this->pdo->prepare($sql);
+        $statement->execute($params);
+
+        return (int) $statement->fetchColumn();
     }
 
     /**

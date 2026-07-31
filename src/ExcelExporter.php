@@ -123,6 +123,11 @@ final class ExcelExporter
         'summary', 'teams', 'members', 'desks', 'desk_assignments', 'lockers', 'rate_settings', 'charges', 'debts', 'transactions',
     ];
 
+    /** @var list<string> */
+    private const FINANCE_ORDER = [
+        'summary', 'charges', 'debts', 'transactions',
+    ];
+
     /** @var array{fiscal_year?:string,month_from?:int,month_to?:int,team_id?:int} */
     private array $filters = [];
 
@@ -136,7 +141,8 @@ final class ExcelExporter
     public function output(string $reportKey, array $filters = []): void
     {
         $reports = self::reports();
-        if ($reportKey !== 'all' && !isset($reports[$reportKey])) {
+        $allowed = array_merge(array_keys($reports), ['all', 'finance']);
+        if (!in_array($reportKey, $allowed, true)) {
             http_response_code(404);
             echo 'Report not found';
             return;
@@ -144,7 +150,7 @@ final class ExcelExporter
 
         $this->filters = $this->normalizeFilters($filters);
         $today = JalaliDate::todayParts();
-        $fileName = $reportKey === 'all'
+        $fileName = in_array($reportKey, ['all', 'finance'], true)
             ? 'mechinno-report-' . str_replace('/', '-', $today['formatted']) . '.xls'
             : "mechinno-{$reportKey}-" . str_replace('/', '-', $today['formatted']) . '.xls';
 
@@ -152,9 +158,11 @@ final class ExcelExporter
         header('Content-Disposition: attachment; filename="' . $fileName . '"');
         header('Cache-Control: max-age=0');
 
-        $keys = $reportKey === 'all'
-            ? self::EXPORT_ORDER
-            : [$reportKey];
+        $keys = match ($reportKey) {
+            'all' => self::EXPORT_ORDER,
+            'finance' => self::FINANCE_ORDER,
+            default => [$reportKey],
+        };
 
         echo $this->workbookXml($keys, $today['formatted']);
     }
@@ -177,6 +185,13 @@ final class ExcelExporter
         }
         if ($to >= 1 && $to <= 12) {
             $normalized['month_to'] = $to;
+        }
+        if (isset($normalized['month_from'], $normalized['month_to'])
+            && $normalized['month_from'] > $normalized['month_to']) {
+            [$normalized['month_from'], $normalized['month_to']] = [
+                $normalized['month_to'],
+                $normalized['month_from'],
+            ];
         }
         $teamId = (int) ($filters['team_id'] ?? 0);
         if ($teamId > 0) {
@@ -224,12 +239,7 @@ final class ExcelExporter
                 $xml .= $this->worksheetXml($report['title'], $report['headers'], $rows, $generatedAt);
                 continue;
             }
-            if (in_array($key, ['charges', 'transactions'], true) && $this->filters !== []) {
-                $rows = $this->filteredQueryRows($key, $report['query']);
-                $xml .= $this->worksheetXml($report['title'], $report['headers'], $rows, $generatedAt);
-                continue;
-            }
-            $rows = $this->pdo->query($report['query'])->fetchAll(PDO::FETCH_NUM);
+            $rows = $this->filteredQueryRows($key, $report['query']);
             $xml .= $this->worksheetXml($report['title'], $report['headers'], $rows, $generatedAt);
         }
 
@@ -290,7 +300,15 @@ final class ExcelExporter
                       AND (t.category <> 'واریز تیم' OR t.payment_status = 'approved')";
             $params = [];
             if (isset($this->filters['fiscal_year'], $this->filters['month_from'], $this->filters['month_to'])) {
-                $sql .= ' AND t.tx_date >= :date_from AND t.tx_date <= :date_to';
+                $sql .= ' AND (
+                    (t.category = \'واریز تیم\' AND t.fiscal_year = :fiscal_year
+                        AND t.month_index BETWEEN :month_from AND :month_to)
+                    OR (t.category IN (\'درآمد\', \'هزینه\')
+                        AND t.tx_date >= :date_from AND t.tx_date <= :date_to)
+                )';
+                $params['fiscal_year'] = $this->filters['fiscal_year'];
+                $params['month_from'] = $this->filters['month_from'];
+                $params['month_to'] = $this->filters['month_to'];
                 $params['date_from'] = JalaliDate::monthStart(
                     $this->filters['fiscal_year'],
                     (int) $this->filters['month_from']
@@ -300,16 +318,114 @@ final class ExcelExporter
                     (int) $this->filters['month_to']
                 );
             } elseif (isset($this->filters['fiscal_year'])) {
-                $sql .= ' AND t.fiscal_year = :fiscal_year';
+                $sql .= ' AND (
+                    (t.category = \'واریز تیم\' AND t.fiscal_year = :fiscal_year)
+                    OR (t.category IN (\'درآمد\', \'هزینه\') AND t.tx_date LIKE :year_prefix)
+                )';
                 $params['fiscal_year'] = $this->filters['fiscal_year'];
+                $params['year_prefix'] = $this->filters['fiscal_year'] . '%';
             }
             if (isset($this->filters['team_id'])) {
+                // درآمد/هزینه مرکز team_id ندارند؛ در فیلتر تیمی فقط واریز/تراکنش همان نهاد.
                 $sql .= ' AND t.team_id = :team_id';
                 $params['team_id'] = $this->filters['team_id'];
             }
             $sql .= ' ORDER BY t.tx_date DESC, t.id DESC';
             $statement = $this->pdo->prepare($sql);
             $statement->execute($params);
+
+            return $statement->fetchAll(PDO::FETCH_NUM);
+        }
+
+        if ($key === 'teams' && isset($this->filters['team_id'])) {
+            $sql = "SELECT t.entity_code,
+                    CASE t.entity_type WHEN 'team' THEN 'تیم' WHEN 'company' THEN 'شرکت' WHEN 'student' THEN 'دانشجو' ELSE t.entity_type END,
+                    t.name, t.leader, t.phone,
+                    (SELECT COUNT(*) FROM desks d WHERE d.team_id = t.id),
+                    t.contract_start, t.contract_end,
+                    t.joined_at, t.warning, t.notes,
+                    u.username
+                    FROM teams t
+                    LEFT JOIN panel_users u ON u.team_id = t.id AND u.role = 'team'
+                    WHERE t.id = :team_id
+                    ORDER BY t.entity_type, t.name";
+            $statement = $this->pdo->prepare($sql);
+            $statement->execute(['team_id' => $this->filters['team_id']]);
+
+            return $statement->fetchAll(PDO::FETCH_NUM);
+        }
+
+        if ($key === 'members') {
+            $sql = "SELECT m.member_code, m.full_name, t.name AS team_label,
+                    CASE t.entity_type WHEN 'team' THEN 'تیم' WHEN 'company' THEN 'شرکت' WHEN 'student' THEN 'دانشجو' ELSE t.entity_type END,
+                    (SELECT GROUP_CONCAT(d.number ORDER BY d.number) FROM desks d WHERE d.team_id = m.team_id),
+                    CASE m.wants_access WHEN 1 THEN 'بله' ELSE 'خیر' END,
+                    m.access_code, m.phone, m.national_id, m.notes
+                    FROM members m
+                    LEFT JOIN teams t ON t.id = m.team_id
+                    WHERE (m.approval_status = 'approved' OR m.approval_status IS NULL)";
+            $params = [];
+            if (isset($this->filters['team_id'])) {
+                $sql .= ' AND m.team_id = :team_id';
+                $params['team_id'] = $this->filters['team_id'];
+            }
+            $sql .= ' ORDER BY t.name, m.full_name';
+            $statement = $this->pdo->prepare($sql);
+            $statement->execute($params);
+
+            return $statement->fetchAll(PDO::FETCH_NUM);
+        }
+
+        if ($key === 'desks' && isset($this->filters['team_id'])) {
+            $sql = "SELECT d.number,
+                    CASE d.usage_type WHEN 'formal' THEN 'رسمی' WHEN 'informal' THEN 'غیررسمی' WHEN 'mixed' THEN 'ترکیبی' ELSE d.usage_type END,
+                    COALESCE(t.name, 'آزاد'),
+                    CASE t.entity_type WHEN 'team' THEN 'تیم' WHEN 'company' THEN 'شرکت' WHEN 'student' THEN 'دانشجو' ELSE COALESCE(t.entity_type, '') END,
+                    d.notes, d.row_index, d.col_index
+                    FROM desks d
+                    LEFT JOIN teams t ON t.id = d.team_id
+                    WHERE d.team_id = :team_id
+                    ORDER BY d.number";
+            $statement = $this->pdo->prepare($sql);
+            $statement->execute(['team_id' => $this->filters['team_id']]);
+
+            return $statement->fetchAll(PDO::FETCH_NUM);
+        }
+
+        if ($key === 'desk_assignments' && isset($this->filters['team_id'])) {
+            $sql = "SELECT da.desk_number, t.name AS team_name,
+                    CASE da.usage_type WHEN 'formal' THEN 'رسمی' WHEN 'informal' THEN 'غیررسمی' ELSE da.usage_type END,
+                    da.assigned_from, da.assigned_until, da.notes
+                    FROM desk_assignments da
+                    LEFT JOIN teams t ON t.id = da.team_id
+                    WHERE da.team_id = :team_id
+                    ORDER BY da.desk_number, da.assigned_from";
+            $statement = $this->pdo->prepare($sql);
+            $statement->execute(['team_id' => $this->filters['team_id']]);
+
+            return $statement->fetchAll(PDO::FETCH_NUM);
+        }
+
+        if ($key === 'lockers' && isset($this->filters['team_id'])) {
+            $sql = 'SELECT l.locker_number, l.status, t.name AS team_label,
+                            l.delivered_at, l.key_number, l.spare_key, l.notes
+                            FROM lockers l
+                            LEFT JOIN teams t ON t.id = l.team_id
+                            WHERE l.team_id = :team_id
+                            ORDER BY l.locker_number';
+            $statement = $this->pdo->prepare($sql);
+            $statement->execute(['team_id' => $this->filters['team_id']]);
+
+            return $statement->fetchAll(PDO::FETCH_NUM);
+        }
+
+        if ($key === 'rate_settings' && isset($this->filters['fiscal_year'])) {
+            $sql = 'SELECT fiscal_year, title, charge_rate, informal_rent_rate, effective_from, notes
+                    FROM rate_settings
+                    WHERE fiscal_year = :fiscal_year
+                    ORDER BY fiscal_year, id';
+            $statement = $this->pdo->prepare($sql);
+            $statement->execute(['fiscal_year' => $this->filters['fiscal_year']]);
 
             return $statement->fetchAll(PDO::FETCH_NUM);
         }
@@ -400,30 +516,58 @@ final class ExcelExporter
     private function summaryWorksheetXml(string $generatedAt): string
     {
         $repo = new Repository($this->pdo);
-        $summary = $repo->summary();
-        $cards = $summary['cards'];
-        $month = $summary['current_month'];
+        $year = $this->filters['fiscal_year'] ?? (string) JalaliDate::todayParts()['year'];
+        $monthFrom = (int) ($this->filters['month_from'] ?? 1);
+        $monthTo = (int) ($this->filters['month_to'] ?? 12);
+        $teamId = (int) ($this->filters['team_id'] ?? 0);
+
+        $builder = new ReportBuilder($this->pdo);
+        $period = $builder->resolvePeriod([
+            'fiscal_year' => $year,
+            'period' => ($monthFrom === 1 && $monthTo === 12) ? ReportBuilder::PERIOD_ANNUAL : ReportBuilder::PERIOD_CUSTOM,
+            'month' => $monthFrom,
+            'quarter' => (int) ceil($monthFrom / 3),
+            'month_from' => $monthFrom,
+            'month_to' => $monthTo,
+        ]);
+        $report = $builder->build([
+            'type' => ReportBuilder::TYPE_OVERVIEW,
+            'period' => ($monthFrom === 1 && $monthTo === 12) ? ReportBuilder::PERIOD_ANNUAL : ReportBuilder::PERIOD_CUSTOM,
+            'fiscal_year' => $year,
+            'month' => $monthFrom,
+            'quarter' => (int) ceil($monthFrom / 3),
+            'month_from' => $monthFrom,
+            'month_to' => $monthTo,
+            'team_id' => $teamId,
+        ]);
+        $finance = $report['finance_summary'] ?? [];
+        $cards = $repo->summary()['cards'];
 
         $rows = [
+            ['بازه گزارش', (string) ($period['label'] ?? '')],
+            ['نهاد فیلتر', $teamId > 0 ? (string) ($report['meta']['team_name'] ?? '') : 'همه نهادها'],
             ['نهادها', (int) $cards['teams']],
-            ['اعضا', (int) $cards['members']],
+            ['اعضا (تأییدشده)', (int) $cards['members']],
             ['میز اشغال', (int) $cards['desks_occupied'] . ' از ' . (int) ($cards['desks_total'] ?? 0)],
-            ['کمدها', (int) $cards['lockers']],
             ['کمد آزاد', (int) $cards['available_lockers']],
-            ['جمع شارژ قراردادها (ریال)', (int) $cards['charge_total']],
-            ['درآمد سال — واریز+دستی (ریال)', (int) $cards['income_total']],
-            ['هزینه سال (ریال)', (int) $cards['expense_total']],
-            ['واریز تأییدشده نهادها (ریال)', (int) $cards['paid_total']],
-            ['طلب کل از نهادها (ریال)', (int) $cards['debt_total']],
-            ['شارژ ماه ' . ($month['month_name'] ?? ''), (int) ($month['charge_total'] ?? 0)],
-            ['واریز تخصیص‌یافته ماه ' . ($month['month_name'] ?? ''), (int) ($month['paid_total'] ?? 0)],
-            ['مانده طلب ماه ' . ($month['month_name'] ?? ''), (int) ($month['debt_total'] ?? 0)],
+            ['جمع شارژ بازه (ریال)', (int) ($finance['charge_total'] ?? 0)],
+            ['واریز نهادها در بازه (ریال)', (int) ($finance['deposits'] ?? 0)],
+            ['درآمد دستی بازه (ریال)', (int) ($finance['manual_income'] ?? 0)],
+            ['درآمد کل بازه (ریال)', (int) ($finance['income_total'] ?? 0)],
+            ['هزینه بازه (ریال)', (int) ($finance['expense_total'] ?? 0)],
+            ['خالص نقدی بازه (ریال)', (int) ($finance['net'] ?? 0)],
+            ['واریز تخصیص‌یافته بازه (ریال)', (int) ($finance['paid_allocated'] ?? 0)],
+            ['مانده طلب بازه (ریال)', (int) ($finance['debt_total'] ?? 0)],
+            ['تعداد تراکنش بازه', (int) ($finance['transaction_count'] ?? 0)],
         ];
+        if (array_key_exists('formal_contract_total', $finance)) {
+            $rows[] = ['جمع مبلغ قراردادهای رسمی سال (ریال)', (int) $finance['formal_contract_total']];
+        }
 
         $xml = '<Worksheet ss:Name="خلاصه" ss:RightToLeft="1">' . "\n";
         $xml .= '<Table>' . "\n";
-        $xml .= '<Column ss:Width="180"/><Column ss:Width="140"/>' . "\n";
-        $xml .= '<Row ss:Height="28"><Cell ss:StyleID="DocTitle" ss:MergeAcross="1"><Data ss:Type="String">گزارش جامع مرکز نوآوری</Data></Cell></Row>' . "\n";
+        $xml .= '<Column ss:Width="220"/><Column ss:Width="160"/>' . "\n";
+        $xml .= '<Row ss:Height="28"><Cell ss:StyleID="DocTitle" ss:MergeAcross="1"><Data ss:Type="String">گزارش مرکز نوآوری</Data></Cell></Row>' . "\n";
         $xml .= '<Row><Cell ss:StyleID="Meta" ss:MergeAcross="1"><Data ss:Type="String">تاریخ تولید: ' . $this->xml($generatedAt) . '</Data></Cell></Row>' . "\n";
         $xml .= '<Row ss:Height="8"><Cell/></Row>' . "\n";
         $xml .= '<Row><Cell ss:StyleID="Header"><Data ss:Type="String">شاخص</Data></Cell><Cell ss:StyleID="Header"><Data ss:Type="String">مقدار</Data></Cell></Row>' . "\n";
@@ -432,8 +576,8 @@ final class ExcelExporter
             $xml .= '<Row>';
             $xml .= '<Cell ss:StyleID="Label"><Data ss:Type="String">' . $this->xml((string) $row[0]) . '</Data></Cell>';
             $value = $row[1];
-            if (is_int($value)) {
-                $xml .= '<Cell ss:StyleID="Money"><Data ss:Type="Number">' . $value . '</Data></Cell>';
+            if (is_int($value) || is_float($value)) {
+                $xml .= '<Cell ss:StyleID="Money"><Data ss:Type="Number">' . (int) $value . '</Data></Cell>';
             } else {
                 $xml .= '<Cell ss:StyleID="Cell"><Data ss:Type="String">' . $this->xml((string) $value) . '</Data></Cell>';
             }
@@ -477,8 +621,9 @@ final class ExcelExporter
 
         foreach ($rows as $row) {
             $xml .= '<Row>';
-            foreach ($row as $value) {
-                $isNumber = $this->isNumericCell($value);
+            foreach (array_values($row) as $colIndex => $value) {
+                $header = $headers[$colIndex] ?? '';
+                $isNumber = $this->isNumericCell($value, $header);
                 $style = $isNumber ? 'Money' : 'Cell';
                 $type = $isNumber ? 'Number' : 'String';
                 $display = $isNumber ? (int) $value : (string) ($value ?? '');
@@ -492,16 +637,34 @@ final class ExcelExporter
         return $xml;
     }
 
-    private function isNumericCell(mixed $value): bool
+    private function isNumericCell(mixed $value, string $header = ''): bool
     {
         if ($value === null || $value === '') {
             return false;
         }
+
+        $textHeaders = ['تماس', 'کدملی', 'کد تردد', 'کد عضو', 'کد', 'شماره کلید', 'کلید یدک', 'نام کاربری نهاد'];
+        foreach ($textHeaders as $needle) {
+            if ($header !== '' && str_contains($header, $needle)) {
+                return false;
+            }
+        }
+
         if (is_int($value) || is_float($value)) {
             return true;
         }
 
-        return is_string($value) && preg_match('/^-?\d+$/', $value) === 1;
+        if (!is_string($value) || preg_match('/^-?\d+$/', $value) !== 1) {
+            return false;
+        }
+
+        // Phone / national ID / access codes: keep as text so Excel does not drop leading zeros.
+        $digits = ltrim($value, '-');
+        if (strlen($digits) >= 8) {
+            return false;
+        }
+
+        return true;
     }
 
     private function xml(string $value): string

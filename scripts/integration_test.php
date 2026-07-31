@@ -868,6 +868,39 @@ $assert(($monthly['meta']['type'] ?? '') === 'finance', 'reports: finance monthl
 $assert(($monthly['meta']['month_from'] ?? 0) === 5 && ($monthly['meta']['month_to'] ?? 0) === 5, 'reports: monthly range');
 $assert(isset($monthly['finance_summary']['income_total'], $monthly['monthly_breakdown']), 'reports: finance sections');
 $assert(!array_key_exists('formal_contract_total', $monthly['finance_summary']), 'reports: monthly omits formal contract total');
+$assert((int) ($monthly['finance_summary']['manual_income'] ?? -1) === 0, 'reports: team filter zeros center manual income');
+$assert((int) ($monthly['finance_summary']['expense_total'] ?? -1) === 0, 'reports: team filter zeros center expense');
+$pdo->exec("INSERT INTO transactions (tx_date, description, amount, category, confirmed, notes)
+            VALUES ('1405/05/10', 'درآمد مرکز تست گزارش', 777000, 'درآمد', 1, 'report-audit')");
+$centerFinance = $builder->build([
+    'type' => 'finance',
+    'period' => 'monthly',
+    'fiscal_year' => '1405',
+    'month' => 5,
+    'team_id' => 0,
+]);
+$assert((int) ($centerFinance['finance_summary']['manual_income'] ?? 0) >= 777000, 'reports: center report includes manual income');
+$teamFinanceAgain = $builder->build([
+    'type' => 'finance',
+    'period' => 'monthly',
+    'fiscal_year' => '1405',
+    'month' => 5,
+    'team_id' => $teamId,
+]);
+$assert((int) ($teamFinanceAgain['finance_summary']['manual_income'] ?? -1) === 0, 'reports: team filter still excludes center income');
+$pdo->exec("INSERT INTO members (member_code, team_id, full_name, phone, approval_status, notes)
+            VALUES ('REJ-1', {$teamId}, 'عضو رد شده گزارش', '09121112233', 'rejected', 'report-audit')");
+$membersReport = $builder->build([
+    'type' => 'members',
+    'period' => 'annual',
+    'fiscal_year' => '1405',
+    'team_id' => $teamId,
+]);
+foreach ($membersReport['members'] as $memberRow) {
+    $assert(($memberRow['approval_status'] ?? 'approved') === 'approved'
+        || ($memberRow['approval_status'] ?? '') === '', 'reports: members export is approved-only');
+    $assert(($memberRow['full_name'] ?? '') !== 'عضو رد شده گزارش', 'reports: rejected member excluded');
+}
 $quarterly = $builder->build([
     'type' => 'debts',
     'period' => 'quarterly',
@@ -917,6 +950,29 @@ $assert($missingAmountFailed, 'contracts: formal amount required on create');
 // --- Excel exporter ---
 $exporter = new ExcelExporter($pdo);
 $assert(method_exists($exporter, 'output'), 'export: ExcelExporter available');
+$excelRef = new ReflectionClass($exporter);
+$normalizeMethod = $excelRef->getMethod('normalizeFilters');
+$normalizeMethod->setAccessible(true);
+$workbookMethod = $excelRef->getMethod('workbookXml');
+$workbookMethod->setAccessible(true);
+$filtersProp = $excelRef->getProperty('filters');
+$filtersProp->setAccessible(true);
+$filtersProp->setValue($exporter, $normalizeMethod->invoke($exporter, [
+    'fiscal_year' => '1405',
+    'month_from' => 5,
+    'month_to' => 5,
+    'team_id' => $teamId,
+]));
+$excelXml = (string) $workbookMethod->invoke($exporter, ['summary', 'charges', 'transactions', 'members'], '1405/05/09');
+$assert(str_contains($excelXml, 'بازه گزارش'), 'export: filtered summary includes period label');
+$assert(str_contains($excelXml, 'Worksheet ss:Name="شارژ ماهانه"'), 'export: charges sheet present');
+$assert(!str_contains($excelXml, 'عضو رد شده گزارش'), 'export: rejected members excluded from excel');
+$isNumericMethod = $excelRef->getMethod('isNumericCell');
+$isNumericMethod->setAccessible(true);
+$assert($isNumericMethod->invoke($exporter, '09121112233', 'تماس') === false, 'export: phone header forces text cell');
+$assert($isNumericMethod->invoke($exporter, '1234567890', '') === false, 'export: long digit strings stay text');
+$assert($isNumericMethod->invoke($exporter, 1500000, 'مبلغ') === true, 'export: money ints stay numeric');
+$assert($isNumericMethod->invoke($exporter, '12', 'شماره ماه') === true, 'export: short digit strings stay numeric');
 
 // --- Database backup roundtrip ---
 require_once dirname(__DIR__) . '/src/DatabaseBackup.php';
@@ -954,7 +1010,28 @@ $restoredTeamCount = (int) $roundtripPdo->query('SELECT COUNT(*) FROM teams')->f
 $assert($restoredTeamCount === (int) ($exportPayload['counts']['teams'] ?? 0), 'backup: restored team count matches export');
 $restoredRoomReservations = (int) $roundtripPdo->query('SELECT COUNT(*) FROM room_reservations')->fetchColumn();
 $assert($restoredRoomReservations === (int) ($exportPayload['counts']['room_reservations'] ?? 0), 'backup: restored room reservations match export');
+$schemaVersion = (int) $roundtripPdo->query('SELECT schema_version FROM center_settings WHERE id = 1')->fetchColumn();
+$assert($schemaVersion === Schema::VERSION, 'backup: restore pins schema_version to current');
 
+// Old backup without room tables must not wipe live rooms on restore.
+$legacyPayload = $exportPayload;
+unset($legacyPayload['tables']['meeting_rooms'], $legacyPayload['tables']['room_closed_days'], $legacyPayload['tables']['room_reservations'], $legacyPayload['counts']['meeting_rooms'], $legacyPayload['counts']['room_closed_days'], $legacyPayload['counts']['room_reservations']);
+$legacyDb = dirname(__DIR__) . '/data/integration_backup_legacy.sqlite3';
+if (is_file($legacyDb)) {
+    unlink($legacyDb);
+}
+$legacyPdo = new PDO('sqlite:' . $legacyDb);
+$legacyPdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+Schema::migrate($legacyPdo);
+$legacyPdo->exec("INSERT INTO meeting_rooms (name, code, capacity, open_time, close_time, slot_minutes, is_active, created_at, updated_at)
+                  VALUES ('اتاق زنده', 'LIVE-1', 4, '08:00', '20:00', 60, 1, '1405/01/01', '1405/01/01')");
+$liveRoomBefore = (int) $legacyPdo->query('SELECT COUNT(*) FROM meeting_rooms')->fetchColumn();
+$assert($liveRoomBefore >= 1, 'backup: legacy target has live rooms before restore');
+(new DatabaseBackup($legacyPdo))->import($legacyPayload);
+$liveRoomAfter = (int) $legacyPdo->query('SELECT COUNT(*) FROM meeting_rooms')->fetchColumn();
+$assert($liveRoomAfter === $liveRoomBefore, 'backup: legacy restore preserves missing room tables');
+$legacyTeams = (int) $legacyPdo->query('SELECT COUNT(*) FROM teams')->fetchColumn();
+$assert($legacyTeams === (int) ($exportPayload['counts']['teams'] ?? 0), 'backup: legacy restore still replaces teams');
 // --- Delete team cascades related finance/member data ---
 $userBefore = (int) $pdo->query('SELECT COUNT(*) FROM panel_users WHERE team_id = ' . $teamId)->fetchColumn();
 $assert($userBefore === 1, 'entity: one portal user per team');

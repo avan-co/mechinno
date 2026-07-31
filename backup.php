@@ -126,7 +126,7 @@ if (!$configured) {
         </div>
 
         <h1>پشتیبان‌گیری و بازیابی</h1>
-        <p>یک فایل JSON شامل تمام داده‌های پنل (نهادها، اعضا، میزها، شارژ، مالی، کاربران، پیامک و …) دانلود یا بازیابی کنید.</p>
+        <p>یک فایل JSON شامل تمام داده‌های پنل (نهادها، اعضا، میزها، شارژ، مالی، کاربران، رزرو اتاق، پیامک و …) دانلود یا بازیابی کنید.</p>
 
         <?php if ($error): ?>
           <div class="notice danger"><?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?></div>
@@ -159,7 +159,7 @@ if (!$configured) {
             <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>" />
             <input type="hidden" name="action" value="restore" />
             <h2>بازیابی از فایل</h2>
-            <p class="hint warn">بازیابی، داده‌های فعلی را با محتوای فایل جایگزین می‌کند. قبل از بازیابی یک نسخه پشتیبان بگیرید.</p>
+            <p class="hint warn">بازیابی، فقط جدول‌هایی که در فایل هستند را جایگزین می‌کند؛ جدول‌های جدیدتر که در بک‌آپ قدیمی نیستند (مثل اتاق‌ها) پاک نمی‌شوند. قبل از بازیابی یک نسخه پشتیبان تازه بگیرید. برای خواندن تنظیمات پیامک پس از بازیابی، همان <code>app_secret</code> باید در config باشد.</p>
             <label class="wide">
               <span>فایل پشتیبان JSON</span>
               <input type="file" name="backup_file" accept=".json,application/json" required />

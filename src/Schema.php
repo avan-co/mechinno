@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 final class Schema
 {
-    private const VERSION = 18;
+    public const VERSION = 18;
 
     public static function migrate(PDO $pdo): void
     {

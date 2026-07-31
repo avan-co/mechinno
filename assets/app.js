@@ -1004,8 +1004,8 @@ const initReportBuilder = async () => {
     document.getElementById("reportOpenExcel")?.addEventListener("click", () => {
       const filters = reportLastFilters || collectReportFilters();
       const excelReport = ({
-        overview: "all",
-        finance: "transactions",
+        overview: "summary",
+        finance: "finance",
         transactions: "transactions",
         charges: "charges",
         debts: "debts",
@@ -1013,26 +1013,26 @@ const initReportBuilder = async () => {
         members: "members",
         desks: "desks",
         lockers: "lockers",
+        full: "all",
       })[filters.type] || "all";
       const params = new URLSearchParams({ report: excelReport });
-      if (reportTypeSupportsPeriod(filters.type)) {
-        params.set("fiscal_year", filters.fiscal_year || "");
-        let monthFrom = Number(filters.month_from || filters.month || 1);
-        let monthTo = Number(filters.month_to || filters.month || 12);
-        if (filters.period === "quarterly") {
-          const q = Number(filters.quarter || 1);
-          monthFrom = ((q - 1) * 3) + 1;
-          monthTo = q * 3;
-        } else if (filters.period === "annual") {
-          monthFrom = 1;
-          monthTo = 12;
-        } else if (filters.period === "monthly") {
-          monthFrom = Number(filters.month || 1);
-          monthTo = monthFrom;
-        }
-        params.set("month_from", String(monthFrom));
-        params.set("month_to", String(monthTo));
+      // Always pass period/team when available so Excel matches the preview filters.
+      params.set("fiscal_year", filters.fiscal_year || "");
+      let monthFrom = Number(filters.month_from || filters.month || 1);
+      let monthTo = Number(filters.month_to || filters.month || 12);
+      if (filters.period === "quarterly") {
+        const q = Number(filters.quarter || 1);
+        monthFrom = ((q - 1) * 3) + 1;
+        monthTo = q * 3;
+      } else if (filters.period === "annual" || !reportTypeSupportsPeriod(filters.type)) {
+        monthFrom = 1;
+        monthTo = 12;
+      } else if (filters.period === "monthly") {
+        monthFrom = Number(filters.month || 1);
+        monthTo = monthFrom;
       }
+      params.set("month_from", String(monthFrom));
+      params.set("month_to", String(monthTo));
       if (filters.team_id) params.set("team_id", String(filters.team_id));
       window.open(`export.php?${params.toString()}`, "_blank", "noopener");
     });
