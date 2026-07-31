@@ -99,6 +99,13 @@ $assetVer = (string) max(
         <?php else: ?>
           <?php if ($error): ?>
             <div class="notice danger"><?= e($error) ?></div>
+            <?php if (str_contains($error, 'دیتابیس') || str_contains($error, 'config.php') || str_contains($error, 'MySQL')): ?>
+              <p class="hint" style="margin-top:10px">
+                اگر هنوز پنل را نصب نکرده‌اید، ابتدا تنظیمات دیتابیس را در <code>config.php</code> درست کنید و
+                <a class="text-link" href="install.php">صفحه نصب</a> را باز کنید.
+              </p>
+              <a class="button ghost login-submit" href="install.php">باز کردن صفحه نصب</a>
+            <?php endif; ?>
           <?php endif; ?>
           <form method="post" class="auth-form login-form">
             <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>" />
@@ -113,6 +120,9 @@ $assetVer = (string) max(
             </label>
             <button class="button login-submit" type="submit">ورود</button>
           </form>
+          <p class="hint" style="margin-top:14px;text-align:center">
+            نصب یا بازنشانی پنل: <a class="text-link" href="install.php">install.php</a>
+          </p>
         <?php endif; ?>
       </section>
     </main>

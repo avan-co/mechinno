@@ -237,6 +237,15 @@ function log_exception(Throwable $exception): void
 function safe_error_message(Throwable $exception): string
 {
     log_exception($exception);
+
+    // Intentional user-facing errors from domain/config checks.
+    if ($exception instanceof RuntimeException || $exception instanceof InvalidArgumentException) {
+        $message = trim($exception->getMessage());
+        if ($message !== '') {
+            return $message;
+        }
+    }
+
     try {
         $config = app_configured() ? app_config() : [];
         if ((bool) ($config['debug'] ?? false)) {
@@ -244,9 +253,11 @@ function safe_error_message(Throwable $exception): string
         }
     } catch (Throwable) {
     }
-    if ($exception instanceof PDOException) {
-        return 'اتصال به دیتابیس برقرار نشد. تنظیمات db در config.php را بررسی کنید.';
+
+    if ($exception instanceof PDOException || $exception->getPrevious() instanceof PDOException) {
+        return 'اتصال به دیتابیس برقرار نشد. تنظیمات db در config.php را بررسی کنید و سپس install.php را باز کنید.';
     }
+
     return 'خطای داخلی رخ داد. تنظیمات دیتابیس و فایل‌های راه‌اندازی را بررسی کنید.';
 }
 
