@@ -122,4 +122,49 @@ if (!apiSource.includes("resource === 'health'") && !apiSource.includes('$resour
   process.exit(1);
 }
 
+const rangePath = path.join(__dirname, "..", "assets", "room-range.js");
+const rangeSource = fs.readFileSync(rangePath, "utf8");
+if (!rangeSource.includes("resolveRange") || !rangeSource.includes("MechinnoRoomRange")) {
+  console.error("room-range.js must expose MechinnoRoomRange.resolveRange");
+  process.exit(1);
+}
+// Evaluate helper and assert exclusive-end 2-hour selection (10:00 → 12:00).
+global.window = global;
+require(rangePath);
+const Range = global.MechinnoRoomRange;
+const freeSlots = ["10:00", "10:30", "11:00", "11:30", "12:00"].map((time) => ({
+  time,
+  end: Range.minutesToTime(Range.timeToMinutes(time) + 30),
+  status: "free",
+}));
+const twoHours = Range.resolveRange({
+  anchor: "10:00",
+  clicked: "12:00",
+  slotMinutes: 30,
+  maxHours: 2,
+  slots: freeSlots,
+});
+if (!twoHours.ok || twoHours.end !== "12:00" || twoHours.minutes !== 120) {
+  console.error("room-range must treat second click as exclusive end (10:00–12:00 = 2h)", twoHours);
+  process.exit(1);
+}
+const tooLong = Range.resolveRange({
+  anchor: "10:00",
+  clicked: "12:30",
+  slotMinutes: 30,
+  maxHours: 2,
+  slots: freeSlots.concat([{ time: "12:30", end: "13:00", status: "free" }]),
+});
+if (tooLong.ok) {
+  console.error("room-range must reject ranges above maxHours");
+  process.exit(1);
+}
+
+const bookingJs = fs.readFileSync(path.join(__dirname, "..", "assets", "room-booking.js"), "utf8");
+const publicJs = fs.readFileSync(path.join(__dirname, "..", "assets", "room-public.js"), "utf8");
+if (!bookingJs.includes("MechinnoRoomRange") || !publicJs.includes("MechinnoRoomRange")) {
+  console.error("admin/team and public booking must use shared MechinnoRoomRange");
+  process.exit(1);
+}
+
 console.log("Frontend smoke tests passed");

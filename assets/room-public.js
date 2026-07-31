@@ -1,5 +1,11 @@
 (() => {
   const cfg = window.MECHINNO_PUBLIC || {};
+  const Range = window.MechinnoRoomRange;
+  if (!Range) {
+    console.error("MechinnoRoomRange is required. Load assets/room-range.js first.");
+  }
+  const { minutesToTime, timeToMinutes, inRange, resolveRange, canUseAsEnd, durationLabel } = Range || {};
+
   const state = {
     rooms: [],
     settings: {},
@@ -12,6 +18,7 @@
     slots: [],
     slotMinutes: Number(cfg.slotMinutes || 30),
     maxHours: Number(cfg.maxHours || 2),
+    closeTime: "20:00",
     year: Number(cfg.year || String(cfg.today || "1404").slice(0, 4)),
     month: Number(cfg.month || String(cfg.today || "1404/01/01").slice(5, 7)),
     monthData: null,
@@ -27,17 +34,6 @@
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
-
-  const minutesToTime = (minutes) => {
-    const hour = Math.floor(minutes / 60);
-    const minute = minutes % 60;
-    return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
-  };
-
-  const timeToMinutes = (time) => {
-    const [hour, minute] = String(time || "0:0").split(":").map(Number);
-    return (hour * 60) + minute;
-  };
 
   const weekdayOffset = (weekdayName) => {
     const map = {
@@ -105,15 +101,15 @@
     if (!preview) return;
     if (state.selectedStart && state.selectedEnd) {
       const minutes = timeToMinutes(state.selectedEnd) - timeToMinutes(state.selectedStart);
-      const label = minutes < 60 ? `${minutes} دقیقه` : `${(minutes / 60).toFixed(minutes % 60 ? 1 : 0)} ساعت`;
-      preview.textContent = `بازه انتخابی: ${state.selectedStart} تا ${state.selectedEnd} (${label})`;
+      preview.textContent = `بازه انتخابی: ${state.selectedStart} تا ${state.selectedEnd} (${durationLabel(minutes)})`;
       return;
     }
     if (state.rangeAnchor) {
-      preview.textContent = `شروع: ${state.rangeAnchor} — حالا ساعت پایان را بزنید`;
+      const exampleEnd = minutesToTime(timeToMinutes(state.rangeAnchor) + state.maxHours * 60);
+      preview.textContent = `شروع: ${state.rangeAnchor} — ساعت پایان را بزنید (مثلاً ${exampleEnd} برای ${state.maxHours} ساعت)`;
       return;
     }
-    preview.textContent = "۱) شروع  ۲) پایان";
+    preview.textContent = "۱) شروع  ۲) پایان (ساعت اتمام جلسه)";
   };
 
   const renderRooms = () => {
@@ -159,6 +155,8 @@
     }
   };
 
+  const pickingEnd = () => Boolean(state.rangeAnchor && !(state.selectedStart && state.selectedEnd));
+
   const paintSlots = () => {
     const grid = $("#slotGrid");
     if (!grid) return;
@@ -166,21 +164,48 @@
       grid.innerHTML = '<p class="hint">برای این روز بازه‌ای موجود نیست.</p>';
       return;
     }
-    const maxMinutes = state.maxHours * 60;
-    grid.innerHTML = state.slots.map((slot) => {
+    const choosingEnd = pickingEnd();
+    const slotTimes = new Set(state.slots.map((slot) => slot.time));
+    const buttons = state.slots.map((slot) => {
       const busy = slot.status !== "free";
+      const validEnd = choosingEnd && canUseAsEnd({
+        anchor: state.rangeAnchor,
+        candidate: slot.time,
+        slotMinutes: state.slotMinutes,
+        maxHours: state.maxHours,
+        slots: state.slots,
+      });
       const inSelected = state.selectedStart && state.selectedEnd
-        && timeToMinutes(slot.time) >= timeToMinutes(state.selectedStart)
-        && timeToMinutes(slot.time) < timeToMinutes(state.selectedEnd);
+        && inRange(slot.time, state.selectedStart, state.selectedEnd);
       const isAnchor = state.rangeAnchor === slot.time;
       let label = slot.time;
-      if (slot.status === "busy") label = "پر";
+      if (choosingEnd && validEnd) label = `تا ${slot.time}`;
+      else if (slot.status === "busy") label = "پر";
       else if (slot.status === "pending") label = "انتظار";
       const classes = ["room-slot", `room-slot--${slot.status}`];
       if (inSelected || isAnchor) classes.push("is-in-range");
       if (isAnchor || state.selectedStart === slot.time) classes.push("is-selected");
-      return `<button type="button" class="${classes.join(" ")}" data-time="${slot.time}" ${busy ? "disabled" : ""}>${label}</button>`;
-    }).join("");
+      if (choosingEnd && validEnd) classes.push("is-end-candidate");
+      const disabled = choosingEnd ? !validEnd : busy;
+      return `<button type="button" class="${classes.join(" ")}" data-time="${slot.time}" ${disabled ? "disabled" : ""}>${label}</button>`;
+    });
+
+    if (choosingEnd && state.closeTime && !slotTimes.has(state.closeTime)) {
+      const validClose = canUseAsEnd({
+        anchor: state.rangeAnchor,
+        candidate: state.closeTime,
+        slotMinutes: state.slotMinutes,
+        maxHours: state.maxHours,
+        slots: state.slots,
+      });
+      if (validClose) {
+        buttons.push(
+          `<button type="button" class="room-slot is-end-candidate" data-time="${state.closeTime}" data-end-only="1">تا ${state.closeTime}</button>`
+        );
+      }
+    }
+
+    grid.innerHTML = buttons.join("");
 
     grid.querySelectorAll(".room-slot:not([disabled])").forEach((button) => {
       button.addEventListener("click", () => {
@@ -188,6 +213,7 @@
         if (!time) return;
 
         if (!state.rangeAnchor || (state.selectedStart && state.selectedEnd)) {
+          if (button.dataset.endOnly === "1") return;
           state.rangeAnchor = time;
           state.selectedStart = time;
           state.selectedEnd = "";
@@ -197,32 +223,21 @@
           return;
         }
 
-        let start = state.rangeAnchor;
-        let endSlot = time;
-        if (timeToMinutes(endSlot) < timeToMinutes(start)) {
-          [start, endSlot] = [endSlot, start];
-        }
-        const end = minutesToTime(timeToMinutes(endSlot) + state.slotMinutes);
-        const duration = timeToMinutes(end) - timeToMinutes(start);
-        if (duration > maxMinutes) {
-          showMessage(`حداکثر ${state.maxHours} ساعت در هر رزرو مجاز است.`, "error");
+        const resolved = resolveRange({
+          anchor: state.rangeAnchor,
+          clicked: time,
+          slotMinutes: state.slotMinutes,
+          maxHours: state.maxHours,
+          slots: state.slots,
+        });
+        if (!resolved.ok) {
+          showMessage(resolved.error, "error");
           return;
         }
-        const byTime = new Map(state.slots.map((slot) => [slot.time, slot]));
-        let cursor = timeToMinutes(start);
-        while (cursor < timeToMinutes(end)) {
-          const key = minutesToTime(cursor);
-          const slot = byTime.get(key);
-          if (!slot || slot.status !== "free") {
-            showMessage("بین شروع و پایان، بازهٔ پر وجود دارد.", "error");
-            return;
-          }
-          cursor += state.slotMinutes;
-        }
 
-        state.selectedStart = start;
-        state.selectedEnd = end;
-        state.rangeAnchor = start;
+        state.selectedStart = resolved.start;
+        state.selectedEnd = resolved.end;
+        state.rangeAnchor = resolved.start;
         paintSlots();
         updateTimePreview();
         updateSummary();
@@ -288,6 +303,7 @@
       state.slots = data.slots || [];
       state.slotMinutes = Number(data.slot_minutes || data.room?.slot_minutes || state.slotMinutes || 30);
       state.maxHours = Number(data.max_hours || state.settings.room_max_hours_per_day || state.maxHours || 2);
+      state.closeTime = data.room?.close_time || selectedRoom()?.close_time || state.closeTime || "20:00";
       paintSlots();
       updateTimePreview();
       updateSummary();

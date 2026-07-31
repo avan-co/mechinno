@@ -29,6 +29,7 @@ $today = JalaliDate::todayParts();
 $assetVer = (string) max(
     filemtime(__DIR__ . '/assets/styles.css'),
     filemtime(__DIR__ . '/assets/room.css'),
+    filemtime(__DIR__ . '/assets/room-range.js'),
     filemtime(__DIR__ . '/assets/room-public.js'),
     (int) Brand::version()
 );
@@ -94,7 +95,7 @@ $maxHours = (int) ($settings['room_max_hours_per_day'] ?? 2);
 
             <section class="room-card">
               <h2>تاریخ و ساعت</h2>
-              <p class="room-card-lead">روز را بزنید، بعد ساعت شروع و پایان را انتخاب کنید. حداکثر <?= $maxHours ?> ساعت.</p>
+              <p class="room-card-lead">روز را بزنید، بعد ساعت شروع و سپس ساعت پایان (اتمام جلسه) را انتخاب کنید — مثلاً ۱۰:۰۰ تا ۱۲:۰۰ = ۲ ساعت. حداکثر <?= $maxHours ?> ساعت.</p>
 
               <div class="room-month-picker pub-month-picker" id="publicMonthPicker">
                 <div class="room-month-toolbar">
@@ -174,6 +175,7 @@ $maxHours = (int) ($settings['room_max_hours_per_day'] ?? 2);
           slotMinutes: <?= (int) ($settings['room_slot_minutes'] ?? 30) ?>,
         };
       </script>
+      <script src="assets/room-range.js?v=<?= e($assetVer) ?>"></script>
       <script src="assets/room-public.js?v=<?= e($assetVer) ?>"></script>
     <?php endif; ?>
   </body>

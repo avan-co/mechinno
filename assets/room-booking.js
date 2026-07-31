@@ -32,46 +32,17 @@
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
 
-  const minutesToTime = (minutes) => {
-    const hour = Math.floor(minutes / 60);
-    const minute = minutes % 60;
-    return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
-  };
-
-  const timeToMinutes = (time) => {
-    const [hour, minute] = String(time || "0:0").split(":").map(Number);
-    return (hour * 60) + minute;
-  };
+  const Range = window.MechinnoRoomRange;
+  if (!Range) {
+    console.error("MechinnoRoomRange is required. Load assets/room-range.js first.");
+  }
+  const { minutesToTime, timeToMinutes, inRange, resolveRange, canUseAsEnd, durationLabel } = Range || {};
 
   const weekdayOffset = (weekdayName) => {
     const map = {
       شنبه: 0, یکشنبه: 1, دوشنبه: 2, سه‌شنبه: 3, "سه شنبه": 3, چهارشنبه: 4, پنجشنبه: 5, جمعه: 6,
     };
     return map[weekdayName] ?? 0;
-  };
-
-  /** Hotel-style range helpers */
-  const rangeHelpers = {
-    slotEnd(start, slotMinutes) {
-      return minutesToTime(timeToMinutes(start) + slotMinutes);
-    },
-    isFreeBetween(slots, start, endExclusive, slotMinutes) {
-      const byTime = new Map(slots.map((slot) => [slot.time, slot]));
-      let cursor = timeToMinutes(start);
-      const end = timeToMinutes(endExclusive);
-      while (cursor < end) {
-        const key = minutesToTime(cursor);
-        const slot = byTime.get(key);
-        if (!slot || slot.status !== "free") return false;
-        cursor += slotMinutes;
-      }
-      return true;
-    },
-    inRange(time, start, endExclusive) {
-      if (!start || !endExclusive) return false;
-      const t = timeToMinutes(time);
-      return t >= timeToMinutes(start) && t < timeToMinutes(endExclusive);
-    },
   };
 
   const renderRoomCards = (grid, rooms, selectedRoomId, onSelect) => {
@@ -236,29 +207,30 @@
       slots: [],
       slotMinutes: 30,
       maxHours: 2,
+      closeTime: "20:00",
       year: todayYear,
       month: todayMonth,
       monthData: null,
     };
 
     const selectedRoom = () => state.rooms.find((room) => Number(room.id) === Number(state.selectedRoomId));
+    const pickingEnd = () => Boolean(state.rangeAnchor && !(state.selectedStart && state.selectedEnd));
 
     const updatePreview = () => {
       if (!preview) return;
       if (state.selectedStart && state.selectedEnd) {
         const minutes = timeToMinutes(state.selectedEnd) - timeToMinutes(state.selectedStart);
-        const label = minutes < 60 ? `${minutes} دقیقه` : (minutes % 60 === 0 ? `${minutes / 60} ساعت` : `${(minutes / 60).toFixed(1)} ساعت`);
-        preview.textContent = `بازه انتخابی: ${state.selectedStart} تا ${state.selectedEnd} (${label})`;
+        preview.textContent = `بازه انتخابی: ${state.selectedStart} تا ${state.selectedEnd} (${durationLabel(minutes)})`;
         if (rangeHint) rangeHint.textContent = "برای تغییر، دوباره روی یک ساعت آزاد کلیک کنید.";
         return;
       }
       if (state.rangeAnchor) {
-        preview.textContent = `شروع: ${state.rangeAnchor} — حالا ساعت پایان را انتخاب کنید.`;
-        if (rangeHint) rangeHint.textContent = "فقط بازه‌های آزاد بین شروع و پایان قابل انتخاب‌اند.";
+        preview.textContent = `شروع: ${state.rangeAnchor} — حالا ساعت پایان را بزنید (مثلاً ${minutesToTime(timeToMinutes(state.rangeAnchor) + state.maxHours * 60)} برای ${state.maxHours} ساعت).`;
+        if (rangeHint) rangeHint.textContent = "ساعت پایان یعنی زمان اتمام جلسه — مثلاً ۱۰:۰۰ تا ۱۲:۰۰ = ۲ ساعت.";
         return;
       }
       preview.textContent = "ابتدا ساعت شروع، سپس ساعت پایان را انتخاب کنید.";
-      if (rangeHint) rangeHint.textContent = "۱) ساعت شروع  ۲) ساعت پایان — بازه‌های پر قابل انتخاب نیستند.";
+      if (rangeHint) rangeHint.textContent = "۱) شروع  ۲) پایان (ساعت اتمام) — بازه‌های پر وسط مسیر قابل عبور نیستند.";
     };
 
     const clearRange = () => {
@@ -274,30 +246,60 @@
         return;
       }
 
-      const maxMinutes = state.maxHours * 60;
-      slotGrid.innerHTML = state.slots.map((slot) => {
+      const choosingEnd = pickingEnd();
+      const slotTimes = new Set(state.slots.map((slot) => slot.time));
+      const buttons = state.slots.map((slot) => {
         const busy = slot.status !== "free";
+        const validEnd = choosingEnd && canUseAsEnd({
+          anchor: state.rangeAnchor,
+          candidate: slot.time,
+          slotMinutes: state.slotMinutes,
+          maxHours: state.maxHours,
+          slots: state.slots,
+        });
         const inSelected = state.selectedStart && state.selectedEnd
-          && rangeHelpers.inRange(slot.time, state.selectedStart, state.selectedEnd);
+          && inRange(slot.time, state.selectedStart, state.selectedEnd);
         const isAnchor = state.rangeAnchor === slot.time;
         let label = slot.time;
-        if (slot.status === "busy") label = "پر";
+        if (choosingEnd && validEnd) label = `تا ${slot.time}`;
+        else if (slot.status === "busy") label = "پر";
         else if (slot.status === "pending") label = "انتظار";
 
         const classes = ["room-slot", `room-slot--${slot.status}`];
         if (inSelected || isAnchor) classes.push("is-in-range");
-        if (isAnchor || (state.selectedStart === slot.time)) classes.push("is-selected");
+        if (isAnchor || state.selectedStart === slot.time) classes.push("is-selected");
+        if (choosingEnd && validEnd) classes.push("is-end-candidate");
 
-        return `<button type="button" class="${classes.join(" ")}" data-time="${slot.time}" data-end="${slot.end}" ${busy ? "disabled" : ""}>${label}</button>`;
-      }).join("");
+        // While picking end: only valid exclusive-end times are clickable (even if that slot is busy).
+        const disabled = choosingEnd ? !validEnd : busy;
+        return `<button type="button" class="${classes.join(" ")}" data-time="${slot.time}" data-end="${slot.end}" ${disabled ? "disabled" : ""}>${label}</button>`;
+      });
+
+      // Closing time as exclusive end (e.g. 20:00) when it is not itself a slot start.
+      if (choosingEnd && state.closeTime && !slotTimes.has(state.closeTime)) {
+        const validClose = canUseAsEnd({
+          anchor: state.rangeAnchor,
+          candidate: state.closeTime,
+          slotMinutes: state.slotMinutes,
+          maxHours: state.maxHours,
+          slots: state.slots,
+        });
+        if (validClose) {
+          buttons.push(
+            `<button type="button" class="room-slot is-end-candidate" data-time="${state.closeTime}" data-end-only="1">تا ${state.closeTime}</button>`
+          );
+        }
+      }
+
+      slotGrid.innerHTML = buttons.join("");
 
       slotGrid.querySelectorAll(".room-slot:not([disabled])").forEach((button) => {
         button.addEventListener("click", () => {
           const time = button.dataset.time || "";
           if (!time) return;
 
-          // Start a new selection, or complete the range.
           if (!state.rangeAnchor || (state.selectedStart && state.selectedEnd)) {
+            if (button.dataset.endOnly === "1") return;
             state.rangeAnchor = time;
             state.selectedStart = time;
             state.selectedEnd = "";
@@ -306,29 +308,21 @@
             return;
           }
 
-          let start = state.rangeAnchor;
-          let endSlotStart = time;
-          if (timeToMinutes(endSlotStart) < timeToMinutes(start)) {
-            [start, endSlotStart] = [endSlotStart, start];
-          }
-          const end = rangeHelpers.slotEnd(endSlotStart, state.slotMinutes);
-          const duration = timeToMinutes(end) - timeToMinutes(start);
-          if (duration <= 0) {
-            window.showToast?.("بازه زمانی معتبر نیست.", "error");
-            return;
-          }
-          if (duration > maxMinutes) {
-            window.showToast?.(`حداکثر ${state.maxHours} ساعت در هر رزرو مجاز است.`, "error");
-            return;
-          }
-          if (!rangeHelpers.isFreeBetween(state.slots, start, end, state.slotMinutes)) {
-            window.showToast?.("بین شروع و پایان، بازهٔ پر یا در انتظار وجود دارد.", "error");
+          const resolved = resolveRange({
+            anchor: state.rangeAnchor,
+            clicked: time,
+            slotMinutes: state.slotMinutes,
+            maxHours: state.maxHours,
+            slots: state.slots,
+          });
+          if (!resolved.ok) {
+            window.showToast?.(resolved.error, "error");
             return;
           }
 
-          state.selectedStart = start;
-          state.selectedEnd = end;
-          state.rangeAnchor = start;
+          state.selectedStart = resolved.start;
+          state.selectedEnd = resolved.end;
+          state.rangeAnchor = resolved.start;
           paintSlots();
           updatePreview();
         });
@@ -396,6 +390,7 @@
         state.slots = data.slots || [];
         state.slotMinutes = Number(data.slot_minutes || data.room?.slot_minutes || state.slotMinutes || 30);
         state.maxHours = Number(data.max_hours || state.maxHours || 2);
+        state.closeTime = data.room?.close_time || selectedRoom()?.close_time || state.closeTime || "20:00";
         paintSlots();
         updatePreview();
       } catch (error) {

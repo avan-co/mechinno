@@ -189,6 +189,60 @@ if (!is_file($root . '/config.php')) {
                 'token' => $bookingToken,
             ], JSON_UNESCAPED_UNICODE), ['Content-Type: application/json']);
             $assert(($cancel['json']['ok'] ?? false) === true, 'http: public room cancel with token');
+
+            // Two-hour booking: start + exclusive end (e.g. 10:00–12:00).
+            $r = $request('GET', '/public-api.php?resource=availability&room_id=' . $publicRoomId . '&date=' . rawurlencode($publicToday));
+            $slotMinutes = (int) ($r['json']['slot_minutes'] ?? $r['json']['room']['slot_minutes'] ?? 30);
+            $maxHours = (int) ($r['json']['max_hours'] ?? 2);
+            $needSlots = (int) (($maxHours * 60) / max(1, $slotMinutes));
+            $toMinutes = static function (string $time): int {
+                [$h, $m] = array_map('intval', explode(':', $time . ':0'));
+
+                return ($h * 60) + $m;
+            };
+            $fromMinutes = static function (int $minutes): string {
+                return sprintf('%02d:%02d', intdiv($minutes, 60), $minutes % 60);
+            };
+            $freeTimes = [];
+            foreach ($r['json']['slots'] ?? [] as $candidate) {
+                if (($candidate['status'] ?? '') === 'free') {
+                    $freeTimes[] = (string) ($candidate['time'] ?? '');
+                }
+            }
+            $twoHourStart = null;
+            $twoHourEnd = null;
+            for ($i = 0; $i < count($freeTimes); $i++) {
+                $startMin = $toMinutes($freeTimes[$i]);
+                $ok = true;
+                for ($j = 1; $j < $needSlots; $j++) {
+                    $expected = $fromMinutes($startMin + ($j * $slotMinutes));
+                    if (!in_array($expected, $freeTimes, true)) {
+                        $ok = false;
+                        break;
+                    }
+                }
+                if ($ok) {
+                    $twoHourStart = $freeTimes[$i];
+                    $twoHourEnd = $fromMinutes($startMin + ($maxHours * 60));
+                    break;
+                }
+            }
+            if ($twoHourStart !== null && $twoHourEnd !== null) {
+                $book2 = $request('POST', '/public-api.php?resource=book', json_encode([
+                    'room_id' => $publicRoomId,
+                    'reserved_date' => $publicToday,
+                    'start_time' => $twoHourStart,
+                    'end_time' => $twoHourEnd,
+                    'booker_name' => 'HTTP تست ۲ساعته',
+                    'booker_phone' => '09120002222',
+                ], JSON_UNESCAPED_UNICODE), ['Content-Type: application/json']);
+                $assert(($book2['json']['ok'] ?? false) === true, 'http: public 2-hour room book');
+                $assert((int) ($book2['json']['record']['duration_minutes'] ?? 0) === ($maxHours * 60), 'http: public 2-hour duration stored');
+                $request('POST', '/public-api.php?resource=cancel', json_encode([
+                    'id' => (int) ($book2['json']['record']['id'] ?? 0),
+                    'token' => (string) ($book2['json']['record']['public_token'] ?? ''),
+                ], JSON_UNESCAPED_UNICODE), ['Content-Type: application/json']);
+            }
         }
     }
 
