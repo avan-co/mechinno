@@ -2,6 +2,12 @@
 
 declare(strict_types=1);
 
+/**
+ * REST client aligned with the official MeliPayamak PHP SDK.
+ *
+ * @see https://github.com/Melipayamak/melipayamak-php
+ * @see SmsRest::send(), SmsRest::sendByBaseNumber()
+ */
 final class MelliPayamak
 {
     private const BASE = 'https://rest.payamak-panel.com/api/SendSMS/';
@@ -61,11 +67,28 @@ final class MelliPayamak
     }
 
     /**
+     * ارسال الگوی خط خدماتی اشتراکی — معادل SmsRest::sendByBaseNumber($text, $to, $bodyId).
+     * متغیرها در $text با ; جدا می‌شوند.
+     *
+     * @return array{ok:bool, rec_id:?string, error:?string, raw:mixed}
+     */
+    public function sendByBaseNumber(string $username, string $password, string $to, int $bodyId, string $text): array
+    {
+        return $this->sendBaseServiceNumber(
+            $username,
+            $password,
+            TeamLeaders::normalizePhone($to),
+            $bodyId,
+            trim($text)
+        );
+    }
+
+    /**
      * @return array{ok:bool, rec_id:?string, error:?string, raw:mixed}
      */
     private function sendSimpleSms(string $username, string $password, string $from, string $to, string $text): array
     {
-        $response = $this->requestJson(self::BASE . 'SendSMS', [
+        $response = $this->request('SendSMS', [
             'username' => trim($username),
             'password' => trim($password),
             'to' => $to,
@@ -94,7 +117,7 @@ final class MelliPayamak
             return ['ok' => false, 'rec_id' => null, 'error' => 'شناسه الگوی پیامک نامعتبر است.', 'raw' => ''];
         }
 
-        $response = $this->requestJson(self::BASE . 'BaseServiceNumber', [
+        $response = $this->request('BaseServiceNumber', [
             'username' => trim($username),
             'password' => trim($password),
             'text' => $text,
@@ -118,7 +141,7 @@ final class MelliPayamak
      */
     public function getUserNumbers(string $username, string $password): array
     {
-        $response = $this->request('GetUserNumbers', $this->authFields($username, $password, true));
+        $response = $this->request('GetUserNumbers', $this->authFields($username, $password));
         if (!$response['ok']) {
             return ['ok' => false, 'numbers' => [], 'error' => $response['error'], 'raw' => $response['raw']];
         }
@@ -144,11 +167,11 @@ final class MelliPayamak
      */
     public function getMessages(string $username, string $password, int $location, int $index, int $count, string $from = ''): array
     {
-        $response = $this->request('GetMessages', array_merge($this->authFields($username, $password, true), [
-            'Location' => (string) $location,
-            'Index' => (string) max(0, $index),
-            'Count' => (string) max(1, min(500, $count)),
-            'From' => $from,
+        $response = $this->request('GetMessages', array_merge($this->authFields($username, $password), [
+            'location' => (string) $location,
+            'index' => (string) max(0, $index),
+            'count' => (string) max(1, min(500, $count)),
+            'from' => $from,
         ]));
         if (!$response['ok']) {
             return ['ok' => false, 'messages' => [], 'error' => $response['error'], 'raw' => $response['raw']];
@@ -172,7 +195,7 @@ final class MelliPayamak
             return ['ok' => false, 'status' => null, 'status_code' => null, 'error' => 'شناسه پیامک نامعتبر است.', 'raw' => ''];
         }
 
-        $response = $this->request('GetDeliveries2', array_merge($this->authFields($username, $password, true), [
+        $response = $this->request('GetDeliveries2', array_merge($this->authFields($username, $password), [
             'recId' => $recId,
         ]));
         if (!$response['ok']) {
@@ -204,7 +227,7 @@ final class MelliPayamak
      */
     public function getCredit(string $username, string $password): array
     {
-        $response = $this->request('GetCredit', $this->authFields($username, $password, true));
+        $response = $this->request('GetCredit', $this->authFields($username, $password));
         if (!$response['ok']) {
             return ['ok' => false, 'credit' => null, 'error' => $response['error'], 'raw' => $response['raw']];
         }
@@ -224,7 +247,7 @@ final class MelliPayamak
      */
     public function getBasePrice(string $username, string $password): array
     {
-        $response = $this->request('GetBasePrice', $this->authFields($username, $password, true));
+        $response = $this->request('GetBasePrice', $this->authFields($username, $password));
         if (!$response['ok']) {
             return ['ok' => false, 'price' => null, 'error' => $response['error'], 'raw' => $response['raw']];
         }
@@ -242,14 +265,12 @@ final class MelliPayamak
     /**
      * @return array<string, string>
      */
-    private function authFields(string $username, string $password, bool $legacyPanel = false): array
+    private function authFields(string $username, string $password): array
     {
-        $username = trim($username);
-        $password = trim($password);
-
-        return $legacyPanel
-            ? ['UserName' => $username, 'PassWord' => $password]
-            : ['username' => $username, 'password' => $password];
+        return [
+            'username' => trim($username),
+            'password' => trim($password),
+        ];
     }
 
     /**
@@ -294,12 +315,22 @@ final class MelliPayamak
 
         $decoded = json_decode($raw, true);
         $data = json_last_error() === JSON_ERROR_NONE ? $decoded : $raw;
-        if (is_array($data) && isset($data['StrRetStatus']) && is_string($data['StrRetStatus'])) {
-            $status = strtolower($data['StrRetStatus']);
-            if (str_contains($status, 'error') || str_contains($status, 'err')) {
-                $message = trim((string) ($data['Value'] ?? $data['StrRetStatus']));
+        if (is_array($data)) {
+            if (isset($data['RetStatus']) && !self::isRestSuccess($data['RetStatus'])) {
+                $message = trim((string) ($data['Value'] ?? $data['StrRetStatus'] ?? 'خطای سرویس پیامک'));
+                if (isset($data['RetStatus'])) {
+                    $message .= ' (کد وضعیت: ' . $data['RetStatus'] . ')';
+                }
 
                 return ['ok' => false, 'data' => $data, 'error' => $message !== '' ? $message : 'خطای سرویس پیامک', 'raw' => $raw];
+            }
+            if (isset($data['StrRetStatus']) && is_string($data['StrRetStatus'])) {
+                $status = strtolower($data['StrRetStatus']);
+                if (str_contains($status, 'error') || str_contains($status, 'err')) {
+                    $message = trim((string) ($data['Value'] ?? $data['StrRetStatus']));
+
+                    return ['ok' => false, 'data' => $data, 'error' => $message !== '' ? $message : 'خطای سرویس پیامک', 'raw' => $raw];
+                }
             }
         }
 
@@ -307,80 +338,10 @@ final class MelliPayamak
     }
 
     /**
-     * @param array<string, mixed> $body
-     * @return array{ok:bool, data:mixed, error:?string, raw:string}
-     */
-    private function requestJson(string $url, array $body): array
-    {
-        $username = trim((string) ($body['username'] ?? ''));
-        $password = trim((string) ($body['password'] ?? ''));
-        if ($username === '' || $password === '') {
-            return ['ok' => false, 'data' => null, 'error' => 'تنظیمات پیامک کامل نیست.', 'raw' => ''];
-        }
-
-        $payload = json_encode($body, JSON_UNESCAPED_UNICODE);
-        if ($payload === false) {
-            return ['ok' => false, 'data' => null, 'error' => 'خطا در آماده‌سازی درخواست پیامک.', 'raw' => ''];
-        }
-
-        $ch = curl_init($url);
-        if ($ch === false) {
-            return ['ok' => false, 'data' => null, 'error' => 'امکان اتصال به سرویس پیامک وجود ندارد.', 'raw' => ''];
-        }
-
-        curl_setopt_array($ch, [
-            CURLOPT_POST => true,
-            CURLOPT_POSTFIELDS => $payload,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT => 15,
-            CURLOPT_CONNECTTIMEOUT => 5,
-            CURLOPT_HTTPHEADER => [
-                'Content-Type: application/json; charset=utf-8',
-                'Accept: application/json',
-            ],
-        ]);
-
-        $response = curl_exec($ch);
-        $curlError = curl_error($ch);
-        curl_close($ch);
-
-        if ($response === false) {
-            return ['ok' => false, 'data' => null, 'error' => $curlError !== '' ? $curlError : 'خطا در ارتباط با ملی‌پیامک', 'raw' => ''];
-        }
-
-        $raw = trim((string) $response);
-        if ($raw === '') {
-            return ['ok' => false, 'data' => null, 'error' => 'پاسخ خالی از سرویس پیامک', 'raw' => ''];
-        }
-
-        $decoded = json_decode($raw, true);
-        if (json_last_error() !== JSON_ERROR_NONE || !is_array($decoded)) {
-            return ['ok' => false, 'data' => $decoded ?? $raw, 'error' => 'پاسخ نامعتبر از سرویس پیامک', 'raw' => $raw];
-        }
-
-        if (!self::isJsonApiSuccess($decoded)) {
-            $message = trim((string) ($decoded['StrRetStatus'] ?? $decoded['Value'] ?? 'خطای سرویس پیامک'));
-            if (isset($decoded['RetStatus'])) {
-                $message .= ' (کد وضعیت: ' . $decoded['RetStatus'] . ')';
-            }
-
-            return ['ok' => false, 'data' => $decoded, 'error' => $message !== '' ? $message : 'خطای سرویس پیامک', 'raw' => $raw];
-        }
-
-        return ['ok' => true, 'data' => $decoded, 'error' => null, 'raw' => $raw];
-    }
-
-    /**
      * @param array<string, mixed> $result
      */
-    private static function isJsonApiSuccess(array $result): bool
+    private static function isRestSuccess(mixed $status): bool
     {
-        if (!isset($result['RetStatus'])) {
-            return false;
-        }
-
-        $status = $result['RetStatus'];
-
         return $status == 1 || (is_string($status) && strtolower($status) === 'success');
     }
 

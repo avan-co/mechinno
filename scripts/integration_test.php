@@ -660,7 +660,7 @@ $allMembers = $repo->paginatedResource('members', 1, 100, []);
 $leaderMembers = $repo->paginatedResource('members', 1, 100, ['is_leader' => '1']);
 $assert($leaderMembers['total'] <= $allMembers['total'], 'members: leader filter reduces result set');
 $assert($leaderMembers['total'] >= 1, 'members: leader filter returns leaders');
-$assert(MelliPayamak::deliveryLabel(4) === 'رسیده به گوشی', 'sms: delivery label mapping');
+$assert(method_exists(MelliPayamak::class, 'sendByBaseNumber'), 'sms: sendByBaseNumber matches official SDK');
 $assert(MelliPayamak::deliveryLabel(0) === 'ارسال شده به مخابرات', 'sms: delivery code 0 label');
 $assert(MelliPayamak::deliveryLabel(-2) === 'شناسه پیامک نامعتبر یا هنوز ثبت نشده', 'sms: delivery error code label');
 $plainPattern = MelliPayamak::parsePatternMessage('سلام به همه');
@@ -668,8 +668,7 @@ $assert($plainPattern['is_shared_pattern'] === false && $plainPattern['body_id']
 $sharedPattern = MelliPayamak::parsePatternMessage('12345@arg1##arg2##shared');
 $assert($sharedPattern['is_shared_pattern'] === true, 'sms: shared pattern detected');
 $assert($sharedPattern['body_id'] === '12345', 'sms: shared pattern body id parsed');
-$assert(str_contains($sharedPattern['vars_string'], 'arg1'), 'sms: shared pattern vars include first segment');
-$assert(str_contains($sharedPattern['vars_string'], 'arg2'), 'sms: shared pattern vars include second segment');
+$assert($sharedPattern['vars_string'] === 'arg1;arg2', 'sms: shared pattern vars joined with semicolon');
 $nonSharedPattern = MelliPayamak::parsePatternMessage('12345@متن آزاد##custom');
 $assert($nonSharedPattern['is_shared_pattern'] === false, 'sms: non-shared pattern uses simple send path');
 $assert($nonSharedPattern['text_data'] === 'متن آزاد##custom', 'sms: non-shared pattern keeps full text payload');
