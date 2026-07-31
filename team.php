@@ -35,6 +35,7 @@ $today = JalaliDate::todayParts();
 $assetVer = (string) max(
     filemtime(__DIR__ . '/assets/styles.css'),
     filemtime(__DIR__ . '/assets/app.js'),
+    filemtime(__DIR__ . '/assets/room-range.js'),
     filemtime(__DIR__ . '/assets/room-booking.js'),
     filemtime(__DIR__ . '/assets/room-calendar.js'),
     filemtime(__DIR__ . '/assets/room.css'),
@@ -390,21 +391,46 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
 
               <article class="room-card room-booking-panel">
                 <h2>رزرو جدید</h2>
-                <p class="room-card-lead">اتاق و بازه زمانی را انتخاب کنید.</p>
+                <p class="room-card-lead">روز را انتخاب کنید، سپس مثل رزرو هتل ابتدا ساعت شروع و بعد ساعت پایان را بزنید (مثلاً ۱۰:۰۰ تا ۱۲:۰۰ = ۲ ساعت).</p>
                 <form id="panelRoomBookingForm">
                   <label class="wide"><span>انتخاب اتاق</span></label>
                   <div id="panelRoomCardGrid" class="room-room-grid room-room-grid--panel" role="listbox" aria-label="انتخاب اتاق"></div>
                   <input type="hidden" name="room_id" required />
-                  <div class="room-field-row">
-                    <label><span>تاریخ</span><input name="reserved_date" type="text" required placeholder="1404/01/01" value="<?= e($today['formatted']) ?>" /></label>
-                    <label><span>نام *</span><input name="booker_name" type="text" required /></label>
-                    <label><span>موبایل *</span><input name="booker_phone" type="tel" required dir="ltr" class="ltr-input" /></label>
-                    <label class="wide"><span>موضوع</span><textarea name="purpose" rows="2"></textarea></label>
+                  <input type="hidden" name="reserved_date" id="panelReservedDate" value="<?= e($today['formatted']) ?>" />
+
+                  <div class="room-booking-layout">
+                    <div class="room-month-picker" id="panelRoomMonthPicker">
+                      <div class="room-month-toolbar">
+                        <button type="button" class="button ghost" id="panelMonthPrev" aria-label="ماه قبل">‹</button>
+                        <strong id="panelMonthLabel">—</strong>
+                        <button type="button" class="button ghost" id="panelMonthNext" aria-label="ماه بعد">›</button>
+                      </div>
+                      <div class="room-month-weekdays" aria-hidden="true">
+                        <span>ش</span><span>ی</span><span>د</span><span>س</span><span>چ</span><span>پ</span><span>ج</span>
+                      </div>
+                      <div id="panelMonthGrid" class="room-month-grid"></div>
+                      <p class="hint" id="panelMonthHint">روی یک روز قابل‌رزرو کلیک کنید.</p>
+                    </div>
+
+                    <div class="room-booking-fields">
+                      <div class="room-field-row">
+                        <label><span>نام *</span><input name="booker_name" type="text" required value="<?= e((string) ($team['leader'] ?? '')) ?>" /></label>
+                        <label><span>موبایل *</span><input name="booker_phone" type="tel" required dir="ltr" class="ltr-input" value="<?= e((string) ($team['phone'] ?? '')) ?>" /></label>
+                        <label class="wide"><span>موضوع</span><textarea name="purpose" rows="2"></textarea></label>
+                      </div>
+                      <div class="room-slot-legend">
+                        <span class="free">آزاد</span>
+                        <span class="range">انتخاب‌شده</span>
+                        <span class="pending">انتظار</span>
+                        <span class="busy">پر</span>
+                      </div>
+                      <p class="hint" id="panelSelectedDayLabel">روز انتخاب‌شده: <?= e(fa_digits($today['formatted'])) ?></p>
+                      <p class="hint" id="panelRangeHint">۱) شروع  ۲) پایان (ساعت اتمام) — مثلاً ۱۰:۰۰ تا ۱۲:۰۰ = ۲ ساعت.</p>
+                      <div id="panelRoomSlotGrid" class="room-slot-grid"></div>
+                      <p class="hint" id="panelRoomTimePreview"></p>
+                      <div class="form-actions"><button class="button" type="submit">ثبت رزرو</button></div>
+                    </div>
                   </div>
-                  <div class="room-slot-legend"><span class="free">آزاد</span><span class="pending">انتظار</span><span class="busy">پر</span></div>
-                  <div id="panelRoomSlotGrid" class="room-slot-grid"></div>
-                  <p class="hint" id="panelRoomTimePreview"></p>
-                  <div class="form-actions"><button class="button" type="submit">ثبت رزرو</button></div>
                 </form>
               </article>
               <data-table title="رزروهای نهاد" endpoint="api.php?resource=room-reservations" data-no-add data-readonly></data-table>
@@ -475,6 +501,7 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
       </script>
       <script src="assets/app.js?v=<?= e($assetVer) ?>"></script>
       <script src="assets/team-year-workspace.js?v=<?= e($assetVer) ?>"></script>
+      <script src="assets/room-range.js?v=<?= e($assetVer) ?>"></script>
       <script src="assets/room-booking.js?v=<?= e($assetVer) ?>"></script>
       <script src="assets/room-calendar.js?v=<?= e($assetVer) ?>"></script>
     <?php endif; ?>
