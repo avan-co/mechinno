@@ -105,13 +105,14 @@ final class DeskAssignments
 
     /**
      * @param array<string, mixed> $record
+     * @return list<int> team ids that lost overlapping assignment rows
      */
-    public function applyAssignmentRecord(array $record, ?int $excludeId = null): void
+    public function applyAssignmentRecord(array $record, ?int $excludeId = null): array
     {
         $deskId = (int) ($record['desk_id'] ?? 0);
         $assignmentId = (int) ($record['id'] ?? 0);
         if ($deskId <= 0) {
-            return;
+            return [];
         }
 
         $this->assertNoOverlap(
@@ -130,7 +131,7 @@ final class DeskAssignments
                     $this->clearDeskIfMatches($deskId, (int) ($record['team_id'] ?? 0));
                 }
 
-                return;
+                return [];
             }
 
             $this->closeOtherActiveAssignments(
@@ -139,9 +140,8 @@ final class DeskAssignments
                 $this->handoverDate((string) ($record['assigned_from'] ?? ''))
             );
             $this->syncDeskFromAssignment($deskId, $record);
-            $this->reconcileDeskYearAssignments($record);
 
-            return;
+            return $this->reconcileDeskYearAssignments($record);
         }
 
         $this->closeOtherActiveAssignments(
@@ -150,7 +150,8 @@ final class DeskAssignments
             $this->handoverDate((string) ($record['assigned_from'] ?? ''))
         );
         $this->syncDeskFromAssignment($deskId, $record);
-        $this->reconcileDeskYearAssignments($record);
+
+        return $this->reconcileDeskYearAssignments($record);
     }
 
     /**
@@ -197,43 +198,122 @@ final class DeskAssignments
         return null;
     }
 
-    public function findExistingRecordId(int $deskId, string $fiscalYear, int $teamId): ?int
-    {
-        $record = $this->findAssignmentForYear($deskId, $fiscalYear, $teamId > 0 ? $teamId : null);
-        if ($record === null) {
+    public function findExistingRecordId(
+        int $deskId,
+        string $fiscalYear,
+        int $teamId,
+        string $assignedFrom = '',
+        string $assignedUntil = ''
+    ): ?int {
+        $fiscalYear = JalaliDate::normalizeDigits($fiscalYear);
+        if ($deskId <= 0 || $fiscalYear === '') {
             return null;
         }
 
-        $id = (int) ($record['id'] ?? 0);
+        $from = JalaliDate::tryNormalize($assignedFrom);
+        $until = $this->isOpenEnded($assignedUntil) ? '' : JalaliDate::tryNormalize($assignedUntil);
 
-        return $id > 0 ? $id : null;
+        $yearStart = $fiscalYear . '/01/01';
+        $yearEnd = $fiscalYear . '/12/29';
+        $sql = 'SELECT id, assigned_from, assigned_until FROM desk_assignments
+                WHERE desk_id = :desk_id
+                  AND assigned_from <= :year_end
+                  AND (assigned_until IS NULL OR assigned_until = \'\' OR assigned_until >= :year_start)';
+        $params = [
+            'desk_id' => $deskId,
+            'year_start' => $yearStart,
+            'year_end' => $yearEnd,
+        ];
+        if ($teamId > 0) {
+            $sql .= ' AND team_id = :team_id';
+            $params['team_id'] = $teamId;
+        }
+        $sql .= ' ORDER BY assigned_from DESC, id DESC';
+        $statement = $this->pdo->prepare($sql);
+        $statement->execute($params);
+        foreach ($statement->fetchAll() as $row) {
+            $id = (int) ($row['id'] ?? 0);
+            if ($id <= 0) {
+                continue;
+            }
+            // No explicit range → legacy behavior: latest year row for desk/team.
+            if ($from === '') {
+                return $id;
+            }
+            $otherFrom = JalaliDate::tryNormalize((string) ($row['assigned_from'] ?? ''));
+            $otherUntil = $this->isOpenEnded((string) ($row['assigned_until'] ?? ''))
+                ? ''
+                : JalaliDate::tryNormalize((string) ($row['assigned_until'] ?? ''));
+            if ($this->rangesOverlap($from, $until, $otherFrom, $otherUntil)) {
+                return $id;
+            }
+        }
+
+        return null;
     }
 
     /**
+     * Remove only date-overlapping duplicates for the same desk.
+     * Non-overlapping sequential segments (e.g. 1–6 then 7–12) are kept.
+     *
      * @param array<string, mixed> $record
+     * @return list<int> team ids whose rows were deleted
      */
-    public function reconcileDeskYearAssignments(array $record): void
+    public function reconcileDeskYearAssignments(array $record): array
     {
         $deskId = (int) ($record['desk_id'] ?? 0);
         $keepId = (int) ($record['id'] ?? 0);
         $fiscalYear = $this->fiscalYearFrom((string) ($record['assigned_from'] ?? ''));
         if ($deskId <= 0 || $keepId <= 0 || $fiscalYear === '') {
-            return;
+            return [];
+        }
+
+        $keepFrom = JalaliDate::tryNormalize((string) ($record['assigned_from'] ?? ''));
+        $keepUntil = $this->isOpenEnded((string) ($record['assigned_until'] ?? ''))
+            ? ''
+            : JalaliDate::tryNormalize((string) ($record['assigned_until'] ?? ''));
+        if ($keepFrom === '') {
+            return [];
         }
 
         $yearStart = $fiscalYear . '/01/01';
         $yearEnd = $fiscalYear . '/12/29';
-        $this->pdo->prepare(
-            'DELETE FROM desk_assignments
+        $statement = $this->pdo->prepare(
+            'SELECT id, team_id, assigned_from, assigned_until
+             FROM desk_assignments
              WHERE desk_id = :desk_id AND id <> :keep_id
                AND assigned_from <= :year_end
                AND (assigned_until IS NULL OR assigned_until = \'\' OR assigned_until >= :year_start)'
-        )->execute([
+        );
+        $statement->execute([
             'desk_id' => $deskId,
             'keep_id' => $keepId,
             'year_start' => $yearStart,
             'year_end' => $yearEnd,
         ]);
+
+        $affectedTeams = [];
+        $delete = $this->pdo->prepare('DELETE FROM desk_assignments WHERE id = :id');
+        foreach ($statement->fetchAll() as $row) {
+            $otherFrom = JalaliDate::tryNormalize((string) ($row['assigned_from'] ?? ''));
+            $otherUntil = $this->isOpenEnded((string) ($row['assigned_until'] ?? ''))
+                ? ''
+                : JalaliDate::tryNormalize((string) ($row['assigned_until'] ?? ''));
+            if (!$this->rangesOverlap($keepFrom, $keepUntil, $otherFrom, $otherUntil)) {
+                continue;
+            }
+            $id = (int) ($row['id'] ?? 0);
+            if ($id <= 0) {
+                continue;
+            }
+            $teamId = (int) ($row['team_id'] ?? 0);
+            if ($teamId > 0) {
+                $affectedTeams[$teamId] = true;
+            }
+            $delete->execute(['id' => $id]);
+        }
+
+        return array_map('intval', array_keys($affectedTeams));
     }
 
     /**

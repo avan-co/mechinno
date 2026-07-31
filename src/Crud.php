@@ -497,7 +497,9 @@ final class Crud
             $existingId = $deskAssignments->findExistingRecordId(
                 (int) ($data['desk_id'] ?? 0),
                 JalaliDate::fiscalYearFromDate((string) ($data['assigned_from'] ?? '')),
-                (int) ($data['team_id'] ?? 0)
+                (int) ($data['team_id'] ?? 0),
+                (string) ($data['assigned_from'] ?? ''),
+                (string) ($data['assigned_until'] ?? '')
             );
             if ($existingId !== null) {
                 return $this->update($resource, $existingId, $payload);
@@ -553,8 +555,14 @@ final class Crud
         }
         if ($resource === 'desk_assignments') {
             $record = $this->find($resource, $id);
-            (new DeskAssignments($this->pdo))->applyAssignmentRecord($record);
-            $this->syncChargesForTeam((int) ($record['team_id'] ?? 0), $record);
+            $affectedTeams = (new DeskAssignments($this->pdo))->applyAssignmentRecord($record);
+            $teamIds = array_unique(array_filter(array_merge(
+                [(int) ($record['team_id'] ?? 0)],
+                $affectedTeams
+            )));
+            foreach ($teamIds as $teamId) {
+                $this->syncChargesForTeam((int) $teamId, $record);
+            }
         }
         if ($resource === 'teams') {
             $record = $this->find($resource, $id);
@@ -609,6 +617,13 @@ final class Crud
             return $this->find($resource, $id);
         }
 
+        if ($resource === 'desk_assignments') {
+            $existingAssignment = $this->find($resource, $id);
+            $previousTeamId = (int) ($existingAssignment['team_id'] ?? 0);
+        } else {
+            $existingAssignment = null;
+            $previousTeamId = 0;
+        }
         if ($data !== []) {
             $assignments = array_map(
                 static fn (string $column): string => Sql::quoteIdentifier($column) . " = :{$column}",
@@ -640,8 +655,14 @@ final class Crud
         }
         if ($resource === 'desk_assignments') {
             $record = $this->find($resource, $id);
-            (new DeskAssignments($this->pdo))->applyAssignmentRecord($record, $id);
-            $this->syncChargesForTeam((int) ($record['team_id'] ?? 0), $record);
+            $affectedTeams = (new DeskAssignments($this->pdo))->applyAssignmentRecord($record, $id);
+            $teamIds = array_unique(array_filter(array_merge(
+                [$previousTeamId, (int) ($record['team_id'] ?? 0)],
+                $affectedTeams
+            )));
+            foreach ($teamIds as $teamId) {
+                $this->syncChargesForTeam((int) $teamId, $record);
+            }
         }
         if ($resource === 'teams' && isset($data['leader'])) {
             EntityAccounts::syncLeaderName($this->pdo, $id, (string) $data['leader']);

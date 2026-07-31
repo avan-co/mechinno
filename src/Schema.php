@@ -1185,13 +1185,37 @@ final class Schema
             if (count($group) <= 1) {
                 continue;
             }
-            $keep = self::preferDeskAssignmentRow($group);
-            $keepId = (int) ($keep['id'] ?? 0);
+            // Preferred survivors first; keep non-overlapping segments, drop true overlaps.
+            usort($group, static function (array $a, array $b): int {
+                $preferred = self::preferDeskAssignmentPair($a, $b);
+
+                return (int) ($preferred['id'] ?? 0) === (int) ($a['id'] ?? 0) ? -1 : 1;
+            });
+            $kept = [];
             foreach ($group as $row) {
-                $rowId = (int) ($row['id'] ?? 0);
-                if ($rowId > 0 && $rowId !== $keepId) {
-                    $delete->execute(['id' => $rowId]);
+                $from = JalaliDate::tryNormalize((string) ($row['assigned_from'] ?? ''));
+                $until = JalaliDate::tryNormalize((string) ($row['assigned_until'] ?? ''));
+                $overlapsKept = false;
+                foreach ($kept as $keptRow) {
+                    $keptFrom = JalaliDate::tryNormalize((string) ($keptRow['assigned_from'] ?? ''));
+                    $keptUntil = JalaliDate::tryNormalize((string) ($keptRow['assigned_until'] ?? ''));
+                    $endA = $until !== '' ? $until : '9999/12/29';
+                    $endB = $keptUntil !== '' ? $keptUntil : '9999/12/29';
+                    if ($from !== '' && $keptFrom !== ''
+                        && JalaliDate::compare($from, $endB) <= 0
+                        && JalaliDate::compare($keptFrom, $endA) <= 0) {
+                        $overlapsKept = true;
+                        break;
+                    }
                 }
+                if ($overlapsKept) {
+                    $rowId = (int) ($row['id'] ?? 0);
+                    if ($rowId > 0) {
+                        $delete->execute(['id' => $rowId]);
+                    }
+                    continue;
+                }
+                $kept[] = $row;
             }
         }
     }

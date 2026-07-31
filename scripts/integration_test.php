@@ -1109,8 +1109,65 @@ $bulkAssignCount = (int) $pdo->query(
 )->fetchColumn();
 $assert($bulkAssignCount === 2, 'bulk import: two desk assignments persisted');
 
+// Mid-year desk handoff must keep prior team segment and clear its ghost charges after reassign.
+$handA = $crud->create('teams', [
+    'entity_type' => 'team',
+    'name' => 'نهاد واگذاری الف',
+    'leader' => 'الف',
+    'phone' => '09120004444',
+    'joined_at' => '1405/01/01',
+]);
+$handB = $crud->create('teams', [
+    'entity_type' => 'team',
+    'name' => 'نهاد واگذاری ب',
+    'leader' => 'ب',
+    'phone' => '09120005555',
+    'joined_at' => '1405/01/01',
+]);
+$handAId = (int) $handA['id'];
+$handBId = (int) $handB['id'];
+foreach ([$handAId, $handBId] as $hid) {
+    $crud->create('team_contracts', [
+        'team_id' => (string) $hid,
+        'fiscal_year' => '1405',
+        'contract_start' => '1405/01/01',
+        'contract_end' => '1405/12/29',
+        'formal_contract_amount' => '3000000',
+    ]);
+}
+$handDeskId = (int) ($pdo->query('SELECT id FROM desks WHERE number = 8')->fetchColumn() ?: 0);
+$pdo->exec('DELETE FROM desk_assignments WHERE desk_id = ' . $handDeskId);
+$handFirst = $crud->create('desk_assignments', [
+    'desk_id' => (string) $handDeskId,
+    'team_id' => (string) $handAId,
+    'usage_type' => 'formal',
+    'fiscal_year' => '1405',
+    'assigned_from_month' => '1',
+    'assigned_until_month' => '6',
+]);
+$handSecond = $crud->create('desk_assignments', [
+    'desk_id' => (string) $handDeskId,
+    'team_id' => (string) $handBId,
+    'usage_type' => 'formal',
+    'fiscal_year' => '1405',
+    'assigned_from_month' => '7',
+    'assigned_until_month' => '12',
+]);
+$assert((int) ($handFirst['id'] ?? 0) > 0 && (int) ($handSecond['id'] ?? 0) > 0, 'handoff: both segments created');
+$assert((int) ($handFirst['id'] ?? 0) !== (int) ($handSecond['id'] ?? 0), 'handoff: second segment is a new row');
+$handCount = (int) $pdo->query('SELECT COUNT(*) FROM desk_assignments WHERE desk_id = ' . $handDeskId)->fetchColumn();
+$assert($handCount === 2, 'handoff: non-overlapping segments kept after reconcile');
+(new Seeder($pdo))->recalculateChargesForTeam($handAId, '1405');
+(new Seeder($pdo))->recalculateChargesForTeam($handBId, '1405');
+$handAMonths = (new Seeder($pdo))->monthlyAmountsForTeam($handAId, '1405');
+$handBMonths = (new Seeder($pdo))->monthlyAmountsForTeam($handBId, '1405');
+$assert(isset($handAMonths[1], $handAMonths[6]) && !isset($handAMonths[7]), 'handoff: team A bills early months only');
+$assert(isset($handBMonths[7], $handBMonths[12]) && !isset($handBMonths[1]), 'handoff: team B bills late months only');
+
 $crud->delete('teams', $segTeamId);
 $crud->delete('teams', (int) $bulkTeam['id']);
+$crud->delete('teams', $handAId);
+$crud->delete('teams', $handBId);
 $crud->delete('teams', $uniqTeamId);
 
 // --- Unused tables dropped ---
