@@ -298,6 +298,10 @@ try {
         json_response((new SmsService($pdo))->chargeDebtors());
     }
 
+    if ($resource === 'sms-patterns') {
+        json_response((new SmsService($pdo))->patternRegistry());
+    }
+
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && $resource === 'sms-send-charge-reminders') {
         require_csrf_json();
         Access::requireWriteJson();

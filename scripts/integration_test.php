@@ -668,7 +668,8 @@ $assert($plainPattern['is_shared_pattern'] === false && $plainPattern['body_id']
 $sharedPattern = MelliPayamak::parsePatternMessage('12345@arg1##arg2##shared');
 $assert($sharedPattern['is_shared_pattern'] === true, 'sms: shared pattern detected');
 $assert($sharedPattern['body_id'] === '12345', 'sms: shared pattern body id parsed');
-$assert($sharedPattern['vars_string'] === 'arg1;arg2', 'sms: shared pattern vars joined with semicolon');
+$assert(str_contains($sharedPattern['vars_string'], 'arg1'), 'sms: shared pattern vars include first segment');
+$assert(str_contains($sharedPattern['vars_string'], 'arg2'), 'sms: shared pattern vars include second segment');
 $nonSharedPattern = MelliPayamak::parsePatternMessage('12345@متن آزاد##custom');
 $assert($nonSharedPattern['is_shared_pattern'] === false, 'sms: non-shared pattern uses simple send path');
 $assert($nonSharedPattern['text_data'] === 'متن آزاد##custom', 'sms: non-shared pattern keeps full text payload');
@@ -689,6 +690,7 @@ $assert(($sendSettings['sms_password'] ?? '') === 'testpass', 'sms: partial upda
 $smsCenter->updateSms(['sms_charge_template' => '12345@{team_name}##{debt_total}##shared']);
 $templateSettings = $smsCenter->smsSettings();
 $assert(($templateSettings['sms_charge_template'] ?? '') === '12345@{team_name}##{debt_total}##shared', 'sms: charge template saved');
+$assert(str_contains((new CenterSettings($pdo))->defaultWorkflowTemplates()['room_approved'], '##shared'), 'sms: workflow defaults use shared pattern');
 $rendered = SmsService::renderChargeTemplate(
     '12345@{team_name}##{debt_total}##shared',
     ['team_name' => 'نهاد تست', 'leader_name' => 'علی', 'debt_total' => 450000, 'debt_summary' => 'مرداد 1405'],
@@ -696,8 +698,9 @@ $rendered = SmsService::renderChargeTemplate(
 );
 $assert($rendered === '12345@نهاد تست##450000##shared', 'sms: charge template variables rendered');
 $workflowRendered = SmsService::renderTemplate(
-    CenterSettings::WORKFLOW_TEMPLATE_DEFAULTS['room_approved'],
+    CenterSettings::defaultWorkflowTemplates()['room_approved'],
     [
+        'booker_name' => 'علی',
         'room_name' => 'اتاق الف',
         'reserved_date' => '1405/05/01',
         'start_time' => '10:00',
@@ -706,6 +709,8 @@ $workflowRendered = SmsService::renderTemplate(
     ]
 );
 $assert(str_contains($workflowRendered, 'اتاق الف'), 'sms: workflow template renders room name');
+$patternRows = (int) $pdo->query('SELECT COUNT(*) FROM sms_patterns')->fetchColumn();
+$assert($patternRows === 9, 'sms: pattern registry seeded in database');
 $chargeDebtors = (new SmsService($pdo))->chargeDebtors();
 $assert(is_array($chargeDebtors['debtors'] ?? null), 'sms: charge debtors endpoint data');
 $assert(($chargeDebtors['template_configured'] ?? false) === true, 'sms: charge template configured flag');

@@ -18,6 +18,7 @@ require_once __DIR__ . '/TeamContracts.php';
 require_once __DIR__ . '/DeskAssignments.php';
 require_once __DIR__ . '/TeamLeaders.php';
 require_once __DIR__ . '/MelliPayamak.php';
+require_once __DIR__ . '/SmsPatterns.php';
 require_once __DIR__ . '/SmsService.php';
 require_once __DIR__ . '/RoomReservations.php';
 require_once __DIR__ . '/Schema.php';

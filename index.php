@@ -526,6 +526,11 @@ $assetVer = (string) max(
                 </form>
               </article>
               <article class="panel">
+                <div class="panel-head"><h2>راهنمای ثبت الگو در ملی‌پیامک</h2></div>
+                <p class="hint">متن‌های زیر را در پنل ملی‌پیامک ثبت کنید. پس از دریافت کد تأییدشده، در الگوهای سیستم جایگزین کنید.</p>
+                <div id="smsPatternGuide">در حال بارگذاری…</div>
+              </article>
+              <article class="panel">
                 <div class="panel-head"><h2>آمار و همگام‌سازی</h2></div>
                 <div id="smsSettingsStats">در حال بارگذاری…</div>
                 <div class="panel-actions">

@@ -80,6 +80,7 @@ final class Access
         'sms-send',
         'sms-charge-debtors',
         'sms-send-charge-reminders',
+        'sms-patterns',
         'health',
         'meeting-rooms',
         'meeting_rooms',

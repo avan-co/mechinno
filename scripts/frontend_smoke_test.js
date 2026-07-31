@@ -93,6 +93,11 @@ if (!indexSource.includes('id="smsWorkflowTemplatesEditor"')) {
   process.exit(1);
 }
 
+if (!indexSource.includes('id="smsPatternGuide"')) {
+  console.error("index.php must include sms pattern guide panel");
+  process.exit(1);
+}
+
 if (!apiSource.includes("'desk-assignments' => 'desk_assignments'")) {
   console.error("api.php must map desk-assignments to desk_assignments for CRUD");
   process.exit(1);

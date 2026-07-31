@@ -12,6 +12,7 @@ const loadSmsSettingsPage = async (withLive = false) => {
   renderSmsLineForm(data);
   renderSmsChargeTemplateEditor(data);
   renderSmsWorkflowTemplatesEditor(data);
+  renderSmsPatternGuide();
   renderSmsSettingsStats(data);
 };
 
@@ -128,6 +129,26 @@ const renderSmsWorkflowTemplatesEditor = (data) => {
       showToast(error.message, "error");
     }
   };
+};
+
+const renderSmsPatternGuide = async () => {
+  const host = document.getElementById("smsPatternGuide");
+  if (!host) return;
+  try {
+    const data = await fetchJson("api.php?resource=sms-patterns");
+    host.innerHTML = (data.patterns || []).map((row) => `
+      <div class="charge-reminder-card">
+        <div class="charge-reminder-head">
+          <strong>${escapeHtml(row.title || row.pattern_key || "")}</strong>
+          <span class="hint" dir="ltr">bodyId: ${escapeHtml(String(row.body_id || ""))}</span>
+        </div>
+        <p class="hint">متغیرهای سیستم: ${escapeHtml((row.variables || []).join("، "))}</p>
+        <textarea readonly rows="3" dir="rtl">${escapeHtml(row.panel_text || "")}</textarea>
+        <p class="hint" dir="ltr">الگوی سیستم: ${escapeHtml(row.system_template || "")}</p>
+      </div>`).join("") || `<div class="empty">الگویی ثبت نشده است.</div>`;
+  } catch (error) {
+    host.innerHTML = `<div class="empty">خطا در بارگذاری راهنما: ${escapeHtml(error.message)}</div>`;
+  }
 };
 
 const renderSmsLineForm = (data) => {

@@ -14,16 +14,15 @@ final class CenterSettings
     ];
 
     /** @var array<string, string> */
-    public const WORKFLOW_TEMPLATE_DEFAULTS = [
-        'room_pending' => 'درخواست رزرو {room_name} در {reserved_date} ساعت {start_time} تا {end_time} ثبت شد. کد پیگیری: {public_token}',
-        'room_approved' => 'رزرو {room_name} در {reserved_date} ساعت {start_time} تا {end_time} تأیید شد. کد پیگیری: {public_token}',
-        'room_rejected' => 'رزرو {room_name} در {reserved_date} رد شد.{rejection_reason_line}',
-        'room_cancelled' => 'رزرو {room_name} در {reserved_date} لغو شد.{cancel_reason_line}',
-        'member_approved' => 'عضویت {full_name} در {team_name} تأیید شد.{access_code_line}',
-        'member_rejected' => 'درخواست عضویت {full_name} در {team_name} رد شد.{rejection_reason_line}',
-        'member_request_approved' => 'درخواست {request_type_label} عضو {full_name} در {team_name} تأیید شد.',
-        'member_request_rejected' => 'درخواست {request_type_label} عضو {full_name} در {team_name} رد شد.{rejection_reason_line}',
-    ];
+    public const WORKFLOW_TEMPLATE_DEFAULTS = [];
+
+    /**
+     * @return array<string, string>
+     */
+    public static function defaultWorkflowTemplates(): array
+    {
+        return SmsPatterns::workflowTemplateDefaults();
+    }
 
     public function __construct(private readonly PDO $pdo)
     {
@@ -318,7 +317,7 @@ final class CenterSettings
      */
     private function decodeWorkflowTemplates(string $json): array
     {
-        $templates = self::WORKFLOW_TEMPLATE_DEFAULTS;
+        $templates = self::defaultWorkflowTemplates();
         if ($json === '') {
             return $templates;
         }
@@ -326,7 +325,7 @@ final class CenterSettings
         if (!is_array($decoded)) {
             return $templates;
         }
-        foreach (self::WORKFLOW_TEMPLATE_DEFAULTS as $key => $default) {
+        foreach ($templates as $key => $default) {
             if (array_key_exists($key, $decoded)) {
                 $templates[$key] = trim((string) $decoded[$key]);
             }
@@ -344,7 +343,7 @@ final class CenterSettings
             return trim($templates);
         }
         $normalized = [];
-        foreach (self::WORKFLOW_TEMPLATE_DEFAULTS as $key => $default) {
+        foreach (self::defaultWorkflowTemplates() as $key => $default) {
             $normalized[$key] = trim((string) ($templates[$key] ?? $default));
         }
 

@@ -293,6 +293,49 @@ final class SmsService
     /**
      * @return array<string, mixed>
      */
+    public function patternRegistry(): array
+    {
+        $rows = [];
+        if (Schema::tableExists($this->pdo, 'sms_patterns')) {
+            $statement = $this->pdo->query(
+                'SELECT pattern_key, body_id, title, panel_text, variables_json, system_template, workflow_key
+                 FROM sms_patterns ORDER BY body_id'
+            );
+            $dbRows = $statement->fetchAll() ?: [];
+            foreach ($dbRows as $row) {
+                $variables = json_decode((string) ($row['variables_json'] ?? ''), true);
+                $rows[] = [
+                    'pattern_key' => (string) ($row['pattern_key'] ?? ''),
+                    'workflow_key' => $row['workflow_key'] !== null ? (string) $row['workflow_key'] : null,
+                    'body_id' => (int) ($row['body_id'] ?? 0),
+                    'title' => (string) ($row['title'] ?? ''),
+                    'panel_text' => (string) ($row['panel_text'] ?? ''),
+                    'variables' => is_array($variables) ? $variables : [],
+                    'system_template' => (string) ($row['system_template'] ?? ''),
+                ];
+            }
+        }
+        if ($rows === []) {
+            $rows = SmsPatterns::panelRegistrationGuide();
+        }
+
+        $settings = (new CenterSettings($this->pdo))->smsSettings();
+
+        return [
+            'patterns' => $rows,
+            'charge_template' => (string) ($settings['sms_charge_template'] ?? ''),
+            'workflow_templates' => (array) ($settings['sms_workflow_templates'] ?? []),
+            'registration_notes' => [
+                'نوع خط: خط خدماتی اشتراکی (shared)',
+                'پس از تأیید الگو در پنل، body_id واقعی را در تنظیمات پیامک جایگزین کنید.',
+                'ترتیب متغیرها در پنل ({0}، {1}، ...) باید دقیقاً مطابق جدول زیر باشد.',
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
     public function chargeDebtors(): array
     {
         $center = new CenterSettings($this->pdo);

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 final class Schema
 {
-    public const VERSION = 18;
+    public const VERSION = 19;
 
     public static function migrate(PDO $pdo): void
     {
@@ -13,6 +13,8 @@ final class Schema
             self::ensureMeetingRoomTables($pdo);
             self::ensureRoomClosedDaysTable($pdo);
             self::reconcileDeskAssignments($pdo);
+            self::seedSmsPatterns($pdo);
+
             return;
         }
 
@@ -36,6 +38,7 @@ final class Schema
         self::seedDeskAssignments($pdo);
         self::reconcileDeskAssignments($pdo);
         self::applySecurityHardening($pdo);
+        self::seedSmsPatterns($pdo);
         self::setVersion($pdo, self::VERSION);
     }
 
@@ -1330,6 +1333,132 @@ final class Schema
         }
 
         self::ensureSmsLogColumns($pdo);
+        self::ensureSmsPatternsTable($pdo);
+    }
+
+    private static function ensureSmsPatternsTable(PDO $pdo): void
+    {
+        $driver = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
+        if ($driver === 'sqlite') {
+            $pdo->exec(
+                'CREATE TABLE IF NOT EXISTS sms_patterns (
+                    pattern_key TEXT PRIMARY KEY,
+                    body_id INTEGER NOT NULL,
+                    title TEXT NOT NULL,
+                    panel_text TEXT NOT NULL,
+                    variables_json TEXT NOT NULL,
+                    system_template TEXT NOT NULL,
+                    workflow_key TEXT NULL,
+                    updated_at TEXT NOT NULL
+                )'
+            );
+        } else {
+            $pdo->exec(
+                "CREATE TABLE IF NOT EXISTS sms_patterns (
+                    pattern_key VARCHAR(64) PRIMARY KEY,
+                    body_id INT NOT NULL,
+                    title VARCHAR(255) NOT NULL,
+                    panel_text TEXT NOT NULL,
+                    variables_json TEXT NOT NULL,
+                    system_template TEXT NOT NULL,
+                    workflow_key VARCHAR(64) NULL,
+                    updated_at VARCHAR(32) NOT NULL
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+            );
+        }
+    }
+
+    public static function seedSmsPatterns(PDO $pdo): void
+    {
+        self::ensureSmsPatternsTable($pdo);
+        if (!self::tableExists($pdo, 'center_settings')) {
+            return;
+        }
+
+        $today = JalaliDate::todayParts()['formatted'];
+        $upsert = $pdo->prepare(
+            'INSERT INTO sms_patterns (pattern_key, body_id, title, panel_text, variables_json, system_template, workflow_key, updated_at)
+             VALUES (:pattern_key, :body_id, :title, :panel_text, :variables_json, :system_template, :workflow_key, :updated_at)
+             ON CONFLICT(pattern_key) DO UPDATE SET
+                body_id = excluded.body_id,
+                title = excluded.title,
+                panel_text = excluded.panel_text,
+                variables_json = excluded.variables_json,
+                system_template = excluded.system_template,
+                workflow_key = excluded.workflow_key,
+                updated_at = excluded.updated_at'
+        );
+        if ($pdo->getAttribute(PDO::ATTR_DRIVER_NAME) !== 'sqlite') {
+            $upsert = $pdo->prepare(
+                'INSERT INTO sms_patterns (pattern_key, body_id, title, panel_text, variables_json, system_template, workflow_key, updated_at)
+                 VALUES (:pattern_key, :body_id, :title, :panel_text, :variables_json, :system_template, :workflow_key, :updated_at)
+                 ON DUPLICATE KEY UPDATE
+                    body_id = VALUES(body_id),
+                    title = VALUES(title),
+                    panel_text = VALUES(panel_text),
+                    variables_json = VALUES(variables_json),
+                    system_template = VALUES(system_template),
+                    workflow_key = VALUES(workflow_key),
+                    updated_at = VALUES(updated_at)'
+            );
+        }
+
+        $bodyIds = [];
+        foreach (SmsPatterns::definitions() as $key => $definition) {
+            $bodyId = (int) $definition['body_id'];
+            $bodyIds[$key] = $bodyId;
+            $upsert->execute([
+                'pattern_key' => $key,
+                'body_id' => $bodyId,
+                'title' => (string) $definition['title'],
+                'panel_text' => (string) $definition['panel_text'],
+                'variables_json' => json_encode($definition['variables'], JSON_UNESCAPED_UNICODE),
+                'system_template' => SmsPatterns::systemTemplate($key, $bodyId),
+                'workflow_key' => $definition['workflow_key'],
+                'updated_at' => $today,
+            ]);
+        }
+
+        try {
+            $row = $pdo->query('SELECT sms_charge_template, sms_workflow_templates FROM center_settings WHERE id = 1')->fetch();
+        } catch (PDOException) {
+            return;
+        }
+        if ($row === false) {
+            return;
+        }
+
+        $charge = trim((string) ($row['sms_charge_template'] ?? ''));
+        $workflowJson = trim((string) ($row['sms_workflow_templates'] ?? ''));
+        $workflow = $workflowJson !== '' ? json_decode($workflowJson, true) : [];
+        $needsSeed = $charge === '' || !str_contains($charge, '##shared');
+        if (!$needsSeed && is_array($workflow)) {
+            foreach (SmsPatterns::workflowTemplateDefaults() as $workflowKey => $template) {
+                $current = trim((string) ($workflow[$workflowKey] ?? ''));
+                if ($current === '' || !str_contains($current, '##shared')) {
+                    $needsSeed = true;
+                    break;
+                }
+            }
+        } elseif (!is_array($workflow) || $workflow === []) {
+            $needsSeed = true;
+        }
+
+        if (!$needsSeed) {
+            return;
+        }
+
+        $pdo->prepare(
+            'UPDATE center_settings SET
+                sms_charge_template = :charge,
+                sms_workflow_templates = :workflow,
+                sms_updated_at = :updated
+             WHERE id = 1'
+        )->execute([
+            'charge' => SmsPatterns::chargeTemplate($bodyIds['charge_reminder'] ?? null),
+            'workflow' => json_encode(SmsPatterns::workflowTemplates($bodyIds), JSON_UNESCAPED_UNICODE),
+            'updated' => $today,
+        ]);
     }
 
     private static function ensureSmsLogColumns(PDO $pdo): void
