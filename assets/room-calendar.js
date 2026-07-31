@@ -158,4 +158,14 @@
     if (!document.getElementById("roomCalendarPanel")) return;
     loadCalendar(0).catch(() => {});
   };
+
+  // This script loads after app.js, so activateSection() on initial page load
+  // runs before window.initRoomCalendar is defined. Self-initialize here when the
+  // reservation section is already active (e.g. a direct #meeting-rooms link).
+  document.addEventListener("DOMContentLoaded", () => {
+    const activeCalendarSection = document.querySelector(
+      "#meeting-rooms.section.active, #room-reservations.section.active"
+    );
+    if (activeCalendarSection) window.initRoomCalendar();
+  });
 })();
