@@ -297,12 +297,50 @@
     }
   };
 
+  const weekdayShort = (name) => {
+    const map = {
+      شنبه: "ش", یکشنبه: "ی", دوشنبه: "د", سه‌شنبه: "س", "سه شنبه": "س",
+      چهارشنبه: "چ", پنجشنبه: "پ", جمعه: "ج",
+    };
+    return map[name] || String(name || "").slice(0, 1);
+  };
+
   const levelLabel = (day) => {
     if (day.is_closed) return "تعطیل";
-    if (day.is_past) return "گذشته";
     if (day.level === "busy") return "پر";
     if (day.level === "light") return "نیمه‌پر";
     return "آزاد";
+  };
+
+  const updateWeekDetail = (days) => {
+    const detail = $("#weekDayDetail");
+    if (!detail) return;
+    const day = (days || []).find((item) => item.date === state.selectedDate)
+      || (days || []).find((item) => item.is_today)
+      || (days || [])[0];
+    if (!day) {
+      detail.hidden = true;
+      detail.textContent = "";
+      return;
+    }
+    if (day.is_closed) {
+      detail.hidden = false;
+      detail.textContent = `${day.weekday} ${day.day}: تعطیل — رزرو ندارد`;
+      return;
+    }
+    const blocks = day.blocks || [];
+    if (!blocks.length) {
+      detail.hidden = false;
+      detail.textContent = `${day.weekday} ${day.day}: کاملاً آزاد`;
+      return;
+    }
+    const times = blocks.slice(0, 3).map((block) => {
+      const room = state.weekRoomId ? "" : ` ${block.room_name || ""}`;
+      return `${block.start_time}–${block.end_time}${room}`.trim();
+    }).join(" · ");
+    const more = blocks.length > 3 ? ` +${blocks.length - 3}` : "";
+    detail.hidden = false;
+    detail.textContent = `${day.weekday} ${day.day}: ${times}${more}`;
   };
 
   const renderWeek = (data) => {
@@ -315,9 +353,13 @@
       day_start: data.day_start || "08:00",
       day_end: data.day_end || "20:00",
     };
+    // Only today/future — server already starts from today, keep a client guard.
+    const days = (data.days || []).filter((day) => !day.is_past);
 
     if (rangeLabel) {
-      rangeLabel.textContent = `${data.from || ""} تا ${data.to || ""} · ${state.weekMeta.day_start}–${state.weekMeta.day_end}`;
+      rangeLabel.textContent = days.length
+        ? `${days[0].date} تا ${days[days.length - 1].date}`
+        : "بازه در دسترس نیست";
     }
 
     if (filter && filter.dataset.ready !== "1") {
@@ -328,41 +370,27 @@
       filter.dataset.ready = "1";
     }
 
-    list.innerHTML = (data.days || []).map((day) => {
-      const classes = ["pub-week-row", `is-${day.level || "free"}`];
+    list.innerHTML = days.map((day) => {
+      const classes = ["pub-week-chip", `is-${day.level || "free"}`];
       if (day.is_today) classes.push("is-today");
-      if (day.is_past) classes.push("is-past");
       if (day.date === state.selectedDate) classes.push("is-selected");
-      const disabled = day.is_closed || day.is_past;
-      const pct = day.is_closed ? 100 : Number(day.occupancy_pct || 0);
-      const blocks = (day.blocks || []).map((block) => {
-        const title = `${block.start_time}–${block.end_time}${block.room_name ? ` · ${block.room_name}` : ""}`;
-        return `<span class="pub-week-seg pub-week-seg--${block.status === "pending" ? "pending" : "busy"}" style="inset-inline-start:${block.left_pct}%;width:${block.width_pct}%" title="${escapeHtml(title)}"></span>`;
-      }).join("");
-      const hours = (day.blocks || []).slice(0, 4).map((block) =>
-        `<li>${escapeHtml(block.start_time)}–${escapeHtml(block.end_time)}${state.weekRoomId ? "" : ` <em>${escapeHtml(block.room_name || "")}</em>`}</li>`
+      const disabled = day.is_closed;
+      const pct = day.is_closed ? 100 : Math.max(4, Number(day.occupancy_pct || 0));
+      const segs = (day.blocks || []).map((block) =>
+        `<i class="pub-week-chip-seg pub-week-chip-seg--${block.status === "pending" ? "pending" : "busy"}" style="inset-inline-start:${block.left_pct}%;width:${block.width_pct}%"></i>`
       ).join("");
 
-      return `<button type="button" class="${classes.join(" ")}" data-date="${day.date}" ${disabled ? "disabled" : ""}>
-        <div class="pub-week-row-meta">
-          <div class="pub-week-row-day">
-            <strong>${escapeHtml(day.weekday || "")}</strong>
-            <span>${day.day}</span>
-          </div>
-          <div class="pub-week-row-status">
-            <b>${levelLabel(day)}</b>
-            <small>${day.is_closed ? "رزرو غیرفعال" : (day.busy_count ? `${day.busy_count} بازه · ${pct}٪ اشغال` : "بدون رزرو")}</small>
-          </div>
-        </div>
-        <div class="pub-week-track" aria-hidden="true">
-          <span class="pub-week-track-fill" style="width:${pct}%"></span>
-          ${blocks}
-        </div>
-        <ul class="pub-week-hours">${hours || "<li class=\"is-empty\">—</li>"}</ul>
+      return `<button type="button" class="${classes.join(" ")}" data-date="${day.date}" ${disabled ? "disabled" : ""} aria-label="${escapeHtml(day.weekday || "")} ${day.day}، ${levelLabel(day)}">
+        <span class="pub-week-chip-name">${escapeHtml(weekdayShort(day.weekday))}</span>
+        <strong class="pub-week-chip-num">${day.day}</strong>
+        <span class="pub-week-chip-bar" aria-hidden="true"><span style="width:${day.is_closed ? 100 : pct}%"></span>${segs}</span>
+        <span class="pub-week-chip-tag">${levelLabel(day)}</span>
       </button>`;
     }).join("");
 
-    list.querySelectorAll(".pub-week-row[data-date]:not([disabled])").forEach((button) => {
+    updateWeekDetail(days);
+
+    list.querySelectorAll(".pub-week-chip[data-date]:not([disabled])").forEach((button) => {
       button.addEventListener("click", () => {
         state.selectedDate = button.dataset.date || "";
         const dayLabel = $("#publicSelectedDayLabel");
@@ -374,9 +402,11 @@
         }
         clearRange();
         updateSummary();
+        updateWeekDetail(days);
+        list.querySelectorAll(".pub-week-chip").forEach((chip) => {
+          chip.classList.toggle("is-selected", chip.dataset.date === state.selectedDate);
+        });
         loadMonth().then(loadAvailability).catch((error) => showMessage(error.message, "error"));
-        loadWeek();
-        $("#publicMonthPicker")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
       });
     });
   };
