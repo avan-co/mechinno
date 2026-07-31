@@ -1,30 +1,42 @@
-# برنامه توسعه فیچرهای جدید — Mechinno / ICAUT
+# برنامه توسعه — Mechinno / ICAUT
 
-> **هدف:** افزودن قابلیت‌های جدید **بدون شکستن** ماژول‌های فعلی (نهادها، شارژ، مالی، اعضا، میز، کمد، اتاق جلسه، SMS، گزارش، پورتال نهاد).
+> **هدف این سند:** پیاده‌سازی **۴ فیچر درخواستی** به‌صورت مرحله‌ای، با تست بعد از هر تسک، **بدون شکستن** بخش‌های فعلی.
 >
-> **روش کار:** هر تسک را **یکی‌یکی** انجام دهید → تست همان تسک → `scripts/run_all_tests.sh` → سپس تسک بعدی.
+> **روش کار:** هر تسک را **یکی‌یکی** انجام دهید → تست همان تسک → `scripts/run_all_tests.sh` → ثبت در «لاگ پیشرفت» → تسک بعدی.
 >
 > **وضعیت:** `⬜` انجام نشده · `🔄` در حال انجام · `✅` انجام و تست شده
 
 ---
 
-## فهرست سریع
+## فیچرهای این برنامه
+
+| # | فیچر | پنل نهاد | پنل مدیر |
+|---|------|----------|----------|
+| ۱ | **آپلود قرارداد** توسط نهاد | آپلود + مشاهده وضعیت | بررسی / تأیید / رد |
+| ۲ | **گزارش استفاده اتاق** (ساعت پر/خالی) | — | گزارش + نمودار + export |
+| ۳ | **تابلوی اعلانات** (تعطیلات، رویدادها، تغییر نرخ) | مشاهده + نشان «جدید» | ایجاد / انتشار / آرشیو |
+| ۴ | **نظرسنجی رضایت** (فضا، خدمات) | پاسخ‌دهی | طراحی / نتایج / export |
+
+**خارج از محدوده این سند (فاز بعدی):** لاگ ممیزی کامل، گزارش وضعیت نهاد، رویداد/کارگاه، درآمد رویداد.
+
+---
+
+## فهرست سریع تسک‌ها
 
 | فاز | عنوان | تسک‌ها | وابستگی |
 |-----|--------|--------|---------|
-| **۰** | زیرساخت مشترک | T-000 → T-003 | — |
-| **۱** | لاگ ممیزی | T-100 → T-108 | فاز ۰ |
-| **۲** | اعلان درون‌پنلی | T-200 → T-206 | فاز ۰ (+ بخشی از فاز ۱) |
-| **۳** | گزارش وضعیت نهاد | T-300 → T-304 | فاز ۲ |
-| **۴** | آپلود قرارداد نهاد | T-400 → T-406 | فاز ۰ |
-| **۵** | گزارش استفاده اتاق | T-500 → T-505 | — |
-| **۶** | تابلوی اعلانات | T-600 → T-606 | فاز ۲ |
-| **۷** | نظرسنجی | T-700 → T-706 | فاز ۲ |
-| **۸** | رویداد / کارگاه / منتورینگ | T-800 → T-809 | فاز ۲ |
-| **۹** | درآمد رویداد → دفتر معین | T-900 → T-905 | فاز ۸ |
+| **۰** | زیرساخت مشترک | T-000 → T-002 | — |
+| **۱** | آپلود قرارداد نهاد | T-100 → T-106 | فاز ۰ |
+| **۲** | گزارش استفاده اتاق | T-200 → T-205 | فاز ۰ (سبک) |
+| **۳** | تابلوی اعلانات | T-300 → T-306 | فاز ۰ |
+| **۴** | نظرسنجی | T-400 → T-406 | فاز ۰ |
 
-**ترتیب پیشنهادی اجرا:**  
-`۰ → ۱ → ۲ → ۳ → ۴ → ۵ → ۶ → ۷ → ۸ → ۹`
+**ترتیب پیشنهادی اجرا:**
+```
+۰ → ۱ (قرارداد) → ۲ (اتاق) → ۳ (تابلو) → ۴ (نظرسنجی)
+```
+
+> فاز ۲ (اتاق) مستقل است و می‌تواند همزمان با فاز ۱ جلو برود؛ ولی ترتیب بالا برای کاهش ریسک پیشنهاد می‌شود.
 
 ---
 
@@ -32,510 +44,108 @@
 
 ### قوانین مهندسی
 
-1. **مهاجرت دیتابیس:** هر فیچر جدید → `Schema::VERSION++` + جداول/ستون‌های جدید در `src/Schema.php` + `ensure*` برای نصب‌های قبلی.
-2. **دسترسی:** هر endpoint جدید در `src/Access.php` (`TEAM_RESOURCES` / `ADMIN_RESOURCES`) ثبت شود.
-3. **پورتال نهاد:** داده‌ها با `Access::scopedTeamId()` فیلتر شوند — نهاد نباید داده نهاد دیگر را ببیند.
-4. **نقش مشاهده‌گر:** مدیر مشاهده‌گر فقط خواندن؛ بدون آپلود/حذف/تأیید.
-5. **CSRF:** همه `POST`‌های JSON با `require_csrf_json()` محافظت شوند.
-6. **فایل‌ها:** ذخیره خارج از `public` — مسیر پیشنهادی: `data/uploads/` (مسدود در `.htaccess`).
-7. **بکاپ:** `src/DatabaseBackup.php` باید جداول/فایل‌های جدید را پوشش دهد.
-8. **نصب مجدد:** `Schema::reset()` جداول جدید را در لیست پاک‌سازی داشته باشد.
-9. **تست:** برای هر تسک حداقل یک مورد در `scripts/integration_test.php` اضافه شود.
+1. **مهاجرت دیتابیس:** هر فیچر → `Schema::VERSION++` در `src/Schema.php` + جداول جدید + `ensure*` برای نصب‌های قبلی.
+2. **دسترسی:** هر endpoint در `src/Access.php` (`TEAM_RESOURCES` / `ADMIN_RESOURCES`) ثبت شود.
+3. **پورتال نهاد:** همه queryها با `Access::scopedTeamId()` فیلتر شوند.
+4. **مدیر مشاهده‌گر:** فقط خواندن — بدون آپلود، تأیید، حذف.
+5. **CSRF:** همه `POST`های JSON با `require_csrf_json()`.
+6. **فایل‌ها:** ذخیره در `data/uploads/` — مسیر `data/` از قبل در `.htaccess` مسدود است.
+7. **بکاپ:** `src/DatabaseBackup.php` جداول جدید را پوشش دهد.
+8. **نصب مجدد:** `Schema::reset()` / `install.php` جداول و فایل‌های مرتبط را پاک کند.
+9. **تست:** برای هر فاز حداقل یک مورد در `scripts/integration_test.php`.
 
-### چک‌لیست رگرسیون (بعد از هر تسک)
+### چک‌لیست رگرسیون (بعد از **هر** تسک)
 
 - [ ] `scripts/run_all_tests.sh` بدون خطا
-- [ ] ورود مدیر ویرایشگر / مشاهده‌گر / نهاد
-- [ ] داشبورد admin و team بدون خطای JS
-- [ ] تأیید عضو، واریز، کمد، رزرو اتاق (جریان‌های قدیمی)
-- [ ] محاسبه شارژ و کلاژ ماهانه
+- [ ] ورود: مدیر ویرایشگر / مشاهده‌گر / نهاد
+- [ ] داشبورد `index.php` و `team.php` بدون خطای JS
+- [ ] جریان‌های قدیمی: تأیید عضو، واریز، کمد، رزرو اتاق
+- [ ] محاسبه شارژ + کلاژ ماهانه
 - [ ] دفتر معین و موجودی
 - [ ] رزرو عمومی `reserve.php`
-- [ ] بکاپ JSON و بازیابی (اگر جدول جدید اضافه شد)
-- [ ] نصب مجدد `install.php` روی پنل خالی
+- [ ] SMS (ارسال دستی) دست‌نخورده
+- [ ] بکاپ JSON (اگر جدول جدید اضافه شد)
+- [ ] `install.php` روی پنل خالی
 
-### فایل‌های کلیدی پروژه (مرجع)
+### فایل‌های کلیدی
 
 | لایه | فایل‌ها |
 |------|---------|
 | Schema | `src/Schema.php` |
-| API | `api.php`, `public-api.php` |
-| دسترسی | `src/Access.php`, `src/Auth.php` |
-| گردش کار | `src/Workflow.php`, `src/RoomReservations.php` |
-| CRUD | `src/Crud.php`, `src/Repository.php` |
-| مالی | `src/CenterLedger.php`, `src/Seeder.php` |
+| API | `api.php` |
+| دسترسی | `src/Access.php` |
+| اتاق | `src/RoomReservations.php` |
 | UI مدیر | `index.php`, `assets/app.js` |
 | UI نهاد | `team.php`, `assets/team-year-workspace.js` |
 | گزارش | `src/ReportBuilder.php`, `report.php`, `export.php` |
-| بکاپ | `src/DatabaseBackup.php`, `backup.php` |
-| تست | `scripts/integration_test.php`, `scripts/run_all_tests.sh` |
+| بکاپ | `src/DatabaseBackup.php` |
+| تست | `scripts/integration_test.php` |
 
 ---
 
 ## فاز ۰ — زیرساخت مشترک
 
-> پایه‌ای که بقیه فیچرها روی آن سوار می‌شوند. **قبل از همه فازها.**
+> حداقل زیرساخت برای ۴ فیچر. **قبل از همه فازها.**
 
 ---
 
-### T-000 — سرویس زمان و شناسه مشترک
+### T-000 — کلاس `ActorContext`
 **وضعیت:** ⬜
 
-**شرح:** کلاس کمکی برای timestamp شمسی، `actor_user_id`, `actor_role`, `actor_username`, `ip_address` (اختیاری).
+**شرح:** خواندن `user_id`, `username`, `role`, `team_id` از session برای audit ساده و ثبت `created_by`.
 
-**خروجی:**
-- `src/ActorContext.php` — خواندن اطلاعات عامل از session
-- ثابت‌های `ACTION_*` برای انواع رویداد
+**خروجی:** `src/ActorContext.php`
 
-**تست:** واحد ساده در integration_test — session mock → actor درست برگردد.
+**تست:** mock session → مقادیر درست.
 
 **رگرسیون:** بدون تغییر رفتار فعلی.
 
 ---
 
-### T-001 — قرارداد ثبت رویداد (Event Logger Interface)
+### T-001 — سرویس آپلود فایل (`FileStorage`)
 **وضعیت:** ⬜
 
-**شرح:** اینترفیس/کلاس `AuditLogger` که همه ماژول‌ها از آن استفاده کنند (هنوز بدون UI).
+**شرح:** کلاس مشترک برای ذخیره/حذف/اعتبارسنجی فایل.
 
-**API پیشنهادی:**
-```php
-AuditLogger::log(
-    action: 'payment.approved',
-    entityType: 'transaction',
-    entityId: 42,
-    teamId: 3,          // nullable
-    summary: 'تأیید واریز ۵,۰۰۰,۰۰۰ ریال',
-    before: [...],      // nullable JSON
-    after: [...],       // nullable JSON
-    meta: [...]         // nullable
-);
-```
+**قوانین:**
+- مسیر: `data/uploads/{category}/{scope_id}/`
+- پسوند مجاز per category (قرارداد: `pdf`, `jpg`, `jpeg`, `png`)
+- حداکثر حجم: ۱۰ مگابایت (قابل تنظیم در `config.php`)
+- نام روی دیسک: UUID — نه نام اصلی کاربر
+- برگرداندن: `stored_name`, `sha256`, `mime_type`, `file_size`
 
-**فایل:** `src/AuditLogger.php`
+**خروجی:** `src/FileStorage.php`
 
-**وابستگی:** T-000
+**تست:** آپلود mock → فایل روی دیسک + متادیتا.
 
 ---
 
-### T-002 — جدول `audit_logs` + مهاجرت
+### T-002 — endpoint دانلود امن فایل
 **وضعیت:** ⬜
 
-**شرح:** جدول مرکزی لاگ.
+**شرح:** `file-download.php?id=X&type=contract` — فقط با auth و بررسی دسترسی.
 
-**ستون‌های پیشنهادی:**
-
-| ستون | نوع | توضیح |
-|------|-----|-------|
-| `id` | INT PK | |
-| `created_at` | DATETIME | UTC یا local |
-| `jalali_at` | VARCHAR(10) | تاریخ شمسی نمایشی |
-| `actor_user_id` | INT NULL | `panel_users.id` |
-| `actor_username` | VARCHAR | |
-| `actor_role` | VARCHAR | admin_editor / admin_viewer / team |
-| `team_id` | INT NULL | نهاد مرتبط |
-| `action` | VARCHAR(64) | مثلاً `member.approved` |
-| `entity_type` | VARCHAR(32) | transaction, member, ... |
-| `entity_id` | INT NULL | |
-| `summary` | TEXT | توضیح فارسی کوتاه |
-| `before_json` | TEXT NULL | |
-| `after_json` | TEXT NULL | |
-| `meta_json` | TEXT NULL | IP، user-agent، ... |
-| `is_sensitive` | TINYINT | ۱ = فقط admin |
-
-**ایندکس:** `(team_id, created_at)`, `(action, created_at)`, `(entity_type, entity_id)`
-
-**فایل‌ها:** `src/Schema.php`, `src/DatabaseBackup.php`, `Schema::reset()`
+**قوانین:**
+- نهاد فقط فایل‌های `team_id` خودش
+- admin همه را می‌بیند
+- هدر `Content-Disposition: attachment`
+- MIME از دیتابیس، نه از پسوند کاربر
 
 **وابستگی:** T-001
 
----
-
-### T-003 — جدول `notifications` + مهاجرت
-**وضعیت:** ⬜
-
-**شرح:** اعلان درون‌پنلی (بدون SMS).
-
-**ستون‌های پیشنهادی:**
-
-| ستون | نوع | توضیح |
-|------|-----|-------|
-| `id` | INT PK | |
-| `created_at` | DATETIME | |
-| `recipient_type` | ENUM | `admin` / `team` |
-| `recipient_team_id` | INT NULL | برای نهاد |
-| `recipient_user_id` | INT NULL | اختیاری — کاربر خاص |
-| `category` | VARCHAR(32) | workflow, announcement, survey, event |
-| `title` | VARCHAR(255) | |
-| `body` | TEXT | |
-| `link_section` | VARCHAR(64) NULL | مثلاً `payments` |
-| `link_entity_type` | VARCHAR(32) NULL | |
-| `link_entity_id` | INT NULL | |
-| `is_read` | TINYINT | ۰/۱ |
-| `read_at` | DATETIME NULL | |
-| `expires_at` | DATETIME NULL | |
-
-**ایندکس:** `(recipient_type, recipient_team_id, is_read, created_at)`
-
-**سرویس:** `src/NotificationService.php`
-
-**وابستگی:** T-000
+**تست:** بدون login → 403؛ نهاد A فایل نهاد B → 403.
 
 ---
 
-## فاز ۱ — لاگ ممیزی (Audit Trail)
+## فاز ۱ — آپلود قرارداد توسط نهاد
 
-> **هدف:** ثبت کامل «چه کسی، چه زمانی، چه چیزی» — با نمایش در پروفایل نهاد و بخش مالی.
-
----
-
-### T-100 — اتصال لاگ به گردش کار تأیید/رد
-**وضعیت:** ⬜
-
-**رویدادهای اجباری:**
-
-| action | محل کد | before/after |
-|--------|--------|--------------|
-| `member.approved` | `Workflow::approveMember` | وضعیت، کد تردد |
-| `member.rejected` | `Workflow::rejectMember` | وضعیت، دلیل |
-| `payment.approved` | `Workflow::approvePayment` | payment_status, confirmed |
-| `payment.rejected` | `Workflow::rejectPayment` | payment_status, notes |
-| `locker.approved` | `Workflow::approveLockerRequest` | locker_number, status |
-| `locker.rejected` | `Workflow::rejectLockerRequest` | status, reason |
-| `member_request.approved` | `Workflow::approveMemberRequest` | نوع درخواست، داده |
-| `member_request.rejected` | `Workflow::rejectMemberRequest` | دلیل |
-| `room.approved` | `RoomReservations::approve` | status |
-| `room.rejected` | `RoomReservations::reject` | status, reason |
-
-**همزمان:** ایجاد `NotificationService` برای نهاد (مثلاً «واریز شما تأیید شد»).
-
-**تست:** هر workflow → یک ردیف audit + یک notification برای نهاد.
-
-**رگرسیون:** منطق تأیید/رد تغییر نکند؛ فقط لاگ اضافه شود.
+> نهاد نسخه امضاشده/PDF قرارداد را آپلود می‌کند؛ مدیر بررسی و تأیید/رد می‌کند.
+>
+> **مهم:** رکورد `team_contracts` (تاریخ، مبلغ، نرخ) **دست‌نخورده** می‌ماند — فایل فقط **ضمیمه** است.
 
 ---
 
-### T-101 — لاگ تغییرات مالی و شارژ
-**وضعیت:** ⬜
-
-**رویدادها:**
-
-| action | محل | جزئیات |
-|--------|-----|--------|
-| `charge.manual_edit` | `Crud::update` روی charges | مبلغ قبل/بعد، ماه، سال |
-| `charge.recalculated` | `Seeder::recalculateCharges*` | سال، تعداد ردیف‌های تغییر |
-| `rate.updated` | `Crud` روی rate_settings | نرخ شارژ، نرخ اجاره |
-| `transaction.income` | ایجاد درآمد دستی | مبلغ، شرح |
-| `transaction.expense` | ایجاد هزینه | مبلغ، شرح |
-| `transaction.payment_announced` | نهاد اعلام واریز | مبلغ، team_id |
-| `ledger.manual` | تراکنش‌های غیر واریز تیم | |
-
-**نکته:** `recalculate-charges` ممکن است صدها ردیف تغییر دهد → یک لاگ خلاصه + `meta_json` با `{ "affected_rows": N }` کافی است (نه ۱۰۰ لاگ جدا).
-
----
-
-### T-102 — لاگ تخصیص میز و قرارداد
-**وضعیت:** ⬜
-
-**رویدادها:**
-
-| action | محل |
-|--------|-----|
-| `desk.assigned` | `DeskAssignments`, `Crud` |
-| `desk.updated` | تغییر بازه / معافیت |
-| `desk.unassigned` | پایان تخصیص |
-| `contract.created` | `team_contracts` |
-| `contract.updated` | تغییر مبلغ/تاریخ/نرخ اختصاصی |
-| `contract.deleted` | حذف قرارداد |
-| `team.created` / `team.updated` / `team.deleted` | `Crud` teams |
-
----
-
-### T-103 — لاگ ورود / خروج / شکست ورود
-**وضعیت:** ⬜
-
-**رویدادها:**
-
-| action | محل |
-|--------|-----|
-| `auth.login.success` | `Auth::attempt` |
-| `auth.login.failed` | `LoginThrottle` / Auth |
-| `auth.logout` | `logout.php` |
-
-**حساسیت:** `is_sensitive = 1` — نهادها نبینند.
-
-**meta:** IP، user-agent (خلاصه)
-
-**نکته امنیتی:** رمز عبور هرگز در before/after نرود.
-
----
-
-### T-104 — API خواندن لاگ (`audit-logs`)
-**وضعیت:** ⬜
-
-**Endpoint:** `GET api.php?resource=audit-logs`
-
-**فیلترها:**
-- `team_id` — اجباری برای پورتال نهاد (auto-scoped)
-- `action` — پیشوند مثل `payment.*`
-- `entity_type`, `entity_id`
-- `actor_username`
-- `date_from`, `date_to` (شمسی)
-- `page`, `per_page`
-
-**دسترسی:**
-- Admin: همه (با فیلتر)
-- Team: فقط `team_id` خودش و `is_sensitive = 0`
-- Viewer: read-only
-
-**فایل:** `src/AuditLogRepository.php`, `api.php`, `Access.php`
-
----
-
-### T-105 — UI جدول «تاریخچه تغییرات» در پروفایل نهاد
-**وضعیت:** ⬜
-
-**محل:** `team.php` → بخش `profile` یا تب جدید «تاریخچه»
-
-**UI:**
-- جدول: تاریخ، عملیات (برچسب فارسی)، کاربر، خلاصه
-- فیلتر: نوع عملیات (مالی / عضو / میز / اتاق)
-- کلیک روی ردیف → جزئیات before/after (modal)
-
-**فایل‌ها:** `team.php`, `assets/team-audit.js` (یا داخل workspace موجود)
-
-**وابستگی:** T-104
-
----
-
-### T-106 — UI جدول «تاریخچه» در بخش مالی (admin)
-**وضعیت:** ⬜
-
-**محل:** `index.php` → بخش `transactions` — تب یا پنل فرعی «تاریخچه مالی»
-
-**فیلتر پیش‌فرض:** `action` ∈ payment.*, charge.*, transaction.*, rate.*
-
-**UI مشابه T-105** + فیلتر نهاد
-
----
-
-### T-107 — UI «تاریخچه» در پروفایل نهاد (admin)
-**وضعیت:** ⬜
-
-**محل:** وقتی مدیر پروفایل نهاد را باز می‌کند (`team-year-workspace` / admin team profile)
-
-**هدف:** مدیر همان لاگ‌های T-105 را ببیند + لاگ‌های حساس (مثلاً تغییر نرخ اختصاصی)
-
----
-
-### T-108 — برچسب‌های فارسی و گزارش audit
-**وضعیت:** ⬜
-
-**شرح:**
-- نقشه `action` → عنوان فارسی («تأیید واریز»، «تغییر نرخ شارژ»، …)
-- افزودن نوع گزارش `audit` به `ReportBuilder` (اختیاری ولی توصیه‌شده)
-- خروجی Excel از لاگ‌ها
-
-**تست کامل فاز ۱:**
-- [ ] تأیید واریز → لاگ + اعلان نهاد
-- [ ] تغییر دستی شارژ → لاگ با before/after
-- [ ] تخصیص میز → لاگ
-- [ ] ورود مدیر → لاگ حساس
-- [ ] نهاد لاگ حساس نمی‌بیند
-- [ ] رگرسیون کامل
-
----
-
-## فاز ۲ — اعلان درون‌پنلی
-
-> **هدف:** اطلاع‌رسانی بدون SMS — زنگوله در header، لیست اعلان‌ها، خوانده‌شدن.
-
----
-
-### T-200 — `NotificationService` (ایجاد / خواندن / علامت‌خوانده)
-**وضعیت:** ⬜
-
-**متدها:**
-- `notifyTeam(teamId, title, body, options)`
-- `notifyAdmins(title, body, options)`
-- `listForCurrentUser(filters, page)`
-- `markRead(id)` / `markAllRead()`
-- `unreadCount()`
-
-**وابستگی:** T-003
-
----
-
-### T-201 — API اعلان‌ها (`notifications`)
-**وضعیت:** ⬜
-
-| Method | Route | کار |
-|--------|-------|-----|
-| GET | `resource=notifications` | لیست |
-| GET | `resource=notifications&action=unread-count` | تعداد |
-| POST | `resource=notifications&action=mark-read` | خواندن یکی |
-| POST | `resource=notifications&action=mark-all-read` | همه |
-
-**دسترسی:** team فقط اعلان‌های خودش؛ admin اعلان‌های `recipient_type=admin`.
-
----
-
-### T-202 — UI زنگوله اعلان (admin + team)
-**وضعیت:** ⬜
-
-**محل:** header در `index.php` و `team.php`
-
-**رفتار:**
-- badge تعداد خوانده‌نشده
-- dropdown آخرین ۱۰ اعلان
-- لینک به بخش «اعلان‌ها»
-- polling هر ۶۰ ثانیه یا refresh هنگام تعویض section
-
-**فایل:** `assets/notifications.js`, `assets/styles.css`
-
----
-
-### T-203 — صفحه / بخش «اعلان‌ها»
-**وضعیت:** ⬜
-
-**محل:** section جدید `notifications` در هر دو پنل
-
-**UI:** جدول با فیلتر دسته، تاریخ، خوانده/نخوانده
-
----
-
-### T-204 — اتصال اعلان به workflowها
-**وضعیت:** ⬜
-
-**نقشه اعلان (همزمان با T-100):**
-
-| رویداد | گیرنده | عنوان نمونه |
-|--------|--------|-------------|
-| عضو تأیید/رد شد | نهاد | «عضو X تأیید شد» |
-| واریز تأیید/رد شد | نهاد | «واریز شما تأیید شد» |
-| کمد تأیید/رد شد | نهاد | «کمد شماره N تخصیص یافت» |
-| رزرو اتاق تأیید/رد | نهاد / مهمان؟ | فقط درون‌پنلی برای نهاد |
-| عضو جدید در انتظار | admin | «درخواست عضو جدید» |
-| واریز در انتظار | admin | «واریز جدید در انتظار» |
-
-**نکته:** اعلان admin در داشبورد «اقدامات پیشنهادی» هم قابل نمایش است (بدون حذف queue فعلی).
-
----
-
-### T-205 — اعلان خودکار تغییر نرخ / تعطیلی
-**وضعیت:** ⬜
-
-**تریگر:**
-- تغییر `rate_settings` → اعلان به **همه نهادهای فعال**
-- ثبت `room_closed_days` → اعلان عمومی (آماده‌سازی برای فاز ۶)
-
-**وابستگی:** T-101, T-200
-
----
-
-### T-206 — تست و رگرسیون فاز ۲
-**وضعیت:** ⬜
-
-- [ ] اعلان workflow به نهاد می‌رسد
-- [ ] unread count درست
-- [ ] mark read کار می‌کند
-- [ ] نهاد اعلان admin نمی‌بیند
-- [ ] SMS فعلی دست‌نخورده بماند
-
----
-
-## فاز ۳ — گزارش ساده وضعیت نهاد (پورتال)
-
-> **هدف:** نمای خلاصه بدهی، پرداخت‌ها، اعضا — بدون پیچیدگی گزارش admin.
-
----
-
-### T-300 — API `team-status-report`
-**وضعیت:** ⬜
-
-**Endpoint:** `GET api.php?resource=team-status-report`
-
-**خروجی پیشنهادی:**
-```json
-{
-  "team": { "name", "entity_code", "entity_type", "leader" },
-  "contract": { "fiscal_year", "start", "end", "days_remaining", "status" },
-  "financial": {
-    "total_charged_ytd",
-    "total_paid_ytd",
-    "outstanding_balance",
-    "last_payment": { "date", "amount", "status" },
-    "overdue_months_count"
-  },
-  "members": {
-    "approved_count",
-    "pending_count",
-    "with_access_card_count"
-  },
-  "desks": { "active_count", "numbers": [] },
-  "lockers": { "assigned_count" },
-  "rooms": { "upcoming_reservations_count" }
-}
-```
-
-**دسترسی:** team (scoped) + admin با `team_id`
-
-**فایل:** `src/TeamStatusReport.php`
-
----
-
-### T-301 — UI کارت‌های گزارش در داشبورد نهاد
-**وضعیت:** ⬜
-
-**محل:** `team.php` → section `overview`
-
-**کارت‌ها:**
-1. بدهی / مانده
-2. پرداخت‌های سال
-3. اعضای فعال / در انتظار
-4. میزهای فعال
-5. روزهای مانده قرارداد
-
-**طراحی:** هماهنگ با KPI cards داشبورد admin
-
----
-
-### T-302 — نمودار ساده (اختیاری ولی توصیه‌شده)
-**وضعیت:** ⬜
-
-**محل:** overview نهاد
-
-**نوع:** میله‌ای شارژ vs پرداخت ماهانه (۶ ماه اخیر) — از داده‌های موجود `charges-matrix` و `payment-history`
-
----
-
-### T-303 — دکمه «دانلود خلاصه» (چاپ)
-**وضعیت:** ⬜
-
-**محل:** overview نهاد
-
-**خروجی:** صفحه چاپ HTML ساده (`team-report.php?team_id=X`) — مشابه `report.php`
-
-**دسترسی:** team فقط خودش
-
----
-
-### T-304 — تست فاز ۳
-**وضعیت:** ⬜
-
-- [ ] اعداد با `team-profile` و `charges-matrix`一致
-- [ ] نهاد دیگر داده نمی‌بیند
-- [ ] admin می‌تواند گزارش نهاد را ببیند
-
----
-
-## فاز ۴ — آپلود قرارداد توسط نهاد
-
-> **هدف:** نهاد بتواند نسخه امضاشده / PDF قرارداد را آپلود کند؛ مدیر بررسی و تأیید کند.
-
----
-
-### T-400 — جدول `team_contract_documents`
+### T-100 — جدول `team_contract_documents`
 **وضعیت:** ⬜
 
 | ستون | نوع | توضیح |
@@ -543,14 +153,14 @@ AuditLogger::log(
 | `id` | INT PK | |
 | `team_id` | INT FK | |
 | `fiscal_year` | VARCHAR(4) | |
-| `team_contract_id` | INT NULL FK | ارتباط با `team_contracts` |
+| `team_contract_id` | INT NULL | ارتباط با `team_contracts` |
 | `original_name` | VARCHAR | نام فایل کاربر |
-| `stored_name` | VARCHAR | نام یکتا روی دیسک |
+| `stored_name` | VARCHAR | UUID روی دیسک |
 | `mime_type` | VARCHAR | |
 | `file_size` | INT | بایت |
 | `sha256` | VARCHAR(64) | |
 | `uploaded_by_user_id` | INT | |
-| `uploaded_by_role` | VARCHAR | team / admin_editor |
+| `uploaded_by_role` | VARCHAR | `team` / `admin_editor` |
 | `status` | ENUM | `pending_review` / `approved` / `rejected` |
 | `reviewed_by` | INT NULL | |
 | `reviewed_at` | DATETIME NULL | |
@@ -558,106 +168,116 @@ AuditLogger::log(
 | `notes` | TEXT NULL | |
 | `created_at` | DATETIME | |
 
-**محدودیت:** حداکثر N فایل فعال per team per year (پیشنهاد: ۵)
+**محدودیت:** حداکثر ۵ فایل فعال per `team_id` + `fiscal_year`.
+
+**فایل‌ها:** `src/Schema.php`, `src/DatabaseBackup.php`, `Schema::reset()`
 
 ---
 
-### T-401 — ذخیره‌سازی امن فایل
+### T-101 — سرویس `ContractDocuments`
 **وضعیت:** ⬜
 
-**مسیر:** `data/uploads/contracts/{team_id}/{year}/`
+**متدها:**
+- `upload(teamId, fiscalYear, file)` → رکورد + فایل
+- `list(teamId, fiscalYear?)` → لیست
+- `approve(id, adminUserId)` / `reject(id, reason)`
+- `delete(id)` — team فقط `pending_review` خودش؛ admin همه
 
-**قوانین:**
-- پسوندهای مجاز: `pdf`, `jpg`, `jpeg`, `png`
-- حداکثر حجم: ۱۰ مگابایت (قابل تنظیم در config)
-- نام فایل روی دیسک: UUID — نه نام اصلی
-- `.htaccess` در `data/` از دسترسی مستقیم HTTP جلوگیری کند
+**فایل:** `src/ContractDocuments.php`
 
-**دانلود:** فقط از طریق `contract-download.php?id=X` با auth
-
-**فایل:** `src/ContractDocuments.php`, `contract-download.php`
+**وابستگی:** T-001, T-100
 
 ---
 
-### T-402 — API آپلود / لیست / تأیید / رد
+### T-102 — API `contract-documents`
 **وضعیت:** ⬜
 
 | Method | Route | دسترسی |
 |--------|-------|--------|
-| POST | `resource=contract-documents` (multipart) | team + admin |
-| GET | `resource=contract-documents&team_id=&year=` | team scoped / admin |
+| POST | `resource=contract-documents` (multipart) | team + admin editor |
+| GET | `resource=contract-documents` | team scoped / admin |
 | POST | `action=approve` | admin editor |
 | POST | `action=reject` | admin editor |
-| DELETE | — | admin editor (یا team فقط pending) |
+| DELETE | `resource=contract-documents&id=` | طبق T-101 |
 
-**audit:** `contract_document.uploaded`, `.approved`, `.rejected`
+**ثبت در:** `api.php`, `src/Access.php`
 
-**notification:** به admin هنگام آپلود؛ به team هنگام تأیید/رد
+**وابستگی:** T-101, T-002
 
 ---
 
-### T-403 — UI آپلود در پنل نهاد
+### T-103 — UI آپلود در پنل نهاد
 **وضعیت:** ⬜
 
-**محل:** `team.php` → section `profile` — زیر اطلاعات قرارداد سال
+**محل:** `team.php` → section `profile` — زیر اطلاعات قرارداد (کنار تب سال در `team-year-workspace.js`)
 
 **UI:**
-- انتخاب سال (تب سال موجود)
-- drag & drop یا input file
-- لیست فایل‌های آپلودشده با وضعیت (در انتظار / تأیید / رد)
+- انتخاب فایل (PDF / تصویر)
+- لیست فایل‌ها: نام، تاریخ، وضعیت (در انتظار / تأیید / رد)
 - نمایش دلیل رد
+- دکمه دانلود فایل خودش
+
+**فایل‌ها:** `team.php`, `assets/team-contract-upload.js` (یا ادغام در workspace موجود)
+
+**وابستگی:** T-102
 
 ---
 
-### T-404 — UI بررسی در پنل admin
+### T-104 — UI بررسی در پنل مدیر
 **وضعیت:** ⬜
 
-**محل:** پروفایل نهاد admin + بخش `team-contracts`
+**محل:**
+1. پروفایل نهاد (admin) — لیست ضمیمه‌های قرارداد
+2. صف «در انتظار بررسی» در داشبورد یا بخش نهادها
 
 **UI:**
-- صف «قراردادهای در انتظار بررسی»
-- پیش‌نمایش PDF/تصویر (embed یا لینک دانلود)
-- دکمه تأیید / رد
+- دانلود / پیش‌نمایش
+- تأیید / رد با دلیل
+
+**فایل‌ها:** `index.php`, `assets/app.js`
 
 ---
 
-### T-405 — بکاپ و نصب مجدد
+### T-105 — بکاپ، نصب مجدد، صف داشبورد
 **وضعیت:** ⬜
 
 - جدول در JSON backup
-- فایل‌ها: یا در backup (سنگین) یا یادآوری در README که فایل‌ها جدا backup شوند
-- `install.php` reset → جدول + فایل‌های upload پاک شوند
+- `install.php` → پاک‌سازی `data/uploads/contracts/`
+- کارت «قرارداد در انتظار بررسی» در action items داشبورد admin
 
 ---
 
-### T-406 — تست فاز ۴
+### T-106 — تست فاز ۱
 **وضعیت:** ⬜
 
 - [ ] آپلود PDF توسط نهاد
-- [ ] دانلود فقط با auth
-- [ ] دسترسی مستقیم به `data/uploads` مسدود
-- [ ] تأیید/رد توسط admin
-- [ ] audit + notification
-- [ ] رگرسیون پروفایل و قراردادهای فعلی
+- [ ] نهاد B فایل نهاد A را نمی‌بیند
+- [ ] دانلود فقط با auth — URL مستقیم `data/uploads` → 403
+- [ ] تأیید/رد توسط admin editor
+- [ ] viewer نمی‌تواند تأیید کند
+- [ ] `team_contracts` و پروفایل سالانه بدون تغییر کار می‌کنند
+- [ ] integration_test برای upload + approve
 
 ---
 
-## فاز ۵ — گزارش استفاده اتاق جلسه
+## فاز ۲ — گزارش استفاده اتاق (ساعت پر / خالی)
 
-> **هدف:** برای هر اتاق، ساعت پر / خالی / نرخ اشغال.
+> برای هر اتاق: دقیقه/ساعت در دسترس، رزروشده، درصد اشغال.
+>
+> **بدون جدول جدید** — محاسبه از `room_reservations` + `meeting_rooms` + `room_closed_days`.
 
 ---
 
-### T-500 — سرویس `RoomUsageReport`
+### T-200 — سرویس `RoomUsageReport`
 **وضعیت:** ⬜
 
-**ورودی:** `room_id`, `date_from`, `date_to` (شمسی), `granularity` (day/week/month)
+**ورودی:** `room_id`, `date_from`, `date_to` (شمسی), `granularity` (`day` / `week` / `month`)
 
-**منطق محاسبه:**
-- ساعات کاری اتاق از `meeting_rooms.open_time` / `close_time`
+**منطق:**
+- ساعات کاری: `open_time` / `close_time` اتاق
 - کم کردن `room_closed_days`
-- رزروهای `status IN (confirmed, approved, …)` — مطابق `RoomReservations::ACTIVE_STATUSES`
-- اسلات‌ها: بر اساس `slot_minutes` اتاق
+- رزروها: `RoomReservations::ACTIVE_STATUSES`
+- اسلات: `slot_minutes` اتاق
 
 **خروجی:**
 ```json
@@ -671,168 +291,192 @@ AuditLogger::log(
     "reservation_count"
   },
   "breakdown": [
-    { "date": "1404/05/01", "available_minutes", "booked_minutes", "occupancy_percent" }
-  ],
-  "heatmap": { "by_weekday": [...], "by_hour": [...] }
+    { "label": "1404/05/01", "available_minutes", "booked_minutes", "occupancy_percent" }
+  ]
 }
 ```
 
 **فایل:** `src/RoomUsageReport.php`
 
-**نکته:** از داده موجود `room_reservations` استفاده شود — جدول جدید لازم نیست.
-
 ---
 
-### T-501 — API `room-usage-report`
+### T-201 — API `room-usage-report`
 **وضعیت:** ⬜
 
-`GET api.php?resource=room-usage-report&room_id=1&fiscal_year=1404&month=5`
+`GET api.php?resource=room-usage-report&room_id=1&date_from=1404/01/01&date_to=1404/06/30`
 
-**دسترسی:** فقط admin (viewer هم می‌تواند بخواند)
+**پارامتر جایگزین:** `fiscal_year` + `month` برای میانبر
+
+**دسترسی:** admin + viewer (read-only)
+
+**ثبت در:** `api.php`, `src/Access.php`
 
 ---
 
-### T-502 — UI گزارش در بخش اتاق جلسه
+### T-202 — UI گزارش در بخش اتاق جلسه (admin)
 **وضعیت:** ⬜
 
 **محل:** `index.php` → `meeting-rooms` — تب «گزارش استفاده»
 
 **UI:**
-- انتخاب اتاق + بازه تاریخ
-- KPI: نرخ اشغال، تعداد رزرو، میانگین مدت
-- نمودار میله‌ای روزانه
+- انتخاب اتاق + بازه (ماه / فصل / سفارشی)
+- KPI: نرخ اشغال، تعداد رزرو، ساعت پر، ساعت خالی
+- نمودار میله‌ای روزانه / هفتگی
 - جدول تفکیکی
 
+**فایل:** `assets/room-usage-report.js`
+
 ---
 
-### T-503 — heatmap ساعتی (اختیاری)
+### T-203 — heatmap ساعتی (اختیاری ولی توصیه‌شده)
 **وضعیت:** ⬜
 
-**UI:** جدول ۷×N (روز هفته × ساعت) با رنگ‌بندی تراکم رزرو
+**UI:** جدول ۷×N (روز هفته × بازه ساعتی) با رنگ‌بندی تراکم رزرو
+
+**خروجی API:** `heatmap.by_weekday`, `heatmap.by_hour`
 
 ---
 
-### T-504 — افزودن به ReportBuilder + export
+### T-204 — ReportBuilder + export
 **وضعیت:** ⬜
 
-- نوع گزارش `room-usage` در `report-catalog`
-- چاپ HTML + Excel
+- نوع `room-usage` در `report-catalog`
+- چاپ HTML (`report.php`)
+- Excel (`export.php`)
+
+**نکته:** گزارش اتاق **فقط admin** — در پورتال نهاد نمایش داده نشود.
 
 ---
 
-### T-505 — تست فاز ۵
+### T-205 — تست فاز ۲
 **وضعیت:** ⬜
 
 - [ ] اتاق بدون رزرو → ۰٪ اشغال
-- [ ] رزرو ۲ ساعته → دقیق در booked_minutes
-- [ ] روز تعطیل → available صفر
-- [ ] رگرسیون رزرو و تقویم
+- [ ] رزرو ۲ ساعته → `booked_minutes` دقیق
+- [ ] روز تعطیل → `available_minutes = 0`
+- [ ] چند اتاق — گزارش جدا
+- [ ] رگرسیون: تقویم، رزرو، `reserve.php`, تأیید رزرو
 
 ---
 
-## فاز ۶ — تابلوی اعلانات
+## فاز ۳ — تابلوی اعلانات
 
-> **هدف:** اعلان‌های عمومی مرکز (تعطیلات، رویدادها، تغییر نرخ) — قابل مشاهده در پنل نهاد.
+> اعلان‌های عمومی مرکز: تعطیلات، رویدادها، تغییر نرخ، اطلاعیه عمومی.
+>
+> **تفاوت با اعلان workflow:** تابلوی اعلانات = محتوای عمومی با تاریخ انتشار/انقضا؛ نه «واریز شما تأیید شد».
 
 ---
 
-### T-600 — جدول `announcements`
+### T-300 — جداول `announcements` + `announcement_reads`
 **وضعیت:** ⬜
+
+**`announcements`**
 
 | ستون | نوع | توضیح |
 |------|-----|-------|
 | `id` | INT PK | |
 | `title` | VARCHAR(255) | |
-| `body` | TEXT | HTML ساده یا markdown محدود |
+| `body` | TEXT | متن ساده (بدون HTML خطرناک) |
 | `category` | ENUM | `holiday`, `event`, `rate_change`, `general`, `maintenance` |
 | `priority` | ENUM | `normal`, `important`, `urgent` |
 | `audience` | ENUM | `all_teams`, `specific_teams` |
 | `published_at` | DATETIME NULL | |
 | `expires_at` | DATETIME NULL | |
 | `is_pinned` | TINYINT | |
+| `status` | ENUM | `draft`, `published`, `archived` |
 | `created_by` | INT | |
 | `created_at` | DATETIME | |
-| `status` | ENUM | `draft`, `published`, `archived` |
 
-**جدول واسط:** `announcement_teams (announcement_id, team_id)` برای audience خاص
+**`announcement_teams`** — `(announcement_id, team_id)` برای مخاطب خاص
+
+**`announcement_reads`** — `(announcement_id, team_id, read_at)` برای نشان «جدید»
 
 ---
 
-### T-601 — API CRUD اعلانات
+### T-301 — سرویس و API `announcements`
 **وضعیت:** ⬜
 
 | نقش | دسترسی |
 |-----|--------|
-| admin editor | ایجاد / ویرایش / انتشار / آرشیو |
+| admin editor | ایجاد / ویرایش / انتشار / آرشیو / حذف draft |
 | admin viewer | فقط خواندن |
-| team | فقط published مربوط به خودش |
+| team | فقط `published` مربوط به خودش (یا `all_teams`) |
 
 **Endpoint:** `resource=announcements`
 
+**عملیات:** CRUD + `action=publish` + `action=archive` + `action=mark-read`
+
 ---
 
-### T-602 — UI مدیریت اعلانات (admin)
+### T-302 — UI مدیریت اعلانات (admin)
 **وضعیت:** ⬜
 
-**محل:** section جدید `announcements` در `index.php`
+**محل:** section جدید `announcements` در `index.php` + منوی sidebar
 
 **UI:**
-- لیست با فیلتر دسته / وضعیت
-- فرم: عنوان، متن، دسته، اولویت، مخاطب، پین، تاریخ انقضا
+- لیست با فیلتر: دسته، وضعیت، اولویت
+- فرم: عنوان، متن، دسته، اولویت، مخاطب (همه / نهادهای خاص)، پین، تاریخ انقضا
 - پیش‌نمایش قبل از انتشار
+- دکمه انتشار / آرشیو
 
 ---
 
-### T-603 — UI تابلوی اعلانات (پنل نهاد)
+### T-303 — UI تابلوی اعلانات (پنل نهاد)
 **وضعیت:** ⬜
 
-**محل:** section جدید `announcements` در `team.php` + ویجت در overview
+**محل:**
+- section جدید `announcements` در `team.php` + منو
+- ویجت در `overview`: ۲–۳ اعلان پین‌شده / فوری
 
 **UI:**
-- کارت اعلان‌های پین‌شده
+- کارت اعلان با برچسب دسته (تعطیلات / رویداد / …)
 - فیلتر دسته
-- نشان «جدید» برای اعلان‌های منتشرشده بعد از آخرین بازدید
-
-**جدول کمکی:** `announcement_reads (announcement_id, team_id, read_at)`
+- نشان «جدید» تا اولین بازدید (`announcement_reads`)
+- اعلان منقضی‌شده نمایش داده نشود
 
 ---
 
-### T-604 — اتصال به اعلان درون‌پنلی
+### T-304 — اعلان خودکار تغییر نرخ (اختیاری)
 **وضعیت:** ⬜
 
-هنگام `publish` → `NotificationService::notifyTeam` برای مخاطبان
+هنگام ایجاد/ویرایش `rate_settings`:
+- **پیش‌نویس** announcement با دسته `rate_change` ساخته شود
+- مدیر قبل از انتشار، متن را تأیید/ویرایش کند
 
-**وابستگی:** T-200
+**هدف:** تغییر نرخ بدون فراموشی اطلاع‌رسانی — بدون انتشار خودکار ناخواسته.
+
+**رگرسیون:** محاسبه شارژ و `recalculate-charges` دست‌نخورده.
 
 ---
 
-### T-605 — اعلان خودکار تغییر نرخ
+### T-305 — بکاپ و تست یکپارچگی
 **وضعیت:** ⬜
 
-هنگام تغییر `rate_settings`:
-1. audit log (فاز ۱)
-2. اعلان in-app (فاز ۲)
-3. **اختیاری:** پیش‌نویس announcement با دسته `rate_change` برای تأیید مدیر قبل از انتشار
+- جداول در backup
+- integration_test: انتشار برای همه / نهاد خاص / انقضا / read tracking
 
 ---
 
-### T-606 — تست فاز ۶
+### T-306 — تست فاز ۳
 **وضعیت:** ⬜
 
-- [ ] انتشار برای همه نهادها
-- [ ] انتشار برای نهاد خاص
-- [ ] انقضا → دیگر نمایش داده نشود
-- [ ] نهاد دیگر اعلان مخصوص نمی‌بیند
+- [ ] انتشار `all_teams` → همه نهادها می‌بینند
+- [ ] `specific_teams` → فقط همان نهادها
+- [ ] نهاد A اعلان مخصوص B را نمی‌بیند
+- [ ] `expires_at` گذشته → مخفی
+- [ ] پین در overview نمایش داده می‌شود
+- [ ] draft برای team قابل مشاهده نیست
+- [ ] رگرسیون: شارژ، SMS، سایر بخش‌ها
 
 ---
 
-## فاز ۷ — نظرسنجی رضایت
+## فاز ۴ — نظرسنجی رضایت
 
-> **هدف:** جمع‌آوری بازخورد نهادها از فضا و خدمات.
+> جمع‌آوری بازخورد نهادها از **فضا** و **خدمات** (و سایر دسته‌ها).
 
 ---
 
-### T-700 — جداول نظرسنجی
+### T-400 — جداول نظرسنجی
 **وضعیت:** ⬜
 
 **`surveys`**
@@ -842,11 +486,11 @@ AuditLogger::log(
 | `id` | PK |
 | `title` | VARCHAR |
 | `description` | TEXT |
-| `status` | draft / active / closed |
+| `status` | `draft` / `active` / `closed` |
 | `opens_at` | DATETIME |
 | `closes_at` | DATETIME |
-| `audience` | all_teams / specific |
-| `is_anonymous` | TINYINT |
+| `audience` | `all_teams` / `specific` |
+| `is_anonymous` | TINYINT — اگر ۱، admin نتایج را بدون نام نهاد aggregate می‌بیند |
 | `created_by` | INT |
 
 **`survey_questions`**
@@ -857,330 +501,111 @@ AuditLogger::log(
 | `survey_id` | FK |
 | `sort_order` | INT |
 | `question_text` | TEXT |
-| `question_type` | rating_1_5 / yes_no / text |
-| `category` | space / services / staff / finance / other |
+| `question_type` | `rating_1_5` / `yes_no` / `text` |
+| `category` | `space` / `services` / `staff` / `finance` / `other` |
 
-**`survey_responses`**
+**`survey_teams`** — مخاطب خاص (مثل announcement)
 
-| ستون | نوع |
-|------|-----|
-| `id` | PK |
-| `survey_id` | FK |
-| `team_id` | FK |
-| `submitted_by_user_id` | INT NULL |
-| `submitted_at` | DATETIME |
+**`survey_responses`** — `UNIQUE(survey_id, team_id)`
 
-**`survey_answers`**
-
-| ستون | نوع |
-|------|-----|
-| `id` | PK |
-| `response_id` | FK |
-| `question_id` | FK |
-| `answer_value` | TEXT |
-
-**محدودیت:** یک پاسخ per team per survey (`UNIQUE(survey_id, team_id)`)
+**`survey_answers`** — `(response_id, question_id, answer_value)`
 
 ---
 
-### T-701 — API نظرسنجی
+### T-401 — سرویس و API `surveys`
 **وضعیت:** ⬜
 
 | عمل | دسترسی |
 |-----|--------|
-| CRUD نظرسنجی | admin editor |
-| مشاهده نتایج | admin (viewer هم) |
-| پاسخ دادن | team (فقط active و در بازه) |
-| مشاهده پاسخ خود | team (اگر ناشناس نیست) |
+| CRUD نظرسنجی + سوالات | admin editor |
+| فعال‌سازی / بستن | admin editor |
+| مشاهده نتایج aggregate | admin (+ viewer) |
+| پاسخ دادن | team (فقط `active` و در بازه) |
+| مشاهده پاسخ خود | team |
+
+**Endpoint:** `resource=surveys`, `resource=survey-responses`
 
 ---
 
-### T-702 — UI مدیریت نظرسنجی (admin)
+### T-402 — UI مدیریت نظرسنجی (admin)
 **وضعیت:** ⬜
 
-**محل:** section `surveys`
+**محل:** section `surveys` در `index.php`
 
 **قابلیت:**
-- سازنده سوال (افزودن / حذف / مرتب‌سازی)
+- سازنده سوال: افزودن / حذف / مرتب‌سازی
+- پیش‌فرض پیشنهادی: ۵ سوال امتیازی (فضا، تمیزی، اینترنت، پشتیبانی، ارزش شارژ)
 - فعال‌سازی / بستن
-- داشبورد نتایج: میانگین امتیاز، توزیع، پاسخ‌های متنی
-- نمودار per دسته (فضا / خدمات)
+- داشبورد نتایج: میانگین per سوال، per دسته، توزیع ۱–۵
+- نمودار میله‌ای / دایره‌ای
 
 ---
 
-### T-703 — UI پاسخ‌دهی (پنل نهاد)
+### T-403 — UI پاسخ‌دهی (پنل نهاد)
 **وضعیت:** ⬜
 
-**محل:** section `surveys` در team.php
+**محل:** section `surveys` در `team.php` + لینک از overview اگر نظرسنجی فعال unanswered وجود دارد
 
 **UX:**
 - لیست نظرسنجی‌های فعال
-- فرم سوالات
-- پیام «قبلاً پاسخ داده‌اید»
+- فرم سوالات (ستاره ۱–۵، بله/خیر، متن)
+- پیام «قبلاً پاسخ داده‌اید» + امکان مشاهده پاسخ خود (اگر ناشناس نیست)
+- بسته شدن → فرم غیرفعال
 
 ---
 
-### T-704 — اعلان نظرسنجی جدید
+### T-404 — گزارش و export نتایج
 **وضعیت:** ⬜
 
-فعال شدن نظرسنجی → notification به نهادهای مخاطب
-
----
-
-### T-705 — گزارش و export نتایج
-**وضعیت:** ⬜
-
-- خلاصه در `ReportBuilder`
+- نوع `survey-results` در `ReportBuilder`
 - Excel export
+- فیلتر per نظرسنجی / per دسته سوال
 
 ---
 
-### T-706 — تست فاز ۷
+### T-405 — بکاپ و integration_test
 **وضعیت:** ⬜
 
-- [ ] یک تیم فقط یک بار پاسخ می‌دهد
-- [ ] بسته شدن → فرم غیرفعال
-- [ ] نتایج aggregate درست
-- [ ] حالت ناشناس → admin team_id در پاسخ نبیند (قابل تنظیم)
+- همه جداول در backup
+- تست: یک پاسخ per team، بستن survey، aggregate
 
 ---
 
-## فاز ۸ — رویداد / کارگاه / منتورینگ
-
-> **هدف:** ثبت برنامه‌های مرکز، ثبت‌نام نهادها، حضور.
-
----
-
-### T-800 — جداول رویداد
+### T-406 — تست فاز ۴
 **وضعیت:** ⬜
 
-**`center_events`**
-
-| ستون | نوع | توضیح |
-|------|-----|-------|
-| `id` | PK | |
-| `title` | VARCHAR | |
-| `event_type` | ENUM | `workshop`, `event`, `mentoring`, `other` |
-| `description` | TEXT | |
-| `location` | VARCHAR | اتاق / سالن / آنلاین |
-| `starts_at` | DATETIME | |
-| `ends_at` | DATETIME | |
-| `capacity` | INT NULL | |
-| `registration_opens_at` | DATETIME | |
-| `registration_closes_at` | DATETIME | |
-| `fee_amount` | INT DEFAULT 0 | ریال — ۰ = رایگان |
-| `status` | ENUM | draft / published / cancelled / completed |
-| `created_by` | INT | |
-
-**`event_registrations`**
-
-| ستون | نوع |
-|------|-----|
-| `id` | PK |
-| `event_id` | FK |
-| `team_id` | FK |
-| `registered_by_user_id` | INT |
-| `registered_at` | DATETIME |
-| `status` | registered / cancelled / attended / no_show |
-| `attendee_count` | INT DEFAULT 1 |
-| `notes` | TEXT |
-
-**محدودیت:** `UNIQUE(event_id, team_id)`
+- [ ] team فقط یک بار پاسخ می‌دهد
+- [ ] خارج از بازه `opens_at`/`closes_at` → غیرفعال
+- [ ] `is_anonymous=1` → export بدون team_id
+- [ ] نتایج aggregate درست (میانگین، تعداد)
+- [ ] نهاد خارج از audience نمی‌بیند
+- [ ] رگرسیون کامل
 
 ---
 
-### T-801 — API رویدادها
-**وضعیت:** ⬜
-
-`resource=center-events`, `resource=event-registrations`
-
-| عمل | دسترسی |
-|-----|--------|
-| CRUD رویداد | admin editor |
-| مشاهده | admin + team (published) |
-| ثبت‌نام / لغو | team |
-| حضور و غیاب | admin editor |
-
----
-
-### T-802 — UI مدیریت رویداد (admin)
-**وضعیت:** ⬜
-
-**محل:** section `center-events`
-
-**قابلیت:**
-- تقویم / لیست رویدادها
-- فرم ایجاد
-- لیست ثبت‌نام‌کنندگان
-- علامت‌گذاری حضور
-- لغو رویداد → اعلان به ثبت‌نام‌شده‌ها
-
----
-
-### T-803 — UI ثبت‌نام (پنل نهاد)
-**وضعیت:** ⬜
-
-**محل:** section `events` در team.php
-
-**UI:**
-- کارت رویدادهای قابل ثبت‌نام
-- نمایش ظرفیت باقی‌مانده
-- رویدادهای من (ثبت‌شده / گذشته)
-
----
-
-### T-804 — اتصال به تابلوی اعلانات
-**وضعیت:** ⬜
-
-انتشار رویداد → announcement با دسته `event` (فاز ۶)
-
----
-
-### T-805 — نمایش در داشبورد admin
-**وضعیت:** ⬜
-
-KPI: رویدادهای پیش‌رو، ثبت‌نام‌های امروز
-
----
-
-### T-806 — audit و notification
-**وضعیت:** ⬜
-
-- `event.published`, `event.registration`, `event.cancelled`
-- اعلان به نهاد هنگام ثبت‌نام موفق / لغو / تغییر زمان
-
----
-
-### T-809 — تست فاز ۸ (بدون مالی)
-**وضعیت:** ⬜
-
-- [ ] ظرفیت پر → ثبت‌نام مردود
-- [ ] لغو ثبت‌نام
-- [ ] حضور و غیاب
-- [ ] رگرسیون سایر بخش‌ها
-
----
-
-## فاز ۹ — درآمد رویداد → دفتر معین
-
-> **هدف:** هزینه ثبت‌نام رویداد به‌صورت درآمد در `transactions` / دفتر معین ثبت شود.
-
----
-
-### T-900 — مدل پرداخت رویداد
-**وضعیت:** ⬜
-
-**سناریوها:**
-
-| حالت | رفتار |
-|------|--------|
-| رایگان | فقط registration |
-| با هزینه | ثبت‌نام → ایجاد `transaction` با category `درآمد رویداد` و status `pending` |
-| تأیید دستی | admin تأیید → `confirmed=1` → در ledger |
-| پرداخت از بدهی نهاد | **فاز بعدی** — فعلاً فقط اعلام واریز یا ثبت دستی admin |
-
-**ستون‌های اضافی `event_registrations`:**
-- `transaction_id` INT NULL FK
-- `payment_status` ENUM: `not_required`, `pending`, `approved`, `rejected`
-
----
-
-### T-901 — ثبت خودکار تراکنش هنگام ثبت‌نام
-**وضعیت:** ⬜
-
-**محل:** هنگام `event_registrations` با `fee_amount > 0`
-
-1. ایجاد `transactions` با:
-   - `category = 'درآمد رویداد'`
-   - `team_id`, `amount`, `tx_date`
-   - `payment_status = pending` (اگر نهاد باید واریز کند)
-   - `notes = 'ثبت‌نام رویداد: {title}'`
-2. audit: `event.registration.payment_created`
-3. notification به نهاد: «لطفاً هزینه رویداد را واریز کنید»
-
-**نکته:** با `CenterLedger` هماهنگ شود — فقط `confirmed=1` در موجودی نقدی بیاید.
-
----
-
-### T-902 — تأیید پرداخت رویداد
-**وضعیت:** ⬜
-
-**گزینه A:** از workflow موجود `approvePayment` استفاده شود  
-**گزینه B:** دکمه «تأیید پرداخت رویداد» در صفحه ثبت‌نام‌ها
-
-پس از تأیید:
-- `event_registrations.payment_status = approved`
-- تراکنش در ledger
-- audit + notification
-
----
-
-### T-903 — گزارش درآمد رویدادها
-**وضعیت:** ⬜
-
-- KPI در بخش رویداد: درآمد کل / وصول‌شده / معوق
-- افزودن به `ReportBuilder` نوع `events-finance`
-- تفکیک per رویداد
-
----
-
-### T-904 — UI مالی رویداد (admin)
-**وضعیت:** ⬜
-
-در صفحه رویداد:
-- تب «مالی»: لیست ثبت‌نام‌ها، مبلغ، وضعیت پرداخت، لینک به تراکنش
-
----
-
-### T-905 — تست کامل فاز ۹
-**وضعیت:** ⬜
-
-- [ ] رویداد رایگان → بدون transaction
-- [ ] رویداد پولی → transaction pending
-- [ ] تأیید → ledger balance درست
-- [ ] رد → registration لغو یا pending بماند (تصمیم محصول)
-- [ ] رگرسیون: واریز شارژ تیم همچنان جدا کار کند
-- [ ] category جدید در گزارش مالی دیده شود
-
----
-
-## وابستگی بین فازها (نمودار)
+## وابستگی بین فازها
 
 ```
-فاز ۰ (زیرساخت)
-  ├── فاز ۱ (Audit)
-  │     └── فاز ۲ (اعلان) ──┬── فاز ۳ (گزارش نهاد)
-  │                         ├── فاز ۶ (تابلو) ── فاز ۸ (رویداد) ── فاز ۹ (درآمد)
-  │                         └── فاز ۷ (نظرسنجی)
-  └── فاز ۴ (آپلود قرارداد)
+فاز ۰ (FileStorage + دانلود امن)
+  ├── فاز ۱ (آپلود قرارداد)
+  ├── فاز ۲ (گزارش اتاق) — تقریباً مستقل
+  ├── فاز ۳ (تابلو اعلانات)
+  └── فاز ۴ (نظرسنجی)
 
-فاز ۵ (گزارش اتاق) — مستقل، هر زمان بعد از فاز ۰ قابل اجرا
+فاز ۳ و ۴ مستقل از هم‌اند؛ هر دو بعد از فاز ۰ قابل شروع‌اند.
 ```
 
 ---
 
-## نکات محصولی مهم (برای جلوگیری از تداخل)
+## نکات محصولی (جلوگیری از تداخل)
 
-### ۱. تفکیک «اعلان» vs «تابلو اعلانات»
-| | اعلان درون‌پنلی (فاز ۲) | تابلوی اعلانات (فاز ۶) |
-|--|-------------------------|------------------------|
-| **ماهیت** | رویداد شخصی/کاری | محتوای عمومی |
-| **مثال** | «واریز شما تأیید شد» | «تعطیلی ۱۵ مرداد» |
-| **عمر** | کوتاه | با تاریخ انتشار/انقضا |
-
-### ۲. تفکیک «گزارش نهاد» vs «گزارش admin»
-نهاد فقط **خلاصه خودش** را می‌بیند؛ admin گزارش‌های aggregate دارد.
-
-### ۳. فایل قرارداد vs قرارداد سیستمی
-رکورد `team_contracts` (تاریخ، مبلغ) **دست‌نخورده** بماند؛ فایل آپلودی **ضمیمه** است نه جایگزین.
-
-### ۴. درآمد رویداد vs شارژ میز
-- شارژ: `charges` + `category = واریز تیم`
-- رویداد: `category = درآمد رویداد`
-گزارش‌ها باید تفکیک‌پذیر باشند.
-
-### ۵. حجم لاگ
-سیاست نگهداری پیشنهادی: ۲ سال — job اختیاری `audit_logs` پاکسازی (فاز بعدی).
+| موضوع | قانون |
+|-------|--------|
+| قرارداد سیستمی vs فایل | `team_contracts` منبع حقیقت مالی/تاریخ است؛ فایل ضمیمه است |
+| تابلو vs SMS | تابلو جایگزین SMS نیست؛ SMS دستی فعلی حفظ شود |
+| گزارش اتاق | فقط admin — نهادها نرخ اشغال اتاق‌های دیگر را نبینند |
+| نظرسنجی vs اعلان | فعال شدن نظرسنجی می‌تواند یک announcement با دسته `general` هم بسازد (اختیاری در T-403) |
+| تغییر نرخ | هم announcement (`rate_change`) هم محاسبه شارژ — ترتیب: اول نرخ در DB، بعد اطلاع‌رسانی، بعد recalculate دستی توسط مدیر |
 
 ---
 
@@ -1188,55 +613,23 @@ KPI: رویدادهای پیش‌رو، ثبت‌نام‌های امروز
 
 | تاریخ | تسک | وضعیت | یادداشت |
 |-------|-----|--------|---------|
-| | | | |
+| ۱۴۰۴/۰۵/۱۰ | ایجاد سند | ✅ | محدود به ۴ فیچر درخواستی |
+| | T-000 | ⬜ | |
+| | T-001 | ⬜ | |
+| | … | | |
 
 ---
 
-## پیوست — نگاشت actionهای audit (کامل)
+## پیوست — چک‌لیست نهایی (بعد از اتمام همه فازها)
 
-| action | بخش | حساس |
-|--------|-----|------|
-| `auth.login.success` | امنیت | ✓ |
-| `auth.login.failed` | امنیت | ✓ |
-| `auth.logout` | امنیت | ✓ |
-| `member.approved` | اعضا | |
-| `member.rejected` | اعضا | |
-| `member.created` | اعضا | |
-| `member.updated` | اعضا | |
-| `member.deleted` | اعضا | |
-| `member_request.approved` | اعضا | |
-| `member_request.rejected` | اعضا | |
-| `payment.approved` | مالی | |
-| `payment.rejected` | مالی | |
-| `payment.announced` | مالی | |
-| `transaction.income` | مالی | |
-| `transaction.expense` | مالی | |
-| `charge.manual_edit` | شارژ | |
-| `charge.recalculated` | شارژ | ✓ |
-| `rate.updated` | شارژ | ✓ |
-| `desk.assigned` | میز | |
-| `desk.updated` | میز | |
-| `desk.unassigned` | میز | |
-| `locker.approved` | کمد | |
-| `locker.rejected` | کمد | |
-| `room.approved` | اتاق | |
-| `room.rejected` | اتاق | |
-| `room.created` | اتاق | |
-| `contract.created` | قرارداد | |
-| `contract.updated` | قرارداد | |
-| `contract.deleted` | قرارداد | |
-| `contract_document.uploaded` | قرارداد | |
-| `contract_document.approved` | قرارداد | |
-| `contract_document.rejected` | قرارداد | |
-| `announcement.published` | اعلانات | |
-| `survey.published` | نظرسنجی | |
-| `survey.submitted` | نظرسنجی | |
-| `event.published` | رویداد | |
-| `event.registration` | رویداد | |
-| `event.registration.payment_created` | رویداد | |
-| `event.cancelled` | رویداد | |
-| `settings.updated` | تنظیمات | ✓ |
+- [ ] هر ۴ فیچر در پنل مدیر و نهاد (در صورت مربوط) قابل دسترسی است
+- [ ] README به‌روز: بخش‌های قرارداد، گزارش اتاق، تابلو، نظرسنجی
+- [ ] `Schema::VERSION` افزایش یافته و migrate روی MySQL + SQLite تست شده
+- [ ] بکاپ/restore با داده نمونه هر ۴ ماژول
+- [ ] `install.php` reset تمیز
+- [ ] تست دستی موبایل (RTL) برای پنل نهاد
+- [ ] مدیر مشاهده‌گر محدودیت‌ها را دارد
 
 ---
 
-*آخرین به‌روزرسانی: ۱۴۰۴/۰۵/۱۰ — نسخه ۱.۰*
+*آخرین به‌روزرسانی: ۱۴۰۴/۰۵/۱۰ — نسخه ۲.۰ (محدود به ۴ فیچر)*
