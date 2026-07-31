@@ -578,7 +578,7 @@ $assetVer = (string) max(
               <div class="room-booking-shell">
                 <article class="room-card room-booking-panel">
                   <h2>رزرو جدید</h2>
-                  <p class="room-card-lead">روز را از تقویم انتخاب کنید، سپس ساعت شروع و مدت جلسه را مشخص کنید.</p>
+                  <p class="room-card-lead">روز را انتخاب کنید، سپس مثل رزرو هتل ابتدا ساعت شروع و بعد ساعت پایان را بزنید.</p>
                   <form id="panelRoomBookingForm">
                     <label class="wide"><span>انتخاب اتاق</span></label>
                     <div id="panelRoomCardGrid" class="room-room-grid room-room-grid--panel" role="listbox" aria-label="انتخاب اتاق"></div>
@@ -607,15 +607,6 @@ $assetVer = (string) max(
                               <option value="">— بدون نهاد / مهمان —</option>
                             </select>
                           </label>
-                          <label>
-                            <span>مدت جلسه</span>
-                            <select id="panelDurationSlots" name="duration_slots">
-                              <option value="1">۳۰ دقیقه</option>
-                              <option value="2" selected>۱ ساعت</option>
-                              <option value="3">۱٫۵ ساعت</option>
-                              <option value="4">۲ ساعت</option>
-                            </select>
-                          </label>
                           <label><span>نام *</span><input name="booker_name" type="text" required /></label>
                           <label><span>موبایل *</span><input name="booker_phone" type="tel" required dir="ltr" class="ltr-input" placeholder="09xxxxxxxxx" /></label>
                           <label><span>سازمان / نهاد</span><input name="booker_org" type="text" /></label>
@@ -623,11 +614,13 @@ $assetVer = (string) max(
                         </div>
                         <div class="room-slot-legend">
                           <span class="free">آزاد</span>
+                          <span class="range">انتخاب‌شده</span>
                           <span class="pending">انتظار</span>
                           <span class="busy">پر</span>
                           <span class="closed">تعطیل</span>
                         </div>
                         <p class="hint" id="panelSelectedDayLabel">روز انتخاب‌شده: <?= e(fa_digits($today['formatted'])) ?></p>
+                        <p class="hint" id="panelRangeHint">۱) ساعت شروع  ۲) ساعت پایان — بازه‌های پر قابل انتخاب نیستند.</p>
                         <div id="panelRoomSlotGrid" class="room-slot-grid"></div>
                         <p class="hint" id="panelRoomTimePreview"></p>
                         <div class="form-actions"><button class="button" type="submit">ثبت رزرو</button></div>

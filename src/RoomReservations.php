@@ -156,6 +156,88 @@ final class RoomReservations
     }
 
     /**
+     * Public week occupancy (Saturday–Friday) for the booking page.
+     *
+     * @return array<string, mixed>
+     */
+    public function publicWeekStatus(string $from, int $roomId = 0): array
+    {
+        $anchor = JalaliDate::normalize($from !== '' ? $from : JalaliDate::todayParts()['formatted']);
+        $fromDate = self::persianWeekStart($anchor);
+        $toDate = JalaliDate::addDays($fromDate, 6);
+        $calendar = $this->calendarRange($fromDate, $toDate, $roomId);
+        $rooms = $calendar['rooms'];
+        $days = $calendar['days'];
+        $events = $calendar['events'];
+        $closedMap = array_fill_keys($calendar['closed_dates'] ?? [], true);
+        $today = (string) ($calendar['today'] ?? JalaliDate::todayParts()['formatted']);
+
+        $dayCards = [];
+        foreach ($days as $date) {
+            $dayEvents = array_values(array_filter(
+                $events,
+                static fn (array $event): bool => ($event['reserved_date'] ?? '') === $date
+                    && ($roomId <= 0 || (int) ($event['room_id'] ?? 0) === $roomId)
+            ));
+            $busyBlocks = array_map(static fn (array $event): array => [
+                'room_id' => (int) ($event['room_id'] ?? 0),
+                'room_name' => (string) ($event['room_name'] ?? ''),
+                'start_time' => (string) ($event['start_time'] ?? ''),
+                'end_time' => (string) ($event['end_time'] ?? ''),
+                'status' => (string) ($event['status'] ?? ''),
+            ], $dayEvents);
+
+            $isClosed = isset($closedMap[$date]);
+            $isPast = JalaliDate::compare($date, $today) < 0;
+            $busyCount = count($busyBlocks);
+            $level = $isClosed ? 'closed' : ($busyCount === 0 ? 'free' : ($busyCount <= 2 ? 'light' : 'busy'));
+
+            $dayCards[] = [
+                'date' => $date,
+                'weekday' => JalaliDate::weekdayName($date),
+                'day' => (int) substr($date, 8, 2),
+                'is_today' => $date === $today,
+                'is_past' => $isPast,
+                'is_closed' => $isClosed,
+                'busy_count' => $busyCount,
+                'level' => $level,
+                'blocks' => $busyBlocks,
+            ];
+        }
+
+        return [
+            'from' => $fromDate,
+            'to' => $toDate,
+            'today' => $today,
+            'rooms' => array_map(static fn (array $room): array => [
+                'id' => (int) $room['id'],
+                'name' => (string) $room['name'],
+                'code' => (string) ($room['code'] ?? ''),
+            ], $rooms),
+            'days' => $dayCards,
+        ];
+    }
+
+    /** Saturday start of the Jalali week containing $date. */
+    private static function persianWeekStart(string $date): string
+    {
+        $normalized = JalaliDate::normalize($date);
+        $name = JalaliDate::weekdayName($normalized);
+        $offset = match ($name) {
+            'شنبه' => 0,
+            'یکشنبه' => 1,
+            'دوشنبه' => 2,
+            'سه‌شنبه', 'سه شنبه' => 3,
+            'چهارشنبه' => 4,
+            'پنجشنبه' => 5,
+            'جمعه' => 6,
+            default => 0,
+        };
+
+        return $offset === 0 ? $normalized : JalaliDate::addDays($normalized, -$offset);
+    }
+
+    /**
      * @return array{date: string, room: array<string, mixed>, slots: list<array<string, mixed>>, closed?: bool, closed_note?: string}
      */
     public function availability(int $roomId, string $date): array

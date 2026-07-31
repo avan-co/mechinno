@@ -43,33 +43,35 @@
     return (hour * 60) + minute;
   };
 
-  const durationLabel = (slots, slotMinutes) => {
-    const minutes = slots * slotMinutes;
-    if (minutes < 60) return `${minutes} دقیقه`;
-    if (minutes % 60 === 0) return `${minutes / 60} ساعت`;
-    return `${Math.floor(minutes / 60)}.۵ ساعت`;
-  };
-
-  const fillDurationOptions = (select, slotMinutes, maxHours) => {
-    if (!select) return;
-    const maxSlots = Math.max(1, Math.floor((maxHours * 60) / slotMinutes));
-    const current = Number(select.value || 0);
-    select.innerHTML = "";
-    for (let slots = 1; slots <= maxSlots; slots += 1) {
-      const option = document.createElement("option");
-      option.value = String(slots);
-      option.textContent = durationLabel(slots, slotMinutes);
-      select.appendChild(option);
-    }
-    const preferred = Math.min(Math.max(1, Math.round(60 / slotMinutes)), maxSlots);
-    select.value = String(current >= 1 && current <= maxSlots ? current : preferred);
-  };
-
   const weekdayOffset = (weekdayName) => {
     const map = {
       شنبه: 0, یکشنبه: 1, دوشنبه: 2, سه‌شنبه: 3, "سه شنبه": 3, چهارشنبه: 4, پنجشنبه: 5, جمعه: 6,
     };
     return map[weekdayName] ?? 0;
+  };
+
+  /** Hotel-style range helpers */
+  const rangeHelpers = {
+    slotEnd(start, slotMinutes) {
+      return minutesToTime(timeToMinutes(start) + slotMinutes);
+    },
+    isFreeBetween(slots, start, endExclusive, slotMinutes) {
+      const byTime = new Map(slots.map((slot) => [slot.time, slot]));
+      let cursor = timeToMinutes(start);
+      const end = timeToMinutes(endExclusive);
+      while (cursor < end) {
+        const key = minutesToTime(cursor);
+        const slot = byTime.get(key);
+        if (!slot || slot.status !== "free") return false;
+        cursor += slotMinutes;
+      }
+      return true;
+    },
+    inRange(time, start, endExclusive) {
+      if (!start || !endExclusive) return false;
+      const t = timeToMinutes(time);
+      return t >= timeToMinutes(start) && t < timeToMinutes(endExclusive);
+    },
   };
 
   const renderRoomCards = (grid, rooms, selectedRoomId, onSelect) => {
@@ -218,16 +220,17 @@
     const cardGrid = document.getElementById("panelRoomCardGrid");
     const slotGrid = document.getElementById("panelRoomSlotGrid");
     const preview = document.getElementById("panelRoomTimePreview");
-    const durationSelect = document.getElementById("panelDurationSlots");
     const teamSelect = document.getElementById("panelTeamSelect");
     const dayLabel = document.getElementById("panelSelectedDayLabel");
     const monthLabel = document.getElementById("panelMonthLabel");
     const monthGrid = document.getElementById("panelMonthGrid");
+    const rangeHint = document.getElementById("panelRangeHint");
 
     const state = {
       rooms: [],
       teams: [],
       selectedRoomId: 0,
+      rangeAnchor: "",
       selectedStart: "",
       selectedEnd: "",
       slots: [],
@@ -240,54 +243,92 @@
 
     const selectedRoom = () => state.rooms.find((room) => Number(room.id) === Number(state.selectedRoomId));
 
-    const computeEnd = (start) => {
-      if (!start) return "";
-      const slots = Number(durationSelect?.value || 1);
-      return minutesToTime(timeToMinutes(start) + (slots * state.slotMinutes));
-    };
-
     const updatePreview = () => {
       if (!preview) return;
-      preview.textContent = state.selectedStart && state.selectedEnd
-        ? `بازه انتخابی: ${state.selectedStart} تا ${state.selectedEnd}`
-        : "ابتدا ساعت شروع را انتخاب کنید.";
+      if (state.selectedStart && state.selectedEnd) {
+        const minutes = timeToMinutes(state.selectedEnd) - timeToMinutes(state.selectedStart);
+        const label = minutes < 60 ? `${minutes} دقیقه` : (minutes % 60 === 0 ? `${minutes / 60} ساعت` : `${(minutes / 60).toFixed(1)} ساعت`);
+        preview.textContent = `بازه انتخابی: ${state.selectedStart} تا ${state.selectedEnd} (${label})`;
+        if (rangeHint) rangeHint.textContent = "برای تغییر، دوباره روی یک ساعت آزاد کلیک کنید.";
+        return;
+      }
+      if (state.rangeAnchor) {
+        preview.textContent = `شروع: ${state.rangeAnchor} — حالا ساعت پایان را انتخاب کنید.`;
+        if (rangeHint) rangeHint.textContent = "فقط بازه‌های آزاد بین شروع و پایان قابل انتخاب‌اند.";
+        return;
+      }
+      preview.textContent = "ابتدا ساعت شروع، سپس ساعت پایان را انتخاب کنید.";
+      if (rangeHint) rangeHint.textContent = "۱) ساعت شروع  ۲) ساعت پایان — بازه‌های پر قابل انتخاب نیستند.";
+    };
+
+    const clearRange = () => {
+      state.rangeAnchor = "";
+      state.selectedStart = "";
+      state.selectedEnd = "";
     };
 
     const paintSlots = () => {
       if (!slotGrid) return;
-      const slots = state.slots;
-      const needed = Math.max(1, Number(durationSelect?.value || 1));
-      const byTime = new Map(slots.map((slot) => [slot.time, slot]));
-      const canStartAt = (startTime) => {
-        let cursor = timeToMinutes(startTime);
-        for (let i = 0; i < needed; i += 1) {
-          const key = minutesToTime(cursor);
-          const slot = byTime.get(key);
-          if (!slot || slot.status !== "free") return false;
-          cursor += state.slotMinutes;
-        }
-        return true;
-      };
-
-      if (!slots.length) {
+      if (!state.slots.length) {
         slotGrid.innerHTML = '<p class="hint">برای این روز بازه‌ای موجود نیست.</p>';
         return;
       }
 
-      slotGrid.innerHTML = slots.map((slot) => {
-        const disabled = slot.status !== "free" || !canStartAt(slot.time);
-        const selected = state.selectedStart === slot.time;
+      const maxMinutes = state.maxHours * 60;
+      slotGrid.innerHTML = state.slots.map((slot) => {
+        const busy = slot.status !== "free";
+        const inSelected = state.selectedStart && state.selectedEnd
+          && rangeHelpers.inRange(slot.time, state.selectedStart, state.selectedEnd);
+        const isAnchor = state.rangeAnchor === slot.time;
         let label = slot.time;
-        if (slot.status === "busy") label = "رزرو";
+        if (slot.status === "busy") label = "پر";
         else if (slot.status === "pending") label = "انتظار";
-        else if (disabled) label = "کوتاه";
-        return `<button type="button" class="room-slot room-slot--${slot.status}${selected ? " is-selected" : ""}${disabled && slot.status === "free" ? " room-slot--short" : ""}" data-time="${slot.time}" ${disabled ? "disabled" : ""}>${label}</button>`;
+
+        const classes = ["room-slot", `room-slot--${slot.status}`];
+        if (inSelected || isAnchor) classes.push("is-in-range");
+        if (isAnchor || (state.selectedStart === slot.time)) classes.push("is-selected");
+
+        return `<button type="button" class="${classes.join(" ")}" data-time="${slot.time}" data-end="${slot.end}" ${busy ? "disabled" : ""}>${label}</button>`;
       }).join("");
 
       slotGrid.querySelectorAll(".room-slot:not([disabled])").forEach((button) => {
         button.addEventListener("click", () => {
-          state.selectedStart = button.dataset.time || "";
-          state.selectedEnd = computeEnd(state.selectedStart);
+          const time = button.dataset.time || "";
+          if (!time) return;
+
+          // Start a new selection, or complete the range.
+          if (!state.rangeAnchor || (state.selectedStart && state.selectedEnd)) {
+            state.rangeAnchor = time;
+            state.selectedStart = time;
+            state.selectedEnd = "";
+            paintSlots();
+            updatePreview();
+            return;
+          }
+
+          let start = state.rangeAnchor;
+          let endSlotStart = time;
+          if (timeToMinutes(endSlotStart) < timeToMinutes(start)) {
+            [start, endSlotStart] = [endSlotStart, start];
+          }
+          const end = rangeHelpers.slotEnd(endSlotStart, state.slotMinutes);
+          const duration = timeToMinutes(end) - timeToMinutes(start);
+          if (duration <= 0) {
+            window.showToast?.("بازه زمانی معتبر نیست.", "error");
+            return;
+          }
+          if (duration > maxMinutes) {
+            window.showToast?.(`حداکثر ${state.maxHours} ساعت در هر رزرو مجاز است.`, "error");
+            return;
+          }
+          if (!rangeHelpers.isFreeBetween(state.slots, start, end, state.slotMinutes)) {
+            window.showToast?.("بین شروع و پایان، بازهٔ پر یا در انتظار وجود دارد.", "error");
+            return;
+          }
+
+          state.selectedStart = start;
+          state.selectedEnd = end;
+          state.rangeAnchor = start;
           paintSlots();
           updatePreview();
         });
@@ -315,8 +356,7 @@
         button.addEventListener("click", () => {
           dateInput.value = button.dataset.date || "";
           if (dayLabel) dayLabel.textContent = `روز انتخاب‌شده: ${dateInput.value}`;
-          state.selectedStart = "";
-          state.selectedEnd = "";
+          clearRange();
           renderMonth();
           loadSlots();
         });
@@ -341,16 +381,14 @@
         );
         if (data.closed) {
           state.slots = [];
-          state.selectedStart = "";
-          state.selectedEnd = "";
+          clearRange();
           slotGrid.innerHTML = `<p class="hint room-closed-hint">${escapeHtml(data.closed_note || "این روز تعطیل است.")}</p>`;
           updatePreview();
           return;
         }
         if (data.error) {
           state.slots = [];
-          state.selectedStart = "";
-          state.selectedEnd = "";
+          clearRange();
           slotGrid.innerHTML = `<p class="hint">${escapeHtml(data.error)}</p>`;
           updatePreview();
           return;
@@ -358,8 +396,6 @@
         state.slots = data.slots || [];
         state.slotMinutes = Number(data.slot_minutes || data.room?.slot_minutes || state.slotMinutes || 30);
         state.maxHours = Number(data.max_hours || state.maxHours || 2);
-        fillDurationOptions(durationSelect, state.slotMinutes, state.maxHours);
-        if (state.selectedStart) state.selectedEnd = computeEnd(state.selectedStart);
         paintSlots();
         updatePreview();
       } catch (error) {
@@ -372,7 +408,7 @@
       if (roomInput) roomInput.value = roomId > 0 ? String(roomId) : "";
       const room = selectedRoom();
       state.slotMinutes = Number(room?.slot_minutes || state.slotMinutes || 30);
-      fillDurationOptions(durationSelect, state.slotMinutes, state.maxHours);
+      clearRange();
       renderRoomCards(cardGrid, state.rooms, state.selectedRoomId, selectRoom);
       loadSlots();
     };
@@ -384,7 +420,6 @@
       if (roomInput) roomInput.value = state.selectedRoomId > 0 ? String(state.selectedRoomId) : "";
       const room = selectedRoom();
       state.slotMinutes = Number(room?.slot_minutes || state.slotMinutes || 30);
-      fillDurationOptions(durationSelect, state.slotMinutes, state.maxHours);
       renderRoomCards(cardGrid, state.rooms, state.selectedRoomId, selectRoom);
     };
 
@@ -421,7 +456,7 @@
         return;
       }
       if (!state.selectedStart || !state.selectedEnd) {
-        window.showToast?.("ساعت شروع را انتخاب کنید.", "error");
+        window.showToast?.("بازه ساعت را کامل انتخاب کنید (شروع و پایان).", "error");
         return;
       }
       const payload = Object.fromEntries(new FormData(form).entries());
@@ -440,8 +475,7 @@
           if (field) field.value = "";
         });
         if (teamSelect) teamSelect.value = "";
-        state.selectedStart = "";
-        state.selectedEnd = "";
+        clearRange();
         await loadSlots();
         document.querySelector('#meeting-rooms data-table[endpoint*="room-reservations"]')?.load?.();
         document.querySelector('#meeting-rooms data-table[endpoint*="pending-room-reservations"]')?.load?.();
@@ -453,11 +487,6 @@
       }
     });
 
-    durationSelect?.addEventListener("change", () => {
-      if (state.selectedStart) state.selectedEnd = computeEnd(state.selectedStart);
-      paintSlots();
-      updatePreview();
-    });
     teamSelect?.addEventListener("change", applyTeamDefaults);
 
     document.getElementById("panelMonthPrev")?.addEventListener("click", () => {
@@ -486,6 +515,7 @@
         state.year = Number(parts[0]);
         state.month = Number(parts[1]);
       }
+      clearRange();
       loadMonth().then(loadSlots).catch((error) => window.showToast?.(error.message, "error"));
     };
     window.setPanelBookingRoom = (roomId) => selectRoom(Number(roomId));
@@ -495,7 +525,6 @@
       fetchJson("api.php?resource=room-settings").then((settings) => {
         state.slotMinutes = Number(settings.room_slot_minutes || 30);
         state.maxHours = Number(settings.room_max_hours_per_day || 2);
-        fillDurationOptions(durationSelect, state.slotMinutes, state.maxHours);
       }).catch(() => {}),
       loadRooms(),
       loadTeams(),
