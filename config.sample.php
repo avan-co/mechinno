@@ -14,8 +14,8 @@ return [
     // هرگز مقدار CHANGE_ME را در production نگه ندارید — در غیر این صورت کلید ضعیف fallback استفاده می‌شود.
     'app_secret' => 'CHANGE_ME_RANDOM_SECRET_KEY',
 
-    // پس از نصب اولیه در production روی false بگذارید تا install.php غیرفعال شود.
-    'install_enabled' => false,
+    // برای نصب اولیه true بماند. بعد از نصب موفق در production روی false بگذارید.
+    'install_enabled' => true,
 
     'auth' => [
         'enabled' => true,
