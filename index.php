@@ -250,14 +250,9 @@ $assetVer = (string) max(
               <span class="user-avatar" aria-hidden="true"><?= e(avatar_initial((string) ($authContext['username'] ?? ''), 'م')) ?></span>
               <div class="user-pill-copy">
                 <strong><?= e($authContext['username'] ?: 'مدیر') ?></strong>
-                <small><?= e(match ($authContext['role']) {
-                    'admin_editor' => 'مدیر ویرایشگر',
-                    'admin_viewer' => 'مدیر مشاهده‌گر',
-                    default => 'مدیر سیستم',
-                }) ?></small>
+                <small><?= e(Access::roleLabel($authContext['role'] ?? '')) ?></small>
               </div>
             </div>
-            <a class="sidebar-logout" href="logout.php">خروج از پنل</a>
           </div>
           </div>
         </aside>
@@ -276,22 +271,51 @@ $assetVer = (string) max(
             <div class="global-search" role="search">
               <span class="global-search-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16"><path d="M10.5 3a7.5 7.5 0 1 1 4.73 13.35l4.35 4.35-1.41 1.41-4.35-4.35A7.5 7.5 0 0 1 10.5 3Zm0 2a5.5 5.5 0 1 0 5.5 5.5A5.5 5.5 0 0 0 10.5 5Z" fill="currentColor"/></svg></span>
               <input type="search" id="globalSearch" placeholder="جست‌وجو در بخش فعلی…" autocomplete="off" aria-label="جست‌وجوی سریع" />
+              <kbd class="kbd-hint" title="کلید / برای جست‌وجو">/</kbd>
             </div>
             <div class="topbar-actions">
-              <span class="role-chip"><?= e(match ($authContext['role']) {
-                  'admin_editor' => 'ویرایشگر',
-                  'admin_viewer' => 'مشاهده‌گر',
-                  default => 'مدیر',
-              }) ?></span>
-              <span class="date-chip" id="todayChip"><?= e(fa_digits($today['formatted'])) ?></span>
-              <button class="theme-toggle" id="themeToggle" type="button" title="تغییر تم" aria-label="تغییر تم">
-                <span class="theme-toggle-track" aria-hidden="true">
-                  <svg class="icon-sun" viewBox="0 0 24 24"><path d="M12 18a6 6 0 1 1 6-6 6 6 0 0 1-6 6Zm0-16h2v3h-2V2Zm0 19h2v3h-2v-3ZM2 11h3v2H2v-2Zm19 0h3v2h-3v-2ZM4.2 4.2l2.1 2.1-1.4 1.4-2.1-2.1 1.4-1.4Zm13.1 13.1 2.1 2.1-1.4 1.4-2.1-2.1 1.4-1.4ZM4.2 19.8l1.4-1.4 2.1 2.1-1.4 1.4-2.1-2.1Zm13.1-13.1 1.4-1.4 2.1 2.1-1.4 1.4-2.1-2.1Z" fill="currentColor"/></svg>
-                  <svg class="icon-moon" viewBox="0 0 24 24"><path d="M21 14.5A7.5 7.5 0 0 1 9.5 3a6 6 0 1 0 11.5 11.5Z" fill="currentColor"/></svg>
-                </span>
-                <span class="theme-toggle-label">تم</span>
-              </button>
-              <span class="kbd-hint" title="کلید / برای جست‌وجو">/</span>
+              <?php
+                $accountName = (string) ($authContext['username'] ?: 'مدیر');
+                $accountRole = Access::roleLabel($authContext['role'] ?? '');
+                $accountInitial = avatar_initial($accountName, 'م');
+              ?>
+              <div class="account-menu" id="accountMenu">
+                <button class="account-menu-trigger" id="accountMenuTrigger" type="button" aria-expanded="false" aria-haspopup="menu" aria-controls="accountMenuDropdown">
+                  <span class="account-menu-avatar" aria-hidden="true"><?= e($accountInitial) ?></span>
+                  <span class="account-menu-meta">
+                    <strong><?= e($accountName) ?></strong>
+                    <small><?= e($accountRole) ?></small>
+                  </span>
+                  <svg class="account-menu-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5Z" fill="currentColor"/></svg>
+                </button>
+                <div class="account-menu-dropdown" id="accountMenuDropdown" role="menu" hidden>
+                  <div class="account-menu-profile">
+                    <span class="account-menu-avatar account-menu-avatar--lg" aria-hidden="true"><?= e($accountInitial) ?></span>
+                    <div>
+                      <strong><?= e($accountName) ?></strong>
+                      <small><?= e($accountRole) ?></small>
+                    </div>
+                  </div>
+                  <div class="account-menu-meta-row">
+                    <span>تاریخ امروز</span>
+                    <strong id="todayChip"><?= e(fa_digits($today['formatted'])) ?></strong>
+                  </div>
+                  <div class="account-menu-divider" role="separator"></div>
+                  <button class="account-menu-item" id="themeToggle" type="button" role="menuitem" title="تغییر تم">
+                    <span class="account-menu-item-label">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 18a6 6 0 1 1 6-6 6 6 0 0 1-6 6Zm0-16h2v3h-2V2Zm0 19h2v3h-2v-3ZM2 11h3v2H2v-2Zm19 0h3v2h-3v-2Z" fill="currentColor" class="icon-sun"/><path d="M21 14.5A7.5 7.5 0 0 1 9.5 3a6 6 0 1 0 11.5 11.5Z" fill="currentColor" class="icon-moon"/></svg>
+                      حالت نمایش
+                    </span>
+                    <span class="theme-toggle-label">تم</span>
+                  </button>
+                  <a class="account-menu-item account-menu-item--danger" href="logout.php" role="menuitem">
+                    <span class="account-menu-item-label">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4h8a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-8v-2h8V6h-8V4Zm-1.3 5.3L6.4 12l2.3 2.7-1.5 1.3L3 12l3.2-4 1.5 1.3Z" fill="currentColor"/></svg>
+                      خروج از پنل
+                    </span>
+                  </a>
+                </div>
+              </div>
             </div>
           </header>
 

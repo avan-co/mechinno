@@ -102,4 +102,24 @@ if (!/text-align:\s*center/.test(fs.readFileSync(path.join(__dirname, "..", "ass
   process.exit(1);
 }
 
+if (!indexSource.includes('id="accountMenu"') || !indexSource.includes('id="accountMenuTrigger"')) {
+  console.error("index.php must include account menu dropdown in the topbar");
+  process.exit(1);
+}
+
+if (!source.includes('window.addEventListener("hashchange"') && !source.includes("window.addEventListener('hashchange'")) {
+  console.error("app.js must listen for hashchange to sync section routing");
+  process.exit(1);
+}
+
+if (!source.includes('closest(".section.active")')) {
+  console.error("data-table must lazy-load only when parent section is active");
+  process.exit(1);
+}
+
+if (!apiSource.includes("resource === 'health'") && !apiSource.includes('$resource === \'health\'')) {
+  console.error("api.php must expose health resource");
+  process.exit(1);
+}
+
 console.log("Frontend smoke tests passed");

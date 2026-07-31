@@ -51,22 +51,18 @@ try {
     }
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && $resource === 'book') {
+        require_same_origin_json();
         if (!$settings['room_public_enabled']) {
             json_response(['error' => 'رزرو عمومی اتاق جلسه غیرفعال است.'], 403);
         }
-        $payload = json_decode((string) file_get_contents('php://input'), true);
-        if (!is_array($payload)) {
-            $payload = $_POST;
-        }
+        $payload = read_json_body();
         $record = $rooms->createFromPayload($payload, 'public');
         json_response(['ok' => true, 'record' => $record]);
     }
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && $resource === 'cancel') {
-        $payload = json_decode((string) file_get_contents('php://input'), true);
-        if (!is_array($payload)) {
-            $payload = $_POST;
-        }
+        require_same_origin_json();
+        $payload = read_json_body();
         $id = (int) ($payload['id'] ?? 0);
         $token = trim((string) ($payload['token'] ?? ''));
         $reason = trim((string) ($payload['reason'] ?? ''));

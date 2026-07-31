@@ -1,0 +1,54 @@
+name: Tests
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          extensions: pdo_sqlite, zip, simplexml
+          coverage: none
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Create CI config (SQLite)
+        run: |
+          cat > config.php << 'PHP'
+          <?php
+          return [
+              'app_name' => 'Mechinno CI',
+              'timezone' => 'Asia/Tehran',
+              'debug' => true,
+              'app_secret' => 'ci-test-secret-key-not-for-production-use',
+              'install_enabled' => true,
+              'auth' => [
+                  'enabled' => true,
+                  'username' => 'admin',
+                  'password' => 'admin-ci-password',
+                  'password_hash' => '',
+                  'viewer_username' => 'viewer',
+                  'viewer_password' => 'viewer-ci-password',
+                  'viewer_password_hash' => '',
+              ],
+              'db' => [
+                  'driver' => 'sqlite',
+                  'path' => __DIR__ . '/data/mechinno-ci.sqlite3',
+              ],
+          ];
+          PHP
+          mkdir -p data
+
+      - name: Run all tests
+        run: bash scripts/run_all_tests.sh

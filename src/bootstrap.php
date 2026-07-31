@@ -106,6 +106,57 @@ function json_response(mixed $payload, int $status = 200): never
     exit;
 }
 
+/**
+ * @return array<string, mixed>
+ */
+function read_json_body(): array
+{
+    $raw = (string) file_get_contents('php://input');
+    $payload = json_decode($raw, true);
+    if (!is_array($payload)) {
+        $payload = $_POST;
+    }
+
+    return is_array($payload) ? $payload : [];
+}
+
+/** Same-origin guard for public mutation endpoints (CSRF mitigation without session). */
+function require_same_origin_json(): void
+{
+    $host = strtolower((string) ($_SERVER['HTTP_HOST'] ?? ''));
+    if ($host === '') {
+        return;
+    }
+
+    $candidates = [
+        (string) ($_SERVER['HTTP_ORIGIN'] ?? ''),
+        (string) ($_SERVER['HTTP_REFERER'] ?? ''),
+    ];
+
+    foreach ($candidates as $candidate) {
+        if ($candidate === '') {
+            continue;
+        }
+        $parts = parse_url($candidate);
+        $candidateHost = strtolower((string) ($parts['host'] ?? ''));
+        if ($candidateHost === '') {
+            continue;
+        }
+        $port = isset($parts['port']) ? ':' . $parts['port'] : '';
+        $full = $candidateHost . $port;
+        if ($full === $host || $candidateHost === explode(':', $host)[0]) {
+            return;
+        }
+    }
+
+    // Allow non-browser clients (curl/tests) that send neither Origin nor Referer.
+    if ($candidates[0] === '' && $candidates[1] === '') {
+        return;
+    }
+
+    json_response(['error' => 'درخواست از مبدأ نامعتبر رد شد.'], 403);
+}
+
 function app_configured(): bool
 {
     return is_file(Database::configPath());
