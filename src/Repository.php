@@ -315,6 +315,14 @@ final class Repository
     private function resourceCount(string $name, array $filters = []): int
     {
         $teamId = Access::scopedTeamId();
+        if ($name === 'room-reservations' && (
+            trim((string) ($filters['q'] ?? '')) !== ''
+            || trim((string) ($filters['status'] ?? '')) !== ''
+        )) {
+            return (int) $this->pdo->query(
+                'SELECT COUNT(*) FROM (' . $this->resourceSql($name, $filters) . ') AS filtered_rows'
+            )->fetchColumn();
+        }
         if ($teamId !== null) {
             if (trim((string) ($filters['q'] ?? '')) !== '' && in_array($name, [
                 'members', 'desks', 'lockers', 'charges', 'transactions',
@@ -597,7 +605,7 @@ final class Repository
                  LEFT JOIN lockers l ON l.id = lr.locker_id"
                 . ($teamId !== null ? " WHERE lr.team_id = {$teamId}" : '')
                 . ' ORDER BY lr.submitted_at DESC, lr.id DESC',
-            'pending-room-reservations' => "SELECT rr.id, rr.room_id, rr.reserved_date, rr.start_time, rr.end_time,
+            'pending-room-reservations' => "SELECT rr.id, rr.room_id, rr.team_id, rr.reserved_date, rr.start_time, rr.end_time,
                         rr.booker_name, rr.booker_phone, rr.booker_org, rr.purpose, rr.source, rr.submitted_at,
                         mr.name AS room_name, mr.code AS room_code, t.name AS team_label
                  FROM room_reservations rr
@@ -1858,7 +1866,7 @@ final class Repository
             'panel_users' => "u.username LIKE {$quoted} OR COALESCE(u.full_name, '') LIKE {$quoted} OR COALESCE(t.name, '') LIKE {$quoted}",
             'development_plans' => "COALESCE(p.title, '') LIKE {$quoted} OR COALESCE(p.description, '') LIKE {$quoted} OR COALESCE(p.notes, '') LIKE {$quoted}",
             'meeting-rooms' => "COALESCE(name, '') LIKE {$quoted} OR COALESCE(code, '') LIKE {$quoted} OR COALESCE(floor, '') LIKE {$quoted} OR COALESCE(notes, '') LIKE {$quoted}",
-            'room-reservations' => "COALESCE(rr.booker_name, '') LIKE {$quoted} OR COALESCE(rr.booker_phone, '') LIKE {$quoted} OR COALESCE(rr.booker_org, '') LIKE {$quoted} OR COALESCE(mr.name, '') LIKE {$quoted} OR COALESCE(rr.purpose, '') LIKE {$quoted}",
+            'room-reservations' => "COALESCE(rr.booker_name, '') LIKE {$quoted} OR COALESCE(rr.booker_phone, '') LIKE {$quoted} OR COALESCE(rr.booker_org, '') LIKE {$quoted} OR COALESCE(mr.name, '') LIKE {$quoted} OR COALESCE(t.name, '') LIKE {$quoted} OR COALESCE(rr.purpose, '') LIKE {$quoted}",
             default => '',
         };
         if ($expr === '') {

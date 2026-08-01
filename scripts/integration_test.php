@@ -1396,6 +1396,54 @@ $publicBooking = $rooms->createFromPayload([
 $assert(($publicBooking['team_id'] ?? null) === null || (int) ($publicBooking['team_id'] ?? 0) === 0, 'public booking: team_id ignored');
 $assert(($publicBooking['member_id'] ?? null) === null || (int) ($publicBooking['member_id'] ?? 0) === 0, 'public booking: member_id ignored');
 
+// Room reservation lists must stay paginated and keep filtered totals accurate.
+$_SESSION['mechinno_role'] = Access::ROLE_ADMIN_EDITOR;
+$insertReservation = $pdo->prepare(
+    'INSERT INTO room_reservations (
+        room_id, reserved_date, start_time, end_time, duration_minutes, team_id,
+        booker_name, booker_phone, status, source, public_token, submitted_at, created_at, updated_at
+    ) VALUES (
+        :room_id, :reserved_date, :start_time, :end_time, 60, :team_id,
+        :booker_name, :booker_phone, :status, \'admin\', :public_token, :submitted_at, :created_at, :updated_at
+    )'
+);
+for ($i = 1; $i <= 11; $i++) {
+    $date = sprintf('1399/02/%02d', $i);
+    $insertReservation->execute([
+        'room_id' => $publicRoomId,
+        'reserved_date' => $date,
+        'start_time' => '08:00',
+        'end_time' => '09:00',
+        'team_id' => $teamId,
+        'booker_name' => "صفحه‌بندی {$i}",
+        'booker_phone' => sprintf('0912555%04d', $i),
+        'status' => $i === 1 ? 'pending' : ($i % 2 === 0 ? 'approved' : 'cancelled'),
+        'public_token' => sprintf('MN-PAGE%04d', $i),
+        'submitted_at' => $date,
+        'created_at' => $date,
+        'updated_at' => $date,
+    ]);
+}
+$roomPageOne = $repo->paginatedResource('room-reservations', 1, 10);
+$roomPageTwo = $repo->paginatedResource('room-reservations', 2, 10);
+$assert(count($roomPageOne['rows']) === 10, 'room reservations: first page is limited to 10 rows');
+$assert(($roomPageOne['pages'] ?? 1) >= 2 && count($roomPageTwo['rows']) >= 1, 'room reservations: subsequent page is available');
+$firstRoomIds = array_map(static fn (array $row): int => (int) $row['id'], $roomPageOne['rows']);
+$secondRoomIds = array_map(static fn (array $row): int => (int) $row['id'], $roomPageTwo['rows']);
+$assert(array_intersect($firstRoomIds, $secondRoomIds) === [], 'room reservations: pages do not repeat rows');
+$approvedRooms = $repo->paginatedResource('room-reservations', 1, 10, ['status' => 'approved']);
+$approvedRoomCount = (int) $pdo->query("SELECT COUNT(*) FROM room_reservations WHERE status = 'approved'")->fetchColumn();
+$assert(($approvedRooms['total'] ?? -1) === $approvedRoomCount, 'room reservations: status filter keeps correct pagination total');
+$teamSearchName = (string) $pdo->query("SELECT name FROM teams WHERE id = {$teamId}")->fetchColumn();
+$searchedRooms = $repo->paginatedResource('room-reservations', 1, 10, ['q' => $teamSearchName]);
+$assert(($searchedRooms['total'] ?? 0) >= 11, 'room reservations: search includes team name');
+$pendingRooms = $repo->paginatedResource('pending-room-reservations', 1, 25);
+$pendingRoom = array_values(array_filter(
+    $pendingRooms['rows'],
+    static fn (array $row): bool => ($row['booker_name'] ?? '') === 'صفحه‌بندی 1'
+))[0] ?? [];
+$assert((int) ($pendingRoom['team_id'] ?? 0) === $teamId, 'pending room reservations: team profile id is included');
+
 // Second locker request cannot reuse an already assigned locker.
 $_SESSION = [
     'mechinno_authenticated' => true,

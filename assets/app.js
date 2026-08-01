@@ -3451,9 +3451,6 @@ const formatCell = (column, value, row, resource) => {
     }
     return teamLink(row[linkColumns[column]], value);
   }
-  if (column === "full_name" && resource === "members" && row.team_id && panelMode === "admin") {
-    return `${escapeHtml(value || "—")} <small>${teamLink(row.team_id, "پروفایل نهاد")}</small>`;
-  }
   if (column === "desk_numbers" && value) {
     return String(value).split(",").filter(Boolean).map((n) => deskLink(n.trim())).join(" ");
   }
@@ -3651,7 +3648,7 @@ class DataTable extends HTMLElement {
     this.definition = null;
     this.rows = [];
     this.page = 1;
-    this.perPage = 25;
+    this.perPage = Number(this.getAttribute("data-per-page")) || 25;
     this.total = 0;
     this.pages = 1;
     this.filter = "";
@@ -3659,12 +3656,16 @@ class DataTable extends HTMLElement {
     const addButtonHtml = this.readOnly
       ? ""
       : `<button class="button add-button" type="button">+ افزودن</button>`;
+    const bulkImportButtonHtml = this.hasAttribute("data-bulk-import")
+      ? `<button class="button ghost" id="bulkYearImportButton" type="button">ورود گروهی از فایل</button>`
+      : "";
     this.innerHTML = `
       <article class="panel data-panel">
         <div class="table-toolbar${this.title?.trim() ? "" : " is-empty-title"}">
           <h2>${escapeHtml(this.title)}</h2>
           <div class="table-actions">
             ${addButtonHtml}
+            ${bulkImportButtonHtml}
             <input class="search" type="search" placeholder="جست‌وجو... ( / )" />
           </div>
         </div>

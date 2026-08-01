@@ -198,11 +198,42 @@ if (tooLong.ok) {
   console.error("room-range must reject ranges above maxHours");
   process.exit(1);
 }
+const backwards = Range.resolveRange({
+  anchor: "10:00",
+  clicked: "09:30",
+  slotMinutes: 30,
+  maxHours: 2,
+  slots: [{ time: "09:30", end: "10:00", status: "free" }, ...freeSlots],
+});
+if (backwards.ok || Range.canUseAsEnd({
+  anchor: "10:00",
+  candidate: "09:30",
+  slotMinutes: 30,
+  maxHours: 2,
+  slots: [{ time: "09:30", end: "10:00", status: "free" }, ...freeSlots],
+})) {
+  console.error("room-range must only allow end times after the selected start", backwards);
+  process.exit(1);
+}
 
 const bookingJs = fs.readFileSync(path.join(__dirname, "..", "assets", "room-booking.js"), "utf8");
 const publicJs = fs.readFileSync(path.join(__dirname, "..", "assets", "room-public.js"), "utf8");
 if (!bookingJs.includes("MechinnoRoomRange") || !publicJs.includes("MechinnoRoomRange")) {
   console.error("admin/team and public booking must use shared MechinnoRoomRange");
+  process.exit(1);
+}
+if (!indexSource.includes('endpoint="api.php?resource=teams" data-bulk-import')
+  || !source.includes('id="bulkYearImportButton"')) {
+  console.error("teams table must place bulk import beside its add action");
+  process.exit(1);
+}
+if (source.includes('column === "full_name" && resource === "members"')) {
+  console.error("member names must not contain a duplicate team profile link");
+  process.exit(1);
+}
+if (!indexSource.includes('endpoint="api.php?resource=room-reservations" data-per-page="10"')
+  || !source.includes('getAttribute("data-per-page")')) {
+  console.error("room reservations must use configurable 10-row pagination");
   process.exit(1);
 }
 

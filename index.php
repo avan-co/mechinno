@@ -315,28 +315,30 @@ $assetVer = (string) max(
             <p class="page-subtitle" id="pageSubtitle">خلاصه وضعیت مرکز و اقدامات پیشنهادی</p>
 
             <section id="overview" class="section active">
-            <div class="dashboard-hero" id="dashboardHero">
-              <div class="dashboard-hero-copy">
-                <p class="dashboard-hero-eyebrow">مرکز نوآوری مکانیک</p>
-                <h2 id="dashboardHeroTitle">خلاصه وضعیت امروز</h2>
-                <p id="dashboardHeroSubtitle">وضعیت مالی، ظرفیت و اقدام‌های فوری</p>
+            <div class="dashboard-top-grid">
+              <div class="dashboard-hero" id="dashboardHero">
+                <div class="dashboard-hero-copy">
+                  <p class="dashboard-hero-eyebrow">مرکز نوآوری مکانیک</p>
+                  <h2 id="dashboardHeroTitle">خلاصه وضعیت امروز</h2>
+                  <p id="dashboardHeroSubtitle">وضعیت مالی، ظرفیت و اقدام‌های فوری</p>
+                </div>
+                <div class="dashboard-hero-meta" id="dashboardHeroMeta">
+                  <div class="dashboard-hero-stat"><span>امروز</span><strong id="heroToday"><?= e(fa_digits($today['formatted'])) ?></strong></div>
+                  <div class="dashboard-hero-stat"><span>سال مالی</span><strong id="heroFiscalYear"><?= e(fa_digits((string) $today['year'])) ?></strong></div>
+                </div>
               </div>
-              <div class="dashboard-hero-meta" id="dashboardHeroMeta">
-                <div class="dashboard-hero-stat"><span>امروز</span><strong id="heroToday"><?= e(fa_digits($today['formatted'])) ?></strong></div>
-                <div class="dashboard-hero-stat"><span>سال مالی</span><strong id="heroFiscalYear"><?= e(fa_digits((string) $today['year'])) ?></strong></div>
-              </div>
-            </div>
 
-            <nav class="quick-nav" id="quickNav" aria-label="دسترسی سریع">
-              <button type="button" class="quick-nav-item" data-section="teams"><span class="quick-nav-icon quick-nav-icon--purple"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm-7 8a7 7 0 0 1 14 0Z" fill="currentColor"/></svg></span>نهادها</button>
-              <button type="button" class="quick-nav-item" data-section="members"><span class="quick-nav-icon quick-nav-icon--teal"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 11c1.7 0 3-1.3 3-3S17.7 5 16 5s-3 1.3-3 3 1.3 3 3 3ZM8 11c1.7 0 3-1.3 3-3S9.7 5 8 5 5 6.3 5 8s1.3 3 3 3Zm0 2c-2.7 0-8 1.3-8 4v3h10v-3c0-1.1.4-2.1 1.1-2.9C9.8 13.1 8.9 13 8 13Zm8 0c-.9 0-1.8.1-2.6.3.7.8 1.1 1.8 1.1 2.9v3h7v-3c0-2.7-5.3-4-8-4Z" fill="currentColor"/></svg></span>اعضا</button>
-              <button type="button" class="quick-nav-item" data-section="desks"><span class="quick-nav-icon quick-nav-icon--orange"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16a1 1 0 0 1 1 1v3H3V6a1 1 0 0 1 1-1Zm17 6v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-8h18ZM8 17h2v-3H8v3Zm6 0h2v-3h-2v3Z" fill="currentColor"/></svg></span>میزها</button>
-              <button type="button" class="quick-nav-item" data-section="charges"><span class="quick-nav-icon quick-nav-icon--amber"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 4 6v6c0 5 3.4 9.7 8 11 4.6-1.3 8-6 8-11V6l-8-4Zm0 6.5A2.5 2.5 0 1 1 9.5 6 2.5 2.5 0 0 1 12 8.5Z" fill="currentColor"/></svg></span>شارژ</button>
-              <button type="button" class="quick-nav-item" data-section="transactions"><span class="quick-nav-icon quick-nav-icon--pink"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4Zm2 2v2h12V7Zm0 4v2h8v-2Z" fill="currentColor"/></svg></span>مالی</button>
-              <?php if (Access::isAdmin()): ?>
-              <button type="button" class="quick-nav-item" data-section="reports"><span class="quick-nav-icon quick-nav-icon--blue"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h9l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm8 1.5V8h4.5L14 3.5ZM8 12h8v2H8v-2Zm0 4h8v2H8v-2Zm0-8h4v2H8V8Z" fill="currentColor"/></svg></span>گزارش</button>
-              <?php endif; ?>
-            </nav>
+              <nav class="quick-nav" id="quickNav" aria-label="دسترسی سریع">
+                <button type="button" class="quick-nav-item" data-section="teams"><span class="quick-nav-icon quick-nav-icon--purple"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm-7 8a7 7 0 0 1 14 0Z" fill="currentColor"/></svg></span>نهادها</button>
+                <button type="button" class="quick-nav-item" data-section="members"><span class="quick-nav-icon quick-nav-icon--teal"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 11c1.7 0 3-1.3 3-3S17.7 5 16 5s-3 1.3-3 3 1.3 3 3 3ZM8 11c1.7 0 3-1.3 3-3S9.7 5 8 5 5 6.3 5 8s1.3 3 3 3Zm0 2c-2.7 0-8 1.3-8 4v3h10v-3c0-1.1.4-2.1 1.1-2.9C9.8 13.1 8.9 13 8 13Zm8 0c-.9 0-1.8.1-2.6.3.7.8 1.1 1.8 1.1 2.9v3h7v-3c0-2.7-5.3-4-8-4Z" fill="currentColor"/></svg></span>اعضا</button>
+                <button type="button" class="quick-nav-item" data-section="desks"><span class="quick-nav-icon quick-nav-icon--orange"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16a1 1 0 0 1 1 1v3H3V6a1 1 0 0 1 1-1Zm17 6v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-8h18ZM8 17h2v-3H8v3Zm6 0h2v-3h-2v3Z" fill="currentColor"/></svg></span>میزها</button>
+                <button type="button" class="quick-nav-item" data-section="charges"><span class="quick-nav-icon quick-nav-icon--amber"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 4 6v6c0 5 3.4 9.7 8 11 4.6-1.3 8-6 8-11V6l-8-4Zm0 6.5A2.5 2.5 0 1 1 9.5 6 2.5 2.5 0 0 1 12 8.5Z" fill="currentColor"/></svg></span>شارژ</button>
+                <button type="button" class="quick-nav-item" data-section="transactions"><span class="quick-nav-icon quick-nav-icon--pink"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4Zm2 2v2h12V7Zm0 4v2h8v-2Z" fill="currentColor"/></svg></span>مالی</button>
+                <?php if (Access::isAdmin()): ?>
+                <button type="button" class="quick-nav-item" data-section="reports"><span class="quick-nav-icon quick-nav-icon--blue"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h9l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm8 1.5V8h4.5L14 3.5ZM8 12h8v2H8v-2Zm0 4h8v2H8v-2Zm0-8h4v2H8V8Z" fill="currentColor"/></svg></span>گزارش</button>
+                <?php endif; ?>
+              </nav>
+            </div>
 
             <?php if (Access::canWrite()): ?>
             <article class="panel panel--accent welcome-panel" id="welcomePanel" hidden>
@@ -375,15 +377,10 @@ $assetVer = (string) max(
                 <div class="section-intro-copy"><p>هر نهاد را از دکمه <strong>پروفایل</strong> باز کنید — قرارداد، میز و بدهی هر سال در یکجا مدیریت می‌شود.</p></div>
               </div>
               <?php if (Access::canWrite()): ?>
-              <article class="panel">
-                <div class="panel-head">
-                  <h2>ورود گروهی سابقه</h2>
-                  <button type="button" class="button ghost" id="bulkYearImportButton">ورود CSV سال</button>
-                </div>
-                <p class="hint">برای ثبت یک‌باره چند نهاد در یک سال — فرمت: <code>نام نهاد,شروع,پایان,مبلغ قرارداد,میزها</code> (مبلغ بدون جداکننده هزارگان)</p>
-              </article>
-              <?php endif; ?>
+              <data-table title="نهادها" endpoint="api.php?resource=teams" data-bulk-import></data-table>
+              <?php else: ?>
               <data-table title="نهادها" endpoint="api.php?resource=teams"></data-table>
+              <?php endif; ?>
             </section>
 
             <section id="team-contracts" class="section">
@@ -721,7 +718,7 @@ $assetVer = (string) max(
                 </aside>
               </div>
               <?php endif; ?>
-              <data-table title="رزروهای اتاق" endpoint="api.php?resource=room-reservations" data-no-add data-readonly></data-table>
+              <data-table title="رزروهای اتاق" endpoint="api.php?resource=room-reservations" data-per-page="10" data-no-add data-readonly></data-table>
               <data-table title="اتاق‌های جلسه" endpoint="api.php?resource=meeting-rooms"></data-table>
             </section>
 

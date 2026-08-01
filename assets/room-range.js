@@ -2,7 +2,7 @@
  * Shared hotel-style time range selection for admin / team / public booking.
  *
  * 1) First click = start time (slot start)
- * 2) Second click = exclusive end time (the clock time shown on the button)
+ * 2) Second click = a later, exclusive end time (the clock time shown on the button)
  *    Example: 10:00 then 12:00 => 2 hours
  * Same-slot second click => one slot (start + slotMinutes).
  */
@@ -120,10 +120,10 @@
       return { ok: false, error: "بازه زمانی معتبر نیست." };
     }
 
-    let start = anchor;
+    const start = anchor;
     let end = clicked;
     if (timeToMinutes(end) < timeToMinutes(start)) {
-      [start, end] = [end, start];
+      return { ok: false, error: "ساعت پایان باید بعد از ساعت شروع باشد." };
     }
     // Same button twice => book exactly one slot.
     if (timeToMinutes(end) === timeToMinutes(start)) {
