@@ -80,7 +80,7 @@ final class Repository
         $month = (int) $today['month'];
 
         $chargeTotal = $this->preparedScalar(
-            'SELECT COALESCE(SUM(amount), 0) FROM charges WHERE fiscal_year = :year AND month_index = :month',
+            'SELECT COALESCE(SUM(' . $this->chargeDueSql() . '), 0) FROM charges WHERE fiscal_year = :year AND month_index = :month',
             ['year' => $year, 'month' => $month]
         );
         $allocationMap = $this->paymentAllocationByTeamMonth();
@@ -337,6 +337,7 @@ final class Repository
                     ['id' => $teamId]
                 ),
                 'locker-requests' => $this->preparedScalar('SELECT COUNT(*) FROM locker_requests WHERE team_id = :id', ['id' => $teamId]),
+                'member-requests' => $this->preparedScalar('SELECT COUNT(*) FROM member_requests WHERE team_id = :id', ['id' => $teamId]),
                 'room-reservations' => Schema::tableExists($this->pdo, 'room_reservations')
                     ? (int) $this->pdo->query(
                         'SELECT COUNT(*) FROM (' . $this->resourceSql('room-reservations', $filters) . ') AS filtered_rows'
@@ -591,7 +592,7 @@ final class Repository
                         m.full_name AS current_full_name, m.member_code, t.name AS team_label
                  FROM member_requests mr
                  INNER JOIN teams t ON t.id = mr.team_id
-                 INNER JOIN members m ON m.id = mr.member_id
+                 LEFT JOIN members m ON m.id = mr.member_id
                  WHERE mr.status = 'pending'
                  ORDER BY mr.submitted_at DESC, mr.id DESC",
             'member-requests' => "SELECT mr.id, mr.team_id, mr.member_id, mr.request_type, mr.full_name, mr.phone,
@@ -901,7 +902,7 @@ final class Repository
         $year = (string) $today['year'];
         $month = (int) $today['month'];
         $chargeTotal = $this->preparedScalar(
-            'SELECT COALESCE(SUM(amount), 0) FROM charges WHERE team_id = :team_id AND fiscal_year = :year AND month_index = :month',
+            'SELECT COALESCE(SUM(' . $this->chargeDueSql() . '), 0) FROM charges WHERE team_id = :team_id AND fiscal_year = :year AND month_index = :month',
             ['team_id' => $teamId, 'year' => $year, 'month' => $month]
         );
         $allocation = $this->allocatedPaymentsForTeam($teamId);
@@ -1471,7 +1472,7 @@ final class Repository
     private function contractChargeTotalForTeamInYear(int $teamId, string $fiscalYear): int
     {
         return (int) $this->preparedScalar(
-            'SELECT COALESCE(SUM(amount), 0) FROM charges WHERE team_id = :team_id AND fiscal_year = :year',
+            'SELECT COALESCE(SUM(' . $this->chargeDueSql() . '), 0) FROM charges WHERE team_id = :team_id AND fiscal_year = :year',
             ['team_id' => $teamId, 'year' => JalaliDate::normalizeDigits($fiscalYear)]
         );
     }
@@ -1561,7 +1562,7 @@ final class Repository
         $year = JalaliDate::normalizeDigits(trim((string) ($filters['fiscal_year'] ?? '')));
         if ($year !== '') {
             $yearStart = $this->pdo->quote($year . '/01/01');
-            $yearEnd = $this->pdo->quote($year . '/12/29');
+            $yearEnd = $this->pdo->quote(JalaliDate::monthEnd($year, 12));
             $clauses[] = "da.assigned_from <= {$yearEnd}";
             $clauses[] = "(da.assigned_until IS NULL OR da.assigned_until = '' OR da.assigned_until >= {$yearStart})";
         }
@@ -1744,7 +1745,7 @@ final class Repository
     private function teamMonthDebt(int $teamId, string $year, int $month): int
     {
         $chargeTotal = $this->preparedScalar(
-            'SELECT COALESCE(SUM(amount), 0) FROM charges WHERE team_id = :team_id AND fiscal_year = :year AND month_index = :month',
+            'SELECT COALESCE(SUM(' . $this->chargeDueSql() . '), 0) FROM charges WHERE team_id = :team_id AND fiscal_year = :year AND month_index = :month',
             ['team_id' => $teamId, 'year' => $year, 'month' => $month]
         );
         if ($chargeTotal <= 0) {
@@ -1849,7 +1850,7 @@ final class Repository
         }
 
         $yearStart = $this->pdo->quote($year . '/01/01');
-        $yearEnd = $this->pdo->quote($year . '/12/29');
+        $yearEnd = $this->pdo->quote(JalaliDate::monthEnd($year, 12));
 
         return " WHERE da.assigned_from <= {$yearEnd}
                  AND (da.assigned_until IS NULL OR da.assigned_until = '' OR da.assigned_until >= {$yearStart})";
@@ -1898,6 +1899,15 @@ final class Repository
         }
 
         return (int) ($row['charge_amount'] ?? 0) + (int) ($row['rent_amount'] ?? 0);
+    }
+
+    /** SQL expression matching chargeRowDueAmount() for aggregate queries. */
+    private function chargeDueSql(string $alias = ''): string
+    {
+        $prefix = $alias !== '' ? rtrim($alias, '.') . '.' : '';
+
+        return "CASE WHEN COALESCE({$prefix}amount, 0) > 0 THEN {$prefix}amount"
+            . " ELSE COALESCE({$prefix}charge_amount, 0) + COALESCE({$prefix}rent_amount, 0) END";
     }
 
     /**

@@ -325,6 +325,7 @@ const teamPanelHiddenColumns = {
   lockers: ["team_label"],
   "locker-requests": ["team_label"],
   "member-requests": ["team_label"],
+  "room-reservations": ["team_label"],
   charges: ["team_name"],
   transactions: ["category", "team_name", "confirmed"],
   "payment-history": ["team_name"],
@@ -3000,10 +3001,7 @@ const askLockerNumber = (emptyLockers = []) => new Promise((resolve, reject) => 
       </div>`);
     modal = document.getElementById("lockerModal");
     modal.addEventListener("click", (event) => {
-      if (event.target === modal) {
-        modal.hidden = true;
-        reject(new Error("cancelled"));
-      }
+      if (event.target === modal) modal._pendingCancel?.();
     });
   }
 
@@ -3022,15 +3020,17 @@ const askLockerNumber = (emptyLockers = []) => new Promise((resolve, reject) => 
   const cleanup = () => {
     modal.hidden = true;
     releaseFocusTrap(modal);
+    modal._pendingCancel = null;
     modal.querySelectorAll("[data-locker-cancel]").forEach((btn) => { btn.onclick = null; });
     modal.querySelector("[data-locker-confirm]").onclick = null;
   };
 
+  modal._pendingCancel = () => {
+    cleanup();
+    reject(new Error("cancelled"));
+  };
   modal.querySelectorAll("[data-locker-cancel]").forEach((btn) => {
-    btn.onclick = () => {
-      cleanup();
-      reject(new Error("cancelled"));
-    };
+    btn.onclick = () => modal._pendingCancel?.();
   });
   modal.querySelector("[data-locker-confirm]").onclick = () => {
     const parsed = Number(String(input.value).replace(/[^\d]/g, ""));
@@ -3084,6 +3084,18 @@ const openMemberRequestModal = (requestType, member) => {
         request_type: requestType,
         ...Object.fromEntries(new FormData(form).entries()),
       };
+      if (!isDelete) {
+        const phone = String(payload.phone || "").replace(/\D/g, "");
+        const nationalId = String(payload.national_id || "").replace(/\D/g, "");
+        if (!/^09\d{9}$/.test(phone)) {
+          throw new Error("شماره موبایل باید ۱۱ رقم و با ۰۹ شروع شود.");
+        }
+        if (!/^\d{10}$/.test(nationalId)) {
+          throw new Error("کد ملی باید ۱۰ رقم باشد.");
+        }
+        payload.phone = phone;
+        payload.national_id = nationalId;
+      }
       await postJson("api.php?resource=member-requests&action=create", payload);
       closeModal();
       showToast("درخواست ثبت شد.", "success");
@@ -3167,10 +3179,7 @@ const askAccessCode = (memberName = "عضو") => new Promise((resolve, reject) =
       </div>`);
     modal = document.getElementById("accessCodeModal");
     modal.addEventListener("click", (event) => {
-      if (event.target === modal) {
-        modal.hidden = true;
-        reject(new Error("cancelled"));
-      }
+      if (event.target === modal) modal._pendingCancel?.();
     });
   }
 
@@ -3184,10 +3193,15 @@ const askAccessCode = (memberName = "عضو") => new Promise((resolve, reject) =
   const cleanup = () => {
     modal.hidden = true;
     releaseFocusTrap(modal);
+    modal._pendingCancel = null;
     modal.querySelector("[data-access-confirm]").onclick = null;
     modal.querySelectorAll("[data-access-cancel]").forEach((btn) => { btn.onclick = null; });
   };
 
+  modal._pendingCancel = () => {
+    cleanup();
+    reject(new Error("cancelled"));
+  };
   modal.querySelector("[data-access-confirm]").onclick = () => {
     const code = input.value.trim();
     if (!code) {
@@ -3198,10 +3212,7 @@ const askAccessCode = (memberName = "عضو") => new Promise((resolve, reject) =
     resolve(code);
   };
   modal.querySelectorAll("[data-access-cancel]").forEach((btn) => {
-    btn.onclick = () => {
-      cleanup();
-      reject(new Error("cancelled"));
-    };
+    btn.onclick = () => modal._pendingCancel?.();
   });
 });
 
@@ -3224,10 +3235,7 @@ const askRejectReason = () => new Promise((resolve, reject) => {
       </div>`);
     modal = document.getElementById("rejectModal");
     modal.addEventListener("click", (event) => {
-      if (event.target === modal) {
-        modal.hidden = true;
-        reject(new Error("cancelled"));
-      }
+      if (event.target === modal) modal._pendingCancel?.();
     });
   }
 
@@ -3240,15 +3248,17 @@ const askRejectReason = () => new Promise((resolve, reject) => {
   const cleanup = () => {
     modal.hidden = true;
     releaseFocusTrap(modal);
+    modal._pendingCancel = null;
     modal.querySelectorAll("[data-reject-cancel]").forEach((btn) => { btn.onclick = null; });
     modal.querySelector("[data-reject-confirm]").onclick = null;
   };
 
+  modal._pendingCancel = () => {
+    cleanup();
+    reject(new Error("cancelled"));
+  };
   modal.querySelectorAll("[data-reject-cancel]").forEach((btn) => {
-    btn.onclick = () => {
-      cleanup();
-      reject(new Error("cancelled"));
-    };
+    btn.onclick = () => modal._pendingCancel?.();
   });
   modal.querySelector("[data-reject-confirm]").onclick = () => {
     const reason = input.value.trim();
@@ -3359,7 +3369,7 @@ const formatCell = (column, value, row, resource) => {
   }
   if (column === "team_label" || column === "team_name") {
     const teamId = row[linkColumns[column]] || row.team_id;
-    const name = (teamId && value)
+    const name = (panelMode === "admin" && teamId && value)
       ? teamLink(teamId, value)
       : escapeHtml(value || "—");
     const active = row.team_is_active;
@@ -3704,21 +3714,35 @@ class DataTable extends HTMLElement {
     this.querySelector(".bulk-import-button")?.addEventListener("click", () => {
       window.TeamYearWorkspace?.openBulkImportModal();
     });
-    this.querySelector(".add-button")?.addEventListener("click", () => {
+    this.querySelector(".add-button")?.addEventListener("click", async () => {
       if (this.resource === "transactions" && this.txCategoryFilter) {
         openFinanceModal(this.txCategoryFilter).catch((error) => showToast(error.message, "error"));
         return;
       }
-      openRecordModal({
-        resource: this.resource,
-        definition: this.definition,
-        onSaved: async () => {
-          this.page = 1;
-          await this.load();
-          await refreshAfterMutation(this.closest(".section")?.id || null);
-          showToast("ثبت شد.", "success");
-        },
-      });
+      try {
+        if (!this.definition) {
+          const meta = await loadCrudMeta();
+          this.definition = meta.resources[this.resource]
+            || meta.resources[this.resource.replace(/-/g, "_")]
+            || null;
+        }
+        if (!this.definition) {
+          showToast("تعریف فرم این بخش هنوز بارگذاری نشده است.", "error");
+          return;
+        }
+        openRecordModal({
+          resource: this.resource,
+          definition: this.definition,
+          onSaved: async () => {
+            this.page = 1;
+            await this.load();
+            await refreshAfterMutation(this.closest(".section")?.id || null);
+            showToast("ثبت شد.", "success");
+          },
+        });
+      } catch (error) {
+        showToast(error.message, "error");
+      }
     });
     this.querySelector(".per-page-select")?.addEventListener("change", (e) => {
       this.perPage = Number(e.target.value) || 25;
@@ -3828,13 +3852,17 @@ class DataTable extends HTMLElement {
         const workflowBtns = workflow
           ? `<button class="mini-button primary" type="button" data-action="approve" data-id="${escapeHtml(row.id)}">تأیید</button>
              <button class="mini-button danger" type="button" data-action="reject" data-id="${escapeHtml(row.id)}">رد</button>` : "";
+        const memberTeamActions = panelMode === "team" && this.resource === "members" && row.approval_status === "approved"
+          ? `<button class="mini-button" type="button" data-action="request-member-edit" data-id="${escapeHtml(row.id)}">درخواست ویرایش</button>
+             <button class="mini-button danger" type="button" data-action="request-member-delete" data-id="${escapeHtml(row.id)}">درخواست حذف</button>`
+          : "";
         const editBtns = ((editable && canWrite) || rowAllowsTeamEdit(this.resource, row))
           ? `<button class="mini-button" type="button" data-action="edit" data-id="${escapeHtml(row.id)}">ویرایش</button>` : "";
         const deleteBtns = ((editable && canWrite) || rowAllowsTeamDelete(this.resource, row))
           ? `<button class="mini-button danger" type="button" data-action="delete" data-id="${escapeHtml(row.id)}">حذف</button>` : "";
         const rowEditBtns = `${editBtns}${deleteBtns}`;
         return `<article class="mobile-card ${highlighted ? "highlighted" : ""}">${fields}
-          <div class="row-actions">${profileBtn}${workflowBtns}${rowEditBtns}</div></article>`;
+          <div class="row-actions">${profileBtn}${workflowBtns}${memberTeamActions}${rowEditBtns}</div></article>`;
       }).join("")
       : renderEmptyState("رکوردی یافت نشد.", { icon: "search" });
     return true;

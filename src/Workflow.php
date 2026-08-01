@@ -229,15 +229,29 @@ final class Workflow
 
         try {
             if ($type === 'delete') {
+                $member = $this->memberRow($memberId);
+                // Preserve display name on the request so SMS still has the member after delete.
+                if (trim((string) ($row['full_name'] ?? '')) === '') {
+                    $this->pdo->prepare(
+                        'UPDATE member_requests SET full_name = :full_name WHERE id = :id'
+                    )->execute([
+                        'full_name' => (string) ($member['full_name'] ?? ''),
+                        'id' => $id,
+                    ]);
+                }
                 $crud->delete('members', $memberId);
             } elseif ($type === 'update') {
+                $wantsAccess = (int) ($row['wants_access'] ?? 0) === 1 ? 1 : 0;
                 $payload = [
                     'full_name' => (string) ($row['full_name'] ?? ''),
                     'phone' => (string) ($row['phone'] ?? ''),
                     'national_id' => (string) ($row['national_id'] ?? ''),
-                    'wants_access' => (string) ($row['wants_access'] ?? '0'),
+                    'wants_access' => (string) $wantsAccess,
                     'notes' => (string) ($row['notes'] ?? ''),
                 ];
+                if ($wantsAccess === 0) {
+                    $payload['access_code'] = '';
+                }
                 $crud->update('members', $memberId, $payload);
             } else {
                 throw new InvalidArgumentException('نوع درخواست عضو معتبر نیست.');

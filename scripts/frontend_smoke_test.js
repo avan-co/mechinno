@@ -275,4 +275,18 @@ if (!bookingSource.includes('querySelectorAll(\'data-table[endpoint*="room-reser
   process.exit(1);
 }
 
+if (!source.includes('"room-reservations": ["team_label"]') && !source.includes("'room-reservations': ['team_label']")
+  && !/room-reservations["']:\s*\[[^\]]*team_label/.test(source)) {
+  console.error("team panel must hide room-reservations team_label to avoid admin profile links");
+  process.exit(1);
+}
+if (!source.includes("panelMode === \"admin\" && teamId && value") && !source.includes("panelMode === 'admin' && teamId && value")) {
+  console.error("team_label links must be admin-only");
+  process.exit(1);
+}
+if (!source.includes("modal._pendingCancel")) {
+  console.error("workflow modals must use refreshable backdrop cancel handlers");
+  process.exit(1);
+}
+
 console.log("Frontend smoke tests passed");

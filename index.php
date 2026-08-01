@@ -430,7 +430,7 @@ $assetVer = (string) max(
                 <div class="panel-head">
                   <h2>گیرندگان و متن اطلاعیه</h2>
                   <div class="panel-head-actions sms-selection-actions">
-                    <button type="button" class="button ghost" id="smsSelectLeaders">مسئول‌ها</button>
+                    <button type="button" class="button ghost" id="smsSelectLeaders">مسئول‌های این صفحه</button>
                     <button type="button" class="button ghost" id="smsSelectAllPage">همه صفحه</button>
                     <button type="button" class="button ghost" id="smsClearSelection">پاک کردن</button>
                   </div>

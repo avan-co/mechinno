@@ -1002,6 +1002,9 @@ final class Crud
             if (!empty($data['access_code'])) {
                 $data['wants_access'] = 1;
             }
+            if (array_key_exists('wants_access', $data) && (int) $data['wants_access'] === 0) {
+                $data['access_code'] = '';
+            }
         }
         if ($resource === 'locker_requests' && $creating) {
             $teamId = Access::scopedTeamId();
@@ -1225,7 +1228,30 @@ final class Crud
                         ], JSON_UNESCAPED_UNICODE);
                     }
                 } else {
-                    unset($data['payment_status'], $data['confirmed'], $data['payment_plan']);
+                    unset($data['payment_status'], $data['confirmed']);
+                    // Rebuild single-month payment_plan when admin retargets month/amount;
+                    // leave multi-month plans untouched.
+                    if (Schema::hasColumn($this->pdo, 'transactions', 'payment_plan') && $recordId > 0) {
+                        $planStatement = $this->pdo->prepare('SELECT payment_plan, fiscal_year, month_index, amount FROM transactions WHERE id = :id');
+                        $planStatement->execute(['id' => $recordId]);
+                        $existingTx = $planStatement->fetch() ?: [];
+                        $existingPlan = json_decode((string) ($existingTx['payment_plan'] ?? ''), true);
+                        if (!is_array($existingPlan)) {
+                            $existingPlan = [];
+                        }
+                        $fy = JalaliDate::normalizeDigits((string) ($data['fiscal_year'] ?? $existingTx['fiscal_year'] ?? ''));
+                        $mi = (int) ($data['month_index'] ?? $existingTx['month_index'] ?? 0);
+                        $amount = abs((int) ($data['amount'] ?? $existingTx['amount'] ?? 0));
+                        if (count($existingPlan) <= 1 && $fy !== '' && $mi >= 1 && $mi <= 12 && $amount > 0) {
+                            $data['payment_plan'] = json_encode([
+                                ['fiscal_year' => $fy, 'month_index' => $mi, 'amount' => $amount],
+                            ], JSON_UNESCAPED_UNICODE);
+                        } else {
+                            unset($data['payment_plan']);
+                        }
+                    } else {
+                        unset($data['payment_plan']);
+                    }
                 }
             }
         }

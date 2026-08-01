@@ -1066,7 +1066,7 @@ final class Schema
         $today = JalaliDate::todayParts();
         $fiscalYear = (string) $today['year'];
         $yearStart = $fiscalYear . '/01/01';
-        $yearEnd = $fiscalYear . '/12/29';
+        $yearEnd = JalaliDate::monthEnd($fiscalYear, 12);
         $desks = $pdo->query(
             'SELECT d.id, d.number, d.team_id, d.usage_type, d.notes
              FROM desks d

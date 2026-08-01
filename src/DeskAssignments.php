@@ -218,7 +218,7 @@ final class DeskAssignments
         $until = $this->isOpenEnded($assignedUntil) ? '' : JalaliDate::tryNormalize($assignedUntil);
 
         $yearStart = $fiscalYear . '/01/01';
-        $yearEnd = $fiscalYear . '/12/29';
+        $yearEnd = JalaliDate::monthEnd($fiscalYear, 12);
         $sql = 'SELECT id, assigned_from, assigned_until FROM desk_assignments
                 WHERE desk_id = :desk_id
                   AND assigned_from <= :year_end
@@ -281,7 +281,7 @@ final class DeskAssignments
         }
 
         $yearStart = $fiscalYear . '/01/01';
-        $yearEnd = $fiscalYear . '/12/29';
+        $yearEnd = JalaliDate::monthEnd($fiscalYear, 12);
         $statement = $this->pdo->prepare(
             'SELECT id, team_id, assigned_from, assigned_until
              FROM desk_assignments
@@ -331,7 +331,7 @@ final class DeskAssignments
         }
 
         $yearStart = $fiscalYear . '/01/01';
-        $yearEnd = $fiscalYear . '/12/29';
+        $yearEnd = JalaliDate::monthEnd($fiscalYear, 12);
         $sql = 'SELECT id, desk_id, desk_number, team_id, usage_type, assigned_from, assigned_until, notes'
             . $this->exemptSelect()
             . ' FROM desk_assignments
@@ -672,11 +672,10 @@ final class DeskAssignments
         if ($normalized === '') {
             return JalaliDate::todayParts()['formatted'];
         }
-        if (preg_match('/^(\d{4})\/01\/01$/', $normalized, $matches) === 1) {
-            return ((int) $matches[1] - 1) . '/12/29';
-        }
 
-        return $normalized;
+        // Inclusive ranges: previous segment must end the day before the next start
+        // (also handles leap Esfand via JalaliDate::addDays).
+        return JalaliDate::addDays($normalized, -1);
     }
 
     private function isOpenEnded(string $until): bool
