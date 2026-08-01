@@ -14,6 +14,36 @@ const smsState = {
 
 let announcementEditor = null;
 
+const bindSmsPanelTabs = () => {
+  const root = document.getElementById("sms");
+  if (!root || root.dataset.tabsReady) return;
+  root.dataset.tabsReady = "1";
+  const tabs = root.querySelectorAll("[data-sms-tab]");
+  const panels = root.querySelectorAll("[data-sms-panel]");
+  tabs.forEach((tab) => {
+    tab.addEventListener("click", () => {
+      const id = tab.dataset.smsTab;
+      tabs.forEach((item) => {
+        const active = item === tab;
+        item.classList.toggle("is-active", active);
+        item.setAttribute("aria-selected", active ? "true" : "false");
+      });
+      panels.forEach((panel) => {
+        const active = panel.dataset.smsPanel === id;
+        panel.classList.toggle("is-active", active);
+        panel.hidden = !active;
+      });
+    });
+  });
+};
+
+const smsStatusBadge = (status) => {
+  const value = String(status || "");
+  if (value === "sent") return `<span class="badge badge-sent">ارسال شد</span>`;
+  if (value === "failed") return `<span class="badge badge-failed">ناموفق</span>`;
+  return `<span class="badge">${escapeHtml(value || "—")}</span>`;
+};
+
 const renderSmsSetupBanner = (settings = null) => {
   const host = document.getElementById("smsSetupBanner");
   if (!host) return;
@@ -33,6 +63,7 @@ const renderSmsSetupBanner = (settings = null) => {
 };
 
 window.initSmsPanel = () => {
+  bindSmsPanelTabs();
   initSmsFilters().catch((error) => showToast(error.message, "error"));
   initSmsEditors();
   loadSmsStats().catch((error) => {
@@ -106,8 +137,16 @@ const loadSmsStats = async () => {
   const stats = await fetchJson("api.php?resource=sms-stats");
   smsState.configured = Boolean(stats.sms_configured);
   renderSmsSetupBanner({ sms_configured: stats.sms_configured });
+  const statusClass = stats.sms_configured ? "sms-status-pill--ok" : "sms-status-pill--warn";
+  const statusLabel = stats.sms_configured ? "آماده ارسال" : "نیاز به تنظیمات";
   host.innerHTML = `
-    <div class="month-stats">
+    <div class="sms-page-head">
+      <div>
+        <span class="panel-subtitle">وضعیت سرویس</span>
+        <span class="sms-status-pill ${statusClass}">${statusLabel}</span>
+      </div>
+    </div>
+    <div class="month-stats sms-stats-grid">
       <div class="month-stat"><span>ارسال امروز</span><strong>${Number(stats.sent_today || 0).toLocaleString("fa-IR")}</strong></div>
       <div class="month-stat"><span>باقی‌مانده امروز</span><strong>${Number(stats.remaining_today || 0).toLocaleString("fa-IR")}</strong></div>
       <div class="month-stat"><span>ناموفق امروز</span><strong>${Number(stats.failed_today || 0).toLocaleString("fa-IR")}</strong></div>
@@ -115,7 +154,7 @@ const loadSmsStats = async () => {
       <div class="month-stat"><span>موجودی پنل</span><strong>${stats.panel_credit != null ? Number(stats.panel_credit).toLocaleString("fa-IR") : "—"}</strong></div>
       <div class="month-stat"><span>تعرفه هر پیامک</span><strong>${formatMoney(stats.unit_cost || 0)}</strong></div>
     </div>
-    ${stats.sms_configured ? "" : `<p class="hint">اتصال API هنوز کامل نیست — موجودی و تعرفه زنده بعد از تنظیمات نمایش داده می‌شود.</p>`}`;
+    ${stats.sms_configured ? "" : `<p class="hint">برای ارسال، ابتدا حساب API و خط ارسال را در تنظیمات پیامک تکمیل کنید.</p>`}`;
 };
 
 const renderSmsRecipients = () => {
@@ -283,13 +322,13 @@ const updateChargePreview = () => {
     return;
   }
   preview.innerHTML = `
-    <div class="charge-reminder-card">
+    <div class="charge-reminder-card sms-preview-card">
       <div class="charge-reminder-head">
         <strong>پیش‌نمایش پیامک</strong>
         <span class="hint">${escapeHtml(sample.team_name || "")}</span>
       </div>
-      ${humanPreview ? `<textarea readonly dir="rtl">${escapeHtml(humanPreview)}</textarea>` : ""}
-      ${sample.preview_message ? `<p class="hint" dir="ltr">الگوی API: ${escapeHtml(sample.preview_message)}</p>` : ""}
+      ${humanPreview ? `<textarea readonly dir="rtl" class="sms-pattern-preview">${escapeHtml(humanPreview)}</textarea>` : ""}
+      ${sample.preview_message ? `<p class="hint sms-api-preview" dir="ltr">API: ${escapeHtml(sample.preview_message)}</p>` : ""}
     </div>`;
 };
 
@@ -331,14 +370,12 @@ const loadSmsHistory = async () => {
     <td>${escapeHtml(formatPlain(row.created_at))}</td>
     <td>${escapeHtml(messageTypeLabel(row.message_type))}</td>
     <td>${escapeHtml(row.recipient_name || "—")}</td>
-    <td>${escapeHtml(row.phone || "—")}</td>
+    <td dir="ltr">${escapeHtml(row.phone || "—")}</td>
     <td>${escapeHtml(row.team_name || "—")}</td>
-    <td><span class="badge">${escapeHtml(row.status || "—")}</span></td>
+    <td>${smsStatusBadge(row.status)}</td>
     <td>${escapeHtml(row.delivery_status || "—")}</td>
-    <td>${Number(row.api_confirmed) === 1 ? "بله" : "خیر"}</td>
-    <td>${formatMoney(row.cost_rial || 0)}</td>
-    <td title="${escapeHtml(row.message_text || "")}">${escapeHtml((row.message_text || "").slice(0, 40))}${(row.message_text || "").length > 40 ? "…" : ""}</td>
-  </tr>`).join("") || `<tr class="empty-row"><td colspan="10">تاریخچه‌ای ثبت نشده است.</td></tr>`;
+    <td class="sms-history-message" title="${escapeHtml(row.message_text || "")}">${escapeHtml(row.message_text || "—")}</td>
+  </tr>`).join("") || `<tr class="empty-row"><td colspan="8">تاریخچه‌ای ثبت نشده است.</td></tr>`;
 };
 
 document.getElementById("smsRecipientsPager")?.addEventListener("click", (event) => {

@@ -417,28 +417,36 @@ $assetVer = (string) max(
               <div class="section-intro section-intro--green">
                 <span class="section-intro-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2Zm0 2v.5L12 13 4 6.5V6ZM4 18V8.2l7.4 6.5a1 1 0 0 0 1.2 0L20 8.2V18Z" fill="currentColor"/></svg></span>
                 <div class="section-intro-copy">
-                  <p>ارسال پیامک از طریق <strong>ملی‌پیامک</strong>. تنظیمات API در بخش <button type="button" class="text-link" data-go="sms-settings">تنظیمات پیامک</button>. مدیر مشاهده‌گر فقط آمار و تاریخچه را می‌بیند.</p>
+                  <p>ارسال پیامک از طریق <strong>ملی‌پیامک</strong>. تنظیمات API در بخش <button type="button" class="text-link" data-go="sms-settings">تنظیمات پیامک</button>.</p>
                 </div>
                 <?php if (Access::canWrite()): ?>
                 <button type="button" class="button ghost section-intro-action" data-go="sms-settings">تنظیمات پیامک</button>
                 <?php endif; ?>
               </div>
-              <article class="panel">
-                <div class="panel-head"><h2>آمار ارسال</h2></div>
+
+              <article class="panel sms-hero-panel">
                 <div id="smsStats">در حال بارگذاری…</div>
               </article>
+
+              <div class="sms-tabs" role="tablist" aria-label="بخش‌های پیامک">
+                <button type="button" class="sms-tab is-active" data-sms-tab="announce" role="tab" aria-selected="true">ارسال اطلاعیه</button>
+                <button type="button" class="sms-tab" data-sms-tab="charge" role="tab" aria-selected="false">یادآوری شارژ</button>
+                <button type="button" class="sms-tab" data-sms-tab="history" role="tab" aria-selected="false">تاریخچه</button>
+              </div>
+
+              <div class="sms-tab-panel is-active" data-sms-panel="announce" role="tabpanel">
               <article class="panel" id="smsRecipientsPanel">
                 <div class="panel-head">
-                  <h2>ارسال اطلاعیه</h2>
+                  <h2>گیرندگان و متن اطلاعیه</h2>
                   <div class="panel-head-actions sms-selection-actions">
-                    <button type="button" class="button ghost" id="smsSelectLeaders">انتخاب مسئول‌ها</button>
-                    <button type="button" class="button ghost" id="smsSelectAllPage">انتخاب صفحه</button>
-                    <button type="button" class="button ghost" id="smsClearSelection">پاک کردن انتخاب</button>
+                    <button type="button" class="button ghost" id="smsSelectLeaders">مسئول‌ها</button>
+                    <button type="button" class="button ghost" id="smsSelectAllPage">همه صفحه</button>
+                    <button type="button" class="button ghost" id="smsClearSelection">پاک کردن</button>
                   </div>
                 </div>
                 <div id="smsFilterBar"></div>
-                <p class="hint" id="smsSelectionInfo">۰ نفر انتخاب شده</p>
-                <div class="table-wrap">
+                <p class="hint sms-selection-summary" id="smsSelectionInfo">۰ نفر انتخاب شده</p>
+                <div class="table-wrap sms-recipients-table-wrap">
                   <table id="smsRecipientsTable" class="data-table">
                     <thead><tr><th></th><th>نام</th><th>نهاد</th><th>موبایل</th><th>تردد</th></tr></thead>
                     <tbody></tbody>
@@ -451,49 +459,77 @@ $assetVer = (string) max(
                     <button class="mini-button" type="button" data-sms-next>بعدی</button>
                   </div>
                 </div>
-                <div id="smsAnnouncementEditor"></div>
-                <?php if (Access::canWrite()): ?>
-                <button type="button" class="button" id="smsSendAnnouncement">ارسال به انتخاب‌شده‌ها</button>
-                <?php endif; ?>
+                <div class="sms-compose-block">
+                  <div id="smsAnnouncementEditor"></div>
+                  <?php if (Access::canWrite()): ?>
+                  <button type="button" class="button sms-primary-action" id="smsSendAnnouncement">ارسال به انتخاب‌شده‌ها</button>
+                  <?php endif; ?>
+                </div>
               </article>
+              </div>
+
+              <div class="sms-tab-panel" data-sms-panel="charge" role="tabpanel" hidden>
               <article class="panel" id="smsChargeReminderPanel">
                 <div class="panel-head">
                   <h2>یادآوری شارژ بدهکاران</h2>
                   <div class="panel-head-actions sms-selection-actions">
                     <button type="button" class="button ghost" id="smsSelectAllDebtors">انتخاب همه</button>
-                    <button type="button" class="button ghost" id="smsClearDebtorSelection">پاک کردن انتخاب</button>
+                    <button type="button" class="button ghost" id="smsClearDebtorSelection">پاک کردن</button>
                   </div>
                 </div>
-                <p class="hint">لیست نهادهای بدهکار از ماتریس شارژ خوانده می‌شود. الگوی پیامک را در <button type="button" class="text-link" data-go="sms-settings">تنظیمات پیامک</button> ذخیره کنید.</p>
+                <p class="hint">نهادهای بدهکار از ماتریس شارژ خوانده می‌شوند. الگوی پیامک در <button type="button" class="text-link" data-go="sms-settings">تنظیمات پیامک</button> قابل ویرایش است.</p>
                 <div class="charge-reminder-layout">
                   <div>
-                    <p class="hint" id="smsDebtorSelectionInfo">۰ نهاد انتخاب شده</p>
+                    <p class="hint sms-selection-summary" id="smsDebtorSelectionInfo">۰ نهاد انتخاب شده</p>
                     <div class="charge-debtor-list" id="smsChargeDebtorList">در حال بارگذاری…</div>
                   </div>
-                  <div>
+                  <div class="sms-compose-block">
                     <div id="smsChargePreview"></div>
                     <?php if (Access::canWrite()): ?>
-                    <button type="button" class="button" id="smsSendChargeReminders">ارسال یادآوری به انتخاب‌شده‌ها</button>
+                    <button type="button" class="button sms-primary-action" id="smsSendChargeReminders">ارسال یادآوری</button>
                     <?php endif; ?>
                   </div>
                 </div>
               </article>
+              </div>
+
+              <div class="sms-tab-panel" data-sms-panel="history" role="tabpanel" hidden>
               <article class="panel">
-                <div class="panel-head"><h2>تاریخچه پیامک‌ها</h2></div>
+                <div class="panel-head"><h2>تاریخچه ارسال</h2></div>
                 <div class="table-wrap table-scroll">
-                  <table id="smsHistoryTable" class="data-table data-table--wide">
-                    <thead><tr><th>زمان</th><th>نوع</th><th>گیرنده</th><th>موبایل</th><th>نهاد</th><th>وضعیت</th><th>دلیوری</th><th>پذیرش API</th><th>هزینه</th><th>متن</th></tr></thead>
+                  <table id="smsHistoryTable" class="data-table data-table--wide sms-history-table">
+                    <thead><tr><th>زمان</th><th>نوع</th><th>گیرنده</th><th>موبایل</th><th>نهاد</th><th>وضعیت</th><th>دلیوری</th><th>متن</th></tr></thead>
                     <tbody></tbody>
                   </table>
                 </div>
               </article>
+              </div>
             </section>
 
             <section id="sms-settings" class="section">
               <div class="section-intro section-intro--green">
                 <span class="section-intro-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 8a1 1 0 0 1 1 1v3h3a1 1 0 1 1 0 2h-4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Zm8-3H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Z" fill="currentColor"/></svg></span>
-                <div class="section-intro-copy"><p>اتصال REST ملی‌پیامک. حساب API و شماره خط ارسال را جداگانه وارد و ذخیره کنید.</p></div>
+                <div class="section-intro-copy"><p>اتصال REST ملی‌پیامک، خط ارسال، و کدهای الگوی تأییدشده در پنل.</p></div>
               </div>
+
+              <article class="panel sms-hero-panel">
+                <div id="smsSettingsStats">در حال بارگذاری…</div>
+                <div class="panel-actions sms-settings-actions">
+                  <?php if (Access::canWrite()): ?>
+                  <button class="button ghost" type="button" id="smsTestConnection">تست اتصال</button>
+                  <button class="button ghost" type="button" id="smsRefreshLiveStats">بروزرسانی موجودی</button>
+                  <button class="button ghost" type="button" id="smsSyncHistory">همگام‌سازی تاریخچه</button>
+                  <?php endif; ?>
+                </div>
+              </article>
+
+              <div class="sms-tabs" role="tablist" aria-label="بخش‌های تنظیمات پیامک">
+                <button type="button" class="sms-tab is-active" data-sms-settings-tab="connection" role="tab" aria-selected="true">اتصال</button>
+                <button type="button" class="sms-tab" data-sms-settings-tab="templates" role="tab" aria-selected="false">الگوهای سیستم</button>
+                <button type="button" class="sms-tab" data-sms-settings-tab="patterns" role="tab" aria-selected="false">کدهای پنل</button>
+              </div>
+
+              <div class="sms-tab-panel is-active" data-sms-settings-panel="connection" role="tabpanel">
               <article class="panel">
                 <div class="panel-head"><h2>حساب API ملی‌پیامک</h2></div>
                 <form id="smsCredentialsForm" class="payment-settings-form">در حال بارگذاری…</form>
@@ -502,6 +538,9 @@ $assetVer = (string) max(
                 <div class="panel-head"><h2>خط ارسال و محدودیت روزانه</h2></div>
                 <form id="smsLineForm" class="payment-settings-form">در حال بارگذاری…</form>
               </article>
+              </div>
+
+              <div class="sms-tab-panel" data-sms-settings-panel="templates" role="tabpanel" hidden>
               <article class="panel">
                 <div class="panel-head"><h2>الگوی یادآوری شارژ</h2></div>
                 <div id="smsChargeTemplateEditor"></div>
@@ -515,32 +554,25 @@ $assetVer = (string) max(
               </article>
               <article class="panel">
                 <div class="panel-head"><h2>پیامک‌های خودکار گردش‌کار</h2></div>
-                <p class="hint">با تأیید/رد رزرو اتاق یا درخواست عضو، پیامک به‌صورت خودکار ارسال می‌شود. برای غیرفعال‌کردن هر مورد، متن آن را خالی بگذارید.</p>
-                <div id="smsWorkflowTemplatesEditor" class="charge-reminder-list"></div>
+                <p class="hint">با تأیید/رد رزرو یا عضو، پیامک ارسال می‌شود. برای غیرفعال‌کردن، متن را خالی بگذارید.</p>
+                <div id="smsWorkflowTemplatesEditor" class="charge-reminder-list sms-workflow-grid"></div>
                 <form id="smsWorkflowTemplatesForm" class="payment-settings-form">
                   <div class="panel-actions">
                     <?php if (Access::canWrite()): ?>
-                    <button class="button" type="submit">ذخیره پیامک‌های گردش‌کار</button>
+                    <button class="button" type="submit">ذخیره گردش‌کار</button>
                     <?php endif; ?>
                   </div>
                 </form>
               </article>
+              </div>
+
+              <div class="sms-tab-panel" data-sms-settings-panel="patterns" role="tabpanel" hidden>
               <article class="panel">
-                <div class="panel-head"><h2>راهنمای ثبت الگو در ملی‌پیامک</h2></div>
-                <p class="hint">متن‌های زیر را در پنل ملی‌پیامک ثبت کنید. پس از دریافت کد تأییدشده، در الگوهای سیستم جایگزین کنید.</p>
-                <div id="smsPatternGuide">در حال بارگذاری…</div>
+                <div class="panel-head"><h2>کدهای الگو (bodyId) ملی‌پیامک</h2></div>
+                <p class="hint">پس از تأیید هر الگو در پنل ملی‌پیامک، کد آن را اینجا ذخیره کنید. «الگوی فعال ارسال» همان چیزی است که سیستم به API می‌فرستد.</p>
+                <div id="smsPatternGuide" class="sms-pattern-grid">در حال بارگذاری…</div>
               </article>
-              <article class="panel">
-                <div class="panel-head"><h2>آمار و همگام‌سازی</h2></div>
-                <div id="smsSettingsStats">در حال بارگذاری…</div>
-                <div class="panel-actions">
-                  <?php if (Access::canWrite()): ?>
-                  <button class="button ghost" type="button" id="smsTestConnection">تست اتصال API</button>
-                  <button class="button ghost" type="button" id="smsRefreshLiveStats">بروزرسانی موجودی و تعرفه از API</button>
-                  <button class="button ghost" type="button" id="smsSyncHistory">همگام‌سازی تاریخچه از API</button>
-                  <?php endif; ?>
-                </div>
-              </article>
+              </div>
             </section>
 
             <section id="desks" class="section">

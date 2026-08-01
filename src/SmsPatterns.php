@@ -34,7 +34,7 @@ final class SmsPatterns
                 'workflow_key' => null,
             ],
             'room_pending' => [
-                'body_id' => 287102,
+                'body_id' => 507317,
                 'title' => 'رزرو اتاق — ثبت درخواست',
                 'panel_text' => '{0} گرامی؛ درخواست رزرو اتاق {1} برای تاریخ {2} از ساعت {3} تا {4} ثبت شد. کد پیگیری شما {5} است.',
                 'variables' => ['booker_name', 'room_name', 'reserved_date', 'start_time', 'end_time', 'public_token'],

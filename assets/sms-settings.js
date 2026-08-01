@@ -5,6 +5,29 @@ let smsSettingsReady = false;
 let chargeTemplateEditor = null;
 const workflowTemplateEditors = {};
 
+const bindSmsSettingsTabs = () => {
+  const root = document.getElementById("sms-settings");
+  if (!root || root.dataset.tabsReady) return;
+  root.dataset.tabsReady = "1";
+  const tabs = root.querySelectorAll("[data-sms-settings-tab]");
+  const panels = root.querySelectorAll("[data-sms-settings-panel]");
+  tabs.forEach((tab) => {
+    tab.addEventListener("click", () => {
+      const id = tab.dataset.smsSettingsTab;
+      tabs.forEach((item) => {
+        const active = item === tab;
+        item.classList.toggle("is-active", active);
+        item.setAttribute("aria-selected", active ? "true" : "false");
+      });
+      panels.forEach((panel) => {
+        const active = panel.dataset.smsSettingsPanel === id;
+        panel.classList.toggle("is-active", active);
+        panel.hidden = !active;
+      });
+    });
+  });
+};
+
 const loadSmsSettingsPage = async (withLive = false) => {
   const data = await fetchJson(`api.php?resource=sms-settings${withLive ? "&live=1" : ""}`);
   smsSettingsState = data;
@@ -140,23 +163,25 @@ const renderSmsPatternGuide = async () => {
     host.innerHTML = `
       ${notes ? `<ul class="hint sms-pattern-notes">${notes}</ul>` : ""}
       ${(data.patterns || []).map((row) => `
-      <div class="charge-reminder-card" data-pattern-key="${escapeHtml(row.pattern_key || "")}">
+      <div class="charge-reminder-card sms-pattern-card ${row.is_placeholder ? "sms-pattern-card--placeholder" : "sms-pattern-card--configured"}" data-pattern-key="${escapeHtml(row.pattern_key || "")}">
         <div class="charge-reminder-head">
           <strong>${escapeHtml(row.title || row.pattern_key || "")}</strong>
-          ${row.is_placeholder ? `<span class="hint">کد پیش‌فرض — نیاز به ثبت در پنل</span>` : ""}
+          <span class="sms-status-pill ${row.is_placeholder ? "sms-status-pill--warn" : "sms-status-pill--ok"}">${row.is_placeholder ? "نیاز به کد پنل" : "پیکربندی شده"}</span>
         </div>
-        <p class="hint">متغیرهای سیستم: ${escapeHtml((row.variables || []).join("، "))}</p>
-        ${canWrite ? `<label class="crud-grid"><span>کد الگو در پنل ملی‌پیامک (bodyId)</span>
+        <p class="hint">متغیرها: ${escapeHtml((row.variables || []).join("، "))}</p>
+        ${canWrite ? `<label class="crud-grid"><span>کد الگو (bodyId)</span>
           <input type="number" min="1" step="1" data-pattern-body-id value="${escapeHtml(String(row.body_id || ""))}" dir="ltr" />
         </label>
         <div class="panel-actions">
-          <button type="button" class="button ghost" data-save-pattern-body-id>ذخیره کد الگو</button>
+          <button type="button" class="button" data-save-pattern-body-id>ذخیره کد</button>
         </div>` : `<p class="hint" dir="ltr">bodyId: ${escapeHtml(String(row.body_id || ""))}</p>`}
-        <p class="hint">متن ثبت در پنل ملی‌پیامک:</p>
-        <textarea readonly rows="3" dir="rtl">${escapeHtml(row.panel_text || "")}</textarea>
-        <p class="hint">پیش‌نمایش پیامک (نمونه):</p>
-        <textarea readonly rows="3" dir="rtl" class="sms-pattern-preview">${escapeHtml(row.panel_preview || "")}</textarea>
-        <p class="hint" dir="ltr">الگوی فعال ارسال: ${escapeHtml(row.active_template || row.system_template || "")}</p>
+        <details class="sms-pattern-details">
+          <summary>متن ثبت در پنل و پیش‌نمایش</summary>
+          <textarea readonly rows="3" dir="rtl">${escapeHtml(row.panel_text || "")}</textarea>
+          <p class="hint">پیش‌نمایش نمونه:</p>
+          <textarea readonly rows="2" dir="rtl" class="sms-pattern-preview">${escapeHtml(row.panel_preview || "")}</textarea>
+        </details>
+        <p class="hint sms-api-preview" dir="ltr">ارسال: ${escapeHtml(row.active_template || row.system_template || "")}</p>
       </div>`).join("") || `<div class="empty">الگویی ثبت نشده است.</div>`}`;
 
     host.querySelectorAll("[data-save-pattern-body-id]").forEach((button) => {
@@ -228,12 +253,19 @@ const renderSmsSettingsStats = (data) => {
   if (!host) return;
   const price = Number(data.sms_base_price ?? data.sms_unit_cost ?? 0);
   host.innerHTML = `
+    <div class="sms-page-head">
+      <div>
+        <span class="panel-subtitle">وضعیت اتصال</span>
+        <span class="sms-status-pill ${data.sms_configured ? "sms-status-pill--ok" : "sms-status-pill--warn"}">${data.sms_configured ? "آماده ارسال" : "ناقص"}</span>
+      </div>
+    </div>
     <div class="month-stats">
-      <div class="month-stat"><span>وضعیت اتصال</span><strong>${data.sms_configured ? "آماده ارسال" : "ناقص"}</strong></div>
       <div class="month-stat"><span>موجودی پنل</span><strong>${formatCredit(data.sms_credit)}</strong></div>
       <div class="month-stat"><span>تعرفه پایه</span><strong>${price > 0 ? formatMoney(price) : "—"}</strong></div>
-      <div class="month-stat"><span>آخرین بروزرسانی زنده</span><strong>${escapeHtml(data.sms_live_synced_at || "—")}</strong></div>
-      <div class="month-stat"><span>آخرین همگام‌سازی تاریخچه</span><strong>${escapeHtml(data.sms_history_synced_at || "—")}</strong></div>
+      <div class="month-stat"><span>خط ارسال</span><strong dir="ltr">${escapeHtml(data.sms_from_number || "—")}</strong></div>
+      <div class="month-stat"><span>سقف روزانه</span><strong>${Number(data.sms_daily_limit || 0).toLocaleString("fa-IR")}</strong></div>
+      <div class="month-stat"><span>بروزرسانی زنده</span><strong>${escapeHtml(data.sms_live_synced_at || "—")}</strong></div>
+      <div class="month-stat"><span>همگام‌سازی تاریخچه</span><strong>${escapeHtml(data.sms_history_synced_at || "—")}</strong></div>
     </div>`;
 };
 
@@ -288,6 +320,7 @@ const bindSmsSettingsActions = () => {
 };
 
 window.initSmsSettingsPanel = () => {
+  bindSmsSettingsTabs();
   bindSmsSettingsActions();
   loadSmsSettingsPage().catch((error) => showToast(error.message, "error"));
 };

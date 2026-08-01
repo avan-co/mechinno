@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 final class Schema
 {
-    public const VERSION = 19;
+    public const VERSION = 20;
 
     public static function migrate(PDO $pdo): void
     {
@@ -14,6 +14,7 @@ final class Schema
             self::ensureRoomClosedDaysTable($pdo);
             self::reconcileDeskAssignments($pdo);
             self::seedSmsPatterns($pdo);
+            self::applyKnownPatternBodyIds($pdo);
 
             return;
         }
@@ -39,6 +40,7 @@ final class Schema
         self::reconcileDeskAssignments($pdo);
         self::applySecurityHardening($pdo);
         self::seedSmsPatterns($pdo);
+        self::applyKnownPatternBodyIds($pdo);
         self::setVersion($pdo, self::VERSION);
     }
 
@@ -1488,6 +1490,72 @@ final class Schema
             'workflow' => json_encode($workflowTemplates, JSON_UNESCAPED_UNICODE),
             'updated' => $today,
         ]);
+    }
+
+    private static function applyKnownPatternBodyIds(PDO $pdo): void
+    {
+        if (!self::tableExists($pdo, 'sms_patterns') || !self::tableExists($pdo, 'center_settings')) {
+            return;
+        }
+
+        /** @var array<string, int> $known */
+        $known = [
+            'room_pending' => 507317,
+        ];
+
+        $today = JalaliDate::todayParts()['formatted'];
+        foreach ($known as $patternKey => $bodyId) {
+            if (!isset(SmsPatterns::definitions()[$patternKey])) {
+                continue;
+            }
+            $statement = $pdo->prepare('SELECT body_id FROM sms_patterns WHERE pattern_key = :pattern_key LIMIT 1');
+            $statement->execute(['pattern_key' => $patternKey]);
+            $current = (int) ($statement->fetchColumn() ?: 0);
+            if ($current > 0 && !SmsPatterns::isPlaceholderBodyId($current)) {
+                continue;
+            }
+
+            $systemTemplate = SmsPatterns::systemTemplate($patternKey, $bodyId);
+            $pdo->prepare(
+                'UPDATE sms_patterns SET body_id = :body_id, system_template = :system_template, updated_at = :updated_at
+                 WHERE pattern_key = :pattern_key'
+            )->execute([
+                'pattern_key' => $patternKey,
+                'body_id' => $bodyId,
+                'system_template' => $systemTemplate,
+                'updated_at' => $today,
+            ]);
+
+            $workflowKey = SmsPatterns::definitions()[$patternKey]['workflow_key'] ?? null;
+            if ($workflowKey === null) {
+                continue;
+            }
+
+            try {
+                $row = $pdo->query('SELECT sms_workflow_templates FROM center_settings WHERE id = 1')->fetch();
+            } catch (PDOException) {
+                return;
+            }
+            if ($row === false) {
+                return;
+            }
+
+            $workflowJson = trim((string) ($row['sms_workflow_templates'] ?? ''));
+            $workflow = $workflowJson !== '' ? json_decode($workflowJson, true) : [];
+            if (!is_array($workflow)) {
+                $workflow = [];
+            }
+            $currentTemplate = trim((string) ($workflow[$workflowKey] ?? ''));
+            if ($currentTemplate !== '' && !SmsPatterns::templateUsesPlaceholder($currentTemplate)) {
+                continue;
+            }
+            $workflow[$workflowKey] = $systemTemplate;
+            $pdo->prepare('UPDATE center_settings SET sms_workflow_templates = :workflow, sms_updated_at = :updated WHERE id = 1')
+                ->execute([
+                    'workflow' => json_encode($workflow, JSON_UNESCAPED_UNICODE),
+                    'updated' => $today,
+                ]);
+        }
     }
 
     private static function ensureSmsLogColumns(PDO $pdo): void
