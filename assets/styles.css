@@ -1749,6 +1749,16 @@ textarea[dir="ltr"] {
   background: color-mix(in srgb, var(--amber) 10%, transparent);
 }
 .reject-hint { color: var(--danger); }
+.viewer-banner {
+  margin: 0;
+  padding: 0.55rem 1rem;
+  background: color-mix(in srgb, var(--amber) 16%, var(--surface));
+  color: var(--text);
+  border-bottom: 1px solid color-mix(in srgb, var(--amber) 35%, transparent);
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-align: center;
+}
 .review-list-host { min-height: 2.5rem; }
 .review-list-actions {
   display: flex;

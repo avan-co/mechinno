@@ -354,6 +354,34 @@ $assert(
     count(array_filter($actionLabels, static fn (string $label): bool => str_contains($label, 'قرارداد در انتظار'))) === 1,
     'dashboard action item includes pending contracts'
 );
+$assert((int) ($summaryAdmin['cards']['pending_contracts'] ?? 0) >= 1, 'summary cards include pending contracts');
+
+// Conditional payment approval cannot revive a rejected deposit.
+$pdo->prepare(
+    "INSERT INTO transactions (tx_date, description, amount, category, team_id, fiscal_year, month_index, payment_status, confirmed, source_file)
+     VALUES ('1405/01/15', 'واریز تست رقابت', 1000, 'واریز تیم', 1, '1405', 1, 'pending', 0, 'manual')"
+)->execute();
+$paymentId = (int) $pdo->lastInsertId();
+$workflow = new Workflow($pdo);
+$workflow->rejectPayment($paymentId, 'اشتباه');
+$reviveBlocked = false;
+try {
+    $workflow->approvePayment($paymentId);
+} catch (InvalidArgumentException) {
+    $reviveBlocked = true;
+}
+$assert($reviveBlocked, 'rejected payment cannot be approved via race');
+
+// Removing desks must not wipe historical system charges for the year.
+$pdo->exec('UPDATE desks SET team_id = NULL WHERE team_id = 1');
+$pdo->prepare('DELETE FROM desk_assignments WHERE team_id = 1')->execute();
+$beforeWipe = (int) $pdo->query("SELECT COUNT(*) FROM charges WHERE team_id = 1 AND fiscal_year = '1405' AND source_file = 'system'")->fetchColumn();
+(new Seeder($pdo))->recalculateChargesForTeam(1, '1405', true);
+$afterWipe = (int) $pdo->query("SELECT COUNT(*) FROM charges WHERE team_id = 1 AND fiscal_year = '1405' AND source_file = 'system'")->fetchColumn();
+$assert($beforeWipe === $afterWipe, 'recalc without desk preserves historical system charges');
+
+$token = RoomReservations::normalizePublicToken('mn-1234567890');
+$assert($token === 'MN-1234567890', 'public room token normalizes 10-digit codes');
 
 $_SESSION['mechinno_role'] = Access::ROLE_TEAM;
 $_SESSION['mechinno_team_id'] = 1;

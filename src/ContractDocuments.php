@@ -339,8 +339,8 @@ final class ContractDocuments
             throw new InvalidArgumentException('تاریخ پایان نباید قبل از شروع باشد.');
         }
         $amount = (int) preg_replace('/\D+/', '', (string) ($payload['formal_contract_amount'] ?? '0'));
-        if ($amount < 0) {
-            throw new InvalidArgumentException('مبلغ قرارداد نامعتبر است.');
+        if ($amount <= 0) {
+            throw new InvalidArgumentException('مبلغ قرارداد باید بیشتر از صفر باشد.');
         }
 
         $chargeOverride = $this->nullableMoney($payload['charge_rate_override'] ?? null);
@@ -513,11 +513,15 @@ final class ContractDocuments
         try {
             $now = date('c');
             // Mark proposal approved before creating the official row so create-time sync is a no-op.
-            $this->pdo->prepare(
+            $proposalUpdate = $this->pdo->prepare(
                 "UPDATE team_contract_proposals
                  SET status = 'approved', rejection_reason = NULL, reviewed_at = :reviewed_at, updated_at = :updated_at
-                 WHERE id = :id"
-            )->execute(['reviewed_at' => $now, 'updated_at' => $now, 'id' => $proposalId]);
+                 WHERE id = :id AND status = 'pending'"
+            );
+            $proposalUpdate->execute(['reviewed_at' => $now, 'updated_at' => $now, 'id' => $proposalId]);
+            if ($proposalUpdate->rowCount() < 1) {
+                throw new InvalidArgumentException('فقط پیشنهاد در انتظار قابل تأیید است.');
+            }
 
             $this->pdo->prepare(
                 "UPDATE team_contract_files
@@ -566,16 +570,20 @@ final class ContractDocuments
         $now = date('c');
         $teamId = (int) $row['team_id'];
         $fiscalYear = (string) $row['fiscal_year'];
-        $this->pdo->prepare(
+        $statement = $this->pdo->prepare(
             "UPDATE team_contract_proposals
              SET status = 'rejected', rejection_reason = :reason, reviewed_at = :reviewed_at, updated_at = :updated_at
-             WHERE id = :id"
-        )->execute([
+             WHERE id = :id AND status = 'pending'"
+        );
+        $statement->execute([
             'reason' => $reason,
             'reviewed_at' => $now,
             'updated_at' => $now,
             'id' => $proposalId,
         ]);
+        if ($statement->rowCount() < 1) {
+            throw new InvalidArgumentException('فقط پیشنهاد در انتظار قابل رد است.');
+        }
 
         $this->pdo->prepare(
             "UPDATE team_contract_files

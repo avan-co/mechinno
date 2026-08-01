@@ -214,6 +214,8 @@ const cardNavMap = {
   expense_year: "transactions",
   expense_month: "transactions",
   debt_total: "charges",
+  charge_total: "charges",
+  paid_total: "transactions",
   pending_members: "members",
   pending_payments: "transactions",
   pending_locker_requests: "lockers",
@@ -256,8 +258,8 @@ const adminCardConfig = [
 const teamCardConfig = [
   ["members", "اعضای فعال", statIconSvg.members, "members"],
   ["desks", "میز", statIconSvg.desks, "desks"],
-  ["charge_total", "مبلغ کل قرارداد", statIconSvg.charges, "charge"],
-  ["debt_total", "مانده بدهی قرارداد", statIconSvg.debt, "debt"],
+  ["charge_total", "جمع شارژ", statIconSvg.charges, "charge"],
+  ["debt_total", "مانده بدهی", statIconSvg.debt, "debt"],
   ["paid_total", "پرداخت‌شده", statIconSvg.paid, "paid"],
   ["pending_payments", "واریزهای در انتظار تأیید", statIconSvg.payments, "payments"],
 ];
@@ -1252,7 +1254,12 @@ document.addEventListener("click", (event) => {
 });
 
 const resolveCardSection = (key) => {
-  if (panelMode === "team" && key === "pending_payments") return "payments";
+  if (panelMode === "team") {
+    if (key === "pending_payments" || key === "paid_total") return "payments";
+    if (key === "charge_total" || key === "debt_total") return "charges";
+    if (key === "desks") return "desks";
+    if (key === "members") return "members";
+  }
   return cardNavMap[key] || "members";
 };
 
@@ -1360,7 +1367,12 @@ const renderDashboardHero = (cards = {}, team = null) => {
     if (subtitleEl) subtitleEl.textContent = "اعضا، میز و وضعیت شارژ";
   } else {
     titleEl.textContent = greeting;
-    const pending = Number(cards?.pending_payments || 0) + Number(cards?.pending_members || 0);
+    const pending = Number(cards?.pending_payments || 0)
+      + Number(cards?.pending_members || 0)
+      + Number(cards?.pending_contracts || 0)
+      + Number(cards?.pending_performance || 0)
+      + Number(cards?.pending_rooms || 0)
+      + Number(cards?.pending_locker_requests || 0);
     if (subtitleEl) {
       subtitleEl.textContent = pending > 0
         ? `${formatNumber(pending)} مورد در انتظار رسیدگی`
@@ -2729,8 +2741,12 @@ const loadTeamChargeRates = async () => {
     const rates = profile.current_year_rates || {};
     const year = rates.fiscal_year || window.MECHINNO?.fiscalYear || "—";
     const contract = (profile.contracts || []).find((row) => String(row.fiscal_year) === String(year));
-    const chargeRate = contract?.charge_rate_override || rates.charge_rate || 0;
-    const rentRate = contract?.informal_rent_rate_override || rates.informal_rent_rate || 0;
+    const chargeRate = contract?.charge_rate_override != null && contract?.charge_rate_override !== ""
+      ? Number(contract.charge_rate_override)
+      : Number(rates.charge_rate || 0);
+    const rentRate = contract?.informal_rent_rate_override != null && contract?.informal_rent_rate_override !== ""
+      ? Number(contract.informal_rent_rate_override)
+      : Number(rates.informal_rent_rate || 0);
     const billing = profile.billing_summaries?.[year];
     host.innerHTML = `
       <div class="team-charge-rates-grid">

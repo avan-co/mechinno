@@ -278,11 +278,15 @@ final class PerformanceReports
             throw new InvalidArgumentException('فقط گزارش در انتظار قابل تأیید است.');
         }
         $now = date('c');
-        $this->pdo->prepare(
+        $statement = $this->pdo->prepare(
             "UPDATE team_performance_reports
              SET status = 'approved', rejection_reason = NULL, reviewed_at = :reviewed_at, updated_at = :updated_at
-             WHERE id = :id"
-        )->execute(['reviewed_at' => $now, 'updated_at' => $now, 'id' => $id]);
+             WHERE id = :id AND status = 'pending'"
+        );
+        $statement->execute(['reviewed_at' => $now, 'updated_at' => $now, 'id' => $id]);
+        if ($statement->rowCount() < 1) {
+            throw new InvalidArgumentException('فقط گزارش در انتظار قابل تأیید است.');
+        }
 
         return $this->present($this->reportById($id));
     }
@@ -305,16 +309,20 @@ final class PerformanceReports
             throw new InvalidArgumentException('فقط گزارش در انتظار قابل رد است.');
         }
         $now = date('c');
-        $this->pdo->prepare(
+        $statement = $this->pdo->prepare(
             "UPDATE team_performance_reports
              SET status = 'rejected', rejection_reason = :reason, reviewed_at = :reviewed_at, updated_at = :updated_at
-             WHERE id = :id"
-        )->execute([
+             WHERE id = :id AND status = 'pending'"
+        );
+        $statement->execute([
             'reason' => $reason,
             'reviewed_at' => $now,
             'updated_at' => $now,
             'id' => $id,
         ]);
+        if ($statement->rowCount() < 1) {
+            throw new InvalidArgumentException('فقط گزارش در انتظار قابل رد است.');
+        }
 
         return $this->present($this->reportById($id));
     }

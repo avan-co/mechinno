@@ -18,13 +18,22 @@ final class Workflow
         $today = JalaliDate::todayParts()['formatted'];
         $code = trim($accessCode);
         if ($code !== '') {
-            $this->pdo->prepare(
-                "UPDATE members SET approval_status = 'approved', access_code = :access_code, reviewed_at = :reviewed_at, rejection_reason = NULL WHERE id = :id"
-            )->execute(['access_code' => $code, 'reviewed_at' => $today, 'id' => $id]);
+            $statement = $this->pdo->prepare(
+                "UPDATE members
+                 SET approval_status = 'approved', access_code = :access_code, reviewed_at = :reviewed_at, rejection_reason = NULL
+                 WHERE id = :id AND approval_status = 'pending'"
+            );
+            $statement->execute(['access_code' => $code, 'reviewed_at' => $today, 'id' => $id]);
         } else {
-            $this->pdo->prepare(
-                "UPDATE members SET approval_status = 'approved', reviewed_at = :reviewed_at, rejection_reason = NULL WHERE id = :id"
-            )->execute(['reviewed_at' => $today, 'id' => $id]);
+            $statement = $this->pdo->prepare(
+                "UPDATE members
+                 SET approval_status = 'approved', reviewed_at = :reviewed_at, rejection_reason = NULL
+                 WHERE id = :id AND approval_status = 'pending'"
+            );
+            $statement->execute(['reviewed_at' => $today, 'id' => $id]);
+        }
+        if ($statement->rowCount() < 1) {
+            throw new InvalidArgumentException('این عضو در انتظار تأیید نیست.');
         }
 
         return $this->notifyMemberAndReturn($id, 'approved', $accessCode);
@@ -38,13 +47,19 @@ final class Workflow
         }
 
         $today = JalaliDate::todayParts()['formatted'];
-        $this->pdo->prepare(
-            "UPDATE members SET approval_status = 'rejected', reviewed_at = :reviewed_at, rejection_reason = :reason WHERE id = :id"
-        )->execute([
+        $statement = $this->pdo->prepare(
+            "UPDATE members
+             SET approval_status = 'rejected', reviewed_at = :reviewed_at, rejection_reason = :reason
+             WHERE id = :id AND approval_status = 'pending'"
+        );
+        $statement->execute([
             'reviewed_at' => $today,
             'reason' => $reason !== '' ? $reason : null,
             'id' => $id,
         ]);
+        if ($statement->rowCount() < 1) {
+            throw new InvalidArgumentException('این عضو در انتظار تأیید نیست.');
+        }
 
         return $this->notifyMemberAndReturn($id, 'rejected');
     }
@@ -72,9 +87,15 @@ final class Workflow
         }
 
         $today = JalaliDate::todayParts()['formatted'];
-        $this->pdo->prepare(
-            "UPDATE transactions SET payment_status = 'approved', confirmed = 1, reviewed_at = :reviewed_at WHERE id = :id"
-        )->execute(['reviewed_at' => $today, 'id' => $id]);
+        $statement = $this->pdo->prepare(
+            "UPDATE transactions
+             SET payment_status = 'approved', confirmed = 1, reviewed_at = :reviewed_at
+             WHERE id = :id AND category = 'واریز تیم' AND payment_status = 'pending'"
+        );
+        $statement->execute(['reviewed_at' => $today, 'id' => $id]);
+        if ($statement->rowCount() < 1) {
+            throw new InvalidArgumentException('این واریز در انتظار تأیید نیست.');
+        }
 
         return $this->fetchTransaction($id);
     }
@@ -98,9 +119,15 @@ final class Workflow
             $note = $existing !== '' ? $existing : null;
         }
 
-        $this->pdo->prepare(
-            "UPDATE transactions SET payment_status = 'rejected', confirmed = 0, notes = :notes, reviewed_at = :reviewed_at WHERE id = :id"
-        )->execute(['notes' => $note, 'reviewed_at' => $today, 'id' => $id]);
+        $statement = $this->pdo->prepare(
+            "UPDATE transactions
+             SET payment_status = 'rejected', confirmed = 0, notes = :notes, reviewed_at = :reviewed_at
+             WHERE id = :id AND category = 'واریز تیم' AND payment_status = 'pending'"
+        );
+        $statement->execute(['notes' => $note, 'reviewed_at' => $today, 'id' => $id]);
+        if ($statement->rowCount() < 1) {
+            throw new InvalidArgumentException('این واریز در انتظار تأیید نیست.');
+        }
 
         return $this->fetchTransaction($id);
     }

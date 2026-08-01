@@ -35,6 +35,16 @@ final class Repository
                 'expense_month' => $this->expenseForPeriod($this->currentFiscalYear(), $this->currentMonthIndex()),
                 'pending_payments' => $this->scalar("SELECT COUNT(*) FROM transactions WHERE category = 'واریز تیم' AND payment_status = 'pending'"),
                 'pending_members' => $this->scalar("SELECT COUNT(*) FROM members WHERE approval_status = 'pending'"),
+                'pending_locker_requests' => $this->scalar("SELECT COUNT(*) FROM locker_requests WHERE status = 'pending'"),
+                'pending_contracts' => Schema::tableExists($this->pdo, 'team_contract_proposals')
+                    ? $this->scalar("SELECT COUNT(*) FROM team_contract_proposals WHERE status = 'pending'")
+                    : 0,
+                'pending_performance' => Schema::tableExists($this->pdo, 'team_performance_reports')
+                    ? $this->scalar("SELECT COUNT(*) FROM team_performance_reports WHERE status = 'pending'")
+                    : 0,
+                'pending_rooms' => Schema::tableExists($this->pdo, 'room_reservations')
+                    ? $this->scalar("SELECT COUNT(*) FROM room_reservations WHERE status = 'pending'")
+                    : 0,
                 'desks_occupied' => $desksOccupied,
                 'desks_total' => $desksTotal,
                 'available_lockers' => $this->scalar("SELECT COUNT(*) FROM lockers WHERE status = 'خالی'"),

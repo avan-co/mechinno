@@ -70,6 +70,17 @@ $paymentStatusLabels = [
     'pending' => 'در انتظار',
     'rejected' => 'رد‌شده',
 ];
+$maskNationalId = static function (mixed $value): string {
+    $id = preg_replace('/\D+/', '', (string) $value) ?? '';
+    if ($id === '') {
+        return '—';
+    }
+    if (strlen($id) < 6) {
+        return str_repeat('•', strlen($id));
+    }
+
+    return substr($id, 0, 3) . str_repeat('•', max(0, strlen($id) - 6)) . substr($id, -3);
+};
 ?>
 <!DOCTYPE html>
 <html lang="fa" dir="rtl">
@@ -199,7 +210,7 @@ $paymentStatusLabels = [
                 <td><?= e((string) ($row['member_code'] ?? '—')) ?></td>
                 <td><?= e((string) ($row['full_name'] ?? '—')) ?></td>
                 <td><?= e((string) ($row['phone'] ?? '—')) ?></td>
-                <td><?= e((string) ($row['national_id'] ?? '—')) ?></td>
+                <td><?= e($maskNationalId($row['national_id'] ?? '')) ?></td>
                 <td><?= e($approvalLabels[(string) ($row['approval_status'] ?? '')] ?? (string) ($row['approval_status'] ?? '—')) ?></td>
               </tr>
             <?php endforeach; ?>

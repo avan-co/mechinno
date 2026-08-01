@@ -26,9 +26,14 @@ try {
             exit;
         })(),
     };
-} catch (Throwable $error) {
+} catch (InvalidArgumentException $error) {
     http_response_code(400);
     header('Content-Type: text/plain; charset=utf-8');
     echo $error->getMessage();
+    exit;
+} catch (Throwable $error) {
+    http_response_code(400);
+    header('Content-Type: text/plain; charset=utf-8');
+    echo safe_error_message($error);
     exit;
 }

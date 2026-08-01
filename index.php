@@ -260,6 +260,9 @@ $assetVer = (string) max(
         </aside>
 
         <div class="main-wrap">
+          <?php if (Access::isAdmin() && !Access::canWrite()): ?>
+          <div class="viewer-banner" role="status">حالت مشاهده‌گر — فقط خواندن. تأیید، ویرایش و حذف برای مدیر ویرایشگر است.</div>
+          <?php endif; ?>
           <header class="topbar">
             <div class="topbar-start">
               <button class="menu-toggle" id="menuToggle" type="button" aria-label="منو">
@@ -629,7 +632,7 @@ $assetVer = (string) max(
             <section id="desks" class="section">
               <div class="section-intro section-intro--orange">
                 <span class="section-intro-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 5h16a1 1 0 0 1 1 1v3H3V6a1 1 0 0 1 1-1Zm17 6v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-8h18ZM8 17h2v-3H8v3Zm6 0h2v-3h-2v3Z" fill="currentColor"/></svg></span>
-                <div class="section-intro-copy"><p>نقشه ۲۴ میز سال جاری — <?php if (Access::canWrite()): ?>روی هر میز کلیک کنید تا تخصیص را ویرایش کنید.<?php else: ?>میزها به نهاد تخصیص می‌یابند.<?php endif; ?></p></div>
+                <div class="section-intro-copy"><p>نقشه ۲۴ میز سال جاری — وضعیت اشغال و تخصیص نهادها.</p></div>
               </div>
               <article class="panel">
                 <div class="panel-head">
@@ -640,7 +643,7 @@ $assetVer = (string) max(
                     <span class="legend-item legend-highlight">بازه</span>
                   </div>
                 </div>
-                <p class="hint">۳ ردیف × ۸ میز — <?php if (Access::canWrite()): ?>روی هر میز کلیک کنید تا تخصیص سال جاری را ویرایش کنید.<?php else: ?>میزها به نهاد تخصیص می‌یابند.<?php endif; ?></p>
+                <p class="hint">۳ ردیف × ۸ میز — <?php if (Access::canWrite()): ?>برای ویرایش تخصیص سال جاری روی میز کلیک کنید.<?php else: ?>فقط مشاهده.<?php endif; ?></p>
                 <div id="deskGrid" class="desk-map"></div>
               </article>
               <data-table id="currentDesksTable" title="تخصیص سال جاری — جزئیات میزها" endpoint="api.php?resource=desks" data-no-add></data-table>
@@ -1011,7 +1014,7 @@ $assetVer = (string) max(
             <section id="users" class="section">
               <div class="section-intro section-intro--purple">
                 <span class="section-intro-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm-8 9a8 8 0 0 1 16 0Z" fill="currentColor"/></svg></span>
-                <div class="section-intro-copy"><p>مدیران سیستم — هنگام ثبت نهاد می‌توانید رمز ورود را خودکار بسازید یا دستی تعیین کنید.</p></div>
+                <div class="section-intro-copy"><p>کاربران مدیر پنل — نقش ویرایشگر یا مشاهده‌گر. رمز ورود نهادها از بخش نهادها مدیریت می‌شود.</p></div>
               </div>
               <data-table title="کاربران مدیر" endpoint="api.php?resource=panel_users"></data-table>
             </section>

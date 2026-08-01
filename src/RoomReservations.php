@@ -128,7 +128,7 @@ final class RoomReservations
         unset($detail);
 
         $placeholders = implode(',', array_fill(0, count(self::ACTIVE_STATUSES), '?'));
-        $sql = "SELECT rr.id, rr.room_id, rr.reserved_date, rr.start_time, rr.end_time, rr.status,
+        $sql = "SELECT rr.id, rr.room_id, rr.team_id, rr.reserved_date, rr.start_time, rr.end_time, rr.status,
                        rr.booker_name, rr.booker_phone, rr.booker_org, rr.purpose, rr.source,
                        mr.name AS room_name, mr.code AS room_code
                 FROM room_reservations rr
@@ -144,6 +144,32 @@ final class RoomReservations
         $statement = $this->pdo->prepare($sql);
         $statement->execute($params);
         $events = $statement->fetchAll() ?: [];
+        if (Access::isTeam()) {
+            $scopedTeamId = Access::scopedTeamId();
+            $events = array_map(static function (array $event) use ($scopedTeamId): array {
+                $isOwn = $scopedTeamId !== null && (int) ($event['team_id'] ?? 0) === $scopedTeamId;
+                if ($isOwn) {
+                    return $event;
+                }
+                // Busy-block only for other reservations — hide booker PII from team portal.
+                return [
+                    'id' => (int) ($event['id'] ?? 0),
+                    'room_id' => (int) ($event['room_id'] ?? 0),
+                    'reserved_date' => (string) ($event['reserved_date'] ?? ''),
+                    'start_time' => (string) ($event['start_time'] ?? ''),
+                    'end_time' => (string) ($event['end_time'] ?? ''),
+                    'status' => (string) ($event['status'] ?? ''),
+                    'room_name' => (string) ($event['room_name'] ?? ''),
+                    'room_code' => (string) ($event['room_code'] ?? ''),
+                    'source' => (string) ($event['source'] ?? ''),
+                    'booker_name' => '',
+                    'booker_phone' => '',
+                    'booker_org' => '',
+                    'purpose' => '',
+                    'is_busy_block' => true,
+                ];
+            }, $events);
+        }
 
         return [
             'from' => $fromDate,
@@ -471,12 +497,12 @@ final class RoomReservations
         return $reservation;
     }
 
-    /** Short tracking code like MN-482917 (legacy 32-hex tokens still valid). */
+    /** Tracking code like MN-4829173041 (legacy 6-digit / 32-hex tokens still valid). */
     private function generatePublicToken(): string
     {
         $check = $this->pdo->prepare('SELECT 1 FROM room_reservations WHERE public_token = :token LIMIT 1');
         for ($attempt = 0; $attempt < 12; $attempt++) {
-            $token = 'MN-' . str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+            $token = 'MN-' . str_pad((string) random_int(0, 9_999_999_999), 10, '0', STR_PAD_LEFT);
             $check->execute(['token' => $token]);
             if ($check->fetchColumn() === false) {
                 return $token;
@@ -486,12 +512,12 @@ final class RoomReservations
         throw new RuntimeException('ساخت کد پیگیری ممکن نشد. دوباره تلاش کنید.');
     }
 
-    /** Normalize user-entered tracking codes (MN-482917 / mn 482917 / legacy hex). */
+    /** Normalize user-entered tracking codes (MN-4829173041 / mn 482917 / legacy hex). */
     public static function normalizePublicToken(string $token): string
     {
         $token = JalaliDate::normalizeDigits(trim($token));
         $token = preg_replace('/\s+/', '', $token) ?? $token;
-        if (preg_match('/^mn-?(\d{6})$/i', $token, $matches) === 1) {
+        if (preg_match('/^mn-?(\d{6}|\d{10})$/i', $token, $matches) === 1) {
             return 'MN-' . $matches[1];
         }
 
@@ -628,9 +654,11 @@ final class RoomReservations
         if ($token === '') {
             throw new InvalidArgumentException('کد پیگیری معتبر نیست.');
         }
+        self::assertPublicLookupRateLimit();
 
         $statement = $this->pdo->prepare(
-            'SELECT rr.*, mr.name AS room_name, mr.code AS room_code
+            'SELECT rr.id, rr.public_token, rr.reserved_date, rr.start_time, rr.end_time, rr.status,
+                    mr.name AS room_name, mr.code AS room_code
              FROM room_reservations rr
              INNER JOIN meeting_rooms mr ON mr.id = rr.room_id
              WHERE rr.public_token = :token'
@@ -641,7 +669,16 @@ final class RoomReservations
             throw new InvalidArgumentException('رزروی با این کد پیگیری یافت نشد.');
         }
 
-        return $row;
+        return [
+            'id' => (int) ($row['id'] ?? 0),
+            'public_token' => (string) ($row['public_token'] ?? ''),
+            'reserved_date' => (string) ($row['reserved_date'] ?? ''),
+            'start_time' => (string) ($row['start_time'] ?? ''),
+            'end_time' => (string) ($row['end_time'] ?? ''),
+            'status' => (string) ($row['status'] ?? ''),
+            'room_name' => (string) ($row['room_name'] ?? ''),
+            'room_code' => (string) ($row['room_code'] ?? ''),
+        ];
     }
 
     /**
@@ -1093,28 +1130,54 @@ final class RoomReservations
 
     private static function assertPublicRateLimit(string $phone): void
     {
+        self::throttlePublicAction('room-book|' . $phone, 8, 900, 'room_book_throttle.json');
+    }
+
+    private static function assertPublicLookupRateLimit(): void
+    {
+        self::throttlePublicAction('room-lookup', 30, 900, 'room_lookup_throttle.json');
+    }
+
+    private static function throttlePublicAction(string $scope, int $maxAttempts, int $windowSeconds, string $fileName): void
+    {
         $ip = (string) ($_SERVER['REMOTE_ADDR'] ?? 'unknown');
-        $key = hash('sha256', 'room-book|' . $ip . '|' . $phone);
+        $key = hash('sha256', $scope . '|' . $ip);
         $dir = app_base_path() . '/data';
         if (!is_dir($dir)) {
             mkdir($dir, 0775, true);
         }
-        $path = $dir . '/room_book_throttle.json';
-        $data = is_file($path) ? json_decode((string) file_get_contents($path), true) : [];
-        if (!is_array($data)) {
-            $data = [];
+        $path = $dir . '/' . $fileName;
+        $handle = fopen($path, 'c+');
+        if ($handle === false) {
+            throw new RuntimeException('محدودیت نرخ در دسترس نیست.');
         }
-        $now = time();
-        $attempts = array_values(array_filter(
-            (array) ($data[$key]['attempts'] ?? []),
-            static fn (int $ts): bool => ($now - $ts) < 900
-        ));
-        if (count($attempts) >= 8) {
-            throw new InvalidArgumentException('تعداد درخواست زیاد است. چند دقیقه بعد دوباره تلاش کنید.');
+        try {
+            if (!flock($handle, LOCK_EX)) {
+                throw new RuntimeException('محدودیت نرخ در دسترس نیست.');
+            }
+            $raw = stream_get_contents($handle);
+            $data = is_string($raw) && $raw !== '' ? json_decode($raw, true) : [];
+            if (!is_array($data)) {
+                $data = [];
+            }
+            $now = time();
+            $attempts = array_values(array_filter(
+                array_map('intval', (array) ($data[$key]['attempts'] ?? [])),
+                static fn (int $ts): bool => ($now - $ts) < $windowSeconds
+            ));
+            if (count($attempts) >= $maxAttempts) {
+                throw new InvalidArgumentException('تعداد درخواست زیاد است. چند دقیقه بعد دوباره تلاش کنید.');
+            }
+            $attempts[] = $now;
+            $data[$key] = ['attempts' => $attempts];
+            ftruncate($handle, 0);
+            rewind($handle);
+            fwrite($handle, json_encode($data, JSON_UNESCAPED_UNICODE));
+            fflush($handle);
+            flock($handle, LOCK_UN);
+        } finally {
+            fclose($handle);
         }
-        $attempts[] = $now;
-        $data[$key] = ['attempts' => $attempts];
-        file_put_contents($path, json_encode($data, JSON_UNESCAPED_UNICODE));
     }
 
     /**

@@ -49,12 +49,6 @@ final class Seeder
         }
 
         try {
-            if ($deleteExisting) {
-                $this->pdo->prepare(
-                    'DELETE FROM charges WHERE team_id = :team_id AND fiscal_year = :fiscal_year AND source_file = :source'
-                )->execute(['team_id' => $teamId, 'fiscal_year' => $fiscalYear, 'source' => 'system']);
-            }
-
             $manualCheck = $this->pdo->prepare(
                 'SELECT id FROM charges
                  WHERE team_id = :team_id AND fiscal_year = :fiscal_year AND month_index = :month_index
@@ -62,12 +56,19 @@ final class Seeder
             );
 
             $contracts = new TeamContracts($this->pdo);
+            // Guard before wipe: removing the last desk/contract must not erase historical system charges.
             if (!$contracts->hasContractInYear($teamId, $fiscalYear) || !$contracts->hasDeskInFiscalYear($teamId, $fiscalYear)) {
                 if ($startedTransaction) {
                     $this->pdo->commit();
                 }
 
                 return;
+            }
+
+            if ($deleteExisting) {
+                $this->pdo->prepare(
+                    'DELETE FROM charges WHERE team_id = :team_id AND fiscal_year = :fiscal_year AND source_file = :source'
+                )->execute(['team_id' => $teamId, 'fiscal_year' => $fiscalYear, 'source' => 'system']);
             }
 
             $amounts = $this->monthlyAmountsForTeam($teamId, $fiscalYear);
