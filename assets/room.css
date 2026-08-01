@@ -747,6 +747,11 @@
 .room-calendar-cell.is-closed {
   background: color-mix(in srgb, var(--danger) 8%, transparent);
 }
+.room-calendar-day-head.is-past,
+.room-calendar-cell.is-past {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
 .room-calendar-closed-tag {
   display: block;
   font-size: 10px;

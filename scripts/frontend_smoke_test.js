@@ -260,4 +260,19 @@ if (!indexSource.includes('data-per-page="10"')) {
   process.exit(1);
 }
 
+if (!source.includes('resource !== "teams"') && !source.includes("resource !== 'teams'")) {
+  console.error("meeting-room name must not open team profile via linkColumns");
+  process.exit(1);
+}
+if (!source.includes('error.message !== "cancelled"')) {
+  console.error("workflow approve must ignore cancelled modal dismiss like reject");
+  process.exit(1);
+}
+
+const bookingSource = fs.readFileSync(path.join(__dirname, "..", "assets", "room-booking.js"), "utf8");
+if (!bookingSource.includes('querySelectorAll(\'data-table[endpoint*="room-reservations"]\')')) {
+  console.error("room booking must refresh reservation tables in admin and team panels");
+  process.exit(1);
+}
+
 console.log("Frontend smoke tests passed");

@@ -63,7 +63,8 @@
       ${days.map((day) => {
         const meta = daysMeta.get(day);
         const closed = Boolean(meta?.is_closed);
-        return `<div class="room-calendar-day-head${day === data.today ? " is-today" : ""}${closed ? " is-closed" : ""}" data-date="${day}" title="${escapeHtml(closed ? (meta.closed_note || "تعطیل") : "")}">${formatDayLabel(meta)}${closed ? '<small class="room-calendar-closed-tag">تعطیل</small>' : ""}</div>`;
+        const past = Boolean(meta?.is_past);
+        return `<div class="room-calendar-day-head${day === data.today ? " is-today" : ""}${closed ? " is-closed" : ""}${past ? " is-past" : ""}" data-date="${day}" title="${escapeHtml(closed ? (meta.closed_note || "تعطیل") : (past ? "گذشته" : ""))}">${formatDayLabel(meta)}${closed ? '<small class="room-calendar-closed-tag">تعطیل</small>' : ""}</div>`;
       }).join("")}
     </div>`;
 
@@ -81,7 +82,7 @@
             <small>${escapeHtml(event.booker_name || "—")}</small>
           </button>`;
         }).join("");
-        return `<div class="room-calendar-cell${day === data.today ? " is-today" : ""}${meta?.is_closed ? " is-closed" : ""}" data-date="${day}" data-room-id="${room.id}">
+        return `<div class="room-calendar-cell${day === data.today ? " is-today" : ""}${meta?.is_closed ? " is-closed" : ""}${meta?.is_past ? " is-past" : ""}" data-date="${day}" data-room-id="${room.id}">
           ${meta?.is_closed ? '<span class="room-calendar-empty">تعطیل</span>' : (blocks || '<span class="room-calendar-empty">—</span>')}
         </div>`;
       }).join("");
@@ -101,6 +102,14 @@
         if (event.target.closest(".room-calendar-block")) return;
         const date = cell.dataset.date;
         const roomId = cell.dataset.roomId;
+        const meta = daysMeta.get(date);
+        if (meta?.is_closed || meta?.is_past) {
+          window.showToast?.(
+            meta.is_closed ? (meta.closed_note || "این روز تعطیل است.") : "رزرو برای تاریخ گذشته مجاز نیست.",
+            "error"
+          );
+          return;
+        }
         if (date) window.setPanelBookingDate?.(date);
         if (roomId) window.setPanelBookingRoom?.(Number(roomId));
       });

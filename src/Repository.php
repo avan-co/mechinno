@@ -338,25 +338,38 @@ final class Repository
                 ),
                 'locker-requests' => $this->preparedScalar('SELECT COUNT(*) FROM locker_requests WHERE team_id = :id', ['id' => $teamId]),
                 'room-reservations' => Schema::tableExists($this->pdo, 'room_reservations')
-                    ? $this->preparedScalar('SELECT COUNT(*) FROM room_reservations WHERE team_id = :id', ['id' => $teamId])
+                    ? (int) $this->pdo->query(
+                        'SELECT COUNT(*) FROM (' . $this->resourceSql('room-reservations', $filters) . ') AS filtered_rows'
+                    )->fetchColumn()
                     : 0,
+                // Match list SQL: full assignment history for the team.
                 'desk-assignments' => $this->preparedScalar(
-                    'SELECT COUNT(*) FROM desk_assignments
-                     WHERE team_id = :id
-                       AND assigned_from <= :today
-                       AND (assigned_until IS NULL OR assigned_until = \'\' OR assigned_until >= :today)',
-                    ['id' => $teamId, 'today' => JalaliDate::todayParts()['formatted']]
+                    'SELECT COUNT(*) FROM desk_assignments WHERE team_id = :id',
+                    ['id' => $teamId]
                 ),
                 default => 0,
             };
         }
 
-        if (trim((string) ($filters['q'] ?? '')) !== '' && in_array($name, [
-            'teams', 'members', 'desks', 'lockers', 'charges', 'transactions', 'rate_settings', 'panel_users', 'development_plans', 'meeting-rooms', 'room-reservations', 'sms-recipients',
-        ], true)) {
-            return (int) $this->pdo->query(
-                'SELECT COUNT(*) FROM (' . $this->resourceSql($name, $filters) . ') AS filtered_rows'
-            )->fetchColumn();
+        if (
+            trim((string) ($filters['q'] ?? '')) !== ''
+            || ($name === 'desk-assignments' && (
+                trim((string) ($filters['team_id'] ?? '')) !== ''
+                || trim((string) ($filters['fiscal_year'] ?? '')) !== ''
+                || trim((string) ($filters['assignment_status'] ?? '')) !== ''
+            ))
+            || ($name === 'team_contracts' && trim((string) ($filters['team_id'] ?? '')) !== '')
+            || ($name === 'room-reservations' && trim((string) ($filters['status'] ?? '')) !== '')
+        ) {
+            if (in_array($name, [
+                'teams', 'members', 'desks', 'lockers', 'charges', 'transactions', 'rate_settings', 'panel_users',
+                'development_plans', 'meeting-rooms', 'room-reservations', 'sms-recipients', 'desk-assignments',
+                'team_contracts',
+            ], true)) {
+                return (int) $this->pdo->query(
+                    'SELECT COUNT(*) FROM (' . $this->resourceSql($name, $filters) . ') AS filtered_rows'
+                )->fetchColumn();
+            }
         }
 
         $sql = match ($name) {
@@ -383,10 +396,7 @@ final class Repository
             'locker-requests' => 'SELECT COUNT(*) FROM locker_requests',
             'member-requests' => 'SELECT COUNT(*) FROM member_requests',
             'meeting-rooms' => 'SELECT COUNT(*) FROM meeting_rooms',
-            'room-reservations' => 'SELECT COUNT(*) FROM room_reservations'
-                . (isset($filters['status']) && $filters['status'] !== ''
-                    ? ' WHERE status = ' . $this->pdo->quote((string) $filters['status'])
-                    : ''),
+            'room-reservations' => 'SELECT COUNT(*) FROM room_reservations',
             'pending-room-reservations' => "SELECT COUNT(*) FROM room_reservations WHERE status = 'pending'",
             'desk-assignments' => 'SELECT COUNT(*) FROM desk_assignments',
             'team_contracts' => 'SELECT COUNT(*) FROM team_contracts',
@@ -632,6 +642,14 @@ final class Repository
                  FROM desk_assignments da
                  LEFT JOIN teams t ON t.id = da.team_id"
                 . $this->deskAssignmentAdminWhereClause($filters, $teamId)
+                . $this->searchClause(
+                    'desk-assignments',
+                    $filters,
+                    $teamId !== null
+                        || (int) ($filters['team_id'] ?? 0) > 0
+                        || trim((string) ($filters['fiscal_year'] ?? '')) !== ''
+                        || trim((string) ($filters['assignment_status'] ?? '')) !== ''
+                )
                 . ' ORDER BY
                     CASE
                         WHEN da.assigned_until IS NULL OR da.assigned_until = \'\' OR da.assigned_until >= '
@@ -642,7 +660,7 @@ final class Repository
                     da.desk_number',
             'payment-history' => "SELECT t.id, t.tx_date, t.amount, t.description, t.payment_reference, t.payment_status, t.notes,
                         t.fiscal_year, t.month_index, t.confirmed, t.announced_at, t.reviewed_at,
-                        tm.name AS team_name,
+                        t.team_id, tm.name AS team_name, tm.is_active AS team_is_active,
                         CASE t.month_index
                             WHEN 1 THEN 'فروردین' WHEN 2 THEN 'اردیبهشت' WHEN 3 THEN 'خرداد'
                             WHEN 4 THEN 'تیر' WHEN 5 THEN 'مرداد' WHEN 6 THEN 'شهریور'
@@ -1862,6 +1880,7 @@ final class Repository
             'development_plans' => "COALESCE(p.title, '') LIKE {$quoted} OR COALESCE(p.description, '') LIKE {$quoted} OR COALESCE(p.notes, '') LIKE {$quoted}",
             'meeting-rooms' => "COALESCE(name, '') LIKE {$quoted} OR COALESCE(code, '') LIKE {$quoted} OR COALESCE(floor, '') LIKE {$quoted} OR COALESCE(notes, '') LIKE {$quoted}",
             'room-reservations' => "COALESCE(rr.booker_name, '') LIKE {$quoted} OR COALESCE(rr.booker_phone, '') LIKE {$quoted} OR COALESCE(rr.booker_org, '') LIKE {$quoted} OR COALESCE(mr.name, '') LIKE {$quoted} OR COALESCE(rr.purpose, '') LIKE {$quoted}",
+            'desk-assignments' => "CAST(da.desk_number AS TEXT) LIKE {$quoted} OR COALESCE(t.name, '') LIKE {$quoted} OR COALESCE(da.notes, '') LIKE {$quoted}",
             default => '',
         };
         if ($expr === '') {

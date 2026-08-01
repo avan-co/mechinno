@@ -493,8 +493,8 @@
         }
         clearRange();
         await loadSlots();
-        document.querySelector('#meeting-rooms data-table[endpoint*="room-reservations"]')?.load?.();
-        document.querySelector('#meeting-rooms data-table[endpoint*="pending-room-reservations"]')?.load?.();
+        document.querySelectorAll('data-table[endpoint*="room-reservations"]').forEach((table) => table.load?.());
+        document.querySelectorAll('data-table[endpoint*="pending-room-reservations"]').forEach((table) => table.load?.());
         window.refreshRoomCalendar?.();
       } catch (error) {
         window.showToast?.(error.message, "error");

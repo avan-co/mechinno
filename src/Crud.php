@@ -1425,6 +1425,19 @@ final class Crud
             if (isset($data['is_active'])) {
                 $data['is_active'] = (int) $data['is_active'] === 1 ? 1 : 0;
             }
+            $open = (string) ($data['open_time'] ?? '');
+            $close = (string) ($data['close_time'] ?? '');
+            $slotMinutes = (int) ($data['slot_minutes'] ?? 30);
+            if ($open !== '' && $close !== '') {
+                $openMin = RoomReservations::timeToMinutes($open);
+                $closeMin = RoomReservations::timeToMinutes($close);
+                if ($closeMin <= $openMin) {
+                    throw new InvalidArgumentException('ساعت پایان باید بعد از ساعت شروع باشد.');
+                }
+                if (($closeMin - $openMin) % max(1, $slotMinutes) !== 0) {
+                    throw new InvalidArgumentException('اختلاف ساعات کاری باید مضرب بازهٔ زمانی اتاق باشد.');
+                }
+            }
             $data['updated_at'] = $today;
         }
         if ($resource === 'desks') {

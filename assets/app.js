@@ -1103,7 +1103,7 @@ const activateSection = (id, options = {}) => {
         ?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 180);
   }
-  if (id === "teams" && options.teamId) {
+  if (options.teamId) {
     setTimeout(() => openTeamProfile(options.teamId).catch((error) => showToast(error.message, "error")), 120);
   }
 };
@@ -1231,10 +1231,11 @@ document.addEventListener("click", (event) => {
 
   if (!link.dataset.navSection) return;
   event.preventDefault();
+  const openTeamId = link.dataset.openTeam ? Number(link.dataset.openTeam) : undefined;
   activateSection(link.dataset.navSection, {
     highlightDesk: link.dataset.highlightDesk ? Number(link.dataset.highlightDesk) : undefined,
     highlightLocker: link.dataset.highlightLocker ? Number(link.dataset.highlightLocker) : undefined,
-    teamId: link.dataset.openTeam ? Number(link.dataset.openTeam) : undefined,
+    teamId: openTeamId,
     scrollTarget: link.dataset.scrollTarget || undefined,
   });
 });
@@ -3449,7 +3450,9 @@ const formatCell = (column, value, row, resource) => {
     return escapeHtml(map[value] || value || "—");
   }
   if (linkColumns[column] && row[linkColumns[column]] && value) {
-    if (column === "name" && resource === "teams") {
+    // `name` → id is only for teams; meeting-rooms also have `name`/`id`.
+    if (column === "name") {
+      if (resource !== "teams") return escapeHtml(value);
       return `<button type="button" class="text-link" data-team-id="${escapeHtml(row.id)}">${escapeHtml(value)}</button>`;
     }
     return teamLink(row[linkColumns[column]], value);
@@ -3930,7 +3933,7 @@ class DataTable extends HTMLElement {
         await refreshAfterMutation(this.closest(".section")?.id || null);
         showToast("تأیید شد.", "success");
       } catch (error) {
-        showToast(error.message, "error");
+        if (error.message !== "cancelled") showToast(error.message, "error");
       } finally {
         button.disabled = false;
       }

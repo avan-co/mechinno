@@ -95,6 +95,7 @@ final class RoomReservations
 
         $days = [];
         $daysDetail = [];
+        $today = JalaliDate::todayParts()['formatted'];
         $cursor = $fromDate;
         while (JalaliDate::compare($cursor, $toDate) <= 0) {
             $days[] = $cursor;
@@ -102,6 +103,7 @@ final class RoomReservations
                 'date' => $cursor,
                 'weekday' => JalaliDate::weekdayName($cursor),
                 'day' => (int) substr($cursor, 8, 2),
+                'is_past' => JalaliDate::compare($cursor, $today) < 0,
             ];
             if (count($days) >= 7) {
                 break;
@@ -228,6 +230,9 @@ final class RoomReservations
                 ];
             }, $dayEvents);
 
+            // For "all rooms", average per-room occupancy so two half-busy rooms
+            // do not look fully booked against a single room window.
+            $roomCount = max(1, $roomId > 0 ? 1 : count($rooms));
             $occupied = 0;
             foreach ($busyBlocks as $block) {
                 $occupied += max(
@@ -235,14 +240,15 @@ final class RoomReservations
                     self::timeToMinutes($block['end_time']) - self::timeToMinutes($block['start_time'])
                 );
             }
-            $occupancyPct = (int) min(100, round(($occupied / $windowMinutes) * 100));
+            $occupancyPct = (int) min(100, round(($occupied / ($windowMinutes * $roomCount)) * 100));
 
             $isClosed = isset($closedMap[$date]);
             $isPast = JalaliDate::compare($date, $today) < 0;
             $busyCount = count($busyBlocks);
+            $busyThreshold = max(4, $roomCount * 2);
             $level = $isClosed
                 ? 'closed'
-                : ($busyCount === 0 ? 'free' : ($occupancyPct >= 55 || $busyCount >= 4 ? 'busy' : 'light'));
+                : ($busyCount === 0 ? 'free' : ($occupancyPct >= 55 || $busyCount >= $busyThreshold ? 'busy' : 'light'));
 
             $dayCards[] = [
                 'date' => $date,
@@ -331,12 +337,19 @@ final class RoomReservations
             }
         }
 
+        $today = JalaliDate::todayParts()['formatted'];
+        $nowMinutes = $normalizedDate === $today ? self::timeToMinutes(date('H:i')) : null;
+
         $result = [];
         foreach ($slots as $slot) {
+            $status = $slotStates[$slot['time']] ?? 'free';
+            if ($nowMinutes !== null && self::timeToMinutes($slot['time']) < $nowMinutes && $status === 'free') {
+                $status = 'past';
+            }
             $result[] = [
                 'time' => $slot['time'],
                 'end' => $slot['end'],
-                'status' => $slotStates[$slot['time']] ?? 'free',
+                'status' => $status,
             ];
         }
 
@@ -510,16 +523,20 @@ final class RoomReservations
         }
 
         $today = JalaliDate::todayParts()['formatted'];
-        $this->pdo->prepare(
+        $statement = $this->pdo->prepare(
             "UPDATE room_reservations
              SET status = 'cancelled', cancel_reason = :reason, updated_at = :updated_at, reviewed_at = :reviewed_at
-             WHERE id = :id"
-        )->execute([
+             WHERE id = :id AND status IN ('pending', 'approved')"
+        );
+        $statement->execute([
             'reason' => $reason !== '' ? $reason : null,
             'updated_at' => $today,
             'reviewed_at' => $today,
             'id' => $id,
         ]);
+        if ($statement->rowCount() < 1) {
+            throw new InvalidArgumentException('این رزرو قابل لغو نیست.');
+        }
 
         $reservation = $this->findById($id);
         $this->notifyReservation($reservation, 'cancelled');
@@ -547,16 +564,20 @@ final class RoomReservations
         );
 
         $today = JalaliDate::todayParts()['formatted'];
-        $this->pdo->prepare(
+        $statement = $this->pdo->prepare(
             "UPDATE room_reservations
              SET status = 'approved', reviewed_at = :reviewed_at, reviewed_by = :reviewed_by, updated_at = :updated_at, rejection_reason = NULL
-             WHERE id = :id"
-        )->execute([
+             WHERE id = :id AND status = 'pending'"
+        );
+        $statement->execute([
             'reviewed_at' => $today,
             'reviewed_by' => Access::userId() > 0 ? Access::userId() : null,
             'updated_at' => $today,
             'id' => $id,
         ]);
+        if ($statement->rowCount() < 1) {
+            throw new InvalidArgumentException('این رزرو در انتظار تأیید نیست.');
+        }
 
         $reservation = $this->findById($id);
         $this->notifyReservation($reservation, 'approved');
@@ -575,18 +596,22 @@ final class RoomReservations
         }
 
         $today = JalaliDate::todayParts()['formatted'];
-        $this->pdo->prepare(
+        $statement = $this->pdo->prepare(
             "UPDATE room_reservations
              SET status = 'rejected', reviewed_at = :reviewed_at, reviewed_by = :reviewed_by,
                  rejection_reason = :reason, updated_at = :updated_at
-             WHERE id = :id"
-        )->execute([
+             WHERE id = :id AND status = 'pending'"
+        );
+        $statement->execute([
             'reviewed_at' => $today,
             'reviewed_by' => Access::userId() > 0 ? Access::userId() : null,
             'reason' => $reason !== '' ? $reason : null,
             'updated_at' => $today,
             'id' => $id,
         ]);
+        if ($statement->rowCount() < 1) {
+            throw new InvalidArgumentException('این رزرو در انتظار تأیید نیست.');
+        }
 
         $reservation = $this->findById($id);
         $this->notifyReservation($reservation, 'rejected');
@@ -676,6 +701,15 @@ final class RoomReservations
         }
         if (($startMin - $openMin) % $slotMinutes !== 0) {
             throw new InvalidArgumentException('ساعت شروع باید روی بازه ' . $slotMinutes . ' دقیقه‌ای باشد (مثلاً ' . $open . '، ' . self::minutesToTime($openMin + $slotMinutes) . ').');
+        }
+
+        // Only for new bookings — approving an already-submitted pending row should not fail solely
+        // because the clock has moved past the start time.
+        if ($ignoreReservationId === 0) {
+            $today = JalaliDate::todayParts()['formatted'];
+            if ($date === $today && $startMin < self::timeToMinutes(date('H:i'))) {
+                throw new InvalidArgumentException('رزرو برای ساعت گذشته امروز مجاز نیست.');
+            }
         }
 
         $duration = $endMin - $startMin;

@@ -79,18 +79,20 @@
       label = `پایان ${time}`;
     } else if (choosingEnd && validEnd) {
       label = time === rangeAnchor ? `شروع ${time}` : `تا ${time}`;
+    } else if (status === "past") {
+      label = "گذشته";
     } else if (status === "busy") {
       label = "پر";
     } else if (status === "pending") {
       label = "انتظار";
     }
 
-    const classes = ["room-slot", `room-slot--${status}`];
+    const classes = ["room-slot", `room-slot--${status === "past" ? "busy" : status}`];
     if (highlighted) classes.push("is-in-range");
     if (isStart) classes.push("is-selected", "is-range-start");
     if (isEnd) classes.push("is-selected", "is-range-end");
     if (choosingEnd && validEnd) classes.push("is-end-candidate");
-    if (choosingEnd && !validEnd && !busy) classes.push("is-out-of-reach");
+    if (choosingEnd && !validEnd && !busy && status !== "past") classes.push("is-out-of-reach");
 
     return {
       label,
@@ -99,7 +101,7 @@
       isStart,
       isEnd,
       // While picking end only valid ends are clickable; otherwise only free starts.
-      disabled: choosingEnd ? !validEnd : busy,
+      disabled: choosingEnd ? !validEnd : (busy || status === "past"),
     };
   };
 

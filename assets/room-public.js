@@ -484,6 +484,7 @@
         const record = data.record || {};
         const statusMap = { pending: "در انتظار", approved: "تأیید‌شده", rejected: "رد‌شده", cancelled: "لغو‌شده" };
         result.hidden = false;
+        const canCancel = record.status === "pending" || record.status === "approved";
         result.innerHTML = `
           <div class="pub-summary-inline">
             <div><span>کد</span><strong dir="ltr">${escapeHtml(record.public_token || token)}</strong></div>
@@ -492,16 +493,21 @@
             <div><span>ساعت</span><strong>${escapeHtml(record.start_time || "")} – ${escapeHtml(record.end_time || "")}</strong></div>
             <div><span>وضعیت</span><strong>${escapeHtml(statusMap[record.status] || record.status || "—")}</strong></div>
           </div>
-          <div class="form-actions"><button type="button" class="button ghost" id="cancelLookupBooking">لغو رزرو</button></div>`;
+          ${canCancel ? '<div class="form-actions"><button type="button" class="button ghost" id="cancelLookupBooking">لغو رزرو</button></div>' : ""}`;
         result.querySelector("#cancelLookupBooking")?.addEventListener("click", async () => {
-          await fetchJson("public-api.php?resource=cancel", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ id: record.id, token: record.public_token }),
-          });
-          showMessage("رزرو لغو شد.", "success");
-          result.hidden = true;
-          loadWeek();
+          try {
+            await fetchJson("public-api.php?resource=cancel", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ id: record.id, token: record.public_token }),
+            });
+            showMessage("رزرو لغو شد.", "success");
+            result.hidden = true;
+            loadWeek();
+            loadAvailability();
+          } catch (error) {
+            showMessage(error.message, "error");
+          }
         });
       } catch (error) {
         showMessage(error.message, "error");
