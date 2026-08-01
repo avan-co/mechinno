@@ -355,6 +355,135 @@ $assert(
     'dashboard action item includes pending contracts'
 );
 $assert((int) ($summaryAdmin['cards']['pending_contracts'] ?? 0) >= 1, 'summary cards include pending contracts');
+$assert((int) ($summaryAdmin['cards']['pending_performance'] ?? 0) >= 0, 'summary cards expose pending performance');
+
+// Admin direct official contract clears pending proposal and approves its files.
+$tmpSyncA = tempnam($tmpDir, 'sync') . '.pdf';
+$tmpSyncB = tempnam($tmpDir, 'sync') . '.pdf';
+file_put_contents($tmpSyncA, '%PDF-1.4 sync-a');
+file_put_contents($tmpSyncB, '%PDF-1.4 sync-b');
+$_SESSION['mechinno_role'] = Access::ROLE_TEAM;
+$_SESSION['mechinno_team_id'] = 1;
+$syncPackage = $contractDocs->submitPackage(1, [
+    'fiscal_year' => '1408',
+    'contract_start' => '1408/01/01',
+    'contract_end' => '1408/12/29',
+    'formal_contract_amount' => '900000',
+], [
+    'name' => 'm1408.pdf', 'type' => 'application/pdf', 'tmp_name' => $tmpSyncA,
+    'error' => UPLOAD_ERR_OK, 'size' => filesize($tmpSyncA),
+], [
+    'name' => 's1408.pdf', 'type' => 'application/pdf', 'tmp_name' => $tmpSyncB,
+    'error' => UPLOAD_ERR_OK, 'size' => filesize($tmpSyncB),
+]);
+$assert(($syncPackage['proposal']['status'] ?? '') === 'pending', 'sync package starts pending');
+$_SESSION['mechinno_role'] = Access::ROLE_ADMIN_EDITOR;
+$crud->create('team_contracts', [
+    'team_id' => '1',
+    'fiscal_year' => '1408',
+    'contract_start' => '1408/01/01',
+    'contract_end' => '1408/12/29',
+    'formal_contract_amount' => '900000',
+]);
+$synced = $contractDocs->yearBundle(1, '1408');
+$assert(($synced['proposal']['status'] ?? '') === 'approved', 'direct official contract syncs pending proposal');
+$assert(($synced['files']['membership']['status'] ?? '') === 'approved', 'sync approves membership file');
+$assert(($synced['files']['settlement']['status'] ?? '') === 'approved', 'sync approves settlement file');
+
+$zeroAmountBlocked = false;
+try {
+    $crud->create('team_contracts', [
+        'team_id' => '1',
+        'fiscal_year' => '1409',
+        'contract_start' => '1409/01/01',
+        'contract_end' => '1409/12/29',
+        'formal_contract_amount' => '0',
+    ]);
+} catch (InvalidArgumentException) {
+    $zeroAmountBlocked = true;
+}
+$assert($zeroAmountBlocked, 'admin cannot register zero-amount official contract');
+
+$badYearDatesBlocked = false;
+try {
+    $tmpBadA = tempnam($tmpDir, 'bad') . '.pdf';
+    $tmpBadB = tempnam($tmpDir, 'bad') . '.pdf';
+    file_put_contents($tmpBadA, '%PDF-1.4 bad-a');
+    file_put_contents($tmpBadB, '%PDF-1.4 bad-b');
+    $_SESSION['mechinno_role'] = Access::ROLE_TEAM;
+    $_SESSION['mechinno_team_id'] = 1;
+    $contractDocs->submitPackage(1, [
+        'fiscal_year' => '1410',
+        'contract_start' => '1400/01/01',
+        'contract_end' => '1400/12/29',
+        'formal_contract_amount' => '1000',
+    ], [
+        'name' => 'bad-a.pdf', 'type' => 'application/pdf', 'tmp_name' => $tmpBadA,
+        'error' => UPLOAD_ERR_OK, 'size' => filesize($tmpBadA),
+    ], [
+        'name' => 'bad-b.pdf', 'type' => 'application/pdf', 'tmp_name' => $tmpBadB,
+        'error' => UPLOAD_ERR_OK, 'size' => filesize($tmpBadB),
+    ]);
+} catch (InvalidArgumentException $e) {
+    $badYearDatesBlocked = str_contains($e->getMessage(), 'سال مالی');
+}
+$assert($badYearDatesBlocked, 'package dates must match fiscal year');
+
+// Rejected performance may resubmit outside the open window; team cannot spoof fiscal year.
+$_SESSION['mechinno_role'] = Access::ROLE_ADMIN_EDITOR;
+$perf->updateSettings([
+    'performance_reports_enabled' => 1,
+    'performance_h1_open_from' => '1400/01/01',
+    'performance_h1_open_until' => '1499/12/29',
+    'performance_h2_open_from' => '1400/01/01',
+    'performance_h2_open_until' => '1499/12/29',
+]);
+$tmpH2 = tempnam($tmpDir, 'h2') . '.pdf';
+file_put_contents($tmpH2, '%PDF-1.4 h2');
+$_SESSION['mechinno_role'] = Access::ROLE_TEAM;
+$_SESSION['mechinno_team_id'] = 1;
+$h2Report = $perf->submit(1, '1390', 'h2', [
+    'name' => 'h2.pdf',
+    'type' => 'application/pdf',
+    'tmp_name' => $tmpH2,
+    'error' => UPLOAD_ERR_OK,
+    'size' => filesize($tmpH2),
+]);
+$assert((string) ($h2Report['fiscal_year'] ?? '') === $h2Year, 'team cannot spoof performance fiscal year on first submit');
+$_SESSION['mechinno_role'] = Access::ROLE_ADMIN_EDITOR;
+$perf->reject((int) $h2Report['id'], 'ناقص');
+$perf->updateSettings([
+    'performance_reports_enabled' => 1,
+    'performance_h1_open_from' => '1400/01/01',
+    'performance_h1_open_until' => '1400/01/02',
+    'performance_h2_open_from' => '1400/01/01',
+    'performance_h2_open_until' => '1400/01/02',
+]);
+$_SESSION['mechinno_role'] = Access::ROLE_TEAM;
+$_SESSION['mechinno_team_id'] = 1;
+$overviewAfterReject = $perf->teamOverview(1);
+$h2AfterReject = null;
+foreach ($overviewAfterReject['periods'] as $periodRow) {
+    if (($periodRow['period'] ?? '') === 'h2') {
+        $h2AfterReject = $periodRow;
+    }
+}
+$assert(($h2AfterReject['can_submit'] ?? false) === true, 'rejected performance can resubmit outside window');
+$tmpFix = tempnam($tmpDir, 'fix') . '.pdf';
+file_put_contents($tmpFix, '%PDF-1.4 fix');
+$resubmitted = $perf->submit(1, '1390', 'h2', [
+    'name' => 'fix.pdf',
+    'type' => 'application/pdf',
+    'tmp_name' => $tmpFix,
+    'error' => UPLOAD_ERR_OK,
+    'size' => filesize($tmpFix),
+], 'اصلاحیه');
+$assert(($resubmitted['status'] ?? '') === 'pending', 'rejected performance resubmit pending');
+$assert((string) ($resubmitted['fiscal_year'] ?? '') === $h2Year, 'resubmit still binds period fiscal year');
+
+$_SESSION['mechinno_role'] = Access::ROLE_ADMIN_EDITOR;
+$liveOccupied = (int) ($repo->summary()['cards']['desks_occupied'] ?? 0);
+$assert($liveOccupied >= 1, 'live desk occupancy counts current assignments');
 
 // Conditional payment approval cannot revive a rejected deposit.
 $pdo->prepare(

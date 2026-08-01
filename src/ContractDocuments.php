@@ -150,6 +150,19 @@ final class ContractDocuments
             'updated_at' => $now,
             'id' => (int) $proposal['id'],
         ]);
+
+        if (Schema::tableExists($this->pdo, 'team_contract_files')) {
+            $this->pdo->prepare(
+                "UPDATE team_contract_files
+                 SET status = 'approved', rejection_reason = NULL, reviewed_at = :reviewed_at, updated_at = :updated_at
+                 WHERE team_id = :team_id AND fiscal_year = :fiscal_year"
+            )->execute([
+                'reviewed_at' => $now,
+                'updated_at' => $now,
+                'team_id' => $teamId,
+                'fiscal_year' => $fiscalYear,
+            ]);
+        }
     }
 
     /**
@@ -206,10 +219,6 @@ final class ContractDocuments
         $docType = $this->normalizeDocType($docType);
         $this->assertTeamExists($teamId);
 
-        $stored = FileStorage::storeUpload($upload, 'contracts');
-        $now = date('c');
-        $role = Access::role();
-        $userId = Access::userId();
         if (!Access::canWrite() && !Access::canTeamSubmit()) {
             throw new InvalidArgumentException('دسترسی کافی برای آپلود قرارداد ندارید.');
         }
@@ -221,63 +230,73 @@ final class ContractDocuments
 
         $existing = $this->fileRow($teamId, $fiscalYear, $docType);
         $oldPath = $existing ? (string) ($existing['stored_path'] ?? '') : '';
+        $stored = FileStorage::storeUpload($upload, 'contracts');
+        $now = date('c');
+        $role = Access::role();
+        $userId = Access::userId();
+        $id = 0;
 
-        if ($existing) {
-            $statement = $this->pdo->prepare(
-                'UPDATE team_contract_files SET
-                    original_name = :original_name,
-                    stored_path = :stored_path,
-                    mime = :mime,
-                    size_bytes = :size_bytes,
-                    status = :status,
-                    rejection_reason = NULL,
-                    uploaded_by_role = :uploaded_by_role,
-                    uploaded_by_user_id = :uploaded_by_user_id,
-                    submitted_at = :submitted_at,
-                    reviewed_at = :reviewed_at,
-                    updated_at = :updated_at
-                 WHERE id = :id'
-            );
-            $statement->execute([
-                'original_name' => $stored['original_name'],
-                'stored_path' => $stored['relative_path'],
-                'mime' => $stored['mime'],
-                'size_bytes' => $stored['size_bytes'],
-                'status' => $status,
-                'uploaded_by_role' => $role,
-                'uploaded_by_user_id' => $userId > 0 ? $userId : null,
-                'submitted_at' => $now,
-                'reviewed_at' => $status === 'approved' ? $now : null,
-                'updated_at' => $now,
-                'id' => (int) $existing['id'],
-            ]);
-            $id = (int) $existing['id'];
-        } else {
-            $statement = $this->pdo->prepare(
-                'INSERT INTO team_contract_files
-                    (team_id, fiscal_year, doc_type, original_name, stored_path, mime, size_bytes, status,
-                     uploaded_by_role, uploaded_by_user_id, submitted_at, reviewed_at, created_at, updated_at)
-                 VALUES
-                    (:team_id, :fiscal_year, :doc_type, :original_name, :stored_path, :mime, :size_bytes, :status,
-                     :uploaded_by_role, :uploaded_by_user_id, :submitted_at, :reviewed_at, :created_at, :updated_at)'
-            );
-            $statement->execute([
-                'team_id' => $teamId,
-                'fiscal_year' => $fiscalYear,
-                'doc_type' => $docType,
-                'original_name' => $stored['original_name'],
-                'stored_path' => $stored['relative_path'],
-                'mime' => $stored['mime'],
-                'size_bytes' => $stored['size_bytes'],
-                'status' => $status,
-                'uploaded_by_role' => $role,
-                'uploaded_by_user_id' => $userId > 0 ? $userId : null,
-                'submitted_at' => $now,
-                'reviewed_at' => $status === 'approved' ? $now : null,
-                'created_at' => $now,
-                'updated_at' => $now,
-            ]);
-            $id = (int) $this->pdo->lastInsertId();
+        try {
+            if ($existing) {
+                $statement = $this->pdo->prepare(
+                    'UPDATE team_contract_files SET
+                        original_name = :original_name,
+                        stored_path = :stored_path,
+                        mime = :mime,
+                        size_bytes = :size_bytes,
+                        status = :status,
+                        rejection_reason = NULL,
+                        uploaded_by_role = :uploaded_by_role,
+                        uploaded_by_user_id = :uploaded_by_user_id,
+                        submitted_at = :submitted_at,
+                        reviewed_at = :reviewed_at,
+                        updated_at = :updated_at
+                     WHERE id = :id'
+                );
+                $statement->execute([
+                    'original_name' => $stored['original_name'],
+                    'stored_path' => $stored['relative_path'],
+                    'mime' => $stored['mime'],
+                    'size_bytes' => $stored['size_bytes'],
+                    'status' => $status,
+                    'uploaded_by_role' => $role,
+                    'uploaded_by_user_id' => $userId > 0 ? $userId : null,
+                    'submitted_at' => $now,
+                    'reviewed_at' => $status === 'approved' ? $now : null,
+                    'updated_at' => $now,
+                    'id' => (int) $existing['id'],
+                ]);
+                $id = (int) $existing['id'];
+            } else {
+                $statement = $this->pdo->prepare(
+                    'INSERT INTO team_contract_files
+                        (team_id, fiscal_year, doc_type, original_name, stored_path, mime, size_bytes, status,
+                         uploaded_by_role, uploaded_by_user_id, submitted_at, reviewed_at, created_at, updated_at)
+                     VALUES
+                        (:team_id, :fiscal_year, :doc_type, :original_name, :stored_path, :mime, :size_bytes, :status,
+                         :uploaded_by_role, :uploaded_by_user_id, :submitted_at, :reviewed_at, :created_at, :updated_at)'
+                );
+                $statement->execute([
+                    'team_id' => $teamId,
+                    'fiscal_year' => $fiscalYear,
+                    'doc_type' => $docType,
+                    'original_name' => $stored['original_name'],
+                    'stored_path' => $stored['relative_path'],
+                    'mime' => $stored['mime'],
+                    'size_bytes' => $stored['size_bytes'],
+                    'status' => $status,
+                    'uploaded_by_role' => $role,
+                    'uploaded_by_user_id' => $userId > 0 ? $userId : null,
+                    'submitted_at' => $now,
+                    'reviewed_at' => $status === 'approved' ? $now : null,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ]);
+                $id = (int) $this->pdo->lastInsertId();
+            }
+        } catch (Throwable $error) {
+            FileStorage::deleteRelative((string) ($stored['relative_path'] ?? ''));
+            throw $error;
         }
 
         if ($oldPath !== '' && $oldPath !== $stored['relative_path']) {
@@ -337,6 +356,11 @@ final class ContractDocuments
         }
         if ($contractEnd < $contractStart) {
             throw new InvalidArgumentException('تاریخ پایان نباید قبل از شروع باشد.');
+        }
+        $startYear = substr($contractStart, 0, 4);
+        $endYear = substr($contractEnd, 0, 4);
+        if ($startYear !== $fiscalYear || $endYear !== $fiscalYear) {
+            throw new InvalidArgumentException("تاریخ شروع و پایان باید در سال مالی {$fiscalYear} باشد.");
         }
         $amount = (int) preg_replace('/\D+/', '', (string) ($payload['formal_contract_amount'] ?? '0'));
         if ($amount <= 0) {
@@ -570,32 +594,47 @@ final class ContractDocuments
         $now = date('c');
         $teamId = (int) $row['team_id'];
         $fiscalYear = (string) $row['fiscal_year'];
-        $statement = $this->pdo->prepare(
-            "UPDATE team_contract_proposals
-             SET status = 'rejected', rejection_reason = :reason, reviewed_at = :reviewed_at, updated_at = :updated_at
-             WHERE id = :id AND status = 'pending'"
-        );
-        $statement->execute([
-            'reason' => $reason,
-            'reviewed_at' => $now,
-            'updated_at' => $now,
-            'id' => $proposalId,
-        ]);
-        if ($statement->rowCount() < 1) {
-            throw new InvalidArgumentException('فقط پیشنهاد در انتظار قابل رد است.');
+        $started = false;
+        if (!$this->pdo->inTransaction()) {
+            $this->pdo->beginTransaction();
+            $started = true;
         }
+        try {
+            $statement = $this->pdo->prepare(
+                "UPDATE team_contract_proposals
+                 SET status = 'rejected', rejection_reason = :reason, reviewed_at = :reviewed_at, updated_at = :updated_at
+                 WHERE id = :id AND status = 'pending'"
+            );
+            $statement->execute([
+                'reason' => $reason,
+                'reviewed_at' => $now,
+                'updated_at' => $now,
+                'id' => $proposalId,
+            ]);
+            if ($statement->rowCount() < 1) {
+                throw new InvalidArgumentException('فقط پیشنهاد در انتظار قابل رد است.');
+            }
 
-        $this->pdo->prepare(
-            "UPDATE team_contract_files
-             SET status = 'rejected', rejection_reason = :reason, reviewed_at = :reviewed_at, updated_at = :updated_at
-             WHERE team_id = :team_id AND fiscal_year = :fiscal_year"
-        )->execute([
-            'reason' => $reason,
-            'reviewed_at' => $now,
-            'updated_at' => $now,
-            'team_id' => $teamId,
-            'fiscal_year' => $fiscalYear,
-        ]);
+            $this->pdo->prepare(
+                "UPDATE team_contract_files
+                 SET status = 'rejected', rejection_reason = :reason, reviewed_at = :reviewed_at, updated_at = :updated_at
+                 WHERE team_id = :team_id AND fiscal_year = :fiscal_year"
+            )->execute([
+                'reason' => $reason,
+                'reviewed_at' => $now,
+                'updated_at' => $now,
+                'team_id' => $teamId,
+                'fiscal_year' => $fiscalYear,
+            ]);
+            if ($started) {
+                $this->pdo->commit();
+            }
+        } catch (Throwable $error) {
+            if ($started && $this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            throw $error;
+        }
 
         return $this->yearBundle($teamId, $fiscalYear);
     }
@@ -606,6 +645,11 @@ final class ContractDocuments
         $row = $this->fileById($fileId);
         if (!$row) {
             throw new InvalidArgumentException('فایل قرارداد پیدا نشد.');
+        }
+        $teamId = (int) ($row['team_id'] ?? 0);
+        $fiscalYear = (string) ($row['fiscal_year'] ?? '');
+        if ($this->hasPendingProposal($teamId, $fiscalYear)) {
+            throw new InvalidArgumentException('تا وقتی پیشنهاد این سال در صف تأیید است، حذف پیوست مجاز نیست. ابتدا پیشنهاد را رد کنید.');
         }
         $this->pdo->prepare('DELETE FROM team_contract_files WHERE id = :id')->execute(['id' => $fileId]);
         FileStorage::deleteRelative((string) ($row['stored_path'] ?? ''));

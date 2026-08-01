@@ -136,6 +136,9 @@ final class PerformanceReports
             $row = $this->reportRow($teamId, $periodYear, $period);
             $window = $this->windowForPeriod($period, $settings);
             $windowConfigured = ($window['open_from'] ?? '') !== '' && ($window['open_until'] ?? '') !== '';
+            $status = $row ? (string) ($row['status'] ?? '') : '';
+            $canSubmit = $this->canSubmitNow($period, $settings)
+                || ($status === 'rejected' && (bool) ($settings['performance_reports_enabled'] ?? false));
             $periods[] = [
                 'period' => $period,
                 'period_label' => self::PERIOD_LABELS[$period],
@@ -143,7 +146,7 @@ final class PerformanceReports
                 'report' => $row ? $this->present($row) : null,
                 'window' => $window,
                 'window_configured' => $windowConfigured,
-                'can_submit' => $this->canSubmitNow($period, $settings),
+                'can_submit' => $canSubmit,
             ];
         }
 
@@ -171,90 +174,106 @@ final class PerformanceReports
             throw new InvalidArgumentException('بخش گزارش عملکرد فعلاً غیرفعال است.');
         }
 
-        $fiscalYear = $this->normalizeYear($fiscalYear);
         $period = $this->normalizePeriod($period);
-        if (Access::isTeam() && !$this->canSubmitNow($period, $settings)) {
+        if (Access::isTeam()) {
+            // Teams cannot choose an arbitrary year; bind to the period's target fiscal year.
+            $fiscalYear = $this->reportFiscalYearForPeriod($period);
+        } else {
+            $fiscalYear = $this->normalizeYear($fiscalYear);
+        }
+
+        $this->assertTeamExists($teamId);
+        $existing = $this->reportRow($teamId, $fiscalYear, $period);
+        $isRejectedResubmit = false;
+        if ($existing && Access::isTeam()) {
+            $currentStatus = (string) ($existing['status'] ?? '');
+            if ($currentStatus === 'pending') {
+                throw new InvalidArgumentException('گزارش این دوره در انتظار تأیید مرکز است و ارسال مجدد مجاز نیست.');
+            }
+            if ($currentStatus === 'approved') {
+                throw new InvalidArgumentException('گزارش تأییدشده قابل جایگزینی توسط نهاد نیست. در صورت رد توسط مرکز می‌توانید اصلاحیه بفرستید.');
+            }
+            if ($currentStatus !== 'rejected') {
+                throw new InvalidArgumentException('وضعیت گزارش برای ارسال مجدد مناسب نیست.');
+            }
+            $isRejectedResubmit = true;
+        }
+        // First submit must be inside the open window; rejected corrections may resubmit outside it.
+        if (Access::isTeam() && !$isRejectedResubmit && !$this->canSubmitNow($period, $settings)) {
             $window = $this->windowForPeriod($period, $settings);
             $from = $window['open_from'] !== '' ? $window['open_from'] : '—';
             $until = $window['open_until'] !== '' ? $window['open_until'] : '—';
             throw new InvalidArgumentException("ارسال این گزارش فعلاً ممکن نیست. بازه مجاز: از {$from} تا {$until}.");
         }
 
-        $this->assertTeamExists($teamId);
         $stored = FileStorage::storeUpload($upload, 'performance');
         $now = date('c');
         $status = Access::canWrite() && !Access::isTeam() ? 'approved' : 'pending';
-        $existing = $this->reportRow($teamId, $fiscalYear, $period);
         $oldPath = $existing ? (string) ($existing['stored_path'] ?? '') : '';
+        $id = 0;
 
-        if ($existing) {
-            $currentStatus = (string) ($existing['status'] ?? '');
-            if (Access::isTeam() && $currentStatus === 'pending') {
-                throw new InvalidArgumentException('گزارش این دوره در انتظار تأیید مرکز است و ارسال مجدد مجاز نیست.');
+        try {
+            if ($existing) {
+                $this->pdo->prepare(
+                    'UPDATE team_performance_reports SET
+                        original_name = :original_name,
+                        stored_path = :stored_path,
+                        mime = :mime,
+                        size_bytes = :size_bytes,
+                        notes = :notes,
+                        status = :status,
+                        rejection_reason = NULL,
+                        uploaded_by_role = :uploaded_by_role,
+                        uploaded_by_user_id = :uploaded_by_user_id,
+                        submitted_at = :submitted_at,
+                        reviewed_at = :reviewed_at,
+                        updated_at = :updated_at
+                     WHERE id = :id'
+                )->execute([
+                    'original_name' => $stored['original_name'],
+                    'stored_path' => $stored['relative_path'],
+                    'mime' => $stored['mime'],
+                    'size_bytes' => $stored['size_bytes'],
+                    'notes' => $notes !== '' ? $notes : null,
+                    'status' => $status,
+                    'uploaded_by_role' => Access::role(),
+                    'uploaded_by_user_id' => Access::userId() > 0 ? Access::userId() : null,
+                    'submitted_at' => $now,
+                    'reviewed_at' => $status === 'approved' ? $now : null,
+                    'updated_at' => $now,
+                    'id' => (int) $existing['id'],
+                ]);
+                $id = (int) $existing['id'];
+            } else {
+                $this->pdo->prepare(
+                    'INSERT INTO team_performance_reports
+                        (team_id, fiscal_year, period, original_name, stored_path, mime, size_bytes, notes, status,
+                         uploaded_by_role, uploaded_by_user_id, submitted_at, reviewed_at, created_at, updated_at)
+                     VALUES
+                        (:team_id, :fiscal_year, :period, :original_name, :stored_path, :mime, :size_bytes, :notes, :status,
+                         :uploaded_by_role, :uploaded_by_user_id, :submitted_at, :reviewed_at, :created_at, :updated_at)'
+                )->execute([
+                    'team_id' => $teamId,
+                    'fiscal_year' => $fiscalYear,
+                    'period' => $period,
+                    'original_name' => $stored['original_name'],
+                    'stored_path' => $stored['relative_path'],
+                    'mime' => $stored['mime'],
+                    'size_bytes' => $stored['size_bytes'],
+                    'notes' => $notes !== '' ? $notes : null,
+                    'status' => $status,
+                    'uploaded_by_role' => Access::role(),
+                    'uploaded_by_user_id' => Access::userId() > 0 ? Access::userId() : null,
+                    'submitted_at' => $now,
+                    'reviewed_at' => $status === 'approved' ? $now : null,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ]);
+                $id = (int) $this->pdo->lastInsertId();
             }
-            if (Access::isTeam() && $currentStatus === 'approved') {
-                throw new InvalidArgumentException('گزارش تأییدشده قابل جایگزینی توسط نهاد نیست. در صورت رد توسط مرکز می‌توانید اصلاحیه بفرستید.');
-            }
-            if (Access::isTeam() && $currentStatus !== 'rejected') {
-                throw new InvalidArgumentException('وضعیت گزارش برای ارسال مجدد مناسب نیست.');
-            }
-
-            $this->pdo->prepare(
-                'UPDATE team_performance_reports SET
-                    original_name = :original_name,
-                    stored_path = :stored_path,
-                    mime = :mime,
-                    size_bytes = :size_bytes,
-                    notes = :notes,
-                    status = :status,
-                    rejection_reason = NULL,
-                    uploaded_by_role = :uploaded_by_role,
-                    uploaded_by_user_id = :uploaded_by_user_id,
-                    submitted_at = :submitted_at,
-                    reviewed_at = :reviewed_at,
-                    updated_at = :updated_at
-                 WHERE id = :id'
-            )->execute([
-                'original_name' => $stored['original_name'],
-                'stored_path' => $stored['relative_path'],
-                'mime' => $stored['mime'],
-                'size_bytes' => $stored['size_bytes'],
-                'notes' => $notes !== '' ? $notes : null,
-                'status' => $status,
-                'uploaded_by_role' => Access::role(),
-                'uploaded_by_user_id' => Access::userId() > 0 ? Access::userId() : null,
-                'submitted_at' => $now,
-                'reviewed_at' => $status === 'approved' ? $now : null,
-                'updated_at' => $now,
-                'id' => (int) $existing['id'],
-            ]);
-            $id = (int) $existing['id'];
-        } else {
-            $this->pdo->prepare(
-                'INSERT INTO team_performance_reports
-                    (team_id, fiscal_year, period, original_name, stored_path, mime, size_bytes, notes, status,
-                     uploaded_by_role, uploaded_by_user_id, submitted_at, reviewed_at, created_at, updated_at)
-                 VALUES
-                    (:team_id, :fiscal_year, :period, :original_name, :stored_path, :mime, :size_bytes, :notes, :status,
-                     :uploaded_by_role, :uploaded_by_user_id, :submitted_at, :reviewed_at, :created_at, :updated_at)'
-            )->execute([
-                'team_id' => $teamId,
-                'fiscal_year' => $fiscalYear,
-                'period' => $period,
-                'original_name' => $stored['original_name'],
-                'stored_path' => $stored['relative_path'],
-                'mime' => $stored['mime'],
-                'size_bytes' => $stored['size_bytes'],
-                'notes' => $notes !== '' ? $notes : null,
-                'status' => $status,
-                'uploaded_by_role' => Access::role(),
-                'uploaded_by_user_id' => Access::userId() > 0 ? Access::userId() : null,
-                'submitted_at' => $now,
-                'reviewed_at' => $status === 'approved' ? $now : null,
-                'created_at' => $now,
-                'updated_at' => $now,
-            ]);
-            $id = (int) $this->pdo->lastInsertId();
+        } catch (Throwable $error) {
+            FileStorage::deleteRelative((string) ($stored['relative_path'] ?? ''));
+            throw $error;
         }
 
         if ($oldPath !== '' && $oldPath !== $stored['relative_path']) {

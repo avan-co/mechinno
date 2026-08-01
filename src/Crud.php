@@ -1092,13 +1092,51 @@ final class Crud
                 if ($this->blank($data['formal_contract_amount'])) {
                     throw new InvalidArgumentException('مبلغ کل قرارداد رسمی الزامی است.');
                 }
-                $amount = (int) $data['formal_contract_amount'];
-                if ($amount < 0) {
-                    throw new InvalidArgumentException('مبلغ قرارداد رسمی نمی‌تواند منفی باشد.');
+                $amount = (int) preg_replace('/\D+/', '', (string) $data['formal_contract_amount']);
+                if ($amount <= 0) {
+                    throw new InvalidArgumentException('مبلغ قرارداد باید بیشتر از صفر باشد.');
                 }
                 $data['formal_contract_amount'] = $amount;
             } elseif ($creating) {
                 throw new InvalidArgumentException('مبلغ کل قرارداد رسمی الزامی است.');
+            }
+            foreach (['contract_start', 'contract_end'] as $dateField) {
+                if (!array_key_exists($dateField, $data)) {
+                    continue;
+                }
+                $normalizedDate = JalaliDate::normalize($data[$dateField] ?? '');
+                if ($normalizedDate === '') {
+                    throw new InvalidArgumentException('تاریخ شروع و پایان قرارداد الزامی است.');
+                }
+                $data[$dateField] = $normalizedDate;
+            }
+            $yearForDates = (string) ($data['fiscal_year'] ?? '');
+            if (!$creating && $recordId > 0 && ($yearForDates === '' || !isset($data['contract_start']) || !isset($data['contract_end']))) {
+                $currentContract = $this->pdo->prepare(
+                    'SELECT fiscal_year, contract_start, contract_end FROM team_contracts WHERE id = :id'
+                );
+                $currentContract->execute(['id' => $recordId]);
+                $currentRow = $currentContract->fetch(PDO::FETCH_ASSOC) ?: [];
+                if ($yearForDates === '') {
+                    $yearForDates = (string) ($currentRow['fiscal_year'] ?? '');
+                    $data['fiscal_year'] = $yearForDates;
+                }
+                if (!isset($data['contract_start'])) {
+                    $data['contract_start'] = (string) ($currentRow['contract_start'] ?? '');
+                }
+                if (!isset($data['contract_end'])) {
+                    $data['contract_end'] = (string) ($currentRow['contract_end'] ?? '');
+                }
+            }
+            if ($yearForDates !== '' && isset($data['contract_start'], $data['contract_end'])) {
+                $start = (string) $data['contract_start'];
+                $end = (string) $data['contract_end'];
+                if ($end !== '' && $start !== '' && $end < $start) {
+                    throw new InvalidArgumentException('تاریخ پایان نباید قبل از شروع باشد.');
+                }
+                if (substr($start, 0, 4) !== $yearForDates || substr($end, 0, 4) !== $yearForDates) {
+                    throw new InvalidArgumentException("تاریخ شروع و پایان باید در سال مالی {$yearForDates} باشد.");
+                }
             }
             foreach (['charge_rate_override', 'informal_rent_rate_override'] as $field) {
                 if (array_key_exists($field, $data)) {
@@ -1235,6 +1273,10 @@ final class Crud
                 // Admin «واریز تیم»: pin status/plan only on create (direct deposit).
                 // Updates must not auto-approve pending/rejected rows or collapse multi-month plans.
                 if ($creating) {
+                    $teamIdForDirect = (int) ($data['team_id'] ?? 0);
+                    if ($teamIdForDirect > 0 && $this->countPendingTeamPayment($teamIdForDirect) > 0) {
+                        throw new InvalidArgumentException('این نهاد اعلام واریز در انتظار تأیید دارد. ابتدا همان را تأیید/رد کنید، سپس دریافت مستقیم ثبت کنید.');
+                    }
                     $data['payment_status'] = 'approved';
                     $data['confirmed'] = (int) ($data['confirmed'] ?? 1);
                     $description = trim((string) ($data['description'] ?? ''));

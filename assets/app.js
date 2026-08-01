@@ -218,6 +218,8 @@ const cardNavMap = {
   paid_total: "transactions",
   pending_members: "members",
   pending_payments: "transactions",
+  pending_contracts: "team-contracts",
+  pending_performance: "performance-reports",
   pending_locker_requests: "lockers",
   members: "members",
   teams: "teams",
@@ -250,9 +252,9 @@ const adminCardConfig = [
   ["income_month", "درآمد این ماه", statIconSvg.income, "income"],
   ["expense_month", "هزینه این ماه", statIconSvg.expense, "expense"],
   ["pending_payments", "واریز معلق", statIconSvg.payments, "payments"],
-  ["pending_members", "عضو معلق", statIconSvg.members, "members"],
+  ["pending_contracts", "قرارداد معلق", statIconSvg.charges, "contracts"],
+  ["pending_performance", "گزارش معلق", statIconSvg.members, "performance"],
   ["desks_occupied", "میز اشغال", statIconSvg.desks, "desks"],
-  ["available_lockers", "کمد خالی", statIconSvg.lockers, "lockers"],
 ];
 
 const teamCardConfig = [
@@ -538,6 +540,25 @@ const renderSkeletonTable = (rows = 5, cols = 5) => `
 
 window.renderEmptyState = renderEmptyState;
 window.renderSkeletonTable = renderSkeletonTable;
+
+const renderSectionLoadError = (hostId, message, retryFn) => {
+  const host = document.getElementById(hostId);
+  if (!host) return;
+  host.classList.add("is-ready");
+  const retryId = `retry-${hostId}-${Date.now()}`;
+  host.innerHTML = renderEmptyState(message, {
+    icon: "error",
+    cta: `<button type="button" class="button ghost" id="${retryId}">تلاش دوباره</button>`,
+  });
+  host.querySelector(`#${retryId}`)?.addEventListener("click", () => {
+    host.innerHTML = "در حال بارگذاری…";
+    host.classList.remove("is-ready");
+    Promise.resolve(retryFn()).catch((error) => {
+      showToast(error.message, "error");
+      renderSectionLoadError(hostId, message, retryFn);
+    });
+  });
+};
 
 const loadCrudMeta = () => {
   if (!crudMetaPromise) {
@@ -1083,9 +1104,25 @@ const activateSection = (id, options = {}) => {
   if (id === "desks" && panelMode === "team") {
     loadTeamDeskAssignments().catch((error) => showToast(error.message, "error"));
   }
-  if (id === "performance-reports") loadPerformanceReportsSection().catch((error) => showToast(error.message, "error"));
-  if (id === "team-contracts" && panelMode === "admin") loadPendingContractsQueue().catch((error) => showToast(error.message, "error"));
-  if (id === "contracts" && panelMode === "team") loadTeamContractsSection().catch((error) => showToast(error.message, "error"));
+  if (id === "performance-reports") {
+    loadPerformanceReportsSection().catch((error) => {
+      showToast(error.message, "error");
+      renderSectionLoadError("performanceReportsContent", "بارگذاری گزارش‌های عملکرد ناموفق بود.", () => loadPerformanceReportsSection());
+    });
+  }
+  if (id === "team-contracts" && panelMode === "admin") {
+    loadPendingContractsQueue().catch((error) => {
+      showToast(error.message, "error");
+      renderSectionLoadError("pendingContractsQueue", "بارگذاری صف قراردادها ناموفق بود.", () => loadPendingContractsQueue());
+      renderSectionLoadError("rejectedContractsQueue", "بارگذاری ردشده‌ها ناموفق بود.", () => loadPendingContractsQueue());
+    });
+  }
+  if (id === "contracts" && panelMode === "team") {
+    loadTeamContractsSection().catch((error) => {
+      showToast(error.message, "error");
+      renderSectionLoadError("teamContractsContent", "بارگذاری قراردادها ناموفق بود.", () => loadTeamContractsSection());
+    });
+  }
   if (id === "performance-settings") loadPerformanceSettingsForm().catch((error) => showToast(error.message, "error"));
   if (id === "profile" && panelMode === "team") loadTeamProfile().catch((error) => showToast(error.message, "error"));
   if (id === "charges") {
@@ -1281,7 +1318,7 @@ const renderCards = (cards, config = cardConfig, containerId = "cards") => {
         else value = formatNumber(raw);
       }
       const section = resolveCardSection(key);
-      const alert = !missing && ["pending_payments", "pending_members", "debt_total"].includes(key) && Number(raw) > 0;
+      const alert = !missing && ["pending_payments", "pending_members", "pending_contracts", "pending_performance", "debt_total"].includes(key) && Number(raw) > 0;
       return `<article class="stat-card stat-card--${tone}${alert ? " is-alert" : ""}${missing ? " is-empty" : ""} card-clickable" data-nav-section="${section}" tabindex="0" role="button">
         <span class="stat-icon" aria-hidden="true">${icon}</span>
         <div><span class="stat-label">${escapeHtml(title)}</span><strong>${escapeHtml(value)}</strong></div>
@@ -1620,7 +1657,7 @@ const renderContractReviewTable = (rows, { showActions = false, showReason = fal
         <td>${showActionColumn ? `<div class="review-list-actions">
             <button type="button" class="button" data-approve-proposal="${row.id}" ${canApprove ? "" : "disabled"}>تأیید</button>
             <button type="button" class="button danger ghost" data-reject-proposal="${row.id}">رد</button>
-            ${!canApprove ? `<div class="hint reject-hint">هر دو پیوست لازم است</div>` : ""}
+            ${!canApprove ? `<div class="hint reject-hint">هر دو پیوست لازم است — برای باز کردن مسیر نهاد، پیشنهاد را رد کنید.</div>` : ""}
           </div>` : docStatusBadge(row.status)}
         </td>
       </tr>`;
@@ -1716,9 +1753,9 @@ const loadTeamContractsSection = async () => {
       <h4>${proposal?.status === "rejected" ? "ارسال اصلاحیه قرارداد" : "ارسال قرارداد سال " + escapeHtml(year)}</h4>
       ${proposal?.rejection_reason ? `<p class="hint reject-hint">دلیل رد قبلی: ${escapeHtml(proposal.rejection_reason)}</p>` : ""}
       <div class="crud-grid year-form-grid">
-        <label><span>شروع قرارداد</span><input name="contract_start" type="text" required value="${escapeHtml(proposal?.contract_start || official?.contract_start || `${year}/01/01`)}" /></label>
-        <label><span>پایان قرارداد</span><input name="contract_end" type="text" required value="${escapeHtml(proposal?.contract_end || official?.contract_end || `${year}/12/29`)}" /></label>
-        <label><span>مبلغ کل قرارداد رسمی (ریال)</span><input name="formal_contract_amount" type="number" min="0" step="1" required value="${escapeHtml(proposal?.formal_contract_amount ?? official?.formal_contract_amount ?? "")}" /></label>
+        <label><span>شروع قرارداد</span><input name="contract_start" type="text" required dir="ltr" class="ltr-input" placeholder="${escapeHtml(year)}/01/01" value="${escapeHtml(proposal?.contract_start || official?.contract_start || `${year}/01/01`)}" /></label>
+        <label><span>پایان قرارداد</span><input name="contract_end" type="text" required dir="ltr" class="ltr-input" placeholder="${escapeHtml(year)}/12/29" value="${escapeHtml(proposal?.contract_end || official?.contract_end || `${year}/12/29`)}" /></label>
+        <label><span>مبلغ کل قرارداد رسمی (ریال)</span><input name="formal_contract_amount" type="number" min="1" step="1" required value="${escapeHtml(proposal?.formal_contract_amount ?? official?.formal_contract_amount ?? "")}" /></label>
         <label class="wide"><span>توضیحات</span><textarea name="notes" rows="2">${escapeHtml(proposal?.notes || official?.notes || "")}</textarea></label>
         <label><span>${escapeHtml(labels.membership || "قرارداد عضویت")}${keepFiles ? " (در صورت نیاز جایگزین کنید)" : " (الزامی)"}</span><input name="membership_file" type="file" ${keepFiles ? "" : "required"} accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx" /></label>
         <label><span>${escapeHtml(labels.settlement || "قرارداد استقرار")}${keepFiles ? " (در صورت نیاز جایگزین کنید)" : " (الزامی)"}</span><input name="settlement_file" type="file" ${keepFiles ? "" : "required"} accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx" /></label>
@@ -1777,6 +1814,14 @@ const loadTeamContractsSection = async () => {
       const keepFiles = form.dataset.keepFiles === "1";
       if (!keepFiles && (!membership || !settlement)) {
         showToast("هر دو فایل عضویت و استقرار الزامی است.", "error");
+        return;
+      }
+      if (!isValidJalaliDate(form.contract_start?.value) || !isValidJalaliDate(form.contract_end?.value)) {
+        showToast("تاریخ شروع و پایان باید به صورت 1404/01/01 باشد.", "error");
+        return;
+      }
+      if (Number(form.formal_contract_amount?.value || 0) <= 0) {
+        showToast("مبلغ قرارداد باید بیشتر از صفر باشد.", "error");
         return;
       }
       const body = new FormData(form);
@@ -1932,7 +1977,7 @@ const loadPerformanceReportsSection = async () => {
   host.innerHTML = `
     ${guide ? `<p class="hint">${escapeHtml(guide)}</p>` : ""}
     <div class="table-wrap"><table class="data-table review-list-table">
-      <thead><tr><th>سال</th><th>نیمه</th><th>بازه ارسال</th><th>وضعیت</th><th>فایل</th><th>ارسال / اصلاحیه</th></tr></thead>
+      <thead><tr><th>سال</th><th>نیمه</th><th>بازه ارسال</th><th>وضعیت</th><th>فایل</th><th>اقدام</th></tr></thead>
       <tbody>${(data.periods || []).map((period) => {
         const report = period.report;
         const periodYear = String(period.fiscal_year || data.fiscal_year || "");
@@ -1954,6 +1999,8 @@ const loadPerformanceReportsSection = async () => {
           actionCell = `<span class="hint">در انتظار تأیید مرکز</span>`;
         } else if (report?.status === "approved") {
           actionCell = `<span class="hint">تأیید‌شده</span>`;
+        } else if (report?.status === "rejected" && !canSubmit) {
+          actionCell = `<span class="hint reject-hint">رد‌شده — برای ارسال اصلاحیه با مرکز هماهنگ کنید</span>`;
         }
         return `<tr>
           <td>${escapeHtml(periodYear)}</td>
@@ -2868,6 +2915,7 @@ const profileSection = (title, rows, cols, cellRenderer = null) => `
           if (c === "usage_type") return `<td>${usageLabels[value] || value || "—"}</td>`;
           if (c === "wants_access") return `<td>${accessStatusLabel(row)}</td>`;
           if (c === "approval_status") return `<td>${approvalStatusBadge(value)}</td>`;
+          if (c === "payment_status") return `<td>${paymentStatusBadge(value)}</td>`;
           if (c === "number") return `<td>${deskLink(value)}</td>`;
           if (plainColumns.has(c)) return `<td>${escapeHtml(formatPlain(value))}</td>`;
           return `<td>${escapeHtml(formatNumber(value ?? "—"))}</td>`;
@@ -2914,7 +2962,7 @@ const openTeamProfile = async (teamId, options = {}) => {
       return null;
     })}
     ${profileSection("شارژها", data.charges, ["fiscal_year", "month_name", "charge_amount", "rent_amount", "amount"])}
-    ${profileSection("دریافت شارژ از نهاد", data.payments, ["tx_date", "fiscal_year", "month_name", "amount"])}
+    ${profileSection("دریافت شارژ از نهاد", data.payments, ["tx_date", "fiscal_year", "month_name", "amount", "payment_status"])}
     <div class="modal-actions"><button class="button ghost" type="button" data-close-modal>بستن</button></div>`;
 
   form.querySelector("[data-close-modal]").addEventListener("click", closeModal);
@@ -3209,11 +3257,15 @@ const isJalaliDateField = (name, meta) => {
   return /(?:^|_)(?:date|at)$/.test(name) || name.endsWith("_from") || name.endsWith("_until");
 };
 
-const isValidJalaliDate = (value) => /^\d{4}\/\d{2}\/\d{2}$/.test(String(value || "").trim());
+const normalizeDigits = (value) => String(value ?? "").trim()
+  .replace(/[۰-۹]/g, (ch) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(ch)))
+  .replace(/[٠-٩]/g, (ch) => String("٠١٢٣٤٥٦٧٨٩".indexOf(ch)));
 
-const isValidIranPhone = (value) => /^09\d{9}$/.test(String(value || "").trim());
+const isValidJalaliDate = (value) => /^\d{4}\/\d{2}\/\d{2}$/.test(normalizeDigits(value));
 
-const isValidNationalId = (value) => /^\d{10}$/.test(String(value || "").trim());
+const isValidIranPhone = (value) => /^09\d{9}$/.test(normalizeDigits(value));
+
+const isValidNationalId = (value) => /^\d{10}$/.test(normalizeDigits(value));
 
 const validateCrudForm = (form, definition) => {
   const payload = Object.fromEntries(new FormData(form).entries());
@@ -3671,7 +3723,7 @@ const askRejectReason = (options = {}) => new Promise((resolve, reject) => {
   if (!modal) {
     document.body.insertAdjacentHTML("beforeend", `
       <div id="rejectModal" class="modal-backdrop" hidden>
-        <div class="modal-card" role="dialog" aria-labelledby="rejectModalTitle">
+        <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="rejectModalTitle">
           <div class="modal-head">
             <h2 id="rejectModalTitle">رد درخواست</h2>
             <button class="modal-close" type="button" data-reject-cancel aria-label="بستن">×</button>
@@ -3699,8 +3751,8 @@ const askRejectReason = (options = {}) => new Promise((resolve, reject) => {
   if (error) error.hidden = true;
   input.value = "";
   modal.hidden = false;
-  input.focus();
   trapFocus(modal);
+  input.focus();
 
   const cleanup = () => {
     modal.hidden = true;
@@ -3826,6 +3878,7 @@ const formatCell = (column, value, row, resource) => {
   }
   if (column === "assignment_status") {
     if (value === "active") return '<span class="badge badge-paid">جاری</span>';
+    if (value === "scheduled") return '<span class="badge badge-partial">زمان‌بندی‌شده</span>';
     if (value === "expired") return '<span class="badge badge-debt">منقضی</span>';
     return '<span class="badge">—</span>';
   }
@@ -4592,6 +4645,11 @@ if (recalcChargesButton && canWrite) {
 
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
+    const rejectModal = document.getElementById("rejectModal");
+    if (rejectModal && !rejectModal.hidden && rejectModal._pendingCancel) {
+      rejectModal._pendingCancel();
+      return;
+    }
     closeModal();
     closeDrawer();
     return;

@@ -487,17 +487,22 @@ $crud->create('lockers', ['locker_number' => '10', 'team_id' => (string) $teamId
 $lockers = $repo->paginatedResource('lockers', 1, 25);
 $assert(count($lockers['rows']) >= 1, 'crud: locker created');
 
-$tx = $crud->create('transactions', [
-    'tx_date' => '1405/01/15',
-    'description' => 'واریز تست',
-    'amount' => '600',
-    'category' => 'واریز تیم',
-    'team_id' => (string) $teamId,
-    'fiscal_year' => '1405',
-    'month_index' => '1',
-    'confirmed' => '1',
-]);
-$assert((int) ($tx['amount'] ?? 0) === 600, 'crud: team deposit transaction');
+$directBlockedWhilePending = false;
+try {
+    $crud->create('transactions', [
+        'tx_date' => '1405/01/15',
+        'description' => 'واریز تست',
+        'amount' => '600',
+        'category' => 'واریز تیم',
+        'team_id' => (string) $teamId,
+        'fiscal_year' => '1405',
+        'month_index' => '1',
+        'confirmed' => '1',
+    ]);
+} catch (InvalidArgumentException $e) {
+    $directBlockedWhilePending = str_contains($e->getMessage(), 'در انتظار تأیید');
+}
+$assert($directBlockedWhilePending, 'crud: admin direct deposit blocked while team payment pending');
 
 $workflow = new Workflow($pdo);
 $approvedMember = $workflow->approveMember((int) $member['id']);
@@ -505,6 +510,18 @@ $assert(($approvedMember['approval_status'] ?? '') === 'approved', 'workflow: me
 $approvedPayment = $workflow->approvePayment((int) $payment['id']);
 $assert(($approvedPayment['payment_status'] ?? '') === 'approved', 'workflow: payment approved');
 $assert((int) ($approvedPayment['confirmed'] ?? 0) === 1, 'workflow: payment confirmed in income');
+
+$tx = $crud->create('transactions', [
+    'tx_date' => '1405/02/15',
+    'description' => 'واریز مستقیم پس از تأیید',
+    'amount' => '100',
+    'category' => 'واریز تیم',
+    'team_id' => (string) $teamId,
+    'fiscal_year' => '1405',
+    'month_index' => '2',
+    'confirmed' => '1',
+]);
+$assert((int) ($tx['amount'] ?? 0) === 100, 'crud: admin direct deposit allowed after pending cleared');
 
 $_SESSION = [
     'mechinno_authenticated' => true,

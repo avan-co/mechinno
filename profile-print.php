@@ -36,8 +36,43 @@ $summary = $profile['summary'] ?? [];
 $docs = new ContractDocuments($pdo);
 $docOverview = $docs->teamOverview($teamId);
 $docsByYear = [];
+$proposalRows = [];
 foreach ($docOverview['years'] as $item) {
-    $docsByYear[(string) ($item['fiscal_year'] ?? '')] = $item;
+    $yearKey = (string) ($item['fiscal_year'] ?? '');
+    $docsByYear[$yearKey] = $item;
+    $proposal = $item['proposal'] ?? null;
+    if (is_array($proposal) && in_array((string) ($proposal['status'] ?? ''), ['pending', 'rejected'], true)) {
+        $proposalRows[] = [
+            'fiscal_year' => $yearKey,
+            'status' => (string) ($proposal['status'] ?? ''),
+            'contract_start' => (string) ($proposal['contract_start'] ?? ''),
+            'contract_end' => (string) ($proposal['contract_end'] ?? ''),
+            'formal_contract_amount' => (int) ($proposal['formal_contract_amount'] ?? 0),
+            'rejection_reason' => (string) ($proposal['rejection_reason'] ?? ''),
+        ];
+    }
+}
+$performanceRows = [];
+if (Schema::tableExists($pdo, 'team_performance_reports')) {
+    $periodLabels = ['h1' => 'نیمه اول', 'h2' => 'نیمه دوم'];
+    $perfStmt = $pdo->prepare(
+        'SELECT fiscal_year, period, status, original_name, rejection_reason
+         FROM team_performance_reports
+         WHERE team_id = :team_id
+         ORDER BY fiscal_year DESC, period ASC'
+    );
+    $perfStmt->execute(['team_id' => $teamId]);
+    foreach ($perfStmt->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
+        $period = (string) ($row['period'] ?? '');
+        $performanceRows[] = [
+            'fiscal_year' => (string) ($row['fiscal_year'] ?? ''),
+            'period' => $period,
+            'period_label' => $periodLabels[$period] ?? $period,
+            'status' => (string) ($row['status'] ?? ''),
+            'original_name' => (string) ($row['original_name'] ?? ''),
+            'rejection_reason' => (string) ($row['rejection_reason'] ?? ''),
+        ];
+    }
 }
 $assetVer = (string) max(
     filemtime(__DIR__ . '/assets/profile-print.css') ?: time(),
@@ -136,9 +171,9 @@ $maskNationalId = static function (mixed $value): string {
     </section>
 
     <section class="block">
-      <h2>قراردادهای سالانه</h2>
+      <h2>قراردادهای رسمی سالانه</h2>
       <?php if (empty($profile['contracts'])): ?>
-        <p class="empty">قراردادی ثبت نشده است.</p>
+        <p class="empty">قرارداد رسمی ثبت نشده است.</p>
       <?php else: ?>
         <table>
           <thead>
@@ -157,19 +192,66 @@ $maskNationalId = static function (mixed $value): string {
                 $bundle = $docsByYear[$year] ?? [];
                 $membership = $bundle['files']['membership']['original_name'] ?? '—';
                 $settlement = $bundle['files']['settlement']['original_name'] ?? '—';
+                $membershipStatus = $approvalLabels[(string) ($bundle['files']['membership']['status'] ?? '')] ?? '';
+                $settlementStatus = $approvalLabels[(string) ($bundle['files']['settlement']['status'] ?? '')] ?? '';
               ?>
               <tr>
                 <td><?= e($year) ?></td>
                 <td><?= e((string) ($contract['contract_start'] ?? '—')) ?></td>
                 <td><?= e((string) ($contract['contract_end'] ?? '—')) ?></td>
                 <td><?= e($fmtMoney($contract['formal_contract_amount'] ?? 0)) ?></td>
-                <td class="files-cell">عضویت: <?= e((string) $membership) ?><br />استقرار: <?= e((string) $settlement) ?></td>
+                <td class="files-cell">عضویت: <?= e((string) $membership) ?><?= $membershipStatus !== '' ? ' (' . e($membershipStatus) . ')' : '' ?><br />استقرار: <?= e((string) $settlement) ?><?= $settlementStatus !== '' ? ' (' . e($settlementStatus) . ')' : '' ?></td>
               </tr>
             <?php endforeach; ?>
           </tbody>
         </table>
       <?php endif; ?>
     </section>
+
+    <?php if ($proposalRows !== []): ?>
+    <section class="block">
+      <h2>پیشنهادهای قرارداد (غیررسمی)</h2>
+      <table>
+        <thead>
+          <tr><th>سال</th><th>وضعیت</th><th>شروع</th><th>پایان</th><th>مبلغ پیشنهادی</th><th>دلیل رد</th></tr>
+        </thead>
+        <tbody>
+          <?php foreach ($proposalRows as $proposal): ?>
+            <tr>
+              <td><?= e((string) $proposal['fiscal_year']) ?></td>
+              <td><?= e($approvalLabels[$proposal['status']] ?? $proposal['status']) ?></td>
+              <td><?= e($proposal['contract_start'] !== '' ? $proposal['contract_start'] : '—') ?></td>
+              <td><?= e($proposal['contract_end'] !== '' ? $proposal['contract_end'] : '—') ?></td>
+              <td><?= e($fmtMoney($proposal['formal_contract_amount'])) ?></td>
+              <td><?= e($proposal['rejection_reason'] !== '' ? $proposal['rejection_reason'] : '—') ?></td>
+            </tr>
+          <?php endforeach; ?>
+        </tbody>
+      </table>
+    </section>
+    <?php endif; ?>
+
+    <?php if ($performanceRows !== []): ?>
+    <section class="block">
+      <h2>گزارش‌های عملکرد</h2>
+      <table>
+        <thead>
+          <tr><th>سال</th><th>نیمه</th><th>وضعیت</th><th>فایل</th><th>دلیل رد</th></tr>
+        </thead>
+        <tbody>
+          <?php foreach ($performanceRows as $report): ?>
+            <tr>
+              <td><?= e((string) ($report['fiscal_year'] ?? '—')) ?></td>
+              <td><?= e((string) ($report['period_label'] ?? $report['period'] ?? '—')) ?></td>
+              <td><?= e($approvalLabels[(string) ($report['status'] ?? '')] ?? (string) ($report['status'] ?? '—')) ?></td>
+              <td><?= e((string) ($report['original_name'] ?? '—')) ?></td>
+              <td><?= e((string) (($report['rejection_reason'] ?? '') !== '' ? $report['rejection_reason'] : '—')) ?></td>
+            </tr>
+          <?php endforeach; ?>
+        </tbody>
+      </table>
+    </section>
+    <?php endif; ?>
 
     <section class="block">
       <h2>میزها و تخصیص</h2>

@@ -22,7 +22,7 @@ final class Repository
         }
 
         $desksTotal = (int) $this->scalar('SELECT COUNT(*) FROM desks');
-        $desksOccupied = (int) $this->scalar('SELECT COUNT(*) FROM desks WHERE team_id IS NOT NULL');
+        $desksOccupied = $this->liveOccupiedDeskCount();
         $incomeYear = $this->incomeForPeriod($this->currentFiscalYear());
         $expenseYear = $this->expenseForPeriod($this->currentFiscalYear());
 
@@ -1546,12 +1546,16 @@ final class Repository
         $today = JalaliDate::todayParts()['formatted'];
 
         return array_map(function (array $row) use ($today): array {
+            $from = (string) ($row['assigned_from'] ?? '');
             $until = (string) ($row['assigned_until'] ?? '');
-            $row['assignment_status'] = ($until === '' || JalaliDate::compare($until, $today) >= 0) ? 'active' : 'expired';
-            $row['assignment_period'] = JalaliDate::monthRangeLabel(
-                (string) ($row['assigned_from'] ?? ''),
-                $until
-            );
+            if ($from !== '' && JalaliDate::compare($from, $today) > 0) {
+                $row['assignment_status'] = 'scheduled';
+            } elseif ($until === '' || JalaliDate::compare($until, $today) >= 0) {
+                $row['assignment_status'] = 'active';
+            } else {
+                $row['assignment_status'] = 'expired';
+            }
+            $row['assignment_period'] = JalaliDate::monthRangeLabel($from, $until);
             $fromMonth = JalaliDate::monthIndexFromDate((string) ($row['assigned_from'] ?? ''));
             $untilMonth = JalaliDate::monthIndexFromDate($until);
             $row['assigned_from_month'] = $fromMonth > 0 ? (string) $fromMonth : '';
@@ -1607,7 +1611,10 @@ final class Repository
         $status = trim((string) ($filters['assignment_status'] ?? ''));
         $today = $this->pdo->quote(JalaliDate::todayParts()['formatted']);
         if ($status === 'active') {
+            $clauses[] = "da.assigned_from <= {$today}";
             $clauses[] = "(da.assigned_until IS NULL OR da.assigned_until = '' OR da.assigned_until >= {$today})";
+        } elseif ($status === 'scheduled') {
+            $clauses[] = "da.assigned_from > {$today}";
         } elseif ($status === 'expired') {
             $clauses[] = "(da.assigned_until IS NOT NULL AND da.assigned_until <> '' AND da.assigned_until < {$today})";
         }
@@ -1617,6 +1624,22 @@ final class Repository
         }
 
         return ' WHERE ' . implode(' AND ', $clauses);
+    }
+
+    private function liveOccupiedDeskCount(): int
+    {
+        if (!Schema::tableExists($this->pdo, 'desk_assignments')) {
+            return (int) $this->scalar('SELECT COUNT(*) FROM desks WHERE team_id IS NOT NULL');
+        }
+        $today = JalaliDate::todayParts()['formatted'];
+
+        return (int) $this->preparedScalar(
+            'SELECT COUNT(DISTINCT da.desk_id)
+             FROM desk_assignments da
+             WHERE da.assigned_from <= :today
+               AND (da.assigned_until IS NULL OR da.assigned_until = \'\' OR da.assigned_until >= :today)',
+            ['today' => $today]
+        );
     }
 
     /**
@@ -1632,6 +1655,41 @@ final class Repository
              LEFT JOIN teams t ON t.id = d.team_id
              ORDER BY d.number'
         );
+
+        // Prefer live assignment ranges over possibly-stale desks.team_id cache.
+        $today = JalaliDate::todayParts()['formatted'];
+        $live = $this->preparedRows(
+            'SELECT da.desk_id, da.team_id, da.usage_type, t.name AS team_name, t.is_active AS team_is_active
+             FROM desk_assignments da
+             INNER JOIN teams t ON t.id = da.team_id
+             WHERE da.assigned_from <= :today
+               AND (da.assigned_until IS NULL OR da.assigned_until = \'\' OR da.assigned_until >= :today)
+             ORDER BY da.assigned_from DESC, da.id DESC',
+            ['today' => $today]
+        );
+        $liveByDesk = [];
+        foreach ($live as $assignment) {
+            $deskId = (int) ($assignment['desk_id'] ?? 0);
+            if ($deskId > 0 && !isset($liveByDesk[$deskId])) {
+                $liveByDesk[$deskId] = $assignment;
+            }
+        }
+        $rows = array_map(static function (array $row) use ($liveByDesk): array {
+            $deskId = (int) ($row['id'] ?? 0);
+            $current = $liveByDesk[$deskId] ?? null;
+            if ($current) {
+                $row['team_id'] = (int) ($current['team_id'] ?? 0);
+                $row['team_name'] = (string) ($current['team_name'] ?? '');
+                $row['team_is_active'] = $current['team_is_active'] ?? null;
+                $row['usage_type'] = (string) ($current['usage_type'] ?? $row['usage_type'] ?? 'formal');
+            } else {
+                $row['team_id'] = null;
+                $row['team_name'] = '';
+                $row['team_is_active'] = null;
+            }
+
+            return $row;
+        }, $rows);
 
         if ($scope !== null) {
             // Team map is for finding own desk only: hide other names, occupancy, and usage.

@@ -400,7 +400,7 @@ $assetVer = (string) max(
                 <div id="pendingContractsQueue" class="review-list-host">در حال بارگذاری…</div>
               </article>
               <article class="panel">
-                <div class="panel-head"><h2>ردشده‌ها</h2><span class="hint">جدا از صف تأیید نگه داشته می‌شوند</span></div>
+                <div class="panel-head"><h2>ردشده‌ها</h2><span class="hint">جدا از صف تأیید؛ نهاد پس از رد می‌تواند بستهٔ جدید بفرستد</span></div>
                 <div id="rejectedContractsQueue" class="review-list-host">در حال بارگذاری…</div>
               </article>
               <data-table title="قراردادهای ثبت‌شده نهادها" endpoint="api.php?resource=team_contracts"></data-table>

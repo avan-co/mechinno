@@ -98,8 +98,8 @@
   const statusBadge = (status) => {
     const map = {
       pending: ["badge badge-partial", "در انتظار تأیید"],
-      approved: ["badge badge-ok", "تأییدشده"],
-      rejected: ["badge badge-danger", "رد شده"],
+      approved: ["badge badge-ok", "تأیید‌شده"],
+      rejected: ["badge badge-danger", "رد‌شده"],
     };
     const [cls, label] = map[status] || ["badge", status || "—"];
     return `<span class="${cls}">${S().escapeHtml(label)}</span>`;
@@ -173,7 +173,7 @@
         <div class="crud-grid year-form-grid">
           <label><span>شروع قرارداد</span><input name="contract_start" type="text" required value="${S().escapeHtml(contract?.contract_start || `${year}/01/01`)}" placeholder="${year}/01/01" /></label>
           <label><span>پایان قرارداد</span><input name="contract_end" type="text" required value="${S().escapeHtml(contract?.contract_end || `${year}/12/29`)}" placeholder="${year}/12/29" /></label>
-          <label><span>مبلغ کل قرارداد رسمی (ریال)</span><input name="formal_contract_amount" type="number" min="0" step="1" required value="${S().escapeHtml(contract?.formal_contract_amount ?? "")}" placeholder="مبلغ کل قرارداد رسمی" /></label>
+          <label><span>مبلغ کل قرارداد رسمی (ریال)</span><input name="formal_contract_amount" type="number" min="1" step="1" required value="${S().escapeHtml(contract?.formal_contract_amount ?? "")}" placeholder="مبلغ کل قرارداد رسمی" /></label>
           <label><span>نرخ شارژ اختصاصی</span><input name="charge_rate_override" type="number" min="0" step="1" value="${S().escapeHtml(contract?.charge_rate_override ?? "")}" placeholder="خالی = نرخ عمومی" /></label>
           <label><span>نرخ اجاره اختصاصی</span><input name="informal_rent_rate_override" type="number" min="0" step="1" value="${S().escapeHtml(contract?.informal_rent_rate_override ?? "")}" placeholder="خالی = نرخ عمومی" /></label>
           <label class="wide"><span>توضیحات</span><textarea name="notes" rows="2">${S().escapeHtml(contract?.notes || "")}</textarea></label>
@@ -185,7 +185,9 @@
       </form>
       <div class="contract-files-block">
         <h4>پیوست قراردادها</h4>
-        <p class="hint">دو فایل سالانه: عضویت و استقرار. آپلود ادمین مستقیم تأیید می‌شود.</p>
+        <p class="hint">${proposal && proposal.status === "pending"
+          ? "پیشنهاد نهاد در صف است؛ آپلود ادمین پیوست همان صف را به‌روز می‌کند و تا تأیید/رد رسمی نمی‌شود."
+          : "دو فایل سالانه: عضویت و استقرار. آپلود ادمین مستقیم تأیید می‌شود."}</p>
         ${renderContractFiles(profile, year, teamId, true)}
       </div>
     </article>`;
@@ -281,7 +283,7 @@
           <summary>اعضا، کمدها و پرداخت‌ها</summary>
           ${S().profileSection("اعضا", profile.members || [], ["member_code", "full_name", "access_code", "phone", "national_id"])}
           ${S().profileSection("کمدها", profile.lockers || [], ["locker_number", "status", "delivered_at", "key_number"])}
-          ${S().profileSection("دریافت شارژ از نهاد", profile.payments || [], ["tx_date", "fiscal_year", "month_name", "amount"])}
+          ${S().profileSection("دریافت شارژ از نهاد", profile.payments || [], ["tx_date", "fiscal_year", "month_name", "amount", "payment_status"])}
         </details>
       </div>`;
   };
