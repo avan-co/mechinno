@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 final class Schema
 {
-    public const VERSION = 20;
+    public const VERSION = 21;
 
     public static function migrate(PDO $pdo): void
     {
@@ -12,6 +12,8 @@ final class Schema
             self::ensureColumns($pdo);
             self::ensureMeetingRoomTables($pdo);
             self::ensureRoomClosedDaysTable($pdo);
+            self::ensureContractDocumentTables($pdo);
+            self::ensurePerformanceReportTables($pdo);
             self::reconcileDeskAssignments($pdo);
             self::seedSmsPatterns($pdo);
             self::applyKnownPatternBodyIds($pdo);
@@ -31,6 +33,8 @@ final class Schema
         self::ensureRoomClosedDaysTable($pdo);
         self::migrateRoomSlotDefaults($pdo);
         self::ensureTeamContractsTable($pdo);
+        self::ensureContractDocumentTables($pdo);
+        self::ensurePerformanceReportTables($pdo);
         self::ensureColumns($pdo);
         self::dropLegacyColumns($pdo);
         self::dropUnusedTables($pdo);
@@ -115,6 +119,9 @@ final class Schema
             'locker_requests',
             'member_requests',
             'desk_assignments',
+            'team_performance_reports',
+            'team_contract_files',
+            'team_contract_proposals',
             'team_contracts',
             'lockers',
             'members',
@@ -385,6 +392,12 @@ final class Schema
                 'room_max_hours_per_day' => 'INT NOT NULL DEFAULT 2',
                 'room_slot_minutes' => 'INT NOT NULL DEFAULT 30',
                 'room_public_enabled' => 'TINYINT NOT NULL DEFAULT 1',
+                'performance_reports_enabled' => 'TINYINT NOT NULL DEFAULT 0',
+                'performance_h1_open_from' => 'VARCHAR(32) NULL',
+                'performance_h1_open_until' => 'VARCHAR(32) NULL',
+                'performance_h2_open_from' => 'VARCHAR(32) NULL',
+                'performance_h2_open_until' => 'VARCHAR(32) NULL',
+                'performance_report_guide' => 'TEXT NULL',
             ],
             'lockers' => [
                 'team_id' => 'INT NULL',
@@ -750,6 +763,151 @@ final class Schema
                     created_at VARCHAR(32) NULL,
                     UNIQUE KEY uniq_team_contract_year (team_id, fiscal_year),
                     INDEX idx_team_contracts_year (fiscal_year)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+            );
+        }
+    }
+
+    private static function ensureContractDocumentTables(PDO $pdo): void
+    {
+        $isSqlite = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite';
+        if ($isSqlite) {
+            $pdo->exec(
+                "CREATE TABLE IF NOT EXISTS team_contract_files (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    team_id INTEGER NOT NULL,
+                    fiscal_year TEXT NOT NULL,
+                    doc_type TEXT NOT NULL,
+                    original_name TEXT NOT NULL,
+                    stored_path TEXT NOT NULL,
+                    mime TEXT,
+                    size_bytes INTEGER NOT NULL DEFAULT 0,
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    rejection_reason TEXT,
+                    uploaded_by_role TEXT,
+                    uploaded_by_user_id INTEGER,
+                    submitted_at TEXT,
+                    reviewed_at TEXT,
+                    created_at TEXT,
+                    updated_at TEXT,
+                    UNIQUE(team_id, fiscal_year, doc_type)
+                )"
+            );
+            $pdo->exec(
+                "CREATE TABLE IF NOT EXISTS team_contract_proposals (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    team_id INTEGER NOT NULL,
+                    fiscal_year TEXT NOT NULL,
+                    contract_start TEXT NOT NULL,
+                    contract_end TEXT NOT NULL,
+                    formal_contract_amount INTEGER NOT NULL DEFAULT 0,
+                    charge_rate_override INTEGER,
+                    informal_rent_rate_override INTEGER,
+                    notes TEXT,
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    rejection_reason TEXT,
+                    submitted_at TEXT,
+                    reviewed_at TEXT,
+                    created_at TEXT,
+                    updated_at TEXT,
+                    UNIQUE(team_id, fiscal_year)
+                )"
+            );
+        } else {
+            $pdo->exec(
+                "CREATE TABLE IF NOT EXISTS team_contract_files (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    team_id INT NOT NULL,
+                    fiscal_year VARCHAR(8) NOT NULL,
+                    doc_type VARCHAR(32) NOT NULL,
+                    original_name VARCHAR(255) NOT NULL,
+                    stored_path VARCHAR(512) NOT NULL,
+                    mime VARCHAR(128) NULL,
+                    size_bytes BIGINT NOT NULL DEFAULT 0,
+                    status VARCHAR(32) NOT NULL DEFAULT 'pending',
+                    rejection_reason TEXT NULL,
+                    uploaded_by_role VARCHAR(32) NULL,
+                    uploaded_by_user_id INT NULL,
+                    submitted_at VARCHAR(32) NULL,
+                    reviewed_at VARCHAR(32) NULL,
+                    created_at VARCHAR(32) NULL,
+                    updated_at VARCHAR(32) NULL,
+                    UNIQUE KEY uniq_team_contract_file (team_id, fiscal_year, doc_type),
+                    INDEX idx_team_contract_files_status (status)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+            );
+            $pdo->exec(
+                "CREATE TABLE IF NOT EXISTS team_contract_proposals (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    team_id INT NOT NULL,
+                    fiscal_year VARCHAR(8) NOT NULL,
+                    contract_start VARCHAR(32) NOT NULL,
+                    contract_end VARCHAR(32) NOT NULL,
+                    formal_contract_amount BIGINT NOT NULL DEFAULT 0,
+                    charge_rate_override BIGINT NULL,
+                    informal_rent_rate_override BIGINT NULL,
+                    notes TEXT NULL,
+                    status VARCHAR(32) NOT NULL DEFAULT 'pending',
+                    rejection_reason TEXT NULL,
+                    submitted_at VARCHAR(32) NULL,
+                    reviewed_at VARCHAR(32) NULL,
+                    created_at VARCHAR(32) NULL,
+                    updated_at VARCHAR(32) NULL,
+                    UNIQUE KEY uniq_team_contract_proposal (team_id, fiscal_year),
+                    INDEX idx_team_contract_proposals_status (status)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+            );
+        }
+    }
+
+    private static function ensurePerformanceReportTables(PDO $pdo): void
+    {
+        $isSqlite = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite';
+        if ($isSqlite) {
+            $pdo->exec(
+                "CREATE TABLE IF NOT EXISTS team_performance_reports (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    team_id INTEGER NOT NULL,
+                    fiscal_year TEXT NOT NULL,
+                    period TEXT NOT NULL,
+                    original_name TEXT NOT NULL,
+                    stored_path TEXT NOT NULL,
+                    mime TEXT,
+                    size_bytes INTEGER NOT NULL DEFAULT 0,
+                    notes TEXT,
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    rejection_reason TEXT,
+                    uploaded_by_role TEXT,
+                    uploaded_by_user_id INTEGER,
+                    submitted_at TEXT,
+                    reviewed_at TEXT,
+                    created_at TEXT,
+                    updated_at TEXT,
+                    UNIQUE(team_id, fiscal_year, period)
+                )"
+            );
+        } else {
+            $pdo->exec(
+                "CREATE TABLE IF NOT EXISTS team_performance_reports (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    team_id INT NOT NULL,
+                    fiscal_year VARCHAR(8) NOT NULL,
+                    period VARCHAR(8) NOT NULL,
+                    original_name VARCHAR(255) NOT NULL,
+                    stored_path VARCHAR(512) NOT NULL,
+                    mime VARCHAR(128) NULL,
+                    size_bytes BIGINT NOT NULL DEFAULT 0,
+                    notes TEXT NULL,
+                    status VARCHAR(32) NOT NULL DEFAULT 'pending',
+                    rejection_reason TEXT NULL,
+                    uploaded_by_role VARCHAR(32) NULL,
+                    uploaded_by_user_id INT NULL,
+                    submitted_at VARCHAR(32) NULL,
+                    reviewed_at VARCHAR(32) NULL,
+                    created_at VARCHAR(32) NULL,
+                    updated_at VARCHAR(32) NULL,
+                    UNIQUE KEY uniq_team_performance_report (team_id, fiscal_year, period),
+                    INDEX idx_team_performance_reports_status (status)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
             );
         }

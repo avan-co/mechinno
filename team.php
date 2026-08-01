@@ -183,6 +183,10 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
                   <span class="nav-icon nav-icon--green"><svg viewBox="0 0 24 24"><path d="M6 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm0 4v12h12V7H6Zm3 2h2v2H9V9Zm4 0h2v2h-2V9Z" fill="currentColor"/></svg></span>
                   <span class="nav-label">کمدها</span>
                 </button>
+                <button class="nav-item" data-section="performance-reports" type="button" id="navPerformanceReports">
+                  <span class="nav-icon nav-icon--blue"><svg viewBox="0 0 24 24"><path d="M5 4h14v16H5V4Zm2 2v2h10V6H7Zm0 4v8h10v-8H7Zm2 2h6v2H9v-2Z" fill="currentColor"/></svg></span>
+                  <span class="nav-label">گزارش عملکرد</span>
+                </button>
               </div>
             </div>
 
@@ -346,11 +350,27 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
             <section id="desks" class="section">
               <div class="section-intro section-intro--orange">
                 <span class="section-intro-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 5h16a1 1 0 0 1 1 1v3H3V6a1 1 0 0 1 1-1Zm17 6v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-8h18ZM8 17h2v-3H8v3Zm6 0h2v-3h-2v3Z" fill="currentColor"/></svg></span>
-                <div class="section-intro-copy"><p>میزهای فعال (بازه تخصیص هنوز تمام نشده) و سوابق پایان‌یافته — بازه هر میز روی کارت نمایش داده می‌شود.</p></div>
+                <div class="section-intro-copy"><p>روی نقشه فقط <strong>میز خودتان</strong> مشخص است تا در فضا راحت‌تر پیدایش کنید. نام و وضعیت میزهای دیگر نمایش داده نمی‌شود.</p></div>
               </div>
+              <article class="panel">
+                <div class="panel-head"><h2>نقشه میزها</h2></div>
+                <p class="hint desk-map-legend">۳ ردیف × ۸ میز — میز نهاد شما برجسته است؛ بقیه فقط برای جهت‌یابی شماره دارند.</p>
+                <div id="deskGrid" class="desk-map desk-map--team"></div>
+              </article>
               <article class="panel">
                 <div class="panel-head"><h2>میزهای اختصاص‌یافته</h2></div>
                 <div id="teamDeskAssignments" class="desk-assignment-list">در حال بارگذاری…</div>
+              </article>
+            </section>
+
+            <section id="performance-reports" class="section">
+              <div class="section-intro section-intro--blue">
+                <span class="section-intro-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 4h14v16H5V4Zm2 2v2h10V6H7Zm0 4v8h10v-8H7Zm2 2h6v2H9v-2Z" fill="currentColor"/></svg></span>
+                <div class="section-intro-copy"><p>گزارش عملکرد ۶ماهه را طبق فرمت مرکز به‌صورت فایل بارگذاری کنید. هر دو نیمه دیده می‌شود؛ ارسال فقط در بازه اعلام‌شده ممکن است.</p></div>
+              </div>
+              <article class="panel">
+                <div class="panel-head"><h2>گزارش عملکرد</h2></div>
+                <div id="performanceReportsContent">در حال بارگذاری…</div>
               </article>
             </section>
 

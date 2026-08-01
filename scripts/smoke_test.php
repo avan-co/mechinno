@@ -160,6 +160,72 @@ $deskMap = $repo->deskMap();
 $assert(count($deskMap['rows']) === 24, 'desk map has 24 desks');
 $ownDesks = array_values(array_filter($deskMap['rows'], static fn ($d) => !empty($d['is_own'])));
 $assert(count($ownDesks) >= 1, 'team desk map marks own desks');
+$foreign = array_values(array_filter($deskMap['rows'], static fn ($d) => empty($d['is_own'])));
+$assert(($foreign[0]['privacy_neutral'] ?? false) === true, 'team desk map hides foreign occupancy');
+$assert(($foreign[0]['team_name'] ?? '') === '', 'team desk map hides foreign team names');
+$assert(in_array('desks-map', Access::allowedResources(), true), 'team can access desks-map');
+
+$perf = new PerformanceReports($pdo);
+$perfSettings = $perf->settings();
+$assert(($perfSettings['performance_reports_enabled'] ?? true) === false, 'performance reports disabled by default');
+$_SESSION['mechinno_role'] = Access::ROLE_ADMIN_EDITOR;
+$perf->updateSettings([
+    'performance_reports_enabled' => 1,
+    'performance_h1_open_from' => '1400/01/01',
+    'performance_h1_open_until' => '1499/12/29',
+    'performance_h2_open_from' => '1400/01/01',
+    'performance_h2_open_until' => '1499/12/29',
+]);
+$tmpDir = sys_get_temp_dir();
+$tmpPdf = tempnam($tmpDir, 'perf');
+file_put_contents($tmpPdf, '%PDF-1.4 test');
+$renamed = $tmpPdf . '.pdf';
+rename($tmpPdf, $renamed);
+$_SESSION['mechinno_role'] = Access::ROLE_TEAM;
+$_SESSION['mechinno_team_id'] = 1;
+$report = $perf->submit(1, '1405', 'h1', [
+    'name' => 'report.pdf',
+    'type' => 'application/pdf',
+    'tmp_name' => $renamed,
+    'error' => UPLOAD_ERR_OK,
+    'size' => filesize($renamed),
+], 'گزارش تست');
+$assert(($report['status'] ?? '') === 'pending', 'performance report submitted as pending');
+
+$contractDocs = new ContractDocuments($pdo);
+$tmpMembership = tempnam($tmpDir, 'mem') . '.pdf';
+file_put_contents($tmpMembership, '%PDF-1.4 membership');
+$_SESSION['mechinno_role'] = Access::ROLE_TEAM;
+$membershipFile = $contractDocs->upsertFile(1, '1405', 'membership', [
+    'name' => 'membership.pdf',
+    'type' => 'application/pdf',
+    'tmp_name' => $tmpMembership,
+    'error' => UPLOAD_ERR_OK,
+    'size' => filesize($tmpMembership),
+]);
+$assert(($membershipFile['status'] ?? '') === 'pending', 'team contract file is pending');
+$assert(($membershipFile['doc_type'] ?? '') === 'membership', 'membership doc type saved');
+
+$bundleBefore = $contractDocs->yearBundle(1, '1404');
+$assert(is_array($bundleBefore['files']), 'prior year bundle available without deleting history');
+
+$_SESSION['mechinno_role'] = Access::ROLE_ADMIN_EDITOR;
+$proposal = $contractDocs->submitProposal(1, [
+    'fiscal_year' => '1405',
+    'contract_start' => '1405/01/01',
+    'contract_end' => '1405/12/29',
+    'formal_contract_amount' => '1000000',
+    'notes' => 'پیشنهاد تست',
+]);
+$assert(($proposal['proposal']['status'] ?? '') === 'pending', 'contract proposal pending');
+$approved = $contractDocs->approveProposal((int) $proposal['proposal']['id']);
+$assert(($approved['proposal']['status'] ?? '') === 'approved', 'contract proposal approved');
+$official = (new TeamContracts($pdo))->contractForYear(1, '1405');
+$assert($official !== null, 'approved proposal creates official yearly contract');
+$assert((int) ($official['formal_contract_amount'] ?? 0) === 1000000, 'official contract amount preserved');
+
+$_SESSION['mechinno_role'] = Access::ROLE_TEAM;
+$_SESSION['mechinno_team_id'] = 1;
 
 $teamMeta = $crud->meta();
 $assert(!isset($teamMeta['resources']['panel_users']), 'team crud meta excludes panel_users');

@@ -1695,7 +1695,112 @@ textarea[dir="ltr"] {
 .badge-locker-broken { background: color-mix(in srgb, var(--danger) 18%, transparent); color: var(--danger); }
 .badge-paid { background: color-mix(in srgb, var(--green) 18%, transparent); color: var(--green); }
 .badge-partial { background: color-mix(in srgb, var(--amber) 18%, transparent); color: var(--amber); }
+.badge-ok { background: color-mix(in srgb, var(--green) 18%, transparent); color: var(--green); }
+.badge-danger { background: color-mix(in srgb, var(--danger) 18%, transparent); color: var(--danger); }
 .badge-debt { background: color-mix(in srgb, var(--danger) 18%, transparent); color: var(--danger); }
+
+.contract-files-block { margin-top: 1.25rem; }
+.contract-files-block h4 { margin: 0 0 .35rem; font-size: 1rem; }
+.contract-files-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+  margin-top: 0.75rem;
+}
+@media (max-width: 768px) {
+  .contract-files-grid { grid-template-columns: 1fr; }
+}
+.contract-file-slot {
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  border-radius: 14px;
+  padding: 0.9rem 1rem;
+  background: color-mix(in srgb, var(--surface) 92%, var(--bg));
+}
+.contract-file-slot-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.45rem;
+}
+.contract-file-slot-head h4 { margin: 0; font-size: 0.95rem; }
+.contract-file-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem 0.75rem;
+  margin-bottom: 0.55rem;
+}
+.contract-file-upload {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.contract-file-upload input[type="file"] {
+  max-width: 100%;
+  font-size: 0.82rem;
+}
+.contract-proposal-status {
+  margin-bottom: 0.75rem;
+  padding: 0.65rem 0.8rem;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--amber) 10%, transparent);
+}
+.reject-hint { color: var(--danger); }
+.queue-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 0.85rem;
+}
+.queue-card {
+  border: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
+  border-radius: 14px;
+  padding: 0.95rem 1rem;
+  background: color-mix(in srgb, var(--surface) 94%, var(--bg));
+}
+.queue-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.4rem;
+}
+.queue-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.75rem;
+}
+.queue-block + .queue-block { margin-top: 1.25rem; }
+.performance-period-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem;
+  margin-top: 0.85rem;
+}
+@media (max-width: 768px) {
+  .performance-period-grid { grid-template-columns: 1fr; }
+}
+.desk-tile.desk-neutral,
+.desk-tile.is-neutral {
+  background: color-mix(in srgb, var(--surface) 88%, var(--bg));
+  color: color-mix(in srgb, var(--muted) 70%, var(--text));
+  border-color: color-mix(in srgb, var(--border) 70%, transparent);
+  cursor: default;
+  opacity: 0.78;
+}
+.desk-tile.desk-neutral .desk-status,
+.desk-tile.desk-neutral .desk-badge,
+.desk-tile.is-neutral .desk-status,
+.desk-tile.is-neutral .desk-badge {
+  opacity: 0.35;
+}
+.desk-map--team .desk-tile.own-desk {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 45%, transparent);
+}
+.desk-map-legend { margin-bottom: 0.75rem; }
 
 .desk-number-list {
   display: flex;

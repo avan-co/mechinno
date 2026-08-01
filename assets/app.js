@@ -178,6 +178,9 @@ const sectionMeta = {
   overview: { eyebrow: "داشبورد", title: "مدیریت مرکز نوآوری", subtitle: "خلاصه وضعیت مرکز و اقدامات پیشنهادی" },
   teams: { eyebrow: "نهادها", title: "تیم‌ها، شرکت‌ها و دانشجویان", subtitle: "ثبت و مدیریت نهادها — قرارداد و میز هر سال از پروفایل نهاد" },
   "team-contracts": { eyebrow: "نهادها", title: "قراردادهای نهادها", subtitle: "همه قراردادهای سال جاری و سال‌های قبل با وضعیت فعال/منقضی" },
+  "pending-contracts": { eyebrow: "نهادها", title: "تأیید قراردادها", subtitle: "پیشنهادها و فایل‌های قرارداد ارسال‌شده توسط نهادها" },
+  "performance-reports": { eyebrow: "گزارش‌ها", title: "گزارش عملکرد نهادها", subtitle: "گزارش‌های ۶ماهه و تنظیم زمان‌بندی ارسال" },
+  "performance-settings": { eyebrow: "گزارش‌ها", title: "تنظیمات گزارش عملکرد", subtitle: "فعال‌سازی بخش و بازه مجاز ارسال هر نیمه" },
   members: { eyebrow: "اعضا", title: "اعضای نهادها", subtitle: "هر عضو به یک نهاد تعلق دارد — میزها در سطح نهاد تخصیص می‌یابند" },
   desks: { eyebrow: "میزها", title: "نقشه و تخصیص ۲۴ میز", subtitle: "تخصیص سال جاری از نقشه و جدول زیر نقشه" },
   "desk-history": { eyebrow: "میزها", title: "تاریخچه تخصیص میزها", subtitle: "سوابق تخصیص همه نهادها — جاری و منقضی" },
@@ -196,9 +199,10 @@ const sectionMeta = {
 const teamSectionMeta = {
   overview: { eyebrow: "داشبورد نهاد", title: "وضعیت نهاد", subtitle: "خلاصه اعضا، میزها، کمدها و شارژ" },
   members: { eyebrow: "اعضا", title: "اعضای نهاد", subtitle: "لیست اعضای ثبت‌شده در نهاد شما" },
-  desks: { eyebrow: "میزها", title: "میزهای نهاد", subtitle: "میزهای تخصیص‌یافته به نهاد" },
+  desks: { eyebrow: "میزها", title: "نقشه و میزهای نهاد", subtitle: "موقعیت میز خودتان روی نقشه — بدون نمایش وضعیت دیگران" },
   lockers: { eyebrow: "کمدها", title: "کمدهای نهاد", subtitle: "درخواست کمد و کمدهای تخصیص‌یافته" },
   profile: { eyebrow: "پروفایل", title: "پروفایل نهاد", subtitle: "قرارداد، میز و بدهی هر سال مالی" },
+  "performance-reports": { eyebrow: "گزارش‌ها", title: "گزارش عملکرد", subtitle: "ارسال فایل گزارش ۶ماهه طبق زمان‌بندی مرکز" },
   charges: { eyebrow: "شارژ", title: "شارژ و پرداخت", subtitle: "لیست شارژ سالانه و وضعیت پرداخت" },
   payments: { eyebrow: "واریز", title: "اعلام واریز", subtitle: "ثبت واریز شارژ و پیگیری تأیید مدیر" },
   "room-reservations": { eyebrow: "اتاق جلسه", title: "رزرو اتاق جلسه", subtitle: "رزرو بازه‌های زمانی برای نهاد" },
@@ -383,6 +387,8 @@ const workflowQueueResources = new Set([
   "pending-payments",
   "pending-locker-requests",
   "pending-room-reservations",
+  "pending-contract-proposals",
+  "pending-performance-reports",
 ]);
 
 const teamReadOnlyResources = new Set(["lockers", "charges", "payment-history"]);
@@ -704,15 +710,13 @@ const reloadDeskTables = async () => {
     historyTable.page = 1;
     await historyTable.load?.();
   }
-  if (panelMode === "admin") {
-    await loadDeskGrid().catch((error) => showToast(error.message, "error"));
-  }
+  await loadDeskGrid().catch((error) => showToast(error.message, "error"));
 };
 
 const refreshAfterMutation = async (sectionId = null) => {
   invalidateCrudMeta();
   if (sectionId) reloadSectionTables(sectionId, true);
-  if (sectionId === "desks" && panelMode === "admin") {
+  if (sectionId === "desks") {
     loadDeskGrid().catch((error) => showToast(error.message, "error"));
   }
   try {
@@ -1068,13 +1072,18 @@ const activateSection = (id, options = {}) => {
     reloadSectionTables(id);
   }
 
-  if (id === "desks" && panelMode === "admin") {
+  if (id === "desks") {
     loadDeskGrid().catch((error) => showToast(error.message, "error"));
   }
   if (id === "desk-history" && panelMode === "admin") {
     initDeskHistoryFilters().catch((error) => showToast(error.message, "error"));
   }
-  if (id === "desks" && panelMode === "team") loadTeamDeskAssignments().catch((error) => showToast(error.message, "error"));
+  if (id === "desks" && panelMode === "team") {
+    loadTeamDeskAssignments().catch((error) => showToast(error.message, "error"));
+  }
+  if (id === "performance-reports") loadPerformanceReportsSection().catch((error) => showToast(error.message, "error"));
+  if (id === "pending-contracts") loadPendingContractsQueue().catch((error) => showToast(error.message, "error"));
+  if (id === "performance-settings") loadPerformanceSettingsForm().catch((error) => showToast(error.message, "error"));
   if (id === "profile" && panelMode === "team") loadTeamProfile().catch((error) => showToast(error.message, "error"));
   if (id === "charges") {
     loadChargesCollage().catch((error) => showToast(error.message, "error"));
@@ -1563,6 +1572,278 @@ const loadTeamDeskAssignments = async () => {
 
   host.classList.add("is-ready");
   host.innerHTML = `${activeHtml}${historyHtml}`;
+};
+
+const docStatusBadge = (status) => {
+  if (status === "approved") return `<span class="badge badge-ok">تأییدشده</span>`;
+  if (status === "rejected") return `<span class="badge badge-danger">رد شده</span>`;
+  if (status === "pending") return `<span class="badge badge-partial">در انتظار</span>`;
+  return `<span class="badge">${escapeHtml(status || "—")}</span>`;
+};
+
+const loadPendingContractsQueue = async () => {
+  const host = document.getElementById("pendingContractsQueue");
+  if (!host) return;
+  const data = await fetchJson("api.php?resource=pending-contract-proposals");
+  const proposals = data.rows || [];
+  const files = data.files || [];
+  if (!proposals.length && !files.length) {
+    host.classList.add("is-ready");
+    host.innerHTML = renderEmptyState("پیشنهاد یا فایل قراردادی در انتظار تأیید نیست.", { icon: "inbox" });
+    return;
+  }
+  const proposalCards = proposals.map((row) => `
+    <article class="queue-card">
+      <div class="queue-card-head">
+        <strong>${escapeHtml(row.team_name || "نهاد")}</strong>
+        ${docStatusBadge(row.status)}
+      </div>
+      <p class="hint">سال ${escapeHtml(row.fiscal_year)} · ${escapeHtml(formatPlain(row.contract_start))} تا ${escapeHtml(formatPlain(row.contract_end))} · ${escapeHtml(formatMoney(row.formal_contract_amount || 0))}</p>
+      ${row.notes ? `<p class="hint">${escapeHtml(row.notes)}</p>` : ""}
+      ${canWrite ? `<div class="queue-card-actions">
+        <button type="button" class="button" data-approve-proposal="${row.id}">تأیید و ذخیره در لیست</button>
+        <button type="button" class="button danger ghost" data-reject-proposal="${row.id}">رد</button>
+      </div>` : ""}
+    </article>`).join("");
+  const fileCards = files.map((row) => `
+    <article class="queue-card">
+      <div class="queue-card-head">
+        <strong>${escapeHtml(row.team_name || "نهاد")} — ${escapeHtml(row.doc_label || row.doc_type)}</strong>
+        ${docStatusBadge(row.status)}
+      </div>
+      <p class="hint">سال ${escapeHtml(row.fiscal_year)} · <a class="text-link" href="${escapeHtml(row.download_url)}" target="_blank" rel="noopener">${escapeHtml(row.original_name)}</a></p>
+      ${canWrite ? `<div class="queue-card-actions">
+        <button type="button" class="button" data-approve-file="${row.id}">تأیید فایل</button>
+        <button type="button" class="button danger ghost" data-reject-file="${row.id}">رد فایل</button>
+      </div>` : ""}
+    </article>`).join("");
+  host.classList.add("is-ready");
+  host.innerHTML = `
+    ${proposals.length ? `<div class="queue-block"><h3>پیشنهادهای اطلاعات قرارداد</h3><div class="queue-grid">${proposalCards}</div></div>` : ""}
+    ${files.length ? `<div class="queue-block"><h3>فایل‌های در انتظار</h3><div class="queue-grid">${fileCards}</div></div>` : ""}`;
+
+  host.querySelectorAll("[data-approve-proposal]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+      try {
+        await postJson("api.php?resource=pending-contract-proposals&action=approve", { id: Number(button.dataset.approveProposal) });
+        showToast("قرارداد تأیید و در لیست ذخیره شد.", "success");
+        await loadPendingContractsQueue();
+        await refreshAfterMutation("teams");
+      } catch (error) {
+        showToast(error.message, "error");
+        button.disabled = false;
+      }
+    });
+  });
+  host.querySelectorAll("[data-reject-proposal]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const reason = window.prompt("دلیل رد پیشنهاد قرارداد:");
+      if (reason === null) return;
+      if (!String(reason).trim()) {
+        showToast("دلیل رد الزامی است.", "error");
+        return;
+      }
+      button.disabled = true;
+      try {
+        await postJson("api.php?resource=pending-contract-proposals&action=reject", {
+          id: Number(button.dataset.rejectProposal),
+          reason: String(reason).trim(),
+        });
+        showToast("پیشنهاد رد شد.", "success");
+        await loadPendingContractsQueue();
+      } catch (error) {
+        showToast(error.message, "error");
+        button.disabled = false;
+      }
+    });
+  });
+  host.querySelectorAll("[data-approve-file]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+      try {
+        await postJson("api.php?resource=contract-documents&action=approve-file", { id: Number(button.dataset.approveFile) });
+        showToast("فایل قرارداد تأیید شد.", "success");
+        await loadPendingContractsQueue();
+      } catch (error) {
+        showToast(error.message, "error");
+        button.disabled = false;
+      }
+    });
+  });
+  host.querySelectorAll("[data-reject-file]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const reason = window.prompt("دلیل رد فایل قرارداد:");
+      if (reason === null) return;
+      if (!String(reason).trim()) {
+        showToast("دلیل رد الزامی است.", "error");
+        return;
+      }
+      button.disabled = true;
+      try {
+        await postJson("api.php?resource=contract-documents&action=reject-file", {
+          id: Number(button.dataset.rejectFile),
+          reason: String(reason).trim(),
+        });
+        showToast("فایل رد شد.", "success");
+        await loadPendingContractsQueue();
+      } catch (error) {
+        showToast(error.message, "error");
+        button.disabled = false;
+      }
+    });
+  });
+};
+
+const loadPerformanceSettingsForm = async () => {
+  const form = document.getElementById("performanceSettingsForm");
+  if (!form) return;
+  const settings = await fetchJson("api.php?resource=performance-settings");
+  form.performance_reports_enabled.value = settings.performance_reports_enabled ? "1" : "0";
+  form.performance_h1_open_from.value = settings.performance_h1_open_from || "";
+  form.performance_h1_open_until.value = settings.performance_h1_open_until || "";
+  form.performance_h2_open_from.value = settings.performance_h2_open_from || "";
+  form.performance_h2_open_until.value = settings.performance_h2_open_until || "";
+  form.performance_report_guide.value = settings.performance_report_guide || "";
+  if (!form.dataset.bound) {
+    form.dataset.bound = "1";
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const payload = Object.fromEntries(new FormData(form).entries());
+      try {
+        await postJson("api.php?resource=performance-settings", payload);
+        showToast("تنظیمات گزارش عملکرد ذخیره شد.", "success");
+        await loadPerformanceReportsSection();
+      } catch (error) {
+        showToast(error.message, "error");
+      }
+    });
+  }
+};
+
+const loadPerformanceReportsSection = async () => {
+  const host = document.getElementById("performanceReportsContent");
+  if (!host) return;
+
+  if (panelMode === "admin") {
+    const [listData, settings] = await Promise.all([
+      fetchJson("api.php?resource=performance-reports&list=1"),
+      fetchJson("api.php?resource=performance-settings"),
+    ]);
+    const rows = listData.rows || [];
+    const enabled = Boolean(settings.performance_reports_enabled);
+    host.classList.add("is-ready");
+    host.innerHTML = `
+      <div class="performance-admin-head">
+        <p class="hint">وضعیت بخش: <strong>${enabled ? "فعال" : "غیرفعال"}</strong> — از تنظیمات گزارش عملکرد می‌توانید نمایش برای نهادها را روشن/خاموش کنید.</p>
+      </div>
+      ${rows.length ? `<div class="queue-grid">${rows.map((row) => `
+        <article class="queue-card">
+          <div class="queue-card-head">
+            <strong>${escapeHtml(row.team_name || "نهاد")}</strong>
+            ${docStatusBadge(row.status)}
+          </div>
+          <p class="hint">سال ${escapeHtml(row.fiscal_year)} · ${escapeHtml(row.period_label || row.period)}</p>
+          <p><a class="text-link" href="${escapeHtml(row.download_url)}" target="_blank" rel="noopener">${escapeHtml(row.original_name)}</a></p>
+          ${row.rejection_reason ? `<p class="hint reject-hint">دلیل رد: ${escapeHtml(row.rejection_reason)}</p>` : ""}
+          ${canWrite && row.status === "pending" ? `<div class="queue-card-actions">
+            <button type="button" class="button" data-approve-report="${row.id}">تأیید</button>
+            <button type="button" class="button danger ghost" data-reject-report="${row.id}">رد</button>
+          </div>` : ""}
+        </article>`).join("")}</div>` : renderEmptyState("هنوز گزارش عملکردی ثبت نشده است.", { icon: "inbox" })}`;
+
+    host.querySelectorAll("[data-approve-report]").forEach((button) => {
+      button.addEventListener("click", async () => {
+        try {
+          await postJson("api.php?resource=performance-reports&action=approve", { id: Number(button.dataset.approveReport) });
+          showToast("گزارش تأیید شد.", "success");
+          await loadPerformanceReportsSection();
+        } catch (error) {
+          showToast(error.message, "error");
+        }
+      });
+    });
+    host.querySelectorAll("[data-reject-report]").forEach((button) => {
+      button.addEventListener("click", async () => {
+        const reason = window.prompt("دلیل رد گزارش:");
+        if (reason === null) return;
+        if (!String(reason).trim()) {
+          showToast("دلیل رد الزامی است.", "error");
+          return;
+        }
+        try {
+          await postJson("api.php?resource=performance-reports&action=reject", {
+            id: Number(button.dataset.rejectReport),
+            reason: String(reason).trim(),
+          });
+          showToast("گزارش رد شد.", "success");
+          await loadPerformanceReportsSection();
+        } catch (error) {
+          showToast(error.message, "error");
+        }
+      });
+    });
+    return;
+  }
+
+  const data = await fetchJson("api.php?resource=performance-reports");
+  if (!data.enabled) {
+    host.classList.add("is-ready");
+    host.innerHTML = renderEmptyState("بخش گزارش عملکرد فعلاً توسط مرکز غیرفعال است.", { icon: "inbox" });
+    return;
+  }
+  const guide = data.settings?.performance_report_guide || "";
+  host.classList.add("is-ready");
+  host.innerHTML = `
+    <p class="hint">${escapeHtml(guide)}</p>
+    <div class="performance-period-grid">
+      ${(data.periods || []).map((period) => {
+        const report = period.report;
+        const canSubmit = Boolean(period.can_submit) && (!report || report.status === "rejected" || report.status === "pending");
+        const windowText = period.window?.open_from && period.window?.open_until
+          ? `بازه ارسال: ${period.window.open_from} تا ${period.window.open_until}`
+          : "بازه ارسال هنوز توسط مرکز تعیین نشده است.";
+        return `<article class="year-panel performance-period-card">
+          <div class="year-panel-head">
+            <h3>${escapeHtml(period.period_label)}</h3>
+            ${report ? docStatusBadge(report.status) : `<span class="badge">ارسال‌نشده</span>`}
+          </div>
+          <p class="hint">${escapeHtml(windowText)}</p>
+          ${report ? `<p><a class="text-link" href="${escapeHtml(report.download_url)}" target="_blank" rel="noopener">${escapeHtml(report.original_name)}</a></p>` : ""}
+          ${report?.rejection_reason ? `<p class="hint reject-hint">دلیل رد: ${escapeHtml(report.rejection_reason)}</p>` : ""}
+          ${canSubmit ? `<label class="contract-file-upload">
+            <span>${report ? "ارسال اصلاحیه / جایگزینی" : "انتخاب فایل گزارش"}</span>
+            <input type="file" data-performance-upload data-period="${escapeHtml(period.period)}" data-year="${escapeHtml(data.fiscal_year)}" accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx" ${period.can_submit ? "" : "disabled"} />
+          </label>` : (period.can_submit ? "" : `<p class="hint">ارسال این نیمه فعلاً باز نیست.</p>`)}
+        </article>`;
+      }).join("")}
+    </div>`;
+
+  host.querySelectorAll("[data-performance-upload]").forEach((input) => {
+    input.addEventListener("change", async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      const body = new FormData();
+      body.append("file", file);
+      body.append("fiscal_year", String(input.dataset.year || ""));
+      body.append("period", String(input.dataset.period || ""));
+      input.disabled = true;
+      try {
+        await fetchJson("api.php?resource=performance-reports&action=submit", {
+          method: "POST",
+          headers: { "X-CSRF-Token": csrfToken },
+          body,
+        });
+        showToast("گزارش ارسال شد.", "success");
+        await loadPerformanceReportsSection();
+      } catch (error) {
+        showToast(error.message, "error");
+      } finally {
+        input.disabled = false;
+        input.value = "";
+      }
+    });
+  });
 };
 
 const loadTeamProfile = async () => {
@@ -2142,6 +2423,11 @@ const loadDeskGrid = async () => {
   try {
     desks = (await fetchJson("api.php?resource=desks-map")).rows || [];
   } catch (error) {
+    if (isTeamMap) {
+      const container = document.getElementById("deskGrid");
+      if (container) container.innerHTML = renderEmptyState("نقشه میزها در دسترس نیست.", { icon: "error" });
+      return;
+    }
     desks = (await fetchResource("api.php?resource=desks", { page: 1, perPage: 100 })).rows;
   }
   const container = document.getElementById("deskGrid");
@@ -2164,30 +2450,37 @@ const loadDeskGrid = async () => {
           const foreign = Boolean(desk.foreign_occupied);
           const occupied = Boolean(desk.team_id) || foreign;
           const isOwn = Boolean(desk.is_own);
+          const neutral = Boolean(desk.privacy_neutral) || (isTeamMap && !isOwn);
           const highlighted = highlightDesk === Number(desk.number) || (isTeamMap && isOwn);
           const tileClass = isTeamMap
-            ? (isOwn ? "occupied own-desk" : foreign ? "occupied foreign-desk" : "free")
+            ? (isOwn ? "occupied own-desk" : "desk-neutral")
             : (occupied ? "occupied" : "free");
           let meta = `<span class="desk-meta">بدون نهاد</span>`;
-          if (occupied) {
-            if (isTeamMap && foreign) {
-              meta = `<span class="desk-meta">نهاد دیگر</span>`;
-            } else if (isTeamMap && isOwn) {
-              meta = `<span class="desk-meta">${escapeHtml(desk.team_name || "نهاد شما")}</span>`;
-            } else if (!isTeamMap && desk.team_id) {
-              const statusBadge = desk.team_is_active !== undefined && desk.team_is_active !== null
-                ? ` ${teamActiveBadge(desk.team_is_active)}` : "";
-              meta = `<span class="desk-meta"><span role="button" tabindex="0" class="text-link-inline" data-team-id="${escapeHtml(desk.team_id)}">${escapeHtml(desk.team_name || "نهاد")}</span>${statusBadge}</span>`;
+          let status = occupied ? "اشغال" : "آزاد";
+          let badge = escapeHtml(usageLabels[desk.usage_type] || desk.usage_type || "—");
+          if (isTeamMap) {
+            if (isOwn) {
+              meta = `<span class="desk-meta">میز شما</span>`;
+              status = "موقعیت شما";
+              badge = escapeHtml(usageLabels[desk.usage_type] || "میز نهاد");
+            } else {
+              meta = `<span class="desk-meta"> </span>`;
+              status = "";
+              badge = "";
             }
+          } else if (occupied && desk.team_id) {
+            const statusBadgeHtml = desk.team_is_active !== undefined && desk.team_is_active !== null
+              ? ` ${teamActiveBadge(desk.team_is_active)}` : "";
+            meta = `<span class="desk-meta"><span role="button" tabindex="0" class="text-link-inline" data-team-id="${escapeHtml(desk.team_id)}">${escapeHtml(desk.team_name || "نهاد")}</span>${statusBadgeHtml}</span>`;
           }
-          return `<button type="button" class="desk-tile ${tileClass} ${highlighted ? "highlighted" : ""}"
+          return `<button type="button" class="desk-tile ${tileClass} ${highlighted ? "highlighted" : ""} ${neutral ? "is-neutral" : ""}"
             ${isTeamMap
-              ? `data-nav-section="desks" data-highlight-desk="${desk.number}"`
+              ? (isOwn ? `data-highlight-desk="${desk.number}"` : "disabled")
               : (canWrite ? `data-desk-number="${desk.number}"` : `data-nav-section="desks" data-highlight-desk="${desk.number}"`)}>
             <span class="desk-num">${desk.number}</span>
-            <span class="desk-status">${occupied ? "اشغال" : "آزاد"}</span>
+            ${status ? `<span class="desk-status">${status}</span>` : `<span class="desk-status desk-status--blank">&nbsp;</span>`}
             ${meta}
-            <span class="desk-badge">${escapeHtml(usageLabels[desk.usage_type] || desk.usage_type || "—")}</span>
+            ${badge ? `<span class="desk-badge">${badge}</span>` : `<span class="desk-badge desk-badge--blank">&nbsp;</span>`}
           </button>`;
         }).join("")}
       </div>
@@ -4190,6 +4483,26 @@ loadDashboard().catch((error) => {
   if (cards) cards.innerHTML = `<article class="stat-card"><span class="stat-label">خطا</span><strong>${escapeHtml(error.message)}</strong></article>`;
 });
 
+const syncTeamPerformanceNav = async () => {
+  if (panelMode !== "team") return;
+  const nav = document.getElementById("navPerformanceReports");
+  const section = document.getElementById("performance-reports");
+  if (!nav || !section) return;
+  try {
+    const settings = await fetchJson("api.php?resource=performance-settings");
+    const enabled = Boolean(settings.performance_reports_enabled);
+    nav.hidden = !enabled;
+    section.hidden = !enabled;
+    if (!enabled && location.hash.replace(/^#/, "") === "performance-reports") {
+      activateSection("overview");
+    }
+  } catch {
+    nav.hidden = true;
+    section.hidden = true;
+  }
+};
+syncTeamPerformanceNav().catch(() => {});
+
 document.getElementById("deskHistoryAddButton")?.addEventListener("click", () => {
   openDeskHistoryAssignModal().catch((error) => showToast(error.message, "error"));
 });
@@ -4204,6 +4517,8 @@ window.MechinnoShared = {
   formatNumber,
   showToast,
   canWrite,
+  canTeamSubmit,
+  csrfToken,
   panelMode,
   loadCrudMeta,
   openRecordModal,

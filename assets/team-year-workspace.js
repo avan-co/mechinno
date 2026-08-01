@@ -95,23 +95,92 @@
       }).join("")}
     </div>`;
 
+  const statusBadge = (status) => {
+    const map = {
+      pending: ["badge badge-partial", "در انتظار تأیید"],
+      approved: ["badge badge-ok", "تأییدشده"],
+      rejected: ["badge badge-danger", "رد شده"],
+    };
+    const [cls, label] = map[status] || ["badge", status || "—"];
+    return `<span class="${cls}">${S().escapeHtml(label)}</span>`;
+  };
+
+  const renderFileSlot = (file, docType, label, teamId, year, canUpload) => {
+    const body = file
+      ? `<div class="contract-file-meta">
+          <strong>${S().escapeHtml(file.original_name || "فایل")}</strong>
+          ${statusBadge(file.status)}
+          <a class="text-link" href="${S().escapeHtml(file.download_url)}" target="_blank" rel="noopener">دانلود</a>
+          ${file.rejection_reason ? `<p class="hint reject-hint">دلیل رد: ${S().escapeHtml(file.rejection_reason)}</p>` : ""}
+        </div>`
+      : `<p class="hint">هنوز فایلی برای ${S().escapeHtml(label)} بارگذاری نشده است.</p>`;
+    const upload = canUpload
+      ? `<label class="contract-file-upload">
+          <span>${file ? "جایگزینی فایل" : "انتخاب فایل"}</span>
+          <input type="file" data-contract-upload accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx"
+            data-team-id="${teamId}" data-year="${S().escapeHtml(year)}" data-doc-type="${S().escapeHtml(docType)}" />
+        </label>`
+      : "";
+    return `<div class="contract-file-slot" data-doc-type="${S().escapeHtml(docType)}">
+      <div class="contract-file-slot-head"><h4>${S().escapeHtml(label)}</h4></div>
+      ${body}
+      ${upload}
+    </div>`;
+  };
+
+  const renderContractFiles = (profile, year, teamId, canUpload) => {
+    const bundle = profile.contract_documents?.[year] || { files: {}, proposal: null, doc_labels: { membership: "قرارداد عضویت", settlement: "قرارداد استقرار" } };
+    const labels = bundle.doc_labels || { membership: "قرارداد عضویت", settlement: "قرارداد استقرار" };
+    const files = bundle.files || {};
+    return `<div class="contract-files-grid">
+      ${renderFileSlot(files.membership, "membership", labels.membership || "قرارداد عضویت", teamId, year, canUpload)}
+      ${renderFileSlot(files.settlement, "settlement", labels.settlement || "قرارداد استقرار", teamId, year, canUpload)}
+    </div>`;
+  };
+
   const renderContractPanel = (profile, year, summary, teamId, writable) => {
     const contract = (profile.contracts || []).find((row) => String(row.fiscal_year) === String(year));
+    const bundle = profile.contract_documents?.[year] || {};
+    const proposal = bundle.proposal || null;
     const isPast = String(year) !== String(currentFiscalYear());
+    const canTeamSubmit = Boolean(S().canTeamSubmit && S().panelMode === "team");
+    const canUpload = writable || canTeamSubmit;
+
     if (!writable) {
-      if (!contract) {
-        return `<article class="year-panel"><h3>قرارداد</h3>${window.renderEmptyState?.("قراردادی برای این سال ثبت نشده است.", { icon: "inbox" }) || '<div class="empty">قراردادی برای این سال ثبت نشده است.</div>'}</article>`;
-      }
+      const source = proposal && proposal.status !== "approved" ? proposal : contract;
+      const proposalNote = proposal
+        ? `<div class="contract-proposal-status">وضعیت پیشنهاد نهاد: ${statusBadge(proposal.status)}
+            ${proposal.rejection_reason ? `<p class="hint reject-hint">دلیل رد: ${S().escapeHtml(proposal.rejection_reason)}</p>` : ""}
+          </div>`
+        : "";
       return `<article class="year-panel">
-        <h3>قرارداد</h3>
-        <div class="year-contract-readonly">
-          <div><span>شروع</span><strong>${S().escapeHtml(S().formatPlain(contract.contract_start))}</strong></div>
-          <div><span>پایان</span><strong>${S().escapeHtml(S().formatPlain(contract.contract_end))}</strong></div>
-          <div><span>مبلغ قرارداد رسمی</span><strong>${S().escapeHtml(S().formatMoney(contract.formal_contract_amount || 0))}</strong></div>
-          ${contract.charge_rate_override ? `<div><span>نرخ شارژ اختصاصی</span><strong>${S().escapeHtml(S().formatMoney(contract.charge_rate_override))}</strong></div>` : ""}
-          ${contract.informal_rent_rate_override ? `<div><span>نرخ اجاره اختصاصی</span><strong>${S().escapeHtml(S().formatMoney(contract.informal_rent_rate_override))}</strong></div>` : ""}
-          ${contract.notes ? `<p class="hint">${S().escapeHtml(contract.notes)}</p>` : ""}
+        <div class="year-panel-head"><h3>قرارداد ${S().escapeHtml(year)}</h3></div>
+        ${proposalNote}
+        ${source ? `<div class="year-contract-readonly">
+          <div><span>شروع</span><strong>${S().escapeHtml(S().formatPlain(source.contract_start))}</strong></div>
+          <div><span>پایان</span><strong>${S().escapeHtml(S().formatPlain(source.contract_end))}</strong></div>
+          <div><span>مبلغ قرارداد رسمی</span><strong>${S().escapeHtml(S().formatMoney(source.formal_contract_amount || 0))}</strong></div>
+          ${source.charge_rate_override ? `<div><span>نرخ شارژ اختصاصی</span><strong>${S().escapeHtml(S().formatMoney(source.charge_rate_override))}</strong></div>` : ""}
+          ${source.informal_rent_rate_override ? `<div><span>نرخ اجاره اختصاصی</span><strong>${S().escapeHtml(S().formatMoney(source.informal_rent_rate_override))}</strong></div>` : ""}
+          ${source.notes ? `<p class="hint">${S().escapeHtml(source.notes)}</p>` : ""}
+        </div>` : (window.renderEmptyState?.("قرارداد رسمی این سال هنوز ثبت نشده است.", { icon: "inbox" }) || '<div class="empty">قرارداد رسمی این سال هنوز ثبت نشده است.</div>')}
+        <div class="contract-files-block">
+          <h4>پیوست قراردادها</h4>
+          <p class="hint">هر سال دو فایل جدا دارد: عضویت و استقرار. سال‌های قبل دست‌نخورده می‌مانند.</p>
+          ${renderContractFiles(profile, year, teamId, canTeamSubmit)}
         </div>
+        ${canTeamSubmit ? `<form class="year-contract-form team-contract-proposal" data-team-proposal data-team-id="${teamId}" data-year="${S().escapeHtml(year)}">
+          <h4>${proposal && proposal.status === "rejected" ? "ارسال اصلاحیه قرارداد" : "ارسال اطلاعات قرارداد برای تأیید مرکز"}</h4>
+          <div class="crud-grid year-form-grid">
+            <label><span>شروع قرارداد</span><input name="contract_start" type="text" required value="${S().escapeHtml(proposal?.contract_start || contract?.contract_start || `${year}/01/01`)}" /></label>
+            <label><span>پایان قرارداد</span><input name="contract_end" type="text" required value="${S().escapeHtml(proposal?.contract_end || contract?.contract_end || `${year}/12/29`)}" /></label>
+            <label><span>مبلغ کل قرارداد رسمی (ریال)</span><input name="formal_contract_amount" type="number" min="0" step="1" required value="${S().escapeHtml(proposal?.formal_contract_amount ?? contract?.formal_contract_amount ?? "")}" /></label>
+            <label class="wide"><span>توضیحات</span><textarea name="notes" rows="2">${S().escapeHtml(proposal?.notes || contract?.notes || "")}</textarea></label>
+          </div>
+          <div class="year-panel-actions">
+            <button class="button" type="submit">ارسال برای تأیید</button>
+          </div>
+        </form>` : ""}
       </article>`;
     }
 
@@ -120,6 +189,7 @@
         <h3>قرارداد ${S().escapeHtml(year)}</h3>
         ${isPast ? `<span class="badge badge-partial">سال گذشته — ویرایش با احتیاط</span>` : ""}
       </div>
+      ${proposal && proposal.status === "pending" ? `<div class="contract-proposal-status">پیشنهاد نهاد در صف تأیید است ${statusBadge("pending")}</div>` : ""}
       <form class="year-contract-form" data-year-contract data-team-id="${teamId}" data-year="${S().escapeHtml(year)}">
         <input type="hidden" name="contract_id" value="${contract?.id || ""}" />
         <div class="crud-grid year-form-grid">
@@ -135,6 +205,11 @@
           ${contract ? `<button class="button danger ghost" type="button" data-delete-contract data-contract-id="${contract.id}" data-team-id="${teamId}" data-year="${S().escapeHtml(year)}">حذف قرارداد سال</button>` : ""}
         </div>
       </form>
+      <div class="contract-files-block">
+        <h4>پیوست قراردادها</h4>
+        <p class="hint">دو فایل سالانه: عضویت و استقرار. آپلود ادمین مستقیم تأیید می‌شود.</p>
+        ${renderContractFiles(profile, year, teamId, canUpload)}
+      </div>
     </article>`;
   };
 
@@ -295,6 +370,56 @@
       } finally {
         submit.disabled = false;
       }
+    });
+
+    container.querySelector("[data-team-proposal]")?.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const submit = form.querySelector('button[type="submit"]');
+      submit.disabled = true;
+      try {
+        await S().postJson("api.php?resource=contract-documents&action=submit-proposal", {
+          team_id: String(form.dataset.teamId || teamId),
+          fiscal_year: form.dataset.year,
+          contract_start: form.contract_start.value,
+          contract_end: form.contract_end.value,
+          formal_contract_amount: form.formal_contract_amount.value,
+          notes: form.notes?.value || "",
+        });
+        S().showToast("پیشنهاد قرارداد برای تأیید ارسال شد.", "success");
+        await reloadFn(container, teamId, form.dataset.year);
+      } catch (error) {
+        S().showToast(error.message, "error");
+      } finally {
+        submit.disabled = false;
+      }
+    });
+
+    container.querySelectorAll("[data-contract-upload]").forEach((input) => {
+      input.addEventListener("change", async () => {
+        const file = input.files?.[0];
+        if (!file) return;
+        const body = new FormData();
+        body.append("file", file);
+        body.append("team_id", String(input.dataset.teamId || teamId));
+        body.append("fiscal_year", String(input.dataset.year || ""));
+        body.append("doc_type", String(input.dataset.docType || ""));
+        input.disabled = true;
+        try {
+          await S().fetchJson("api.php?resource=contract-documents&action=upload", {
+            method: "POST",
+            headers: { "X-CSRF-Token": S().csrfToken || S().MECHINNO?.csrfToken || "" },
+            body,
+          });
+          S().showToast("فایل قرارداد ذخیره شد.", "success");
+          await reloadFn(container, teamId, input.dataset.year);
+        } catch (error) {
+          S().showToast(error.message, "error");
+        } finally {
+          input.disabled = false;
+          input.value = "";
+        }
+      });
     });
 
     container.querySelector("[data-delete-contract]")?.addEventListener("click", async (event) => {

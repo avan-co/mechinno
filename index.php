@@ -139,6 +139,10 @@ $assetVer = (string) max(
                   <span class="nav-icon nav-icon--purple"><svg viewBox="0 0 24 24"><path d="M7 3h10a2 2 0 0 1 2 2v14l-7-3-7 3V5a2 2 0 0 1 2-2Z" fill="currentColor"/></svg></span>
                   <span class="nav-label">قراردادها</span>
                 </button>
+                <button class="nav-item nav-item--sub" data-section="pending-contracts" type="button">
+                  <span class="nav-icon nav-icon--purple"><svg viewBox="0 0 24 24"><path d="M9 3h6v2H9V3Zm-2 4h10v14H7V7Zm3 3v2h4v-2h-4Zm0 4v2h4v-2h-4Z" fill="currentColor"/></svg></span>
+                  <span class="nav-label">تأیید قرارداد</span>
+                </button>
                 <?php endif; ?>
                 <button class="nav-item" data-section="members" type="button">
                   <span class="nav-icon nav-icon--teal"><svg viewBox="0 0 24 24"><path d="M16 11c1.7 0 3-1.3 3-3S17.7 5 16 5s-3 1.3-3 3 1.3 3 3 3ZM8 11c1.7 0 3-1.3 3-3S9.7 5 8 5 5 6.3 5 8s1.3 3 3 3Zm0 2c-2.7 0-8 1.3-8 4v3h10v-3c0-1.1.4-2.1 1.1-2.9C9.8 13.1 8.9 13 8 13Zm8 0c-.9 0-1.8.1-2.6.3.7.8 1.1 1.8 1.1 2.9v3h7v-3c0-2.7-5.3-4-8-4Z" fill="currentColor"/></svg></span>
@@ -196,6 +200,16 @@ $assetVer = (string) max(
                   <span class="nav-icon nav-icon--blue"><svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm8 1.5V8h4.5L14 3.5ZM8 12h8v2H8v-2Zm0 4h8v2H8v-2Zm0-8h4v2H8V8Z" fill="currentColor"/></svg></span>
                   <span class="nav-label">گزارش‌گیری</span>
                 </button>
+                <button class="nav-item nav-item--sub" data-section="performance-reports" type="button">
+                  <span class="nav-icon nav-icon--blue"><svg viewBox="0 0 24 24"><path d="M5 4h14v16H5V4Zm2 2v2h10V6H7Zm0 4v8h10v-8H7Zm2 2h6v2H9v-2Z" fill="currentColor"/></svg></span>
+                  <span class="nav-label">گزارش عملکرد</span>
+                </button>
+                <?php if (Access::canWrite()): ?>
+                <button class="nav-item nav-item--sub" data-section="performance-settings" type="button">
+                  <span class="nav-icon nav-icon--blue"><svg viewBox="0 0 24 24"><path d="M12 8a1 1 0 0 1 1 1v3h3a1 1 0 1 1 0 2h-4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Zm8-3H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Z" fill="currentColor"/></svg></span>
+                  <span class="nav-label">تنظیمات گزارش عملکرد</span>
+                </button>
+                <?php endif; ?>
                 <a class="nav-item nav-item--sub" href="export.php?report=all">
                   <span class="nav-icon nav-icon--teal"><svg viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9l-6-6Zm1 7V4.5L18.5 10H15ZM8 13h8v2H8v-2Zm0 4h5v2H8v-2Z" fill="currentColor"/></svg></span>
                   <span class="nav-label">خروجی Excel</span>
@@ -380,9 +394,55 @@ $assetVer = (string) max(
             <section id="team-contracts" class="section">
               <div class="section-intro section-intro--purple">
                 <span class="section-intro-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 3h10a2 2 0 0 1 2 2v14l-7-3-7 3V5a2 2 0 0 1 2-2Z" fill="currentColor"/></svg></span>
-                <div class="section-intro-copy"><p>همه قراردادهای سال جاری و سال‌های قبل — قراردادهای <strong>فعال</strong> (در بازه امروز) در بالای لیست نمایش داده می‌شوند.</p></div>
+                <div class="section-intro-copy"><p>همه قراردادهای سال جاری و سال‌های قبل — قراردادهای <strong>فعال</strong> (در بازه امروز) در بالای لیست نمایش داده می‌شوند. پیوست عضویت و استقرار از پروفایل هر نهاد مدیریت می‌شود.</p></div>
               </div>
               <data-table title="قراردادهای نهادها" endpoint="api.php?resource=team_contracts"></data-table>
+            </section>
+
+            <section id="pending-contracts" class="section">
+              <div class="section-intro section-intro--purple">
+                <span class="section-intro-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 3h6v2H9V3Zm-2 4h10v14H7V7Zm3 3v2h4v-2h-4Zm0 4v2h4v-2h-4Z" fill="currentColor"/></svg></span>
+                <div class="section-intro-copy"><p>پیشنهاد اطلاعات قرارداد و فایل‌های عضویت/استقرار ارسال‌شده توسط نهادها — با تأیید، در لیست رسمی همان سال ذخیره می‌شوند و سال‌های قبل دست‌نخورده می‌مانند.</p></div>
+              </div>
+              <article class="panel">
+                <div class="panel-head"><h2>صف تأیید قرارداد</h2></div>
+                <div id="pendingContractsQueue" class="pending-contracts-queue">در حال بارگذاری…</div>
+              </article>
+            </section>
+
+            <section id="performance-reports" class="section">
+              <div class="section-intro section-intro--blue">
+                <span class="section-intro-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 4h14v16H5V4Zm2 2v2h10V6H7Zm0 4v8h10v-8H7Zm2 2h6v2H9v-2Z" fill="currentColor"/></svg></span>
+                <div class="section-intro-copy"><p>گزارش‌های عملکرد ۶ماهه نهادها — تأیید یا رد با ذکر دلیل برای اصلاحیه.</p></div>
+              </div>
+              <article class="panel">
+                <div class="panel-head"><h2>گزارش‌های عملکرد</h2></div>
+                <div id="performanceReportsContent">در حال بارگذاری…</div>
+              </article>
+            </section>
+
+            <section id="performance-settings" class="section">
+              <div class="section-intro section-intro--blue">
+                <span class="section-intro-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 8a1 1 0 0 1 1 1v3h3a1 1 0 1 1 0 2h-4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Zm8-3H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Z" fill="currentColor"/></svg></span>
+                <div class="section-intro-copy"><p>نمایش بخش گزارش عملکرد در پنل نهاد و بازه مجاز ارسال هر نیمه سال. تا تاریخ باز نشود، نهاد نمی‌تواند زودتر بفرستد.</p></div>
+              </div>
+              <?php if (Access::canWrite()): ?>
+              <article class="panel">
+                <form id="performanceSettingsForm" class="crud-grid">
+                  <label><span>نمایش بخش برای نهادها</span>
+                    <select name="performance_reports_enabled"><option value="0">غیرفعال</option><option value="1">فعال</option></select>
+                  </label>
+                  <label><span>شروع ارسال نیمه اول</span><input name="performance_h1_open_from" type="text" placeholder="1405/07/01" dir="ltr" class="ltr-input" /></label>
+                  <label><span>پایان ارسال نیمه اول</span><input name="performance_h1_open_until" type="text" placeholder="1405/09/30" dir="ltr" class="ltr-input" /></label>
+                  <label><span>شروع ارسال نیمه دوم</span><input name="performance_h2_open_from" type="text" placeholder="1406/01/01" dir="ltr" class="ltr-input" /></label>
+                  <label><span>پایان ارسال نیمه دوم</span><input name="performance_h2_open_until" type="text" placeholder="1406/03/31" dir="ltr" class="ltr-input" /></label>
+                  <label class="wide"><span>راهنمای فرمت برای نهادها</span><textarea name="performance_report_guide" rows="3" placeholder="فرمت فایل و نکات تکمیل گزارش"></textarea></label>
+                  <div class="form-actions wide"><button class="button" type="submit">ذخیره تنظیمات</button></div>
+                </form>
+              </article>
+              <?php else: ?>
+              <p class="hint">فقط مدیر ویرایشگر می‌تواند تنظیمات را تغییر دهد.</p>
+              <?php endif; ?>
             </section>
 
             <section id="members" class="section">

@@ -1231,6 +1231,7 @@ final class Repository
                  FROM team_contracts WHERE team_id = :id ORDER BY fiscal_year DESC',
                 ['id' => $teamId]
             ),
+            'contract_documents' => $this->contractDocumentsByYear($teamId),
             'has_informal_desk' => $this->contracts()->hasInformalDeskInYear($teamId, $this->currentFiscalYear()),
             'desks' => array_map(
                 fn (array $row): array => $this->stripLegacyRow($row),
@@ -1597,16 +1598,22 @@ final class Repository
         );
 
         if ($scope !== null) {
+            // Team map is for finding own desk only: hide other names, occupancy, and usage.
             $rows = array_map(static function (array $row) use ($scope): array {
                 $teamId = (int) ($row['team_id'] ?? 0);
                 $isOwn = $teamId === $scope;
                 $row['is_own'] = $isOwn;
-                if ($teamId > 0 && !$isOwn) {
-                    $row['team_name'] = 'نهاد دیگر';
-                    $row['team_id'] = null;
-                    $row['foreign_occupied'] = true;
+                $row['foreign_occupied'] = false;
+                if ($isOwn) {
+                    $row['team_name'] = 'میز شما';
                 } else {
-                    $row['foreign_occupied'] = false;
+                    $row['team_id'] = null;
+                    $row['team_name'] = '';
+                    $row['team_is_active'] = null;
+                    $row['usage_type'] = '';
+                    $row['formal_seats'] = 0;
+                    $row['informal_seats'] = 0;
+                    $row['privacy_neutral'] = true;
                 }
 
                 return $row;
@@ -2723,5 +2730,58 @@ final class Repository
         }
 
         return $columns === [] ? '' : ', ' . implode(', ', $columns);
+    }
+
+    /**
+     * @return array<string, array<string, mixed>>
+     */
+    private function contractDocumentsByYear(int $teamId): array
+    {
+        if (!Schema::tableExists($this->pdo, 'team_contract_files')
+            && !Schema::tableExists($this->pdo, 'team_contract_proposals')) {
+            return [];
+        }
+
+        $docs = new ContractDocuments($this->pdo);
+        $years = [];
+        foreach ($this->preparedRows(
+            'SELECT DISTINCT fiscal_year FROM team_contracts WHERE team_id = :id',
+            ['id' => $teamId]
+        ) as $row) {
+            $year = (string) ($row['fiscal_year'] ?? '');
+            if ($year !== '') {
+                $years[$year] = true;
+            }
+        }
+        if (Schema::tableExists($this->pdo, 'team_contract_files')) {
+            foreach ($this->preparedRows(
+                'SELECT DISTINCT fiscal_year FROM team_contract_files WHERE team_id = :id',
+                ['id' => $teamId]
+            ) as $row) {
+                $year = (string) ($row['fiscal_year'] ?? '');
+                if ($year !== '') {
+                    $years[$year] = true;
+                }
+            }
+        }
+        if (Schema::tableExists($this->pdo, 'team_contract_proposals')) {
+            foreach ($this->preparedRows(
+                'SELECT DISTINCT fiscal_year FROM team_contract_proposals WHERE team_id = :id',
+                ['id' => $teamId]
+            ) as $row) {
+                $year = (string) ($row['fiscal_year'] ?? '');
+                if ($year !== '') {
+                    $years[$year] = true;
+                }
+            }
+        }
+        $years[$this->currentFiscalYear()] = true;
+
+        $out = [];
+        foreach (array_keys($years) as $year) {
+            $out[(string) $year] = $docs->yearBundle($teamId, (string) $year);
+        }
+
+        return $out;
     }
 }

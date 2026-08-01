@@ -209,6 +209,136 @@ try {
         ]);
     }
 
+    $contractDocs = new ContractDocuments($pdo);
+    $performanceReports = new PerformanceReports($pdo);
+
+    if ($resource === 'performance-settings') {
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            require_csrf_json();
+            Access::requireWriteJson();
+            $payload = read_json_body();
+            json_response(['ok' => true, 'settings' => $performanceReports->updateSettings($payload)]);
+        }
+        json_response($performanceReports->settings());
+    }
+
+    if ($resource === 'contract-documents') {
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            require_csrf_json();
+            Access::requireWriteOrTeamSubmitJson();
+            if ($action === 'submit-proposal') {
+                $payload = read_json_body();
+                $teamId = Access::scopedTeamId() ?? (int) ($payload['team_id'] ?? 0);
+                json_response(['ok' => true, 'bundle' => $contractDocs->submitProposal($teamId, $payload)]);
+            }
+            if ($action === 'upload') {
+                $teamId = Access::scopedTeamId() ?? (int) ($_POST['team_id'] ?? 0);
+                $fiscalYear = (string) ($_POST['fiscal_year'] ?? '');
+                $docType = (string) ($_POST['doc_type'] ?? '');
+                $file = $_FILES['file'] ?? null;
+                if (!is_array($file)) {
+                    json_response(['error' => 'فایل قرارداد ارسال نشده است.'], 422);
+                }
+                $asApproved = Access::canWrite() && !Access::isTeam();
+                json_response([
+                    'ok' => true,
+                    'record' => $contractDocs->upsertFile($teamId, $fiscalYear, $docType, $file, $asApproved),
+                ]);
+            }
+            if ($action === 'delete') {
+                Access::requireWriteJson();
+                $payload = read_json_body();
+                $contractDocs->deleteFile((int) ($payload['id'] ?? 0));
+                json_response(['ok' => true, 'deleted' => true]);
+            }
+            if ($action === 'approve-file') {
+                Access::requireWriteJson();
+                $payload = read_json_body();
+                json_response(['ok' => true, 'record' => $contractDocs->approveFile((int) ($payload['id'] ?? 0))]);
+            }
+            if ($action === 'reject-file') {
+                Access::requireWriteJson();
+                $payload = read_json_body();
+                json_response([
+                    'ok' => true,
+                    'record' => $contractDocs->rejectFile(
+                        (int) ($payload['id'] ?? 0),
+                        trim((string) ($payload['reason'] ?? ''))
+                    ),
+                ]);
+            }
+            json_response(['error' => 'عملیات قرارداد نامعتبر است.'], 422);
+        }
+
+        $teamId = Access::scopedTeamId() ?? (int) ($_GET['team_id'] ?? 0);
+        $fiscalYear = (string) ($_GET['fiscal_year'] ?? '');
+        if ($teamId <= 0 || $fiscalYear === '') {
+            json_response(['error' => 'نهاد و سال مالی الزامی است.'], 422);
+        }
+        json_response($contractDocs->yearBundle($teamId, $fiscalYear));
+    }
+
+    if ($resource === 'pending-contract-proposals') {
+        json_response([
+            'rows' => $contractDocs->pendingProposals(),
+            'files' => $contractDocs->pendingFiles(),
+            'total' => count($contractDocs->pendingProposals()),
+            'page' => 1,
+            'per_page' => 100,
+            'pages' => 1,
+        ]);
+    }
+
+    if ($resource === 'performance-reports') {
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            require_csrf_json();
+            Access::requireWriteOrTeamSubmitJson();
+            if ($action === 'submit') {
+                $teamId = Access::scopedTeamId() ?? (int) ($_POST['team_id'] ?? 0);
+                $fiscalYear = (string) ($_POST['fiscal_year'] ?? '');
+                $period = (string) ($_POST['period'] ?? '');
+                $notes = trim((string) ($_POST['notes'] ?? ''));
+                $file = $_FILES['file'] ?? null;
+                if (!is_array($file)) {
+                    json_response(['error' => 'فایل گزارش ارسال نشده است.'], 422);
+                }
+                json_response([
+                    'ok' => true,
+                    'record' => $performanceReports->submit($teamId, $fiscalYear, $period, $file, $notes),
+                ]);
+            }
+            json_response(['error' => 'عملیات گزارش نامعتبر است.'], 422);
+        }
+
+        $teamId = Access::scopedTeamId() ?? (int) ($_GET['team_id'] ?? 0);
+        $fiscalYear = isset($_GET['fiscal_year']) ? (string) $_GET['fiscal_year'] : null;
+        if (Access::isAdmin() && isset($_GET['list']) && (string) $_GET['list'] === '1') {
+            json_response([
+                'rows' => $performanceReports->adminList(
+                    $fiscalYear,
+                    (string) ($_GET['status'] ?? '')
+                ),
+                'settings' => $performanceReports->settings(),
+            ]);
+        }
+        if ($teamId <= 0) {
+            json_response(['error' => 'نهاد معتبر نیست.'], 422);
+        }
+        json_response($performanceReports->teamOverview($teamId, $fiscalYear));
+    }
+
+    if ($resource === 'pending-performance-reports') {
+        $rows = $performanceReports->pendingList();
+        json_response([
+            'rows' => $rows,
+            'total' => count($rows),
+            'page' => 1,
+            'per_page' => 100,
+            'pages' => 1,
+            'settings' => $performanceReports->settings(),
+        ]);
+    }
+
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && $resource === 'room-reservations' && $action === 'create') {
         require_csrf_json();
         Access::requireWriteOrTeamSubmitJson();
@@ -340,6 +470,8 @@ try {
         $accessCode = trim((string) ($payload['access_code'] ?? ''));
         $lockerNumber = (int) ($payload['locker_number'] ?? 0);
 
+        $contractDocs = new ContractDocuments($pdo);
+        $performanceReports = new PerformanceReports($pdo);
         $result = match ($resource . ':' . $action) {
             'members:approve', 'pending-members:approve' => $workflow->approveMember($id, $accessCode),
             'members:reject', 'pending-members:reject' => $workflow->rejectMember($id, $reason),
@@ -351,6 +483,10 @@ try {
             'pending-member-requests:reject', 'member-requests:reject' => $workflow->rejectMemberRequest($id, $reason),
             'pending-room-reservations:approve', 'room-reservations:approve' => $rooms->approve($id),
             'pending-room-reservations:reject', 'room-reservations:reject' => $rooms->reject($id, $reason),
+            'pending-contract-proposals:approve', 'contract-documents:approve' => $contractDocs->approveProposal($id),
+            'pending-contract-proposals:reject', 'contract-documents:reject' => $contractDocs->rejectProposal($id, $reason),
+            'pending-performance-reports:approve', 'performance-reports:approve' => $performanceReports->approve($id),
+            'pending-performance-reports:reject', 'performance-reports:reject' => $performanceReports->reject($id, $reason),
             default => throw new InvalidArgumentException('عملیات تأیید/رد برای این بخش تعریف نشده است.'),
         };
 
