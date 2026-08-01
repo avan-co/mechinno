@@ -120,10 +120,11 @@
       return { ok: false, error: "بازه زمانی معتبر نیست." };
     }
 
-    let start = anchor;
+    const start = anchor;
     let end = clicked;
+    // End must be at or after start — no backward selection after picking start time.
     if (timeToMinutes(end) < timeToMinutes(start)) {
-      [start, end] = [end, start];
+      return { ok: false, error: "ساعت پایان باید بعد از شروع باشد." };
     }
     // Same button twice => book exactly one slot.
     if (timeToMinutes(end) === timeToMinutes(start)) {

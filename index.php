@@ -374,16 +374,7 @@ $assetVer = (string) max(
                 <span class="section-intro-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm-7 8a7 7 0 0 1 14 0Z" fill="currentColor"/></svg></span>
                 <div class="section-intro-copy"><p>هر نهاد را از دکمه <strong>پروفایل</strong> باز کنید — قرارداد، میز و بدهی هر سال در یکجا مدیریت می‌شود.</p></div>
               </div>
-              <?php if (Access::canWrite()): ?>
-              <article class="panel">
-                <div class="panel-head">
-                  <h2>ورود گروهی سابقه</h2>
-                  <button type="button" class="button ghost" id="bulkYearImportButton">ورود CSV سال</button>
-                </div>
-                <p class="hint">برای ثبت یک‌باره چند نهاد در یک سال — فرمت: <code>نام نهاد,شروع,پایان,مبلغ قرارداد,میزها</code> (مبلغ بدون جداکننده هزارگان)</p>
-              </article>
-              <?php endif; ?>
-              <data-table title="نهادها" endpoint="api.php?resource=teams"></data-table>
+              <data-table title="نهادها" endpoint="api.php?resource=teams"<?= Access::canWrite() ? ' data-bulk-import' : '' ?>></data-table>
             </section>
 
             <section id="team-contracts" class="section">
@@ -721,7 +712,7 @@ $assetVer = (string) max(
                 </aside>
               </div>
               <?php endif; ?>
-              <data-table title="رزروهای اتاق" endpoint="api.php?resource=room-reservations" data-no-add data-readonly></data-table>
+              <data-table title="رزروهای اتاق" endpoint="api.php?resource=room-reservations" data-no-add data-readonly data-per-page="20"></data-table>
               <data-table title="اتاق‌های جلسه" endpoint="api.php?resource=meeting-rooms"></data-table>
             </section>
 

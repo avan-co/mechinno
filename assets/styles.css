@@ -1153,7 +1153,7 @@ a.nav-item {
 
 .stat-cards {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 12px;
   margin-bottom: 18px;
 }
@@ -2866,7 +2866,7 @@ body.is-mobile .mobile-card .row-actions {
 
 .quick-nav {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
   gap: 8px;
   margin-bottom: 14px;
 }
@@ -3654,7 +3654,13 @@ body.is-mobile .mobile-card .row-actions {
   font-size: 13px;
   font-weight: 800;
 }
-.dashboard-panels { margin-bottom: 14px; }
+.dashboard-panels { margin-bottom: 14px; gap: 14px; }
+#overview .dashboard-hero { margin-bottom: 12px; }
+#overview .stat-cards { margin-bottom: 14px; }
+#overview .quick-nav { margin-bottom: 12px; }
+.page-subtitle[hidden] { display: none; }
+.table-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.table-actions .search { flex: 1 1 160px; min-width: 140px; }
 
 .section-intro {
   gap: 12px;

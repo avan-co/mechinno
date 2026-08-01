@@ -682,7 +682,10 @@ const updatePageHeader = (sectionId) => {
   const subtitle = document.getElementById("pageSubtitle");
   if (eyebrow) eyebrow.textContent = meta.eyebrow;
   if (title) title.textContent = meta.title;
-  if (subtitle) subtitle.textContent = meta.subtitle;
+  if (subtitle) {
+    subtitle.textContent = meta.subtitle;
+    subtitle.hidden = id === "overview";
+  }
 };
 
 const reloadSectionTables = (sectionId, resetPage = false) => {
@@ -3451,9 +3454,6 @@ const formatCell = (column, value, row, resource) => {
     }
     return teamLink(row[linkColumns[column]], value);
   }
-  if (column === "full_name" && resource === "members" && row.team_id && panelMode === "admin") {
-    return `${escapeHtml(value || "—")} <small>${teamLink(row.team_id, "پروفایل نهاد")}</small>`;
-  }
   if (column === "desk_numbers" && value) {
     return String(value).split(",").filter(Boolean).map((n) => deskLink(n.trim())).join(" ");
   }
@@ -3651,7 +3651,7 @@ class DataTable extends HTMLElement {
     this.definition = null;
     this.rows = [];
     this.page = 1;
-    this.perPage = 25;
+    this.perPage = Number(this.getAttribute("data-per-page") || 25) || 25;
     this.total = 0;
     this.pages = 1;
     this.filter = "";
@@ -3659,11 +3659,15 @@ class DataTable extends HTMLElement {
     const addButtonHtml = this.readOnly
       ? ""
       : `<button class="button add-button" type="button">+ افزودن</button>`;
+    const bulkImportHtml = (this.hasAttribute("data-bulk-import") && canWrite)
+      ? `<button type="button" class="button ghost bulk-import-button" title="ورود گروهی سابقه از CSV">ورود CSV سال</button>`
+      : "";
     this.innerHTML = `
       <article class="panel data-panel">
         <div class="table-toolbar${this.title?.trim() ? "" : " is-empty-title"}">
           <h2>${escapeHtml(this.title)}</h2>
           <div class="table-actions">
+            ${bulkImportHtml}
             ${addButtonHtml}
             <input class="search" type="search" placeholder="جست‌وجو... ( / )" />
           </div>
@@ -3709,6 +3713,9 @@ class DataTable extends HTMLElement {
           showToast("ثبت شد.", "success");
         },
       });
+    });
+    this.querySelector(".bulk-import-button")?.addEventListener("click", () => {
+      window.TeamYearWorkspace?.openBulkImportModal();
     });
     this.querySelector(".per-page-select")?.addEventListener("change", (e) => {
       this.perPage = Number(e.target.value) || 25;
@@ -3772,7 +3779,16 @@ class DataTable extends HTMLElement {
     pager.querySelector(".pager-info").textContent =
       `صفحه ${this.page.toLocaleString("fa-IR")} از ${this.pages.toLocaleString("fa-IR")} — ${this.total.toLocaleString("fa-IR")} رکورد`;
     const perPageSelect = pager.querySelector(".per-page-select");
-    if (perPageSelect) perPageSelect.value = String(this.perPage);
+    if (perPageSelect) {
+      perPageSelect.value = String(this.perPage);
+      if (!perPageSelect.querySelector(`option[value="${this.perPage}"]`)) {
+        const option = document.createElement("option");
+        option.value = String(this.perPage);
+        option.textContent = String(this.perPage);
+        option.selected = true;
+        perPageSelect.appendChild(option);
+      }
+    }
     pager.querySelector(".pager-prev").disabled = this.page <= 1;
     pager.querySelector(".pager-next").disabled = this.page >= this.pages;
   }
@@ -4149,10 +4165,6 @@ if (memberApprovalTabs && membersTable) {
 loadDashboard().catch((error) => {
   const cards = document.getElementById("cards");
   if (cards) cards.innerHTML = `<article class="stat-card"><span class="stat-label">خطا</span><strong>${escapeHtml(error.message)}</strong></article>`;
-});
-
-document.getElementById("bulkYearImportButton")?.addEventListener("click", () => {
-  window.TeamYearWorkspace?.openBulkImportModal();
 });
 
 document.getElementById("deskHistoryAddButton")?.addEventListener("click", () => {

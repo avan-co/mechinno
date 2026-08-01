@@ -198,6 +198,27 @@ if (tooLong.ok) {
   console.error("room-range must reject ranges above maxHours");
   process.exit(1);
 }
+const backward = Range.resolveRange({
+  anchor: "10:00",
+  clicked: "08:00",
+  slotMinutes: 30,
+  maxHours: 2,
+  slots: [
+    { time: "08:00", end: "08:30", status: "free" },
+    { time: "08:30", end: "09:00", status: "free" },
+    { time: "09:00", end: "09:30", status: "free" },
+    { time: "09:30", end: "10:00", status: "free" },
+    ...freeSlots,
+  ],
+});
+if (backward.ok) {
+  console.error("room-range must reject end times before start anchor");
+  process.exit(1);
+}
+if (Range.canUseAsEnd({ anchor: "10:00", candidate: "08:00", slotMinutes: 30, maxHours: 2, slots: freeSlots })) {
+  console.error("canUseAsEnd must not allow times before anchor");
+  process.exit(1);
+}
 
 const bookingJs = fs.readFileSync(path.join(__dirname, "..", "assets", "room-booking.js"), "utf8");
 const publicJs = fs.readFileSync(path.join(__dirname, "..", "assets", "room-public.js"), "utf8");
