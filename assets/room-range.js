@@ -120,10 +120,12 @@
       return { ok: false, error: "بازه زمانی معتبر نیست." };
     }
 
-    let start = anchor;
+    // Hotel-style: first click is always start; end must be at/after start.
+    // Do not swap — otherwise times before the start look selectable as "end".
+    const start = anchor;
     let end = clicked;
     if (timeToMinutes(end) < timeToMinutes(start)) {
-      [start, end] = [end, start];
+      return { ok: false, error: "ساعت پایان باید بعد از ساعت شروع باشد." };
     }
     // Same button twice => book exactly one slot.
     if (timeToMinutes(end) === timeToMinutes(start)) {

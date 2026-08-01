@@ -315,8 +315,8 @@ const resourceColumns = {
   "payment-history": ["tx_date", "team_name", "fiscal_year", "month_name", "amount", "payment_status", "payment_reference", "announced_at", "reviewed_at", "notes"],
   development_plans: ["title", "status", "priority", "due_date", "notes"],
   "meeting-rooms": ["name", "code", "capacity", "floor", "open_time", "close_time", "slot_minutes", "is_active", "equipment", "notes"],
-  "room-reservations": ["reserved_date", "start_time", "end_time", "room_name", "booker_name", "booker_phone", "booker_org", "team_label", "status", "source", "purpose", "submitted_at", "reviewed_at", "rejection_reason", "cancel_reason"],
-  "pending-room-reservations": ["reserved_date", "start_time", "end_time", "room_name", "booker_name", "booker_phone", "booker_org", "team_label", "purpose", "source", "submitted_at"],
+  "room-reservations": ["reserved_date", "start_time", "end_time", "room_name", "booker_name", "booker_phone", "team_label", "status", "source", "purpose"],
+  "pending-room-reservations": ["reserved_date", "start_time", "end_time", "room_name", "booker_name", "booker_phone", "team_label", "purpose", "source", "submitted_at"],
 };
 
 const teamPanelHiddenColumns = {
@@ -3357,7 +3357,10 @@ const formatCell = (column, value, row, resource) => {
     return '<span class="badge">—</span>';
   }
   if (column === "team_label" || column === "team_name") {
-    const name = escapeHtml(value || "—");
+    const teamId = row[linkColumns[column]] || row.team_id;
+    const name = (teamId && value)
+      ? teamLink(teamId, value)
+      : escapeHtml(value || "—");
     const active = row.team_is_active;
     if (active !== undefined && active !== null && value) {
       return `${name} ${teamActiveBadge(active)}`;
@@ -3450,9 +3453,6 @@ const formatCell = (column, value, row, resource) => {
       return `<button type="button" class="text-link" data-team-id="${escapeHtml(row.id)}">${escapeHtml(value)}</button>`;
     }
     return teamLink(row[linkColumns[column]], value);
-  }
-  if (column === "full_name" && resource === "members" && row.team_id && panelMode === "admin") {
-    return `${escapeHtml(value || "—")} <small>${teamLink(row.team_id, "پروفایل نهاد")}</small>`;
   }
   if (column === "desk_numbers" && value) {
     return String(value).split(",").filter(Boolean).map((n) => deskLink(n.trim())).join(" ");
@@ -3651,7 +3651,7 @@ class DataTable extends HTMLElement {
     this.definition = null;
     this.rows = [];
     this.page = 1;
-    this.perPage = 25;
+    this.perPage = Number(this.getAttribute("data-per-page") || 25) || 25;
     this.total = 0;
     this.pages = 1;
     this.filter = "";
@@ -3659,11 +3659,18 @@ class DataTable extends HTMLElement {
     const addButtonHtml = this.readOnly
       ? ""
       : `<button class="button add-button" type="button">+ افزودن</button>`;
+    const bulkImportHtml = this.resource === "teams" && canWrite && panelMode === "admin"
+      ? `<button class="button ghost bulk-import-button" type="button" id="bulkYearImportButton">ورود گروهی CSV</button>`
+      : "";
+    const perPageOptions = [10, 25, 50, 100].map((n) =>
+      `<option value="${n}"${n === this.perPage ? " selected" : ""}>${n}</option>`
+    ).join("");
     this.innerHTML = `
       <article class="panel data-panel">
         <div class="table-toolbar${this.title?.trim() ? "" : " is-empty-title"}">
           <h2>${escapeHtml(this.title)}</h2>
           <div class="table-actions">
+            ${bulkImportHtml}
             ${addButtonHtml}
             <input class="search" type="search" placeholder="جست‌وجو... ( / )" />
           </div>
@@ -3675,10 +3682,7 @@ class DataTable extends HTMLElement {
           <div class="pager-buttons">
             <label>تعداد
               <select class="per-page-select">
-                <option value="10">10</option>
-                <option value="25" selected>25</option>
-                <option value="50">50</option>
-                <option value="100">100</option>
+                ${perPageOptions}
               </select>
             </label>
             <button class="mini-button pager-prev" type="button">قبلی</button>
@@ -3693,6 +3697,9 @@ class DataTable extends HTMLElement {
         this.page = 1;
         this.load();
       }, 300);
+    });
+    this.querySelector(".bulk-import-button")?.addEventListener("click", () => {
+      window.TeamYearWorkspace?.openBulkImportModal();
     });
     this.querySelector(".add-button")?.addEventListener("click", () => {
       if (this.resource === "transactions" && this.txCategoryFilter) {
@@ -3768,7 +3775,8 @@ class DataTable extends HTMLElement {
   renderPager() {
     const pager = this.querySelector(".table-pagination");
     if (!pager) return;
-    pager.hidden = this.total <= this.perPage && this.pages <= 1;
+    // Keep pager visible whenever there are rows so page-size control stays available.
+    pager.hidden = this.total <= 0;
     pager.querySelector(".pager-info").textContent =
       `صفحه ${this.page.toLocaleString("fa-IR")} از ${this.pages.toLocaleString("fa-IR")} — ${this.total.toLocaleString("fa-IR")} رکورد`;
     const perPageSelect = pager.querySelector(".per-page-select");
@@ -4149,10 +4157,6 @@ if (memberApprovalTabs && membersTable) {
 loadDashboard().catch((error) => {
   const cards = document.getElementById("cards");
   if (cards) cards.innerHTML = `<article class="stat-card"><span class="stat-label">خطا</span><strong>${escapeHtml(error.message)}</strong></article>`;
-});
-
-document.getElementById("bulkYearImportButton")?.addEventListener("click", () => {
-  window.TeamYearWorkspace?.openBulkImportModal();
 });
 
 document.getElementById("deskHistoryAddButton")?.addEventListener("click", () => {

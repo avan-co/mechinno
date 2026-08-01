@@ -317,7 +317,7 @@ final class Repository
         $teamId = Access::scopedTeamId();
         if ($teamId !== null) {
             if (trim((string) ($filters['q'] ?? '')) !== '' && in_array($name, [
-                'members', 'desks', 'lockers', 'charges', 'transactions',
+                'members', 'desks', 'lockers', 'charges', 'transactions', 'room-reservations',
             ], true)) {
                 return (int) $this->pdo->query(
                     'SELECT COUNT(*) FROM (' . $this->resourceSql($name, $filters) . ') AS filtered_rows'
@@ -383,7 +383,10 @@ final class Repository
             'locker-requests' => 'SELECT COUNT(*) FROM locker_requests',
             'member-requests' => 'SELECT COUNT(*) FROM member_requests',
             'meeting-rooms' => 'SELECT COUNT(*) FROM meeting_rooms',
-            'room-reservations' => 'SELECT COUNT(*) FROM room_reservations',
+            'room-reservations' => 'SELECT COUNT(*) FROM room_reservations'
+                . (isset($filters['status']) && $filters['status'] !== ''
+                    ? ' WHERE status = ' . $this->pdo->quote((string) $filters['status'])
+                    : ''),
             'pending-room-reservations' => "SELECT COUNT(*) FROM room_reservations WHERE status = 'pending'",
             'desk-assignments' => 'SELECT COUNT(*) FROM desk_assignments',
             'team_contracts' => 'SELECT COUNT(*) FROM team_contracts',
@@ -598,7 +601,7 @@ final class Repository
                 . ($teamId !== null ? " WHERE lr.team_id = {$teamId}" : '')
                 . ' ORDER BY lr.submitted_at DESC, lr.id DESC',
             'pending-room-reservations' => "SELECT rr.id, rr.room_id, rr.reserved_date, rr.start_time, rr.end_time,
-                        rr.booker_name, rr.booker_phone, rr.booker_org, rr.purpose, rr.source, rr.submitted_at,
+                        rr.team_id, rr.booker_name, rr.booker_phone, rr.booker_org, rr.purpose, rr.source, rr.submitted_at,
                         mr.name AS room_name, mr.code AS room_code, t.name AS team_label
                  FROM room_reservations rr
                  INNER JOIN meeting_rooms mr ON mr.id = rr.room_id

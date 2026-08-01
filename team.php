@@ -433,7 +433,7 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
                   </div>
                 </form>
               </article>
-              <data-table title="رزروهای نهاد" endpoint="api.php?resource=room-reservations" data-no-add data-readonly></data-table>
+              <data-table title="رزروهای نهاد" endpoint="api.php?resource=room-reservations" data-no-add data-readonly data-per-page="10"></data-table>
             </section>
 
             <section id="charges" class="section">

@@ -199,10 +199,64 @@ if (tooLong.ok) {
   process.exit(1);
 }
 
+const beforeSlots = ["08:00", "08:30", "09:00", "09:30", "10:00", "10:30", "11:00", "11:30", "12:00"].map((time) => ({
+  time,
+  end: Range.minutesToTime(Range.timeToMinutes(time) + 30),
+  status: "free",
+}));
+const beforeStart = Range.resolveRange({
+  anchor: "10:00",
+  clicked: "08:00",
+  slotMinutes: 30,
+  maxHours: 2,
+  slots: beforeSlots,
+});
+if (beforeStart.ok) {
+  console.error("room-range must not swap/allow end before start", beforeStart);
+  process.exit(1);
+}
+if (Range.canUseAsEnd({
+  anchor: "10:00",
+  candidate: "08:00",
+  slotMinutes: 30,
+  maxHours: 2,
+  slots: beforeSlots,
+})) {
+  console.error("canUseAsEnd must reject times before the selected start");
+  process.exit(1);
+}
+if (!Range.canUseAsEnd({
+  anchor: "10:00",
+  candidate: "12:00",
+  slotMinutes: 30,
+  maxHours: 2,
+  slots: beforeSlots,
+})) {
+  console.error("canUseAsEnd must allow exclusive end within maxHours after start");
+  process.exit(1);
+}
+
 const bookingJs = fs.readFileSync(path.join(__dirname, "..", "assets", "room-booking.js"), "utf8");
 const publicJs = fs.readFileSync(path.join(__dirname, "..", "assets", "room-public.js"), "utf8");
 if (!bookingJs.includes("MechinnoRoomRange") || !publicJs.includes("MechinnoRoomRange")) {
   console.error("admin/team and public booking must use shared MechinnoRoomRange");
+  process.exit(1);
+}
+
+if (source.includes('teamLink(row.team_id, "پروفایل نهاد")') || source.includes("پروفایل نهاد</small>")) {
+  console.error("members table must not append org profile link next to full_name");
+  process.exit(1);
+}
+if (!source.includes('bulk-import-button') || !source.includes('data-per-page')) {
+  console.error("teams bulk import button and data-per-page table support are required");
+  process.exit(1);
+}
+if (indexSource.includes('id="bulkYearImportButton"') && indexSource.includes("ورود گروهی سابقه")) {
+  console.error("bulk year import panel must be removed from teams section hero");
+  process.exit(1);
+}
+if (!indexSource.includes('data-per-page="10"')) {
+  console.error("room reservations tables must use compact pagination (data-per-page=10)");
   process.exit(1);
 }
 

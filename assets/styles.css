@@ -1155,7 +1155,7 @@ a.nav-item {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
-  margin-bottom: 18px;
+  margin-bottom: 14px;
 }
 
 .filter-tabs {
@@ -3655,6 +3655,18 @@ body.is-mobile .mobile-card .row-actions {
   font-weight: 800;
 }
 .dashboard-panels { margin-bottom: 14px; }
+.dashboard-panels--priority { margin-top: 2px; }
+#overview .quick-nav {
+  margin-top: 4px;
+  margin-bottom: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+#overview .welcome-panel { margin-top: 0; }
+.table-actions .bulk-import-button {
+  min-width: 0;
+  white-space: nowrap;
+}
 
 .section-intro {
   gap: 12px;
