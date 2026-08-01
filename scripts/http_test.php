@@ -310,8 +310,13 @@ if (!is_file($root . '/config.php')) {
     $r = $request('GET', '/api.php?resource=meeting-rooms&page=1&per_page=25');
     $assert($r['status'] === 200, 'http: entity can list meeting rooms');
 
-    $r = $request('GET', '/api.php?resource=room-reservations&page=1&per_page=25');
-    $assert($r['status'] === 200, 'http: entity can list room reservations');
+    $r = $request('GET', '/api.php?resource=room-reservations&page=1&per_page=10');
+    $assert(
+        $r['status'] === 200
+        && isset($r['json']['rows'], $r['json']['total'], $r['json']['page'], $r['json']['pages'])
+        && count($r['json']['rows']) <= 10,
+        'http: entity can access paginated room reservations'
+    );
 
     $r = $request('GET', '/api.php?resource=center-settings');
     $assert($r['status'] === 200 && isset($r['json']['bank_name']), 'http: entity can read payment settings');

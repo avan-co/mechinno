@@ -3445,14 +3445,14 @@ const formatCell = (column, value, row, resource) => {
     const map = { public: "عمومی", team: "نهاد", admin: "مدیر" };
     return escapeHtml(map[value] || value || "—");
   }
+  if (column === "team_label" && resource === "members" && row.team_id && value) {
+    return teamLink(row.team_id, value);
+  }
   if (linkColumns[column] && row[linkColumns[column]] && value) {
     if (column === "name" && resource === "teams") {
       return `<button type="button" class="text-link" data-team-id="${escapeHtml(row.id)}">${escapeHtml(value)}</button>`;
     }
     return teamLink(row[linkColumns[column]], value);
-  }
-  if (column === "full_name" && resource === "members" && row.team_id && panelMode === "admin") {
-    return `${escapeHtml(value || "—")} <small>${teamLink(row.team_id, "پروفایل نهاد")}</small>`;
   }
   if (column === "desk_numbers" && value) {
     return String(value).split(",").filter(Boolean).map((n) => deskLink(n.trim())).join(" ");
@@ -3651,7 +3651,9 @@ class DataTable extends HTMLElement {
     this.definition = null;
     this.rows = [];
     this.page = 1;
-    this.perPage = 25;
+    this.perPage = [10, 25, 50, 100].includes(Number(this.getAttribute("data-per-page")))
+      ? Number(this.getAttribute("data-per-page"))
+      : 25;
     this.total = 0;
     this.pages = 1;
     this.filter = "";
@@ -3659,12 +3661,16 @@ class DataTable extends HTMLElement {
     const addButtonHtml = this.readOnly
       ? ""
       : `<button class="button add-button" type="button">+ افزودن</button>`;
+    const bulkImportButtonHtml = this.hasAttribute("data-bulk-year-import")
+      ? '<button class="button ghost bulk-year-import-button" type="button">ورود گروهی از فایل</button>'
+      : "";
     this.innerHTML = `
       <article class="panel data-panel">
         <div class="table-toolbar${this.title?.trim() ? "" : " is-empty-title"}">
           <h2>${escapeHtml(this.title)}</h2>
           <div class="table-actions">
             ${addButtonHtml}
+            ${bulkImportButtonHtml}
             <input class="search" type="search" placeholder="جست‌وجو... ( / )" />
           </div>
         </div>
@@ -3709,6 +3715,9 @@ class DataTable extends HTMLElement {
           showToast("ثبت شد.", "success");
         },
       });
+    });
+    this.querySelector(".bulk-year-import-button")?.addEventListener("click", () => {
+      window.TeamYearWorkspace?.openBulkImportModal();
     });
     this.querySelector(".per-page-select")?.addEventListener("change", (e) => {
       this.perPage = Number(e.target.value) || 25;
@@ -4149,10 +4158,6 @@ if (memberApprovalTabs && membersTable) {
 loadDashboard().catch((error) => {
   const cards = document.getElementById("cards");
   if (cards) cards.innerHTML = `<article class="stat-card"><span class="stat-label">خطا</span><strong>${escapeHtml(error.message)}</strong></article>`;
-});
-
-document.getElementById("bulkYearImportButton")?.addEventListener("click", () => {
-  window.TeamYearWorkspace?.openBulkImportModal();
 });
 
 document.getElementById("deskHistoryAddButton")?.addEventListener("click", () => {

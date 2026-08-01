@@ -198,11 +198,38 @@ if (tooLong.ok) {
   console.error("room-range must reject ranges above maxHours");
   process.exit(1);
 }
+const backwards = Range.resolveRange({
+  anchor: "12:00",
+  clicked: "10:00",
+  slotMinutes: 30,
+  maxHours: 2,
+  slots: freeSlots,
+});
+if (backwards.ok || !String(backwards.error).includes("پایان")) {
+  console.error("room-range must reject an end time before the selected start", backwards);
+  process.exit(1);
+}
 
 const bookingJs = fs.readFileSync(path.join(__dirname, "..", "assets", "room-booking.js"), "utf8");
 const publicJs = fs.readFileSync(path.join(__dirname, "..", "assets", "room-public.js"), "utf8");
 if (!bookingJs.includes("MechinnoRoomRange") || !publicJs.includes("MechinnoRoomRange")) {
   console.error("admin/team and public booking must use shared MechinnoRoomRange");
+  process.exit(1);
+}
+if (!source.includes("data-bulk-year-import") || !source.includes("bulk-year-import-button")) {
+  console.error("teams table must expose its bulk import action beside add");
+  process.exit(1);
+}
+if (source.includes('column === "full_name" && resource === "members" && row.team_id')) {
+  console.error("member names must not contain an institution-profile link");
+  process.exit(1);
+}
+if (!source.includes('column === "team_label" && resource === "members" && row.team_id && value')) {
+  console.error("member institution column must link to the institution profile");
+  process.exit(1);
+}
+if (!indexSource.includes('resource=room-reservations" data-no-add data-readonly data-per-page="10"')) {
+  console.error("room reservation list must default to a compact paginated page");
   process.exit(1);
 }
 
