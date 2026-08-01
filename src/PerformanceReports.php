@@ -174,10 +174,12 @@ final class PerformanceReports
         if ($existing) {
             $currentStatus = (string) ($existing['status'] ?? '');
             if (Access::isTeam() && $currentStatus === 'pending') {
-                // replace pending
-            } elseif (Access::isTeam() && $currentStatus === 'approved') {
+                throw new InvalidArgumentException('گزارش این دوره در انتظار تأیید مرکز است و ارسال مجدد مجاز نیست.');
+            }
+            if (Access::isTeam() && $currentStatus === 'approved') {
                 throw new InvalidArgumentException('گزارش تأییدشده قابل جایگزینی توسط نهاد نیست. در صورت رد توسط مرکز می‌توانید اصلاحیه بفرستید.');
-            } elseif (Access::isTeam() && $currentStatus !== 'rejected') {
+            }
+            if (Access::isTeam() && $currentStatus !== 'rejected') {
                 throw new InvalidArgumentException('وضعیت گزارش برای ارسال مجدد مناسب نیست.');
             }
 

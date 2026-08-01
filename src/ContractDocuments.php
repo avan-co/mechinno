@@ -87,8 +87,9 @@ final class ContractDocuments
         $proposal = $this->proposalForTeamYear($teamId, $fiscalYear);
         $official = (new TeamContracts($this->pdo))->contractForYear($teamId, $fiscalYear);
         $hasBothFiles = $byType[self::TYPE_MEMBERSHIP] !== null && $byType[self::TYPE_SETTLEMENT] !== null;
+        // Team may submit a new package or a correction after rejection — not while pending review.
         $canSubmit = $official === null
-            && ($proposal === null || in_array((string) ($proposal['status'] ?? ''), ['rejected', 'pending'], true));
+            && ($proposal === null || (string) ($proposal['status'] ?? '') === 'rejected');
 
         return [
             'team_id' => $teamId,
@@ -263,8 +264,14 @@ final class ContractDocuments
         }
 
         $existingProposal = $this->proposalForTeamYear($teamId, $fiscalYear);
-        if ($existingProposal && (string) ($existingProposal['status'] ?? '') === 'approved' && Access::isTeam()) {
-            throw new InvalidArgumentException('قرارداد این سال قبلاً تأیید شده است.');
+        if ($existingProposal && Access::isTeam()) {
+            $proposalStatus = (string) ($existingProposal['status'] ?? '');
+            if ($proposalStatus === 'approved') {
+                throw new InvalidArgumentException('قرارداد این سال قبلاً تأیید شده است.');
+            }
+            if ($proposalStatus === 'pending') {
+                throw new InvalidArgumentException('پیشنهاد این سال در انتظار تأیید مرکز است و ارسال مجدد مجاز نیست.');
+            }
         }
 
         if (!is_array($membershipUpload) || (int) ($membershipUpload['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
@@ -515,16 +522,37 @@ final class ContractDocuments
      */
     public function pendingProposals(): array
     {
+        return $this->proposalsByStatus('pending');
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    public function rejectedProposals(): array
+    {
+        return $this->proposalsByStatus('rejected');
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    public function proposalsByStatus(string $status): array
+    {
         if (!Schema::tableExists($this->pdo, 'team_contract_proposals')) {
             return [];
         }
-        $statement = $this->pdo->query(
+        $status = trim($status);
+        if (!in_array($status, ['pending', 'rejected', 'approved'], true)) {
+            throw new InvalidArgumentException('وضعیت پیشنهاد نامعتبر است.');
+        }
+        $statement = $this->pdo->prepare(
             "SELECT p.*, t.name AS team_name, t.entity_code
              FROM team_contract_proposals p
              INNER JOIN teams t ON t.id = p.team_id
-             WHERE p.status = 'pending'
-             ORDER BY p.submitted_at DESC, p.id DESC"
+             WHERE p.status = :status
+             ORDER BY COALESCE(p.reviewed_at, p.submitted_at) DESC, p.id DESC"
         );
+        $statement->execute(['status' => $status]);
 
         $rows = [];
         foreach ($statement->fetchAll() ?: [] as $row) {
@@ -532,11 +560,67 @@ final class ContractDocuments
             $bundle = $this->yearBundle((int) $presented['team_id'], (string) $presented['fiscal_year']);
             $presented['files'] = $bundle['files'];
             $presented['has_both_files'] = (bool) ($bundle['has_both_files'] ?? false);
-            $presented['can_approve'] = (bool) ($bundle['has_both_files'] ?? false);
+            $presented['can_approve'] = $status === 'pending' && (bool) ($bundle['has_both_files'] ?? false);
             $rows[] = $presented;
         }
 
         return $rows;
+    }
+
+    /**
+     * Delete contract files + proposals for a team/year (used when official contract is deleted).
+     */
+    public function deleteForTeamYear(int $teamId, string $fiscalYear): void
+    {
+        $fiscalYear = JalaliDate::normalizeDigits($fiscalYear);
+        if ($teamId <= 0 || !preg_match('/^\d{4}$/', $fiscalYear)) {
+            return;
+        }
+
+        if (Schema::tableExists($this->pdo, 'team_contract_files')) {
+            $statement = $this->pdo->prepare(
+                'SELECT id, stored_path FROM team_contract_files
+                 WHERE team_id = :team_id AND fiscal_year = :fiscal_year'
+            );
+            $statement->execute(['team_id' => $teamId, 'fiscal_year' => $fiscalYear]);
+            foreach ($statement->fetchAll() ?: [] as $row) {
+                FileStorage::deleteRelative((string) ($row['stored_path'] ?? ''));
+            }
+            $this->pdo->prepare(
+                'DELETE FROM team_contract_files WHERE team_id = :team_id AND fiscal_year = :fiscal_year'
+            )->execute(['team_id' => $teamId, 'fiscal_year' => $fiscalYear]);
+        }
+
+        if (Schema::tableExists($this->pdo, 'team_contract_proposals')) {
+            $this->pdo->prepare(
+                'DELETE FROM team_contract_proposals WHERE team_id = :team_id AND fiscal_year = :fiscal_year'
+            )->execute(['team_id' => $teamId, 'fiscal_year' => $fiscalYear]);
+        }
+    }
+
+    /**
+     * Delete all contract documents for a team (cascade).
+     */
+    public function deleteForTeam(int $teamId): void
+    {
+        if ($teamId <= 0) {
+            return;
+        }
+        if (Schema::tableExists($this->pdo, 'team_contract_files')) {
+            $statement = $this->pdo->prepare(
+                'SELECT stored_path FROM team_contract_files WHERE team_id = :team_id'
+            );
+            $statement->execute(['team_id' => $teamId]);
+            foreach ($statement->fetchAll() ?: [] as $row) {
+                FileStorage::deleteRelative((string) ($row['stored_path'] ?? ''));
+            }
+            $this->pdo->prepare('DELETE FROM team_contract_files WHERE team_id = :team_id')
+                ->execute(['team_id' => $teamId]);
+        }
+        if (Schema::tableExists($this->pdo, 'team_contract_proposals')) {
+            $this->pdo->prepare('DELETE FROM team_contract_proposals WHERE team_id = :team_id')
+                ->execute(['team_id' => $teamId]);
+        }
     }
 
     /**

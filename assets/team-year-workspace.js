@@ -262,11 +262,12 @@
             <h2 class="team-year-title">${S().escapeHtml(team.name || "نهاد")}</h2>
             <p class="hint">${S().entityBadge(team.entity_type)} · کد ${S().escapeHtml(team.entity_code || "—")} · مسئول ${S().escapeHtml(team.leader || "—")}</p>
           </div>
-          ${writable ? `<div class="profile-actions team-year-top-actions">
-            <button type="button" class="button" data-profile-action="add-member">افزودن عضو</button>
+          <div class="profile-actions team-year-top-actions">
+            <a class="button ghost" href="profile-print.php?id=${encodeURIComponent(teamId)}" target="_blank" rel="noopener">چاپ پروفایل A4</a>
+            ${writable ? `<button type="button" class="button" data-profile-action="add-member">افزودن عضو</button>
             <button type="button" class="button ghost" data-go-desk-history>تاریخچه تخصیص میز</button>
-            <button type="button" class="button ghost" data-profile-action="charges">شارژ</button>
-          </div>` : ""}
+            <button type="button" class="button ghost" data-profile-action="charges">شارژ</button>` : ""}
+          </div>
         </div>
         ${renderYearTabs(years, year, teamId, writable)}
         ${renderYearChecklist(summary)}
@@ -385,11 +386,11 @@
     container.querySelector("[data-delete-contract]")?.addEventListener("click", async (event) => {
       const button = event.currentTarget;
       const year = button.dataset.year;
-      if (!window.confirm(`قرارداد سال ${year} حذف شود؟ این عمل قابل بازگشت نیست.`)) return;
+      if (!window.confirm(`قرارداد سال ${year} و فایل‌های پیوست آن حذف شود؟ این عمل قابل بازگشت نیست.`)) return;
       button.disabled = true;
       try {
         await S().postJson("api.php?resource=team_contracts&action=delete", { id: Number(button.dataset.contractId) });
-        S().showToast("قرارداد حذف شد.", "success");
+        S().showToast("قرارداد و فایل‌های پیوست حذف شد.", "success");
         await reloadFn(container, teamId, year);
         await S().refreshAfterMutation("teams");
       } catch (error) {

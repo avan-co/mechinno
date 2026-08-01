@@ -1582,41 +1582,41 @@ const docStatusBadge = (status) => {
   return `<span class="badge">${escapeHtml(status || "—")}</span>`;
 };
 
-const loadPendingContractsQueue = async () => {
-  const host = document.getElementById("pendingContractsQueue");
-  if (!host) return;
-  const data = await fetchJson("api.php?resource=pending-contract-proposals");
-  const proposals = data.rows || [];
-  if (!proposals.length) {
-    host.classList.add("is-ready");
-    host.innerHTML = renderEmptyState("قراردادی در انتظار تأیید نیست.", { icon: "inbox" });
-    return;
+const renderContractReviewTable = (rows, { showActions = false, showReason = false } = {}) => {
+  if (!rows.length) {
+    return renderEmptyState(showActions ? "موردی در انتظار تأیید نیست." : "مورد ردشده‌ای نیست.", { icon: "inbox" });
   }
-  host.classList.add("is-ready");
-  host.innerHTML = `<div class="queue-grid">${proposals.map((row) => {
-    const membership = row.files?.membership;
-    const settlement = row.files?.settlement;
-    const canApprove = Boolean(row.can_approve);
-    return `<article class="queue-card">
-      <div class="queue-card-head">
-        <strong>${escapeHtml(row.team_name || "نهاد")}</strong>
-        ${docStatusBadge(row.status)}
-      </div>
-      <p class="hint">سال ${escapeHtml(row.fiscal_year)} · ${escapeHtml(formatPlain(row.contract_start))} تا ${escapeHtml(formatPlain(row.contract_end))} · ${escapeHtml(formatMoney(row.formal_contract_amount || 0))}</p>
-      ${row.notes ? `<p class="hint">${escapeHtml(row.notes)}</p>` : ""}
-      <div class="contract-file-meta">
-        <span>عضویت: ${membership ? `<a class="text-link" href="${escapeHtml(membership.download_url)}" target="_blank" rel="noopener">${escapeHtml(membership.original_name)}</a>` : "<em>ندارد</em>"}</span>
-        <span>استقرار: ${settlement ? `<a class="text-link" href="${escapeHtml(settlement.download_url)}" target="_blank" rel="noopener">${escapeHtml(settlement.original_name)}</a>` : "<em>ندارد</em>"}</span>
-      </div>
-      ${!canApprove ? `<p class="hint reject-hint">بدون هر دو پیوست قابل تأیید نیست.</p>` : ""}
-      ${canWrite ? `<div class="queue-card-actions">
-        <button type="button" class="button" data-approve-proposal="${row.id}" ${canApprove ? "" : "disabled"}>تأیید بسته قرارداد</button>
-        <button type="button" class="button danger ghost" data-reject-proposal="${row.id}">رد</button>
-      </div>` : ""}
-    </article>`;
-  }).join("")}</div>`;
+  return `<div class="table-wrap"><table class="data-table review-list-table">
+    <thead><tr>
+      <th>نهاد</th><th>سال</th><th>بازه</th><th>مبلغ</th><th>پیوست عضویت</th><th>پیوست استقرار</th>
+      ${showReason ? "<th>دلیل رد</th>" : ""}
+      ${showActions ? "<th>عملیات</th>" : "<th>وضعیت</th>"}
+    </tr></thead>
+    <tbody>${rows.map((row) => {
+      const membership = row.files?.membership;
+      const settlement = row.files?.settlement;
+      const canApprove = Boolean(row.can_approve);
+      return `<tr>
+        <td>${escapeHtml(row.team_name || "—")}<div class="hint">${escapeHtml(row.entity_code || "")}</div></td>
+        <td>${escapeHtml(row.fiscal_year || "—")}</td>
+        <td>${escapeHtml(formatPlain(row.contract_start))} تا ${escapeHtml(formatPlain(row.contract_end))}</td>
+        <td>${escapeHtml(formatMoney(row.formal_contract_amount || 0))}</td>
+        <td>${membership ? `<a class="text-link" href="${escapeHtml(membership.download_url)}" target="_blank" rel="noopener">${escapeHtml(membership.original_name)}</a>` : "<span class=\"hint\">ندارد</span>"}</td>
+        <td>${settlement ? `<a class="text-link" href="${escapeHtml(settlement.download_url)}" target="_blank" rel="noopener">${escapeHtml(settlement.original_name)}</a>` : "<span class=\"hint\">ندارد</span>"}</td>
+        ${showReason ? `<td class="reject-hint">${escapeHtml(row.rejection_reason || "—")}</td>` : ""}
+        <td>${showActions ? `<div class="review-list-actions">
+            <button type="button" class="button" data-approve-proposal="${row.id}" ${canApprove && canWrite ? "" : "disabled"}>تأیید</button>
+            <button type="button" class="button danger ghost" data-reject-proposal="${row.id}" ${canWrite ? "" : "disabled"}>رد</button>
+            ${!canApprove ? `<div class="hint reject-hint">هر دو پیوست لازم است</div>` : ""}
+          </div>` : docStatusBadge(row.status)}
+        </td>
+      </tr>`;
+    }).join("")}</tbody>
+  </table></div>`;
+};
 
-  host.querySelectorAll("[data-approve-proposal]").forEach((button) => {
+const bindContractReviewActions = (root) => {
+  root.querySelectorAll("[data-approve-proposal]").forEach((button) => {
     button.addEventListener("click", async () => {
       button.disabled = true;
       try {
@@ -1630,7 +1630,7 @@ const loadPendingContractsQueue = async () => {
       }
     });
   });
-  host.querySelectorAll("[data-reject-proposal]").forEach((button) => {
+  root.querySelectorAll("[data-reject-proposal]").forEach((button) => {
     button.addEventListener("click", async () => {
       const reason = window.prompt("دلیل رد قرارداد:");
       if (reason === null) return;
@@ -1644,7 +1644,7 @@ const loadPendingContractsQueue = async () => {
           id: Number(button.dataset.rejectProposal),
           reason: String(reason).trim(),
         });
-        showToast("قرارداد رد شد.", "success");
+        showToast("قرارداد رد شد و به فهرست ردشده‌ها منتقل شد.", "success");
         await loadPendingContractsQueue();
       } catch (error) {
         showToast(error.message, "error");
@@ -1652,6 +1652,24 @@ const loadPendingContractsQueue = async () => {
       }
     });
   });
+};
+
+const loadPendingContractsQueue = async () => {
+  const pendingHost = document.getElementById("pendingContractsQueue");
+  const rejectedHost = document.getElementById("rejectedContractsQueue");
+  if (!pendingHost && !rejectedHost) return;
+  const data = await fetchJson("api.php?resource=pending-contract-proposals");
+  const pending = data.rows || [];
+  const rejected = data.rejected || [];
+  if (pendingHost) {
+    pendingHost.classList.add("is-ready");
+    pendingHost.innerHTML = renderContractReviewTable(pending, { showActions: true });
+    bindContractReviewActions(pendingHost);
+  }
+  if (rejectedHost) {
+    rejectedHost.classList.add("is-ready");
+    rejectedHost.innerHTML = renderContractReviewTable(rejected, { showReason: true });
+  }
 };
 
 const loadTeamContractsSection = async () => {
@@ -1798,6 +1816,31 @@ const loadPerformanceSettingsForm = async () => {
   }
 };
 
+let performanceAdminFilter = "pending";
+
+const renderPerformanceAdminTable = (rows) => {
+  if (!rows.length) {
+    return renderEmptyState("گزارشی در این فهرست نیست.", { icon: "inbox" });
+  }
+  return `<div class="table-wrap"><table class="data-table review-list-table">
+    <thead><tr>
+      <th>نهاد</th><th>سال</th><th>نیمه</th><th>فایل</th><th>وضعیت</th><th>دلیل رد</th><th>عملیات</th>
+    </tr></thead>
+    <tbody>${rows.map((row) => `<tr>
+      <td>${escapeHtml(row.team_name || "—")}<div class="hint">${escapeHtml(row.entity_code || "")}</div></td>
+      <td>${escapeHtml(row.fiscal_year || "—")}</td>
+      <td>${escapeHtml(row.period_label || row.period || "—")}</td>
+      <td><a class="text-link" href="${escapeHtml(row.download_url)}" target="_blank" rel="noopener">${escapeHtml(row.original_name || "دانلود")}</a></td>
+      <td>${docStatusBadge(row.status)}</td>
+      <td class="reject-hint">${escapeHtml(row.rejection_reason || "—")}</td>
+      <td>${row.status === "pending" && canWrite ? `<div class="review-list-actions">
+          <button type="button" class="button" data-approve-report="${row.id}">تأیید</button>
+          <button type="button" class="button danger ghost" data-reject-report="${row.id}">رد</button>
+        </div>` : "—"}</td>
+    </tr>`).join("")}</tbody>
+  </table></div>`;
+};
+
 const loadPerformanceReportsSection = async () => {
   const host = document.getElementById("performanceReportsContent");
   if (!host) return;
@@ -1807,27 +1850,27 @@ const loadPerformanceReportsSection = async () => {
       fetchJson("api.php?resource=performance-reports&list=1"),
       fetchJson("api.php?resource=performance-settings"),
     ]);
-    const rows = listData.rows || [];
+    const allRows = listData.rows || [];
     const enabled = Boolean(settings.performance_reports_enabled);
+    const filter = performanceAdminFilter || "pending";
+    const filtered = filter === "all" ? allRows : allRows.filter((row) => String(row.status) === filter);
     host.classList.add("is-ready");
     host.innerHTML = `
-      <div class="performance-admin-head">
-        <p class="hint">وضعیت بخش: <strong>${enabled ? "فعال" : "غیرفعال"}</strong> — از تنظیمات گزارش عملکرد می‌توانید نمایش برای نهادها را روشن/خاموش کنید.</p>
-      </div>
-      ${rows.length ? `<div class="queue-grid">${rows.map((row) => `
-        <article class="queue-card">
-          <div class="queue-card-head">
-            <strong>${escapeHtml(row.team_name || "نهاد")}</strong>
-            ${docStatusBadge(row.status)}
-          </div>
-          <p class="hint">سال ${escapeHtml(row.fiscal_year)} · ${escapeHtml(row.period_label || row.period)}</p>
-          <p><a class="text-link" href="${escapeHtml(row.download_url)}" target="_blank" rel="noopener">${escapeHtml(row.original_name)}</a></p>
-          ${row.rejection_reason ? `<p class="hint reject-hint">دلیل رد: ${escapeHtml(row.rejection_reason)}</p>` : ""}
-          ${canWrite && row.status === "pending" ? `<div class="queue-card-actions">
-            <button type="button" class="button" data-approve-report="${row.id}">تأیید</button>
-            <button type="button" class="button danger ghost" data-reject-report="${row.id}">رد</button>
-          </div>` : ""}
-        </article>`).join("")}</div>` : renderEmptyState("هنوز گزارش عملکردی ثبت نشده است.", { icon: "inbox" })}`;
+      <p class="hint">وضعیت بخش برای نهادها: <strong>${enabled ? "فعال" : "غیرفعال"}</strong> — تنظیم از «تنظیمات گزارش عملکرد».</p>
+      ${renderPerformanceAdminTable(filtered)}`;
+
+    document.querySelectorAll("#performanceStatusTabs [data-perf-filter]").forEach((tab) => {
+      const active = tab.dataset.perfFilter === filter;
+      tab.classList.toggle("active", active);
+      tab.setAttribute("aria-selected", active ? "true" : "false");
+      if (!tab.dataset.bound) {
+        tab.dataset.bound = "1";
+        tab.addEventListener("click", () => {
+          performanceAdminFilter = tab.dataset.perfFilter || "pending";
+          loadPerformanceReportsSection().catch((error) => showToast(error.message, "error"));
+        });
+      }
+    });
 
     host.querySelectorAll("[data-approve-report]").forEach((button) => {
       button.addEventListener("click", async () => {
@@ -1873,28 +1916,37 @@ const loadPerformanceReportsSection = async () => {
   host.classList.add("is-ready");
   host.innerHTML = `
     <p class="hint">${escapeHtml(guide)}</p>
-    <div class="performance-period-grid">
-      ${(data.periods || []).map((period) => {
+    <div class="table-wrap"><table class="data-table review-list-table">
+      <thead><tr><th>نیمه</th><th>بازه ارسال</th><th>وضعیت</th><th>فایل</th><th>ارسال / اصلاحیه</th></tr></thead>
+      <tbody>${(data.periods || []).map((period) => {
         const report = period.report;
-        const canSubmit = Boolean(period.can_submit) && (!report || report.status === "rejected" || report.status === "pending");
+        const canSubmit = Boolean(period.can_submit) && (!report || report.status === "rejected");
         const windowText = period.window?.open_from && period.window?.open_until
-          ? `بازه ارسال: ${period.window.open_from} تا ${period.window.open_until}`
-          : "بازه ارسال هنوز توسط مرکز تعیین نشده است.";
-        return `<article class="year-panel performance-period-card">
-          <div class="year-panel-head">
-            <h3>${escapeHtml(period.period_label)}</h3>
-            ${report ? docStatusBadge(report.status) : `<span class="badge">ارسال‌نشده</span>`}
-          </div>
-          <p class="hint">${escapeHtml(windowText)}</p>
-          ${report ? `<p><a class="text-link" href="${escapeHtml(report.download_url)}" target="_blank" rel="noopener">${escapeHtml(report.original_name)}</a></p>` : ""}
-          ${report?.rejection_reason ? `<p class="hint reject-hint">دلیل رد: ${escapeHtml(report.rejection_reason)}</p>` : ""}
-          ${canSubmit ? `<label class="contract-file-upload">
-            <span>${report ? "ارسال اصلاحیه / جایگزینی" : "انتخاب فایل گزارش"}</span>
-            <input type="file" data-performance-upload data-period="${escapeHtml(period.period)}" data-year="${escapeHtml(data.fiscal_year)}" accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx" ${period.can_submit ? "" : "disabled"} />
-          </label>` : (period.can_submit ? "" : `<p class="hint">ارسال این نیمه فعلاً باز نیست.</p>`)}
-        </article>`;
-      }).join("")}
-    </div>`;
+          ? `${period.window.open_from} تا ${period.window.open_until}`
+          : "تعیین‌نشده";
+        let actionCell = `<span class="hint">فعلاً باز نیست</span>`;
+        if (canSubmit) {
+          actionCell = `<label class="contract-file-upload">
+              <span>${report ? "انتخاب فایل اصلاحی" : "انتخاب فایل"}</span>
+              <input type="file" data-performance-upload data-period="${escapeHtml(period.period)}" data-year="${escapeHtml(data.fiscal_year)}" accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx" />
+            </label>`;
+        } else if (report?.status === "pending") {
+          actionCell = `<span class="hint">در انتظار تأیید مرکز</span>`;
+        } else if (report?.status === "approved") {
+          actionCell = `<span class="hint">تأیید شده</span>`;
+        } else if (period.can_submit) {
+          actionCell = "—";
+        }
+        return `<tr>
+          <td>${escapeHtml(period.period_label)}</td>
+          <td>${escapeHtml(windowText)}</td>
+          <td>${report ? docStatusBadge(report.status) : `<span class="badge">ارسال‌نشده</span>`}</td>
+          <td>${report ? `<a class="text-link" href="${escapeHtml(report.download_url)}" target="_blank" rel="noopener">${escapeHtml(report.original_name)}</a>
+            ${report.rejection_reason ? `<div class="hint reject-hint">${escapeHtml(report.rejection_reason)}</div>` : ""}` : "—"}</td>
+          <td>${actionCell}</td>
+        </tr>`;
+      }).join("")}</tbody>
+    </table></div>`;
 
   host.querySelectorAll("[data-performance-upload]").forEach((input) => {
     input.addEventListener("change", async () => {
@@ -2817,15 +2869,14 @@ const openTeamProfile = async (teamId, options = {}) => {
       <div><span>دریافت از نهاد</span><strong>${escapeHtml(formatMoney(data.summary.paid_total || 0))}</strong></div>
       <div><span>مانده بدهی قرارداد</span><strong class="debt-value">${escapeHtml(formatMoney(data.summary.debt_total || 0))}</strong></div>
     </div>
-    ${canWrite ? `<div class="profile-actions">
-      <button type="button" class="button" data-profile-action="add-member">افزودن عضو</button>
+    <div class="profile-actions">
+      <a class="button ghost" href="profile-print.php?id=${encodeURIComponent(teamId)}" target="_blank" rel="noopener">چاپ پروفایل A4</a>
+      ${canWrite ? `<button type="button" class="button" data-profile-action="add-member">افزودن عضو</button>
       <button type="button" class="button ghost" data-profile-action="deposit">ثبت دریافت شارژ</button>
       <button type="button" class="button ghost" data-profile-action="charges">مشاهده شارژ</button>
-      <button type="button" class="button ghost" data-profile-action="desks">مدیریت میزها</button>
-    </div>` : `<div class="profile-actions">
-      <button type="button" class="button ghost" data-profile-action="charges">مشاهده شارژ</button>
-      <button type="button" class="button ghost" data-profile-action="desks">مشاهده میزها</button>
-    </div>`}
+      <button type="button" class="button ghost" data-profile-action="desks">مدیریت میزها</button>` : `<button type="button" class="button ghost" data-profile-action="charges">مشاهده شارژ</button>
+      <button type="button" class="button ghost" data-profile-action="desks">مشاهده میزها</button>`}
+    </div>
     ${profileSection("قراردادهای سالانه", data.contracts || [], ["fiscal_year", "contract_start", "contract_end", "formal_contract_amount", "notes"])}
     ${profileSection("میزهای نهاد", data.desks, ["number", "usage_type", "notes"])}
     ${profileSection("تاریخچه تخصیص میز", data.desk_assignments || [], ["fiscal_year", "desk_number", "usage_type", "assigned_from", "assigned_until", "notes"])}

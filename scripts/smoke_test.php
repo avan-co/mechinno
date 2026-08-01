@@ -257,6 +257,54 @@ $assert((int) ($official['formal_contract_amount'] ?? 0) === 1000000, 'official 
 $assert(($approved['files']['membership']['status'] ?? '') === 'approved', 'membership file approved with package');
 $assert(($approved['files']['settlement']['status'] ?? '') === 'approved', 'settlement file approved with package');
 
+// Rejected proposals are listed separately from the pending queue.
+$tmpRejectA = tempnam($tmpDir, 'rej') . '.pdf';
+$tmpRejectB = tempnam($tmpDir, 'rej') . '.pdf';
+file_put_contents($tmpRejectA, '%PDF-1.4 reject-a');
+file_put_contents($tmpRejectB, '%PDF-1.4 reject-b');
+$_SESSION['mechinno_role'] = Access::ROLE_TEAM;
+$_SESSION['mechinno_team_id'] = 1;
+$rejectPackage = $contractDocs->submitPackage(1, [
+    'fiscal_year' => '1407',
+    'contract_start' => '1407/01/01',
+    'contract_end' => '1407/12/29',
+    'formal_contract_amount' => '500000',
+], [
+    'name' => 'm1407.pdf', 'type' => 'application/pdf', 'tmp_name' => $tmpRejectA,
+    'error' => UPLOAD_ERR_OK, 'size' => filesize($tmpRejectA),
+], [
+    'name' => 's1407.pdf', 'type' => 'application/pdf', 'tmp_name' => $tmpRejectB,
+    'error' => UPLOAD_ERR_OK, 'size' => filesize($tmpRejectB),
+]);
+$_SESSION['mechinno_role'] = Access::ROLE_ADMIN_EDITOR;
+$rejected = $contractDocs->rejectProposal((int) $rejectPackage['proposal']['id'], 'ناقص است');
+$assert(($rejected['proposal']['status'] ?? '') === 'rejected', 'rejected proposal status');
+$assert(count($contractDocs->pendingProposals()) === 0, 'rejected proposal leaves pending queue');
+$rejectedRows = $contractDocs->rejectedProposals();
+$assert(count($rejectedRows) === 1, 'rejected proposals listed separately');
+$assert((string) ($rejectedRows[0]['fiscal_year'] ?? '') === '1407', 'rejected list includes year 1407');
+
+// Deleting an official contract also removes attachment files from disk.
+$pathStmt = $pdo->prepare(
+    'SELECT doc_type, stored_path FROM team_contract_files WHERE team_id = 1 AND fiscal_year = :year'
+);
+$pathStmt->execute(['year' => '1406']);
+$pathsByType = [];
+foreach ($pathStmt->fetchAll() ?: [] as $fileRow) {
+    $pathsByType[(string) $fileRow['doc_type']] = (string) $fileRow['stored_path'];
+}
+$membershipAbs = isset($pathsByType['membership']) ? FileStorage::absolutePath($pathsByType['membership']) : '';
+$settlementAbs = isset($pathsByType['settlement']) ? FileStorage::absolutePath($pathsByType['settlement']) : '';
+$assert($membershipAbs !== '' && is_file($membershipAbs), 'membership file exists before contract delete');
+$assert($settlementAbs !== '' && is_file($settlementAbs), 'settlement file exists before contract delete');
+$crud->delete('team_contracts', (int) $official['id']);
+$assert(!is_file($membershipAbs), 'membership file removed with contract delete');
+$assert(!is_file($settlementAbs), 'settlement file removed with contract delete');
+$bundleAfterDelete = $contractDocs->yearBundle(1, '1406');
+$assert(($bundleAfterDelete['files']['membership'] ?? null) === null, 'membership db row removed with contract');
+$assert(($bundleAfterDelete['files']['settlement'] ?? null) === null, 'settlement db row removed with contract');
+$assert(($bundleAfterDelete['proposal'] ?? null) === null, 'proposal removed with contract delete');
+
 $_SESSION['mechinno_role'] = Access::ROLE_TEAM;
 $_SESSION['mechinno_team_id'] = 1;
 

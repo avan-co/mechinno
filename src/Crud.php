@@ -711,6 +711,7 @@ final class Crud
             $fiscalYear = (string) ($record['fiscal_year'] ?? '');
             $this->pdo->prepare(sprintf('DELETE FROM %s WHERE id = :id', $definition['table']))->execute(['id' => $id]);
             if ($teamId > 0) {
+                (new ContractDocuments($this->pdo))->deleteForTeamYear($teamId, $fiscalYear);
                 (new TeamContracts($this->pdo))->syncTeamContractCache($teamId);
                 $this->syncChargesForTeam($teamId, ['fiscal_year' => $fiscalYear]);
             }
@@ -760,6 +761,16 @@ final class Crud
                 "UPDATE lockers SET team_id = NULL, member_id = NULL, status = 'خالی' WHERE team_id = :id"
             )->execute(['id' => $teamId]);
             $this->pdo->prepare('UPDATE members SET locker_id = NULL WHERE team_id = :id')->execute(['id' => $teamId]);
+
+            (new ContractDocuments($this->pdo))->deleteForTeam($teamId);
+            if (Schema::tableExists($this->pdo, 'team_performance_reports')) {
+                $perfRows = $this->pdo->prepare('SELECT stored_path FROM team_performance_reports WHERE team_id = :id');
+                $perfRows->execute(['id' => $teamId]);
+                foreach ($perfRows->fetchAll() ?: [] as $perfRow) {
+                    FileStorage::deleteRelative((string) ($perfRow['stored_path'] ?? ''));
+                }
+                $this->pdo->prepare('DELETE FROM team_performance_reports WHERE team_id = :id')->execute(['id' => $teamId]);
+            }
 
             foreach ([
                 'DELETE FROM locker_requests WHERE team_id = :id',

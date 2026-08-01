@@ -27,7 +27,6 @@ final class Access
         'team_contracts',
         'contract-documents',
         'performance-reports',
-        'performance-settings',
         'team-payable-months',
         'center-settings',
         'room-reservations',

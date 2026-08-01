@@ -394,7 +394,11 @@ $assetVer = (string) max(
               </div>
               <article class="panel">
                 <div class="panel-head"><h2>در انتظار تأیید</h2></div>
-                <div id="pendingContractsQueue" class="pending-contracts-queue">در حال بارگذاری…</div>
+                <div id="pendingContractsQueue" class="review-list-host">در حال بارگذاری…</div>
+              </article>
+              <article class="panel">
+                <div class="panel-head"><h2>ردشده‌ها</h2><span class="hint">جدا از صف تأیید نگه داشته می‌شوند</span></div>
+                <div id="rejectedContractsQueue" class="review-list-host">در حال بارگذاری…</div>
               </article>
               <data-table title="قراردادهای ثبت‌شده نهادها" endpoint="api.php?resource=team_contracts"></data-table>
             </section>
@@ -402,11 +406,19 @@ $assetVer = (string) max(
             <section id="performance-reports" class="section">
               <div class="section-intro section-intro--blue">
                 <span class="section-intro-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 4h14v16H5V4Zm2 2v2h10V6H7Zm0 4v8h10v-8H7Zm2 2h6v2H9v-2Z" fill="currentColor"/></svg></span>
-                <div class="section-intro-copy"><p>گزارش‌های عملکرد ۶ماهه نهادها — تأیید یا رد با ذکر دلیل برای اصلاحیه.</p></div>
+                <div class="section-intro-copy"><p>گزارش‌های عملکرد ۶ماهه — ابتدا در انتظار، سپس تأیید/رد. موارد ردشده جدا فهرست می‌شوند.</p></div>
               </div>
               <article class="panel">
-                <div class="panel-head"><h2>گزارش‌های عملکرد</h2></div>
-                <div id="performanceReportsContent">در حال بارگذاری…</div>
+                <div class="panel-head">
+                  <h2>گزارش‌های عملکرد</h2>
+                  <div class="filter-tabs" id="performanceStatusTabs" role="tablist" aria-label="فیلتر وضعیت گزارش">
+                    <button type="button" class="filter-tab active" data-perf-filter="pending" role="tab" aria-selected="true">در انتظار</button>
+                    <button type="button" class="filter-tab" data-perf-filter="approved" role="tab" aria-selected="false">تأییدشده</button>
+                    <button type="button" class="filter-tab" data-perf-filter="rejected" role="tab" aria-selected="false">ردشده</button>
+                    <button type="button" class="filter-tab" data-perf-filter="all" role="tab" aria-selected="false">همه</button>
+                  </div>
+                </div>
+                <div id="performanceReportsContent" class="review-list-host">در حال بارگذاری…</div>
               </article>
             </section>
 

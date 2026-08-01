@@ -286,10 +286,13 @@ try {
     }
 
     if ($resource === 'pending-contract-proposals') {
-        $rows = $contractDocs->pendingProposals();
+        $pending = $contractDocs->pendingProposals();
+        $rejected = $contractDocs->rejectedProposals();
         json_response([
-            'rows' => $rows,
-            'total' => count($rows),
+            'rows' => $pending,
+            'rejected' => $rejected,
+            'total' => count($pending),
+            'rejected_total' => count($rejected),
             'page' => 1,
             'per_page' => 100,
             'pages' => 1,
