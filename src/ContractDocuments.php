@@ -84,11 +84,68 @@ final class ContractDocuments
             $byType[(string) $file['doc_type']] = $file;
         }
 
+        $proposal = $this->proposalForTeamYear($teamId, $fiscalYear);
+        $official = (new TeamContracts($this->pdo))->contractForYear($teamId, $fiscalYear);
+        $hasBothFiles = $byType[self::TYPE_MEMBERSHIP] !== null && $byType[self::TYPE_SETTLEMENT] !== null;
+        $canSubmit = $official === null
+            && ($proposal === null || in_array((string) ($proposal['status'] ?? ''), ['rejected', 'pending'], true));
+
         return [
             'team_id' => $teamId,
             'fiscal_year' => $fiscalYear,
             'files' => $byType,
-            'proposal' => $this->proposalForTeamYear($teamId, $fiscalYear),
+            'proposal' => $proposal,
+            'official_contract' => $official ? [
+                'id' => (int) ($official['id'] ?? 0),
+                'contract_start' => (string) ($official['contract_start'] ?? ''),
+                'contract_end' => (string) ($official['contract_end'] ?? ''),
+                'formal_contract_amount' => (int) ($official['formal_contract_amount'] ?? 0),
+                'notes' => (string) ($official['notes'] ?? ''),
+            ] : null,
+            'has_both_files' => $hasBothFiles,
+            'can_submit' => $canSubmit,
+            'is_registered' => $official !== null,
+            'doc_labels' => self::DOC_LABELS,
+        ];
+    }
+
+    /**
+     * @return array{team_id:int, years:list<array<string, mixed>>, current_year:string, doc_labels:array<string, string>}
+     */
+    public function teamOverview(int $teamId): array
+    {
+        Access::assertTeamAccess($teamId);
+        $this->assertTeamExists($teamId);
+        $currentYear = (string) JalaliDate::todayParts()['year'];
+        $years = [$currentYear => true];
+
+        foreach (['team_contracts', 'team_contract_proposals', 'team_contract_files'] as $table) {
+            if (!Schema::tableExists($this->pdo, $table)) {
+                continue;
+            }
+            $statement = $this->pdo->prepare(
+                "SELECT DISTINCT fiscal_year FROM {$table} WHERE team_id = :id AND fiscal_year IS NOT NULL AND fiscal_year <> ''"
+            );
+            $statement->execute(['id' => $teamId]);
+            foreach ($statement->fetchAll() ?: [] as $row) {
+                $year = JalaliDate::normalizeDigits((string) ($row['fiscal_year'] ?? ''));
+                if (preg_match('/^\d{4}$/', $year)) {
+                    $years[$year] = true;
+                }
+            }
+        }
+
+        $sorted = array_keys($years);
+        rsort($sorted, SORT_NUMERIC);
+        $bundles = [];
+        foreach ($sorted as $year) {
+            $bundles[] = $this->yearBundle($teamId, (string) $year);
+        }
+
+        return [
+            'team_id' => $teamId,
+            'current_year' => $currentYear,
+            'years' => $bundles,
             'doc_labels' => self::DOC_LABELS,
         ];
     }
@@ -184,12 +241,14 @@ final class ContractDocuments
     }
 
     /**
-     * Team submits contract metadata + optional already-uploaded pending files.
+     * Team/admin submits one contract package: metadata + both required attachments.
      *
      * @param array<string, mixed> $payload
+     * @param array<string, mixed> $membershipUpload
+     * @param array<string, mixed> $settlementUpload
      * @return array<string, mixed>
      */
-    public function submitProposal(int $teamId, array $payload): array
+    public function submitPackage(int $teamId, array $payload, array $membershipUpload, array $settlementUpload): array
     {
         if (!Access::canTeamSubmit() && !Access::canWrite()) {
             throw new InvalidArgumentException('ارسال پیشنهاد قرارداد مجاز نیست.');
@@ -198,6 +257,23 @@ final class ContractDocuments
         $this->assertTeamExists($teamId);
 
         $fiscalYear = $this->normalizeYear((string) ($payload['fiscal_year'] ?? ''));
+        $official = (new TeamContracts($this->pdo))->contractForYear($teamId, $fiscalYear);
+        if ($official !== null && Access::isTeam()) {
+            throw new InvalidArgumentException('قرارداد این سال قبلاً در سامانه ثبت شده است و ارسال مجدد مجاز نیست.');
+        }
+
+        $existingProposal = $this->proposalForTeamYear($teamId, $fiscalYear);
+        if ($existingProposal && (string) ($existingProposal['status'] ?? '') === 'approved' && Access::isTeam()) {
+            throw new InvalidArgumentException('قرارداد این سال قبلاً تأیید شده است.');
+        }
+
+        if (!is_array($membershipUpload) || (int) ($membershipUpload['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+            throw new InvalidArgumentException('آپلود قرارداد عضویت الزامی است.');
+        }
+        if (!is_array($settlementUpload) || (int) ($settlementUpload['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+            throw new InvalidArgumentException('آپلود قرارداد استقرار الزامی است.');
+        }
+
         $contractStart = JalaliDate::normalize($payload['contract_start'] ?? '');
         $contractEnd = JalaliDate::normalize($payload['contract_end'] ?? '');
         if ($contractStart === '' || $contractEnd === '') {
@@ -216,12 +292,23 @@ final class ContractDocuments
         $notes = trim((string) ($payload['notes'] ?? ''));
         $now = date('c');
 
-        $existing = $this->proposalForTeamYear($teamId, $fiscalYear);
-        if ($existing && (string) ($existing['status'] ?? '') === 'pending' && !Access::canWrite()) {
-            // replace pending proposal
-        }
+        // Store both attachments first (pending for team, approved only when admin uploads outside package).
+        $this->upsertFile($teamId, $fiscalYear, self::TYPE_MEMBERSHIP, $membershipUpload, false);
+        $this->upsertFile($teamId, $fiscalYear, self::TYPE_SETTLEMENT, $settlementUpload, false);
 
-        if ($existing) {
+        // Force pending status on both files for package review.
+        $this->pdo->prepare(
+            "UPDATE team_contract_files
+             SET status = 'pending', rejection_reason = NULL, submitted_at = :submitted_at, reviewed_at = NULL, updated_at = :updated_at
+             WHERE team_id = :team_id AND fiscal_year = :fiscal_year"
+        )->execute([
+            'submitted_at' => $now,
+            'updated_at' => $now,
+            'team_id' => $teamId,
+            'fiscal_year' => $fiscalYear,
+        ]);
+
+        if ($existingProposal) {
             $statement = $this->pdo->prepare(
                 'UPDATE team_contract_proposals SET
                     contract_start = :contract_start,
@@ -247,9 +334,9 @@ final class ContractDocuments
                 'status' => 'pending',
                 'submitted_at' => $now,
                 'updated_at' => $now,
-                'id' => (int) $existing['id'],
+                'id' => (int) $existingProposal['id'],
             ]);
-            $id = (int) $existing['id'];
+            $id = (int) $existingProposal['id'];
         } else {
             $statement = $this->pdo->prepare(
                 'INSERT INTO team_contract_proposals
@@ -278,20 +365,6 @@ final class ContractDocuments
             $id = (int) $this->pdo->lastInsertId();
         }
 
-        // Re-queue only non-approved files when team resubmits metadata; approved files stay.
-        if (Schema::tableExists($this->pdo, 'team_contract_files')) {
-            $this->pdo->prepare(
-                "UPDATE team_contract_files
-                 SET status = 'pending', rejection_reason = NULL, submitted_at = :submitted_at, reviewed_at = NULL, updated_at = :updated_at
-                 WHERE team_id = :team_id AND fiscal_year = :fiscal_year AND status IN ('pending', 'rejected')"
-            )->execute([
-                'submitted_at' => $now,
-                'updated_at' => $now,
-                'team_id' => $teamId,
-                'fiscal_year' => $fiscalYear,
-            ]);
-        }
-
         return $this->yearBundle($teamId, $fiscalYear) + ['proposal_id' => $id];
     }
 
@@ -311,6 +384,13 @@ final class ContractDocuments
 
         $teamId = (int) $row['team_id'];
         $fiscalYear = (string) $row['fiscal_year'];
+        $bundle = $this->yearBundle($teamId, $fiscalYear);
+        $membership = $bundle['files'][self::TYPE_MEMBERSHIP] ?? null;
+        $settlement = $bundle['files'][self::TYPE_SETTLEMENT] ?? null;
+        if (!$membership || !$settlement) {
+            throw new InvalidArgumentException('تأیید قرارداد بدون هر دو پیوست (عضویت و استقرار) ممکن نیست.');
+        }
+
         $payload = [
             'team_id' => (string) $teamId,
             'fiscal_year' => $fiscalYear,
@@ -341,7 +421,7 @@ final class ContractDocuments
         $this->pdo->prepare(
             "UPDATE team_contract_files
              SET status = 'approved', rejection_reason = NULL, reviewed_at = :reviewed_at, updated_at = :updated_at
-             WHERE team_id = :team_id AND fiscal_year = :fiscal_year AND status = 'pending'"
+             WHERE team_id = :team_id AND fiscal_year = :fiscal_year"
         )->execute([
             'reviewed_at' => $now,
             'updated_at' => $now,
@@ -387,7 +467,7 @@ final class ContractDocuments
         $this->pdo->prepare(
             "UPDATE team_contract_files
              SET status = 'rejected', rejection_reason = :reason, reviewed_at = :reviewed_at, updated_at = :updated_at
-             WHERE team_id = :team_id AND fiscal_year = :fiscal_year AND status = 'pending'"
+             WHERE team_id = :team_id AND fiscal_year = :fiscal_year"
         )->execute([
             'reason' => $reason,
             'reviewed_at' => $now,
@@ -397,61 +477,6 @@ final class ContractDocuments
         ]);
 
         return $this->yearBundle($teamId, $fiscalYear);
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    public function approveFile(int $fileId): array
-    {
-        Access::requireWriteJson();
-        $row = $this->fileById($fileId);
-        if (!$row) {
-            throw new InvalidArgumentException('فایل قرارداد پیدا نشد.');
-        }
-        if ((string) ($row['status'] ?? '') !== 'pending') {
-            throw new InvalidArgumentException('فقط فایل در انتظار قابل تأیید است.');
-        }
-        $now = date('c');
-        $this->pdo->prepare(
-            "UPDATE team_contract_files
-             SET status = 'approved', rejection_reason = NULL, reviewed_at = :reviewed_at, updated_at = :updated_at
-             WHERE id = :id"
-        )->execute(['reviewed_at' => $now, 'updated_at' => $now, 'id' => $fileId]);
-
-        return $this->presentFile($this->fileById($fileId));
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    public function rejectFile(int $fileId, string $reason): array
-    {
-        Access::requireWriteJson();
-        $reason = trim($reason);
-        if ($reason === '') {
-            throw new InvalidArgumentException('دلیل رد الزامی است.');
-        }
-        $row = $this->fileById($fileId);
-        if (!$row) {
-            throw new InvalidArgumentException('فایل قرارداد پیدا نشد.');
-        }
-        if ((string) ($row['status'] ?? '') !== 'pending') {
-            throw new InvalidArgumentException('فقط فایل در انتظار قابل رد است.');
-        }
-        $now = date('c');
-        $this->pdo->prepare(
-            "UPDATE team_contract_files
-             SET status = 'rejected', rejection_reason = :reason, reviewed_at = :reviewed_at, updated_at = :updated_at
-             WHERE id = :id"
-        )->execute([
-            'reason' => $reason,
-            'reviewed_at' => $now,
-            'updated_at' => $now,
-            'id' => $fileId,
-        ]);
-
-        return $this->presentFile($this->fileById($fileId));
     }
 
     public function deleteFile(int $fileId): void
@@ -484,6 +509,8 @@ final class ContractDocuments
     }
 
     /**
+     * Pending contract packages (metadata + both attachments) for admin review.
+     *
      * @return list<array<string, mixed>>
      */
     public function pendingProposals(): array
@@ -499,7 +526,17 @@ final class ContractDocuments
              ORDER BY p.submitted_at DESC, p.id DESC"
         );
 
-        return array_map(fn (array $row): array => $this->presentProposal($row), $statement->fetchAll() ?: []);
+        $rows = [];
+        foreach ($statement->fetchAll() ?: [] as $row) {
+            $presented = $this->presentProposal($row);
+            $bundle = $this->yearBundle((int) $presented['team_id'], (string) $presented['fiscal_year']);
+            $presented['files'] = $bundle['files'];
+            $presented['has_both_files'] = (bool) ($bundle['has_both_files'] ?? false);
+            $presented['can_approve'] = (bool) ($bundle['has_both_files'] ?? false);
+            $rows[] = $presented;
+        }
+
+        return $rows;
     }
 
     /**
@@ -507,18 +544,8 @@ final class ContractDocuments
      */
     public function pendingFiles(): array
     {
-        if (!Schema::tableExists($this->pdo, 'team_contract_files')) {
-            return [];
-        }
-        $statement = $this->pdo->query(
-            "SELECT f.*, t.name AS team_name, t.entity_code
-             FROM team_contract_files f
-             INNER JOIN teams t ON t.id = f.team_id
-             WHERE f.status = 'pending'
-             ORDER BY f.submitted_at DESC, f.id DESC"
-        );
-
-        return array_map(fn (array $row): array => $this->presentFile($row), $statement->fetchAll() ?: []);
+        // Individual file approval removed — packages are reviewed as a whole.
+        return [];
     }
 
     /**

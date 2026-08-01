@@ -226,23 +226,40 @@ try {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             require_csrf_json();
             Access::requireWriteOrTeamSubmitJson();
-            if ($action === 'submit-proposal') {
-                $payload = read_json_body();
-                $teamId = Access::scopedTeamId() ?? (int) ($payload['team_id'] ?? 0);
-                json_response(['ok' => true, 'bundle' => $contractDocs->submitProposal($teamId, $payload)]);
+            if ($action === 'submit-package') {
+                $teamId = Access::scopedTeamId() ?? (int) ($_POST['team_id'] ?? 0);
+                $payload = [
+                    'fiscal_year' => (string) ($_POST['fiscal_year'] ?? ''),
+                    'contract_start' => (string) ($_POST['contract_start'] ?? ''),
+                    'contract_end' => (string) ($_POST['contract_end'] ?? ''),
+                    'formal_contract_amount' => (string) ($_POST['formal_contract_amount'] ?? ''),
+                    'charge_rate_override' => (string) ($_POST['charge_rate_override'] ?? ''),
+                    'informal_rent_rate_override' => (string) ($_POST['informal_rent_rate_override'] ?? ''),
+                    'notes' => (string) ($_POST['notes'] ?? ''),
+                ];
+                $membership = $_FILES['membership_file'] ?? null;
+                $settlement = $_FILES['settlement_file'] ?? null;
+                if (!is_array($membership) || !is_array($settlement)) {
+                    json_response(['error' => 'هر دو فایل قرارداد عضویت و استقرار الزامی است.'], 422);
+                }
+                json_response([
+                    'ok' => true,
+                    'bundle' => $contractDocs->submitPackage($teamId, $payload, $membership, $settlement),
+                ]);
             }
             if ($action === 'upload') {
-                $teamId = Access::scopedTeamId() ?? (int) ($_POST['team_id'] ?? 0);
+                // Admin-only single-file attach on profile year workspace.
+                Access::requireWriteJson();
+                $teamId = (int) ($_POST['team_id'] ?? 0);
                 $fiscalYear = (string) ($_POST['fiscal_year'] ?? '');
                 $docType = (string) ($_POST['doc_type'] ?? '');
                 $file = $_FILES['file'] ?? null;
                 if (!is_array($file)) {
                     json_response(['error' => 'فایل قرارداد ارسال نشده است.'], 422);
                 }
-                $asApproved = Access::canWrite() && !Access::isTeam();
                 json_response([
                     'ok' => true,
-                    'record' => $contractDocs->upsertFile($teamId, $fiscalYear, $docType, $file, $asApproved),
+                    'record' => $contractDocs->upsertFile($teamId, $fiscalYear, $docType, $file, true),
                 ]);
             }
             if ($action === 'delete') {
@@ -251,38 +268,28 @@ try {
                 $contractDocs->deleteFile((int) ($payload['id'] ?? 0));
                 json_response(['ok' => true, 'deleted' => true]);
             }
-            if ($action === 'approve-file') {
-                Access::requireWriteJson();
-                $payload = read_json_body();
-                json_response(['ok' => true, 'record' => $contractDocs->approveFile((int) ($payload['id'] ?? 0))]);
-            }
-            if ($action === 'reject-file') {
-                Access::requireWriteJson();
-                $payload = read_json_body();
-                json_response([
-                    'ok' => true,
-                    'record' => $contractDocs->rejectFile(
-                        (int) ($payload['id'] ?? 0),
-                        trim((string) ($payload['reason'] ?? ''))
-                    ),
-                ]);
-            }
             json_response(['error' => 'عملیات قرارداد نامعتبر است.'], 422);
         }
 
         $teamId = Access::scopedTeamId() ?? (int) ($_GET['team_id'] ?? 0);
+        if ($teamId <= 0) {
+            json_response(['error' => 'نهاد معتبر نیست.'], 422);
+        }
+        if (isset($_GET['overview']) && (string) $_GET['overview'] === '1') {
+            json_response($contractDocs->teamOverview($teamId));
+        }
         $fiscalYear = (string) ($_GET['fiscal_year'] ?? '');
-        if ($teamId <= 0 || $fiscalYear === '') {
-            json_response(['error' => 'نهاد و سال مالی الزامی است.'], 422);
+        if ($fiscalYear === '') {
+            json_response(['error' => 'سال مالی الزامی است.'], 422);
         }
         json_response($contractDocs->yearBundle($teamId, $fiscalYear));
     }
 
     if ($resource === 'pending-contract-proposals') {
+        $rows = $contractDocs->pendingProposals();
         json_response([
-            'rows' => $contractDocs->pendingProposals(),
-            'files' => $contractDocs->pendingFiles(),
-            'total' => count($contractDocs->pendingProposals()),
+            'rows' => $rows,
+            'total' => count($rows),
             'page' => 1,
             'per_page' => 100,
             'pages' => 1,

@@ -143,44 +143,22 @@
     const bundle = profile.contract_documents?.[year] || {};
     const proposal = bundle.proposal || null;
     const isPast = String(year) !== String(currentFiscalYear());
-    const canTeamSubmit = Boolean(S().canTeamSubmit && S().panelMode === "team");
-    const canUpload = writable || canTeamSubmit;
 
     if (!writable) {
-      const source = proposal && proposal.status !== "approved" ? proposal : contract;
-      const proposalNote = proposal
-        ? `<div class="contract-proposal-status">وضعیت پیشنهاد نهاد: ${statusBadge(proposal.status)}
-            ${proposal.rejection_reason ? `<p class="hint reject-hint">دلیل رد: ${S().escapeHtml(proposal.rejection_reason)}</p>` : ""}
-          </div>`
-        : "";
+      // Team profile: read-only summary only — submit lives in Contracts section.
       return `<article class="year-panel">
         <div class="year-panel-head"><h3>قرارداد ${S().escapeHtml(year)}</h3></div>
-        ${proposalNote}
-        ${source ? `<div class="year-contract-readonly">
-          <div><span>شروع</span><strong>${S().escapeHtml(S().formatPlain(source.contract_start))}</strong></div>
-          <div><span>پایان</span><strong>${S().escapeHtml(S().formatPlain(source.contract_end))}</strong></div>
-          <div><span>مبلغ قرارداد رسمی</span><strong>${S().escapeHtml(S().formatMoney(source.formal_contract_amount || 0))}</strong></div>
-          ${source.charge_rate_override ? `<div><span>نرخ شارژ اختصاصی</span><strong>${S().escapeHtml(S().formatMoney(source.charge_rate_override))}</strong></div>` : ""}
-          ${source.informal_rent_rate_override ? `<div><span>نرخ اجاره اختصاصی</span><strong>${S().escapeHtml(S().formatMoney(source.informal_rent_rate_override))}</strong></div>` : ""}
-          ${source.notes ? `<p class="hint">${S().escapeHtml(source.notes)}</p>` : ""}
-        </div>` : (window.renderEmptyState?.("قرارداد رسمی این سال هنوز ثبت نشده است.", { icon: "inbox" }) || '<div class="empty">قرارداد رسمی این سال هنوز ثبت نشده است.</div>')}
-        <div class="contract-files-block">
-          <h4>پیوست قراردادها</h4>
-          <p class="hint">هر سال دو فایل جدا دارد: عضویت و استقرار. سال‌های قبل دست‌نخورده می‌مانند.</p>
-          ${renderContractFiles(profile, year, teamId, canTeamSubmit)}
+        ${contract ? `<div class="year-contract-readonly">
+          <div><span>شروع</span><strong>${S().escapeHtml(S().formatPlain(contract.contract_start))}</strong></div>
+          <div><span>پایان</span><strong>${S().escapeHtml(S().formatPlain(contract.contract_end))}</strong></div>
+          <div><span>مبلغ قرارداد رسمی</span><strong>${S().escapeHtml(S().formatMoney(contract.formal_contract_amount || 0))}</strong></div>
+          ${contract.notes ? `<p class="hint">${S().escapeHtml(contract.notes)}</p>` : ""}
+        </div>` : `<div class="empty">قرارداد رسمی این سال هنوز ثبت نشده است.</div>`}
+        ${proposal && proposal.status === "pending" ? `<p class="hint">پیشنهاد قرارداد در انتظار تأیید مرکز است — جزئیات در بخش قراردادها.</p>` : ""}
+        ${proposal && proposal.status === "rejected" ? `<p class="hint reject-hint">پیشنهاد رد شده — برای اصلاحیه به بخش قراردادها بروید.</p>` : ""}
+        <div class="year-panel-actions">
+          <button type="button" class="button ghost" data-go-contracts>مدیریت قراردادها</button>
         </div>
-        ${canTeamSubmit ? `<form class="year-contract-form team-contract-proposal" data-team-proposal data-team-id="${teamId}" data-year="${S().escapeHtml(year)}">
-          <h4>${proposal && proposal.status === "rejected" ? "ارسال اصلاحیه قرارداد" : "ارسال اطلاعات قرارداد برای تأیید مرکز"}</h4>
-          <div class="crud-grid year-form-grid">
-            <label><span>شروع قرارداد</span><input name="contract_start" type="text" required value="${S().escapeHtml(proposal?.contract_start || contract?.contract_start || `${year}/01/01`)}" /></label>
-            <label><span>پایان قرارداد</span><input name="contract_end" type="text" required value="${S().escapeHtml(proposal?.contract_end || contract?.contract_end || `${year}/12/29`)}" /></label>
-            <label><span>مبلغ کل قرارداد رسمی (ریال)</span><input name="formal_contract_amount" type="number" min="0" step="1" required value="${S().escapeHtml(proposal?.formal_contract_amount ?? contract?.formal_contract_amount ?? "")}" /></label>
-            <label class="wide"><span>توضیحات</span><textarea name="notes" rows="2">${S().escapeHtml(proposal?.notes || contract?.notes || "")}</textarea></label>
-          </div>
-          <div class="year-panel-actions">
-            <button class="button" type="submit">ارسال برای تأیید</button>
-          </div>
-        </form>` : ""}
       </article>`;
     }
 
@@ -208,7 +186,7 @@
       <div class="contract-files-block">
         <h4>پیوست قراردادها</h4>
         <p class="hint">دو فایل سالانه: عضویت و استقرار. آپلود ادمین مستقیم تأیید می‌شود.</p>
-        ${renderContractFiles(profile, year, teamId, canUpload)}
+        ${renderContractFiles(profile, year, teamId, true)}
       </div>
     </article>`;
   };
@@ -372,27 +350,9 @@
       }
     });
 
-    container.querySelector("[data-team-proposal]")?.addEventListener("submit", async (event) => {
-      event.preventDefault();
-      const form = event.currentTarget;
-      const submit = form.querySelector('button[type="submit"]');
-      submit.disabled = true;
-      try {
-        await S().postJson("api.php?resource=contract-documents&action=submit-proposal", {
-          team_id: String(form.dataset.teamId || teamId),
-          fiscal_year: form.dataset.year,
-          contract_start: form.contract_start.value,
-          contract_end: form.contract_end.value,
-          formal_contract_amount: form.formal_contract_amount.value,
-          notes: form.notes?.value || "",
-        });
-        S().showToast("پیشنهاد قرارداد برای تأیید ارسال شد.", "success");
-        await reloadFn(container, teamId, form.dataset.year);
-      } catch (error) {
-        S().showToast(error.message, "error");
-      } finally {
-        submit.disabled = false;
-      }
+    container.querySelector("[data-go-contracts]")?.addEventListener("click", () => {
+      S().closeModal?.();
+      S().activateSection("contracts");
     });
 
     container.querySelectorAll("[data-contract-upload]").forEach((input) => {

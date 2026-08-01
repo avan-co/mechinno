@@ -193,36 +193,69 @@ $report = $perf->submit(1, '1405', 'h1', [
 $assert(($report['status'] ?? '') === 'pending', 'performance report submitted as pending');
 
 $contractDocs = new ContractDocuments($pdo);
-$tmpMembership = tempnam($tmpDir, 'mem') . '.pdf';
-file_put_contents($tmpMembership, '%PDF-1.4 membership');
+$bundleBefore = $contractDocs->yearBundle(1, '1404');
+$assert(is_array($bundleBefore['files']), 'prior year bundle available without deleting history');
+
+// 1405 already has an official contract from legacy migration — team cannot resubmit.
 $_SESSION['mechinno_role'] = Access::ROLE_TEAM;
-$membershipFile = $contractDocs->upsertFile(1, '1405', 'membership', [
+$_SESSION['mechinno_team_id'] = 1;
+$dupBlocked = false;
+try {
+    $tmpA = tempnam($tmpDir, 'dup') . '.pdf';
+    $tmpB = tempnam($tmpDir, 'dup') . '.pdf';
+    file_put_contents($tmpA, '%PDF-1.4 a');
+    file_put_contents($tmpB, '%PDF-1.4 b');
+    $contractDocs->submitPackage(1, [
+        'fiscal_year' => '1405',
+        'contract_start' => '1405/01/01',
+        'contract_end' => '1405/12/29',
+        'formal_contract_amount' => '1',
+    ], [
+        'name' => 'a.pdf', 'type' => 'application/pdf', 'tmp_name' => $tmpA,
+        'error' => UPLOAD_ERR_OK, 'size' => filesize($tmpA),
+    ], [
+        'name' => 'b.pdf', 'type' => 'application/pdf', 'tmp_name' => $tmpB,
+        'error' => UPLOAD_ERR_OK, 'size' => filesize($tmpB),
+    ]);
+} catch (InvalidArgumentException $e) {
+    $dupBlocked = str_contains($e->getMessage(), 'قبلاً');
+}
+$assert($dupBlocked, 'duplicate contract submit blocked when already registered');
+
+$tmpMembership = tempnam($tmpDir, 'mem') . '.pdf';
+$tmpSettlement = tempnam($tmpDir, 'set') . '.pdf';
+file_put_contents($tmpMembership, '%PDF-1.4 membership');
+file_put_contents($tmpSettlement, '%PDF-1.4 settlement');
+$package = $contractDocs->submitPackage(1, [
+    'fiscal_year' => '1406',
+    'contract_start' => '1406/01/01',
+    'contract_end' => '1406/12/29',
+    'formal_contract_amount' => '1000000',
+    'notes' => 'پیشنهاد تست',
+], [
     'name' => 'membership.pdf',
     'type' => 'application/pdf',
     'tmp_name' => $tmpMembership,
     'error' => UPLOAD_ERR_OK,
     'size' => filesize($tmpMembership),
+], [
+    'name' => 'settlement.pdf',
+    'type' => 'application/pdf',
+    'tmp_name' => $tmpSettlement,
+    'error' => UPLOAD_ERR_OK,
+    'size' => filesize($tmpSettlement),
 ]);
-$assert(($membershipFile['status'] ?? '') === 'pending', 'team contract file is pending');
-$assert(($membershipFile['doc_type'] ?? '') === 'membership', 'membership doc type saved');
-
-$bundleBefore = $contractDocs->yearBundle(1, '1404');
-$assert(is_array($bundleBefore['files']), 'prior year bundle available without deleting history');
+$assert(($package['proposal']['status'] ?? '') === 'pending', 'contract package pending');
+$assert(($package['has_both_files'] ?? false) === true, 'package requires both attachments');
 
 $_SESSION['mechinno_role'] = Access::ROLE_ADMIN_EDITOR;
-$proposal = $contractDocs->submitProposal(1, [
-    'fiscal_year' => '1405',
-    'contract_start' => '1405/01/01',
-    'contract_end' => '1405/12/29',
-    'formal_contract_amount' => '1000000',
-    'notes' => 'پیشنهاد تست',
-]);
-$assert(($proposal['proposal']['status'] ?? '') === 'pending', 'contract proposal pending');
-$approved = $contractDocs->approveProposal((int) $proposal['proposal']['id']);
-$assert(($approved['proposal']['status'] ?? '') === 'approved', 'contract proposal approved');
-$official = (new TeamContracts($pdo))->contractForYear(1, '1405');
-$assert($official !== null, 'approved proposal creates official yearly contract');
+$approved = $contractDocs->approveProposal((int) $package['proposal']['id']);
+$assert(($approved['proposal']['status'] ?? '') === 'approved', 'contract package approved');
+$official = (new TeamContracts($pdo))->contractForYear(1, '1406');
+$assert($official !== null, 'approved package creates official yearly contract');
 $assert((int) ($official['formal_contract_amount'] ?? 0) === 1000000, 'official contract amount preserved');
+$assert(($approved['files']['membership']['status'] ?? '') === 'approved', 'membership file approved with package');
+$assert(($approved['files']['settlement']['status'] ?? '') === 'approved', 'settlement file approved with package');
 
 $_SESSION['mechinno_role'] = Access::ROLE_TEAM;
 $_SESSION['mechinno_team_id'] = 1;

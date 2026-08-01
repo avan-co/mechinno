@@ -177,8 +177,7 @@ const teamBillingBadges = (billing = {}, options = {}) => {
 const sectionMeta = {
   overview: { eyebrow: "داشبورد", title: "مدیریت مرکز نوآوری", subtitle: "خلاصه وضعیت مرکز و اقدامات پیشنهادی" },
   teams: { eyebrow: "نهادها", title: "تیم‌ها، شرکت‌ها و دانشجویان", subtitle: "ثبت و مدیریت نهادها — قرارداد و میز هر سال از پروفایل نهاد" },
-  "team-contracts": { eyebrow: "نهادها", title: "قراردادهای نهادها", subtitle: "همه قراردادهای سال جاری و سال‌های قبل با وضعیت فعال/منقضی" },
-  "pending-contracts": { eyebrow: "نهادها", title: "تأیید قراردادها", subtitle: "پیشنهادها و فایل‌های قرارداد ارسال‌شده توسط نهادها" },
+  "team-contracts": { eyebrow: "نهادها", title: "قراردادهای نهادها", subtitle: "تأیید پیشنهادها و فهرست قراردادهای ثبت‌شده" },
   "performance-reports": { eyebrow: "گزارش‌ها", title: "گزارش عملکرد نهادها", subtitle: "گزارش‌های ۶ماهه و تنظیم زمان‌بندی ارسال" },
   "performance-settings": { eyebrow: "گزارش‌ها", title: "تنظیمات گزارش عملکرد", subtitle: "فعال‌سازی بخش و بازه مجاز ارسال هر نیمه" },
   members: { eyebrow: "اعضا", title: "اعضای نهادها", subtitle: "هر عضو به یک نهاد تعلق دارد — میزها در سطح نهاد تخصیص می‌یابند" },
@@ -201,7 +200,8 @@ const teamSectionMeta = {
   members: { eyebrow: "اعضا", title: "اعضای نهاد", subtitle: "لیست اعضای ثبت‌شده در نهاد شما" },
   desks: { eyebrow: "میزها", title: "نقشه و میزهای نهاد", subtitle: "موقعیت میز خودتان روی نقشه — بدون نمایش وضعیت دیگران" },
   lockers: { eyebrow: "کمدها", title: "کمدهای نهاد", subtitle: "درخواست کمد و کمدهای تخصیص‌یافته" },
-  profile: { eyebrow: "پروفایل", title: "پروفایل نهاد", subtitle: "قرارداد، میز و بدهی هر سال مالی" },
+  profile: { eyebrow: "پروفایل", title: "پروفایل نهاد", subtitle: "خلاصه سالانه، میز و بدهی" },
+  contracts: { eyebrow: "قراردادها", title: "قراردادهای نهاد", subtitle: "مشاهده، ارسال و پیگیری قرارداد عضویت و استقرار هر سال" },
   "performance-reports": { eyebrow: "گزارش‌ها", title: "گزارش عملکرد", subtitle: "ارسال فایل گزارش ۶ماهه طبق زمان‌بندی مرکز" },
   charges: { eyebrow: "شارژ", title: "شارژ و پرداخت", subtitle: "لیست شارژ سالانه و وضعیت پرداخت" },
   payments: { eyebrow: "واریز", title: "اعلام واریز", subtitle: "ثبت واریز شارژ و پیگیری تأیید مدیر" },
@@ -1082,7 +1082,8 @@ const activateSection = (id, options = {}) => {
     loadTeamDeskAssignments().catch((error) => showToast(error.message, "error"));
   }
   if (id === "performance-reports") loadPerformanceReportsSection().catch((error) => showToast(error.message, "error"));
-  if (id === "pending-contracts") loadPendingContractsQueue().catch((error) => showToast(error.message, "error"));
+  if (id === "team-contracts" && panelMode === "admin") loadPendingContractsQueue().catch((error) => showToast(error.message, "error"));
+  if (id === "contracts" && panelMode === "team") loadTeamContractsSection().catch((error) => showToast(error.message, "error"));
   if (id === "performance-settings") loadPerformanceSettingsForm().catch((error) => showToast(error.message, "error"));
   if (id === "profile" && panelMode === "team") loadTeamProfile().catch((error) => showToast(error.message, "error"));
   if (id === "charges") {
@@ -1586,50 +1587,43 @@ const loadPendingContractsQueue = async () => {
   if (!host) return;
   const data = await fetchJson("api.php?resource=pending-contract-proposals");
   const proposals = data.rows || [];
-  const files = data.files || [];
-  if (!proposals.length && !files.length) {
+  if (!proposals.length) {
     host.classList.add("is-ready");
-    host.innerHTML = renderEmptyState("پیشنهاد یا فایل قراردادی در انتظار تأیید نیست.", { icon: "inbox" });
+    host.innerHTML = renderEmptyState("قراردادی در انتظار تأیید نیست.", { icon: "inbox" });
     return;
   }
-  const proposalCards = proposals.map((row) => `
-    <article class="queue-card">
+  host.classList.add("is-ready");
+  host.innerHTML = `<div class="queue-grid">${proposals.map((row) => {
+    const membership = row.files?.membership;
+    const settlement = row.files?.settlement;
+    const canApprove = Boolean(row.can_approve);
+    return `<article class="queue-card">
       <div class="queue-card-head">
         <strong>${escapeHtml(row.team_name || "نهاد")}</strong>
         ${docStatusBadge(row.status)}
       </div>
       <p class="hint">سال ${escapeHtml(row.fiscal_year)} · ${escapeHtml(formatPlain(row.contract_start))} تا ${escapeHtml(formatPlain(row.contract_end))} · ${escapeHtml(formatMoney(row.formal_contract_amount || 0))}</p>
       ${row.notes ? `<p class="hint">${escapeHtml(row.notes)}</p>` : ""}
+      <div class="contract-file-meta">
+        <span>عضویت: ${membership ? `<a class="text-link" href="${escapeHtml(membership.download_url)}" target="_blank" rel="noopener">${escapeHtml(membership.original_name)}</a>` : "<em>ندارد</em>"}</span>
+        <span>استقرار: ${settlement ? `<a class="text-link" href="${escapeHtml(settlement.download_url)}" target="_blank" rel="noopener">${escapeHtml(settlement.original_name)}</a>` : "<em>ندارد</em>"}</span>
+      </div>
+      ${!canApprove ? `<p class="hint reject-hint">بدون هر دو پیوست قابل تأیید نیست.</p>` : ""}
       ${canWrite ? `<div class="queue-card-actions">
-        <button type="button" class="button" data-approve-proposal="${row.id}">تأیید و ذخیره در لیست</button>
+        <button type="button" class="button" data-approve-proposal="${row.id}" ${canApprove ? "" : "disabled"}>تأیید بسته قرارداد</button>
         <button type="button" class="button danger ghost" data-reject-proposal="${row.id}">رد</button>
       </div>` : ""}
-    </article>`).join("");
-  const fileCards = files.map((row) => `
-    <article class="queue-card">
-      <div class="queue-card-head">
-        <strong>${escapeHtml(row.team_name || "نهاد")} — ${escapeHtml(row.doc_label || row.doc_type)}</strong>
-        ${docStatusBadge(row.status)}
-      </div>
-      <p class="hint">سال ${escapeHtml(row.fiscal_year)} · <a class="text-link" href="${escapeHtml(row.download_url)}" target="_blank" rel="noopener">${escapeHtml(row.original_name)}</a></p>
-      ${canWrite ? `<div class="queue-card-actions">
-        <button type="button" class="button" data-approve-file="${row.id}">تأیید فایل</button>
-        <button type="button" class="button danger ghost" data-reject-file="${row.id}">رد فایل</button>
-      </div>` : ""}
-    </article>`).join("");
-  host.classList.add("is-ready");
-  host.innerHTML = `
-    ${proposals.length ? `<div class="queue-block"><h3>پیشنهادهای اطلاعات قرارداد</h3><div class="queue-grid">${proposalCards}</div></div>` : ""}
-    ${files.length ? `<div class="queue-block"><h3>فایل‌های در انتظار</h3><div class="queue-grid">${fileCards}</div></div>` : ""}`;
+    </article>`;
+  }).join("")}</div>`;
 
   host.querySelectorAll("[data-approve-proposal]").forEach((button) => {
     button.addEventListener("click", async () => {
       button.disabled = true;
       try {
         await postJson("api.php?resource=pending-contract-proposals&action=approve", { id: Number(button.dataset.approveProposal) });
-        showToast("قرارداد تأیید و در لیست ذخیره شد.", "success");
+        showToast("قرارداد با پیوست‌ها تأیید و ثبت شد.", "success");
         await loadPendingContractsQueue();
-        await refreshAfterMutation("teams");
+        await refreshAfterMutation("team-contracts");
       } catch (error) {
         showToast(error.message, "error");
         button.disabled = false;
@@ -1638,7 +1632,7 @@ const loadPendingContractsQueue = async () => {
   });
   host.querySelectorAll("[data-reject-proposal]").forEach((button) => {
     button.addEventListener("click", async () => {
-      const reason = window.prompt("دلیل رد پیشنهاد قرارداد:");
+      const reason = window.prompt("دلیل رد قرارداد:");
       if (reason === null) return;
       if (!String(reason).trim()) {
         showToast("دلیل رد الزامی است.", "error");
@@ -1650,7 +1644,7 @@ const loadPendingContractsQueue = async () => {
           id: Number(button.dataset.rejectProposal),
           reason: String(reason).trim(),
         });
-        showToast("پیشنهاد رد شد.", "success");
+        showToast("قرارداد رد شد.", "success");
         await loadPendingContractsQueue();
       } catch (error) {
         showToast(error.message, "error");
@@ -1658,38 +1652,121 @@ const loadPendingContractsQueue = async () => {
       }
     });
   });
-  host.querySelectorAll("[data-approve-file]").forEach((button) => {
-    button.addEventListener("click", async () => {
-      button.disabled = true;
-      try {
-        await postJson("api.php?resource=contract-documents&action=approve-file", { id: Number(button.dataset.approveFile) });
-        showToast("فایل قرارداد تأیید شد.", "success");
-        await loadPendingContractsQueue();
-      } catch (error) {
-        showToast(error.message, "error");
-        button.disabled = false;
-      }
+};
+
+const loadTeamContractsSection = async () => {
+  const host = document.getElementById("teamContractsContent");
+  if (!host) return;
+  const data = await fetchJson("api.php?resource=contract-documents&overview=1");
+  const years = data.years || [];
+  const currentYear = String(data.current_year || window.MECHINNO?.fiscalYear || "");
+  const labels = data.doc_labels || { membership: "قرارداد عضویت", settlement: "قرارداد استقرار" };
+
+  const renderYearCard = (bundle) => {
+    const year = String(bundle.fiscal_year || "");
+    const official = bundle.official_contract;
+    const proposal = bundle.proposal;
+    const membership = bundle.files?.membership;
+    const settlement = bundle.files?.settlement;
+    const canSubmit = Boolean(bundle.can_submit);
+    const registered = Boolean(bundle.is_registered);
+    const status = registered
+      ? docStatusBadge("approved")
+      : proposal
+        ? docStatusBadge(proposal.status)
+        : `<span class="badge">ثبت‌نشده</span>`;
+
+    const filesHtml = `<div class="contract-files-grid">
+      <div class="contract-file-slot"><div class="contract-file-slot-head"><h4>${escapeHtml(labels.membership || "قرارداد عضویت")}</h4></div>
+        ${membership ? `<div class="contract-file-meta"><strong>${escapeHtml(membership.original_name)}</strong>${docStatusBadge(membership.status)}<a class="text-link" href="${escapeHtml(membership.download_url)}" target="_blank" rel="noopener">دانلود</a></div>` : `<p class="hint">فایلی نیست</p>`}
+      </div>
+      <div class="contract-file-slot"><div class="contract-file-slot-head"><h4>${escapeHtml(labels.settlement || "قرارداد استقرار")}</h4></div>
+        ${settlement ? `<div class="contract-file-meta"><strong>${escapeHtml(settlement.original_name)}</strong>${docStatusBadge(settlement.status)}<a class="text-link" href="${escapeHtml(settlement.download_url)}" target="_blank" rel="noopener">دانلود</a></div>` : `<p class="hint">فایلی نیست</p>`}
+      </div>
+    </div>`;
+
+    const formHtml = canSubmit ? `<form class="year-contract-form team-contract-package" data-team-contract-package data-year="${escapeHtml(year)}">
+      <h4>${proposal?.status === "rejected" ? "ارسال اصلاحیه قرارداد" : "ارسال قرارداد سال " + escapeHtml(year)}</h4>
+      ${proposal?.rejection_reason ? `<p class="hint reject-hint">دلیل رد قبلی: ${escapeHtml(proposal.rejection_reason)}</p>` : ""}
+      <div class="crud-grid year-form-grid">
+        <label><span>شروع قرارداد</span><input name="contract_start" type="text" required value="${escapeHtml(proposal?.contract_start || official?.contract_start || `${year}/01/01`)}" /></label>
+        <label><span>پایان قرارداد</span><input name="contract_end" type="text" required value="${escapeHtml(proposal?.contract_end || official?.contract_end || `${year}/12/29`)}" /></label>
+        <label><span>مبلغ کل قرارداد رسمی (ریال)</span><input name="formal_contract_amount" type="number" min="0" step="1" required value="${escapeHtml(proposal?.formal_contract_amount ?? official?.formal_contract_amount ?? "")}" /></label>
+        <label class="wide"><span>توضیحات</span><textarea name="notes" rows="2">${escapeHtml(proposal?.notes || official?.notes || "")}</textarea></label>
+        <label><span>${escapeHtml(labels.membership || "قرارداد عضویت")} (الزامی)</span><input name="membership_file" type="file" required accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx" /></label>
+        <label><span>${escapeHtml(labels.settlement || "قرارداد استقرار")} (الزامی)</span><input name="settlement_file" type="file" required accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx" /></label>
+      </div>
+      <div class="year-panel-actions"><button class="button" type="submit">ارسال برای تأیید مرکز</button></div>
+    </form>` : (registered
+      ? `<p class="hint">این سال در سامانه ثبت شده و ارسال تکراری مجاز نیست.</p>`
+      : proposal?.status === "pending"
+        ? `<p class="hint">پیشنهاد در انتظار تأیید مرکز است.</p>`
+        : "");
+
+    return `<article class="year-panel">
+      <div class="year-panel-head">
+        <h3>سال ${escapeHtml(year)}${year === currentYear ? " (جاری)" : ""}</h3>
+        ${status}
+      </div>
+      ${official ? `<div class="year-contract-readonly">
+        <div><span>شروع</span><strong>${escapeHtml(formatPlain(official.contract_start))}</strong></div>
+        <div><span>پایان</span><strong>${escapeHtml(formatPlain(official.contract_end))}</strong></div>
+        <div><span>مبلغ</span><strong>${escapeHtml(formatMoney(official.formal_contract_amount || 0))}</strong></div>
+      </div>` : (proposal ? `<div class="year-contract-readonly">
+        <div><span>شروع پیشنهادی</span><strong>${escapeHtml(formatPlain(proposal.contract_start))}</strong></div>
+        <div><span>پایان پیشنهادی</span><strong>${escapeHtml(formatPlain(proposal.contract_end))}</strong></div>
+        <div><span>مبلغ پیشنهادی</span><strong>${escapeHtml(formatMoney(proposal.formal_contract_amount || 0))}</strong></div>
+      </div>` : "")}
+      ${filesHtml}
+      ${formHtml}
+    </article>`;
+  };
+
+  // Ensure current year always has a submit card even if empty.
+  const hasCurrent = years.some((row) => String(row.fiscal_year) === currentYear);
+  const cards = [...years];
+  if (!hasCurrent && currentYear) {
+    cards.unshift({
+      fiscal_year: currentYear,
+      files: { membership: null, settlement: null },
+      proposal: null,
+      official_contract: null,
+      can_submit: true,
+      is_registered: false,
+      has_both_files: false,
     });
-  });
-  host.querySelectorAll("[data-reject-file]").forEach((button) => {
-    button.addEventListener("click", async () => {
-      const reason = window.prompt("دلیل رد فایل قرارداد:");
-      if (reason === null) return;
-      if (!String(reason).trim()) {
-        showToast("دلیل رد الزامی است.", "error");
+  }
+
+  host.classList.add("is-ready");
+  host.innerHTML = cards.length
+    ? `<div class="year-workspace-panels">${cards.map(renderYearCard).join("")}</div>`
+    : renderEmptyState("هنوز قراردادی ثبت نشده است.", { icon: "inbox" });
+
+  host.querySelectorAll("[data-team-contract-package]").forEach((form) => {
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const membership = form.membership_file?.files?.[0];
+      const settlement = form.settlement_file?.files?.[0];
+      if (!membership || !settlement) {
+        showToast("هر دو فایل عضویت و استقرار الزامی است.", "error");
         return;
       }
-      button.disabled = true;
+      const body = new FormData(form);
+      body.set("fiscal_year", form.dataset.year || "");
+      const submit = form.querySelector('button[type="submit"]');
+      submit.disabled = true;
       try {
-        await postJson("api.php?resource=contract-documents&action=reject-file", {
-          id: Number(button.dataset.rejectFile),
-          reason: String(reason).trim(),
+        await fetchJson("api.php?resource=contract-documents&action=submit-package", {
+          method: "POST",
+          headers: { "X-CSRF-Token": csrfToken },
+          body,
         });
-        showToast("فایل رد شد.", "success");
-        await loadPendingContractsQueue();
+        showToast("قرارداد با هر دو پیوست برای تأیید ارسال شد.", "success");
+        await loadTeamContractsSection();
       } catch (error) {
         showToast(error.message, "error");
-        button.disabled = false;
+      } finally {
+        submit.disabled = false;
       }
     });
   });
@@ -4482,26 +4559,6 @@ loadDashboard().catch((error) => {
   const cards = document.getElementById("cards");
   if (cards) cards.innerHTML = `<article class="stat-card"><span class="stat-label">خطا</span><strong>${escapeHtml(error.message)}</strong></article>`;
 });
-
-const syncTeamPerformanceNav = async () => {
-  if (panelMode !== "team") return;
-  const nav = document.getElementById("navPerformanceReports");
-  const section = document.getElementById("performance-reports");
-  if (!nav || !section) return;
-  try {
-    const settings = await fetchJson("api.php?resource=performance-settings");
-    const enabled = Boolean(settings.performance_reports_enabled);
-    nav.hidden = !enabled;
-    section.hidden = !enabled;
-    if (!enabled && location.hash.replace(/^#/, "") === "performance-reports") {
-      activateSection("overview");
-    }
-  } catch {
-    nav.hidden = true;
-    section.hidden = true;
-  }
-};
-syncTeamPerformanceNav().catch(() => {});
 
 document.getElementById("deskHistoryAddButton")?.addEventListener("click", () => {
   openDeskHistoryAssignModal().catch((error) => showToast(error.message, "error"));

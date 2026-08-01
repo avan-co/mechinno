@@ -139,10 +139,6 @@ $assetVer = (string) max(
                   <span class="nav-icon nav-icon--purple"><svg viewBox="0 0 24 24"><path d="M7 3h10a2 2 0 0 1 2 2v14l-7-3-7 3V5a2 2 0 0 1 2-2Z" fill="currentColor"/></svg></span>
                   <span class="nav-label">قراردادها</span>
                 </button>
-                <button class="nav-item nav-item--sub" data-section="pending-contracts" type="button">
-                  <span class="nav-icon nav-icon--purple"><svg viewBox="0 0 24 24"><path d="M9 3h6v2H9V3Zm-2 4h10v14H7V7Zm3 3v2h4v-2h-4Zm0 4v2h4v-2h-4Z" fill="currentColor"/></svg></span>
-                  <span class="nav-label">تأیید قرارداد</span>
-                </button>
                 <?php endif; ?>
                 <button class="nav-item" data-section="members" type="button">
                   <span class="nav-icon nav-icon--teal"><svg viewBox="0 0 24 24"><path d="M16 11c1.7 0 3-1.3 3-3S17.7 5 16 5s-3 1.3-3 3 1.3 3 3 3ZM8 11c1.7 0 3-1.3 3-3S9.7 5 8 5 5 6.3 5 8s1.3 3 3 3Zm0 2c-2.7 0-8 1.3-8 4v3h10v-3c0-1.1.4-2.1 1.1-2.9C9.8 13.1 8.9 13 8 13Zm8 0c-.9 0-1.8.1-2.6.3.7.8 1.1 1.8 1.1 2.9v3h7v-3c0-2.7-5.3-4-8-4Z" fill="currentColor"/></svg></span>
@@ -394,20 +390,13 @@ $assetVer = (string) max(
             <section id="team-contracts" class="section">
               <div class="section-intro section-intro--purple">
                 <span class="section-intro-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 3h10a2 2 0 0 1 2 2v14l-7-3-7 3V5a2 2 0 0 1 2-2Z" fill="currentColor"/></svg></span>
-                <div class="section-intro-copy"><p>همه قراردادهای سال جاری و سال‌های قبل — قراردادهای <strong>فعال</strong> (در بازه امروز) در بالای لیست نمایش داده می‌شوند. پیوست عضویت و استقرار از پروفایل هر نهاد مدیریت می‌شود.</p></div>
-              </div>
-              <data-table title="قراردادهای نهادها" endpoint="api.php?resource=team_contracts"></data-table>
-            </section>
-
-            <section id="pending-contracts" class="section">
-              <div class="section-intro section-intro--purple">
-                <span class="section-intro-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 3h6v2H9V3Zm-2 4h10v14H7V7Zm3 3v2h4v-2h-4Zm0 4v2h4v-2h-4Z" fill="currentColor"/></svg></span>
-                <div class="section-intro-copy"><p>پیشنهاد اطلاعات قرارداد و فایل‌های عضویت/استقرار ارسال‌شده توسط نهادها — با تأیید، در لیست رسمی همان سال ذخیره می‌شوند و سال‌های قبل دست‌نخورده می‌مانند.</p></div>
+                <div class="section-intro-copy"><p>پیشنهادهای در انتظار را با هر دو پیوست یکجا تأیید یا رد کنید. زیر آن، فهرست قراردادهای ثبت‌شده سال‌های مختلف آمده است.</p></div>
               </div>
               <article class="panel">
-                <div class="panel-head"><h2>صف تأیید قرارداد</h2></div>
+                <div class="panel-head"><h2>در انتظار تأیید</h2></div>
                 <div id="pendingContractsQueue" class="pending-contracts-queue">در حال بارگذاری…</div>
               </article>
+              <data-table title="قراردادهای ثبت‌شده نهادها" endpoint="api.php?resource=team_contracts"></data-table>
             </section>
 
             <section id="performance-reports" class="section">
