@@ -1376,44 +1376,63 @@ final class Schema
         }
 
         $today = JalaliDate::todayParts()['formatted'];
-        $upsert = $pdo->prepare(
+        $insert = $pdo->prepare(
             'INSERT INTO sms_patterns (pattern_key, body_id, title, panel_text, variables_json, system_template, workflow_key, updated_at)
              VALUES (:pattern_key, :body_id, :title, :panel_text, :variables_json, :system_template, :workflow_key, :updated_at)
-             ON CONFLICT(pattern_key) DO UPDATE SET
-                body_id = excluded.body_id,
-                title = excluded.title,
-                panel_text = excluded.panel_text,
-                variables_json = excluded.variables_json,
-                system_template = excluded.system_template,
-                workflow_key = excluded.workflow_key,
-                updated_at = excluded.updated_at'
+             ON CONFLICT(pattern_key) DO NOTHING'
+        );
+        $updateMeta = $pdo->prepare(
+            'UPDATE sms_patterns SET
+                title = :title,
+                panel_text = :panel_text,
+                variables_json = :variables_json,
+                workflow_key = :workflow_key,
+                updated_at = :updated_at
+             WHERE pattern_key = :pattern_key'
         );
         if ($pdo->getAttribute(PDO::ATTR_DRIVER_NAME) !== 'sqlite') {
-            $upsert = $pdo->prepare(
-                'INSERT INTO sms_patterns (pattern_key, body_id, title, panel_text, variables_json, system_template, workflow_key, updated_at)
-                 VALUES (:pattern_key, :body_id, :title, :panel_text, :variables_json, :system_template, :workflow_key, :updated_at)
-                 ON DUPLICATE KEY UPDATE
-                    body_id = VALUES(body_id),
-                    title = VALUES(title),
-                    panel_text = VALUES(panel_text),
-                    variables_json = VALUES(variables_json),
-                    system_template = VALUES(system_template),
-                    workflow_key = VALUES(workflow_key),
-                    updated_at = VALUES(updated_at)'
+            $insert = $pdo->prepare(
+                'INSERT IGNORE INTO sms_patterns (pattern_key, body_id, title, panel_text, variables_json, system_template, workflow_key, updated_at)
+                 VALUES (:pattern_key, :body_id, :title, :panel_text, :variables_json, :system_template, :workflow_key, :updated_at)'
+            );
+            $updateMeta = $pdo->prepare(
+                'UPDATE sms_patterns SET
+                    title = :title,
+                    panel_text = :panel_text,
+                    variables_json = :variables_json,
+                    workflow_key = :workflow_key,
+                    updated_at = :updated_at
+                 WHERE pattern_key = :pattern_key'
             );
         }
 
         $bodyIds = [];
         foreach (SmsPatterns::definitions() as $key => $definition) {
             $bodyId = (int) $definition['body_id'];
-            $bodyIds[$key] = $bodyId;
-            $upsert->execute([
+            $insert->execute([
                 'pattern_key' => $key,
                 'body_id' => $bodyId,
                 'title' => (string) $definition['title'],
                 'panel_text' => (string) $definition['panel_text'],
                 'variables_json' => json_encode($definition['variables'], JSON_UNESCAPED_UNICODE),
                 'system_template' => SmsPatterns::systemTemplate($key, $bodyId),
+                'workflow_key' => $definition['workflow_key'],
+                'updated_at' => $today,
+            ]);
+
+            $existingBodyId = 0;
+            if (Schema::tableExists($pdo, 'sms_patterns')) {
+                $existingBodyId = (int) $pdo->query(
+                    "SELECT body_id FROM sms_patterns WHERE pattern_key = " . $pdo->quote($key)
+                )->fetchColumn();
+            }
+            $bodyIds[$key] = $existingBodyId > 0 ? $existingBodyId : $bodyId;
+
+            $updateMeta->execute([
+                'pattern_key' => $key,
+                'title' => (string) $definition['title'],
+                'panel_text' => (string) $definition['panel_text'],
+                'variables_json' => json_encode($definition['variables'], JSON_UNESCAPED_UNICODE),
                 'workflow_key' => $definition['workflow_key'],
                 'updated_at' => $today,
             ]);
@@ -1435,7 +1454,7 @@ final class Schema
         if (!$needsSeed && is_array($workflow)) {
             foreach (SmsPatterns::workflowTemplateDefaults() as $workflowKey => $template) {
                 $current = trim((string) ($workflow[$workflowKey] ?? ''));
-                if ($current === '' || !str_contains($current, '##shared')) {
+                if ($current === '' || !str_contains($current, '##shared') || SmsPatterns::templateUsesPlaceholder($current)) {
                     $needsSeed = true;
                     break;
                 }
@@ -1448,6 +1467,16 @@ final class Schema
             return;
         }
 
+        $workflowTemplates = [];
+        foreach (SmsPatterns::definitions() as $key => $definition) {
+            $workflowKey = $definition['workflow_key'] ?? null;
+            if ($workflowKey === null) {
+                continue;
+            }
+            $bodyId = (int) ($bodyIds[$key] ?? $definition['body_id']);
+            $workflowTemplates[$workflowKey] = SmsPatterns::systemTemplate($key, $bodyId);
+        }
+
         $pdo->prepare(
             'UPDATE center_settings SET
                 sms_charge_template = :charge,
@@ -1456,7 +1485,7 @@ final class Schema
              WHERE id = 1'
         )->execute([
             'charge' => SmsPatterns::chargeTemplate($bodyIds['charge_reminder'] ?? null),
-            'workflow' => json_encode(SmsPatterns::workflowTemplates($bodyIds), JSON_UNESCAPED_UNICODE),
+            'workflow' => json_encode($workflowTemplates, JSON_UNESCAPED_UNICODE),
             'updated' => $today,
         ]);
     }

@@ -718,6 +718,26 @@ foreach (SmsPatterns::definitions() as $key => $definition) {
     $preview = SmsPatterns::renderPanelPreview($key);
     $assert($preview !== '', 'sms: panel preview renders (' . $key . ')');
 }
+$assert(SmsPatterns::templateUsesPlaceholder('287103@{booker_name}##shared'), 'sms: placeholder template detected');
+$assert(!SmsPatterns::templateUsesPlaceholder('507317@{booker_name}##shared'), 'sms: real body id is not placeholder');
+$assert(
+    SmsPatterns::applyBodyIdToTemplate('287103@{booker_name}##{room_name}##shared', 507317)
+    === '507317@{booker_name}##{room_name}##shared',
+    'sms: body id can be replaced in template'
+);
+$assert(MelliPayamak::formatApiError(['Value' => '-4', 'RetStatus' => 35, 'StrRetStatus' => 'InvalidData']) !== '', 'sms: invalid data error mapped');
+$pdo->prepare('UPDATE sms_patterns SET body_id = 507317, system_template = :template WHERE pattern_key = :key')->execute([
+    'template' => SmsPatterns::systemTemplate('room_pending', 507317),
+    'key' => 'room_pending',
+]);
+Schema::seedSmsPatterns($pdo);
+$preservedBodyId = (int) $pdo->query("SELECT body_id FROM sms_patterns WHERE pattern_key = 'room_pending'")->fetchColumn();
+$assert($preservedBodyId === 507317, 'sms: seed preserves custom body_id');
+$smsService = new SmsService($pdo);
+$resolvedPending = (new ReflectionClass($smsService))->getMethod('resolveWorkflowTemplate');
+$resolvedPending->setAccessible(true);
+$pendingTemplate = (string) $resolvedPending->invoke($smsService, 'room_pending');
+$assert(str_starts_with($pendingTemplate, '507317@'), 'sms: workflow send uses saved body_id from registry');
 $chargeDebtors = (new SmsService($pdo))->chargeDebtors();
 $assert(is_array($chargeDebtors['debtors'] ?? null), 'sms: charge debtors endpoint data');
 $assert(($chargeDebtors['template_configured'] ?? false) === true, 'sms: charge template configured flag');

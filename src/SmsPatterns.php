@@ -149,6 +149,43 @@ final class SmsPatterns
         return preg_match('/\{\d+\}\s*$/u', trim($panelText)) === 1;
     }
 
+    public static function isPlaceholderBodyId(int $bodyId): bool
+    {
+        return $bodyId >= 287101 && $bodyId <= 287109;
+    }
+
+    public static function patternKeyForWorkflow(string $workflowKey): ?string
+    {
+        foreach (self::definitions() as $key => $definition) {
+            if (($definition['workflow_key'] ?? null) === $workflowKey) {
+                return $key;
+            }
+        }
+
+        return null;
+    }
+
+    public static function applyBodyIdToTemplate(string $template, int $bodyId): string
+    {
+        $template = trim($template);
+        if ($template === '' || $bodyId <= 0) {
+            return $template;
+        }
+        if (preg_match('/^\d+@/u', $template) === 1) {
+            return (string) preg_replace('/^\d+@/u', $bodyId . '@', $template, 1);
+        }
+
+        return $template;
+    }
+
+    public static function templateUsesPlaceholder(string $template): bool
+    {
+        $parsed = MelliPayamak::parsePatternMessage($template);
+        $bodyId = (int) ($parsed['body_id'] ?? 0);
+
+        return $bodyId <= 0 || self::isPlaceholderBodyId($bodyId);
+    }
+
     public static function systemTemplate(string $patternKey, ?int $bodyId = null): string
     {
         $definition = self::definitions()[$patternKey] ?? null;

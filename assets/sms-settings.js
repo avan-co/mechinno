@@ -140,18 +140,44 @@ const renderSmsPatternGuide = async () => {
     host.innerHTML = `
       ${notes ? `<ul class="hint sms-pattern-notes">${notes}</ul>` : ""}
       ${(data.patterns || []).map((row) => `
-      <div class="charge-reminder-card">
+      <div class="charge-reminder-card" data-pattern-key="${escapeHtml(row.pattern_key || "")}">
         <div class="charge-reminder-head">
           <strong>${escapeHtml(row.title || row.pattern_key || "")}</strong>
-          <span class="hint" dir="ltr">bodyId: ${escapeHtml(String(row.body_id || ""))}</span>
+          ${row.is_placeholder ? `<span class="hint">کد پیش‌فرض — نیاز به ثبت در پنل</span>` : ""}
         </div>
         <p class="hint">متغیرهای سیستم: ${escapeHtml((row.variables || []).join("، "))}</p>
+        ${canWrite ? `<label class="crud-grid"><span>کد الگو در پنل ملی‌پیامک (bodyId)</span>
+          <input type="number" min="1" step="1" data-pattern-body-id value="${escapeHtml(String(row.body_id || ""))}" dir="ltr" />
+        </label>
+        <div class="panel-actions">
+          <button type="button" class="button ghost" data-save-pattern-body-id>ذخیره کد الگو</button>
+        </div>` : `<p class="hint" dir="ltr">bodyId: ${escapeHtml(String(row.body_id || ""))}</p>`}
         <p class="hint">متن ثبت در پنل ملی‌پیامک:</p>
         <textarea readonly rows="3" dir="rtl">${escapeHtml(row.panel_text || "")}</textarea>
         <p class="hint">پیش‌نمایش پیامک (نمونه):</p>
         <textarea readonly rows="3" dir="rtl" class="sms-pattern-preview">${escapeHtml(row.panel_preview || "")}</textarea>
-        <p class="hint" dir="ltr">الگوی سیستم: ${escapeHtml(row.system_template || "")}</p>
+        <p class="hint" dir="ltr">الگوی فعال ارسال: ${escapeHtml(row.active_template || row.system_template || "")}</p>
       </div>`).join("") || `<div class="empty">الگویی ثبت نشده است.</div>`}`;
+
+    host.querySelectorAll("[data-save-pattern-body-id]").forEach((button) => {
+      button.addEventListener("click", async () => {
+        const card = button.closest("[data-pattern-key]");
+        const patternKey = card?.dataset?.patternKey || "";
+        const input = card?.querySelector("[data-pattern-body-id]");
+        const bodyId = Number(input?.value || 0);
+        if (!patternKey || bodyId <= 0) {
+          showToast("کد الگو (bodyId) را وارد کنید.", "error");
+          return;
+        }
+        try {
+          await postJson("api.php?resource=sms-patterns", { pattern_key: patternKey, body_id: bodyId });
+          showToast("کد الگو ذخیره شد.", "success");
+          await loadSmsSettingsPage();
+        } catch (error) {
+          showToast(error.message, "error");
+        }
+      });
+    });
   } catch (error) {
     host.innerHTML = `<div class="empty">خطا در بارگذاری راهنما: ${escapeHtml(error.message)}</div>`;
   }

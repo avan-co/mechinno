@@ -507,6 +507,33 @@ final class MelliPayamak
         return null;
     }
 
+    public static function formatApiError(mixed $raw): string
+    {
+        if (is_string($raw)) {
+            $decoded = json_decode($raw, true);
+            $raw = json_last_error() === JSON_ERROR_NONE ? $decoded : null;
+        }
+        if (!is_array($raw)) {
+            return '';
+        }
+
+        $value = trim((string) ($raw['Value'] ?? ''));
+        $status = trim((string) ($raw['StrRetStatus'] ?? ''));
+        $retStatus = $raw['RetStatus'] ?? null;
+
+        if ($status === 'InvalidData' || $value === '-4' || $retStatus === 35) {
+            return 'داده نامعتبر: کد الگو (bodyId) در سامانه با پنل ملی‌پیامک مطابقت ندارد یا تعداد/ترتیب متغیرها اشتباه است.';
+        }
+        if ($value === '-5' || $status === 'InvalidBodyId') {
+            return 'کد الگو (bodyId) در پنل ملی‌پیامک یافت نشد یا هنوز تأیید نشده است.';
+        }
+        if ($value !== '' && preg_match('/^-\d+$/', $value) === 1) {
+            return 'خطای ملی‌پیامک (کد ' . $value . ')';
+        }
+
+        return '';
+    }
+
     public static function deliveryLabel(?int $code): string
     {
         return match ($code) {

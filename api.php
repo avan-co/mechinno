@@ -299,6 +299,14 @@ try {
     }
 
     if ($resource === 'sms-patterns') {
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            require_csrf_json();
+            Access::requireWriteJson();
+            $payload = read_json_body();
+            $patternKey = trim((string) ($payload['pattern_key'] ?? ''));
+            $bodyId = (int) ($payload['body_id'] ?? 0);
+            json_response(['ok' => true, 'result' => (new SmsService($pdo))->updatePatternBodyId($patternKey, $bodyId)]);
+        }
         json_response((new SmsService($pdo))->patternRegistry());
     }
 

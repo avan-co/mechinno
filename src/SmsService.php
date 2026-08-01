@@ -320,6 +320,13 @@ final class SmsService
         } else {
             foreach ($rows as &$row) {
                 $variables = is_array($row['variables'] ?? null) ? $row['variables'] : [];
+                $patternKey = (string) ($row['pattern_key'] ?? '');
+                $workflowKey = $row['workflow_key'] !== null ? (string) $row['workflow_key'] : null;
+                $bodyId = (int) ($row['body_id'] ?? 0);
+                $row['is_placeholder'] = SmsPatterns::isPlaceholderBodyId($bodyId);
+                $row['active_template'] = $patternKey === 'charge_reminder'
+                    ? $this->resolveChargeTemplate()
+                    : ($workflowKey !== null ? $this->resolveWorkflowTemplate($workflowKey) : (string) ($row['system_template'] ?? ''));
                 $row['panel_preview'] = SmsPatterns::renderPanelText(
                     (string) ($row['panel_text'] ?? ''),
                     $variables
@@ -339,8 +346,56 @@ final class SmsService
                 'نوع خط: خط خدماتی اشتراکی (shared)',
                 'متغیرها در پنل به‌صورت {0}، {1}، ... و به ترتیب قرار گیرند.',
                 'متغیر نباید در انتهای متن باشد؛ پس از آخرین متغیر عبارت ثابت قرار دهید.',
-                'پس از تأیید الگو در پنل، body_id واقعی را در تنظیمات پیامک جایگزین کنید.',
+                'پس از تأیید الگو در پنل ملی‌پیامک، کد bodyId واقعی را در همین بخش ذخیره کنید (برای هر رویداد جداگانه).',
+                'الگوی فعال ارسال = کد ذخیره‌شده + متغیرهای سیستم؛ عددهای ۲۸۷۱۰۱–۲۸۷۱۰۹ فقط پیش‌فرض هستند.',
             ],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function updatePatternBodyId(string $patternKey, int $bodyId): array
+    {
+        Access::requireWriteJson();
+        $patternKey = trim($patternKey);
+        if (!isset(SmsPatterns::definitions()[$patternKey])) {
+            throw new InvalidArgumentException('الگوی نامعتبر است.');
+        }
+        if ($bodyId <= 0) {
+            throw new InvalidArgumentException('کد الگو (bodyId) باید عدد مثبت باشد.');
+        }
+        if (!Schema::tableExists($this->pdo, 'sms_patterns')) {
+            throw new RuntimeException('جدول الگوهای پیامک موجود نیست.');
+        }
+
+        $systemTemplate = SmsPatterns::systemTemplate($patternKey, $bodyId);
+        $today = JalaliDate::todayParts()['formatted'];
+        $statement = $this->pdo->prepare(
+            'UPDATE sms_patterns SET body_id = :body_id, system_template = :system_template, updated_at = :updated_at
+             WHERE pattern_key = :pattern_key'
+        );
+        $statement->execute([
+            'pattern_key' => $patternKey,
+            'body_id' => $bodyId,
+            'system_template' => $systemTemplate,
+            'updated_at' => $today,
+        ]);
+        if ($statement->rowCount() === 0) {
+            throw new InvalidArgumentException('الگو در پایگاه داده یافت نشد.');
+        }
+
+        $this->syncStoredTemplatesForPattern($patternKey, $systemTemplate);
+
+        $workflowKey = SmsPatterns::definitions()[$patternKey]['workflow_key'] ?? null;
+
+        return [
+            'pattern_key' => $patternKey,
+            'body_id' => $bodyId,
+            'system_template' => $systemTemplate,
+            'active_template' => $patternKey === 'charge_reminder'
+                ? $this->resolveChargeTemplate()
+                : ($workflowKey !== null ? $this->resolveWorkflowTemplate((string) $workflowKey) : $systemTemplate),
         ];
     }
 
@@ -350,7 +405,7 @@ final class SmsService
     public function chargeDebtors(): array
     {
         $center = new CenterSettings($this->pdo);
-        $template = trim((string) ($center->smsSettings()['sms_charge_template'] ?? ''));
+        $template = $this->resolveChargeTemplate();
         $bank = $center->get();
         $debtors = [];
 
@@ -398,7 +453,7 @@ final class SmsService
     {
         Access::requireWriteJson();
         $center = new CenterSettings($this->pdo);
-        $template = trim((string) ($center->smsSettings()['sms_charge_template'] ?? ''));
+        $template = $this->resolveChargeTemplate();
         if ($template === '') {
             throw new InvalidArgumentException('الگوی یادآوری شارژ را در تنظیمات پیامک ذخیره کنید.');
         }
@@ -630,7 +685,7 @@ final class SmsService
             return;
         }
 
-        $template = trim((string) ((new CenterSettings($this->pdo))->workflowTemplates()[$templateKey] ?? ''));
+        $template = trim($this->resolveWorkflowTemplate($templateKey));
         if ($template === '') {
             return;
         }
@@ -661,6 +716,13 @@ final class SmsService
             $text
         );
         $unitCost = (int) ($settings['sms_unit_cost'] ?? 0);
+        $errorMessage = $response['error'];
+        if (($response['ok'] ?? false) !== true) {
+            $formatted = MelliPayamak::formatApiError($response['raw']);
+            if ($formatted !== '') {
+                $errorMessage = $formatted;
+            }
+        }
 
         $this->insertLog([
             'batch_uid' => $this->newBatchUid(),
@@ -673,13 +735,97 @@ final class SmsService
             'is_leader' => (int) ($logMeta['is_leader'] ?? 0),
             'message_text' => $text,
             'status' => $response['ok'] ? 'sent' : 'failed',
-            'error_message' => $response['error'],
+            'error_message' => $errorMessage,
             'provider_rec_id' => $response['rec_id'],
             'provider_response' => is_string($response['raw']) ? $response['raw'] : json_encode($response['raw'], JSON_UNESCAPED_UNICODE),
             'cost_rial' => $response['ok'] ? $unitCost : 0,
             'delivery_status' => $response['ok'] ? 'در حال ارسال' : null,
             'api_confirmed' => $response['ok'] && trim((string) ($response['rec_id'] ?? '')) !== '' ? 1 : 0,
         ]);
+    }
+
+    private function resolveWorkflowTemplate(string $workflowKey): string
+    {
+        $workflowKey = trim($workflowKey);
+        if ($workflowKey === '') {
+            return '';
+        }
+
+        $stored = trim((string) ((new CenterSettings($this->pdo))->workflowTemplates()[$workflowKey] ?? ''));
+        $patternKey = SmsPatterns::patternKeyForWorkflow($workflowKey);
+        if ($patternKey === null) {
+            return $stored;
+        }
+
+        $registryTemplate = $this->registrySystemTemplate($patternKey);
+        if ($registryTemplate === '') {
+            return $stored;
+        }
+
+        if ($stored === '' || SmsPatterns::templateUsesPlaceholder($stored)) {
+            return $registryTemplate;
+        }
+
+        $registryBodyId = (int) (MelliPayamak::parsePatternMessage($registryTemplate)['body_id'] ?? 0);
+        if ($registryBodyId > 0 && !SmsPatterns::isPlaceholderBodyId($registryBodyId)) {
+            return SmsPatterns::applyBodyIdToTemplate($stored, $registryBodyId);
+        }
+
+        return $stored;
+    }
+
+    private function resolveChargeTemplate(): string
+    {
+        $stored = trim((string) ((new CenterSettings($this->pdo))->smsSettings()['sms_charge_template'] ?? ''));
+        $registryTemplate = $this->registrySystemTemplate('charge_reminder');
+        if ($registryTemplate === '') {
+            return $stored;
+        }
+        if ($stored === '' || SmsPatterns::templateUsesPlaceholder($stored)) {
+            return $registryTemplate;
+        }
+
+        $registryBodyId = (int) (MelliPayamak::parsePatternMessage($registryTemplate)['body_id'] ?? 0);
+        if ($registryBodyId > 0 && !SmsPatterns::isPlaceholderBodyId($registryBodyId)) {
+            return SmsPatterns::applyBodyIdToTemplate($stored, $registryBodyId);
+        }
+
+        return $stored;
+    }
+
+    private function registrySystemTemplate(string $patternKey): string
+    {
+        if (Schema::tableExists($this->pdo, 'sms_patterns')) {
+            $statement = $this->pdo->prepare(
+                'SELECT system_template FROM sms_patterns WHERE pattern_key = :pattern_key LIMIT 1'
+            );
+            $statement->execute(['pattern_key' => $patternKey]);
+            $template = trim((string) ($statement->fetchColumn() ?: ''));
+            if ($template !== '') {
+                return $template;
+            }
+        }
+
+        return SmsPatterns::systemTemplate($patternKey);
+    }
+
+    private function syncStoredTemplatesForPattern(string $patternKey, string $systemTemplate): void
+    {
+        $center = new CenterSettings($this->pdo);
+        if ($patternKey === 'charge_reminder') {
+            $center->updateSms(['sms_charge_template' => $systemTemplate]);
+
+            return;
+        }
+
+        $workflowKey = SmsPatterns::definitions()[$patternKey]['workflow_key'] ?? null;
+        if ($workflowKey === null) {
+            return;
+        }
+
+        $templates = $center->workflowTemplates();
+        $templates[$workflowKey] = $systemTemplate;
+        $center->updateSms(['sms_workflow_templates' => $templates]);
     }
 
     /**
