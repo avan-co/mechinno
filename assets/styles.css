@@ -1620,6 +1620,7 @@ textarea[dir="ltr"] {
 .table-toolbar.is-empty-title h2 { display: none; }
 .table-toolbar.is-empty-title { margin-bottom: 0; }
 .table-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.table-actions .search { flex: 1 1 160px; min-width: 140px; }
 
 .search, .year-select, .inline-status, .per-page-select, .crud-grid input, .crud-grid select, .crud-grid textarea {
   padding: 9px 12px;
@@ -3659,8 +3660,6 @@ body.is-mobile .mobile-card .row-actions {
 #overview .stat-cards { margin-bottom: 14px; }
 #overview .quick-nav { margin-bottom: 12px; }
 .page-subtitle[hidden] { display: none; }
-.table-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.table-actions .search { flex: 1 1 160px; min-width: 140px; }
 
 .section-intro {
   gap: 12px;
