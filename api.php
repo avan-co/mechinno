@@ -237,11 +237,12 @@ try {
                     'informal_rent_rate_override' => (string) ($_POST['informal_rent_rate_override'] ?? ''),
                     'notes' => (string) ($_POST['notes'] ?? ''),
                 ];
-                $membership = $_FILES['membership_file'] ?? null;
-                $settlement = $_FILES['settlement_file'] ?? null;
-                if (!is_array($membership) || !is_array($settlement)) {
-                    json_response(['error' => 'هر دو فایل قرارداد عضویت و استقرار الزامی است.'], 422);
-                }
+                $membership = is_array($_FILES['membership_file'] ?? null)
+                    ? $_FILES['membership_file']
+                    : ['error' => UPLOAD_ERR_NO_FILE];
+                $settlement = is_array($_FILES['settlement_file'] ?? null)
+                    ? $_FILES['settlement_file']
+                    : ['error' => UPLOAD_ERR_NO_FILE];
                 json_response([
                     'ok' => true,
                     'bundle' => $contractDocs->submitPackage($teamId, $payload, $membership, $settlement),
@@ -257,9 +258,11 @@ try {
                 if (!is_array($file)) {
                     json_response(['error' => 'فایل قرارداد ارسال نشده است.'], 422);
                 }
+                // Keep pending review status when a team package is already awaiting approval.
+                $asApproved = !$contractDocs->hasPendingProposal($teamId, $fiscalYear);
                 json_response([
                     'ok' => true,
-                    'record' => $contractDocs->upsertFile($teamId, $fiscalYear, $docType, $file, true),
+                    'record' => $contractDocs->upsertFile($teamId, $fiscalYear, $docType, $file, $asApproved),
                 ]);
             }
             if ($action === 'delete') {
@@ -299,27 +302,24 @@ try {
         ]);
     }
 
-    if ($resource === 'performance-reports') {
-        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            require_csrf_json();
-            Access::requireWriteOrTeamSubmitJson();
-            if ($action === 'submit') {
-                $teamId = Access::scopedTeamId() ?? (int) ($_POST['team_id'] ?? 0);
-                $fiscalYear = (string) ($_POST['fiscal_year'] ?? '');
-                $period = (string) ($_POST['period'] ?? '');
-                $notes = trim((string) ($_POST['notes'] ?? ''));
-                $file = $_FILES['file'] ?? null;
-                if (!is_array($file)) {
-                    json_response(['error' => 'فایل گزارش ارسال نشده است.'], 422);
-                }
-                json_response([
-                    'ok' => true,
-                    'record' => $performanceReports->submit($teamId, $fiscalYear, $period, $file, $notes),
-                ]);
-            }
-            json_response(['error' => 'عملیات گزارش نامعتبر است.'], 422);
+    if ($resource === 'performance-reports' && $_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'submit') {
+        require_csrf_json();
+        Access::requireWriteOrTeamSubmitJson();
+        $teamId = Access::scopedTeamId() ?? (int) ($_POST['team_id'] ?? 0);
+        $fiscalYear = (string) ($_POST['fiscal_year'] ?? '');
+        $period = (string) ($_POST['period'] ?? '');
+        $notes = trim((string) ($_POST['notes'] ?? ''));
+        $file = $_FILES['file'] ?? null;
+        if (!is_array($file)) {
+            json_response(['error' => 'فایل گزارش ارسال نشده است.'], 422);
         }
+        json_response([
+            'ok' => true,
+            'record' => $performanceReports->submit($teamId, $fiscalYear, $period, $file, $notes),
+        ]);
+    }
 
+    if ($resource === 'performance-reports' && $_SERVER['REQUEST_METHOD'] !== 'POST') {
         $teamId = Access::scopedTeamId() ?? (int) ($_GET['team_id'] ?? 0);
         $fiscalYear = isset($_GET['fiscal_year']) ? (string) $_GET['fiscal_year'] : null;
         if (Access::isAdmin() && isset($_GET['list']) && (string) $_GET['list'] === '1') {

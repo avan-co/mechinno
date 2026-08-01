@@ -178,7 +178,7 @@ const sectionMeta = {
   overview: { eyebrow: "داشبورد", title: "مدیریت مرکز نوآوری", subtitle: "خلاصه وضعیت مرکز و اقدامات پیشنهادی" },
   teams: { eyebrow: "نهادها", title: "تیم‌ها، شرکت‌ها و دانشجویان", subtitle: "ثبت و مدیریت نهادها — قرارداد و میز هر سال از پروفایل نهاد" },
   "team-contracts": { eyebrow: "نهادها", title: "قراردادهای نهادها", subtitle: "تأیید پیشنهادها و فهرست قراردادهای ثبت‌شده" },
-  "performance-reports": { eyebrow: "گزارش‌ها", title: "گزارش عملکرد نهادها", subtitle: "گزارش‌های ۶ماهه و تنظیم زمان‌بندی ارسال" },
+  "performance-reports": { eyebrow: "گزارش‌ها", title: "گزارش عملکرد نهادها", subtitle: "بررسی و تأیید گزارش‌های ۶ماهه نهادها" },
   "performance-settings": { eyebrow: "گزارش‌ها", title: "تنظیمات گزارش عملکرد", subtitle: "فعال‌سازی بخش و بازه مجاز ارسال هر نیمه" },
   members: { eyebrow: "اعضا", title: "اعضای نهادها", subtitle: "هر عضو به یک نهاد تعلق دارد — میزها در سطح نهاد تخصیص می‌یابند" },
   desks: { eyebrow: "میزها", title: "نقشه و تخصیص ۲۴ میز", subtitle: "تخصیص سال جاری از نقشه و جدول زیر نقشه" },
@@ -1576,8 +1576,8 @@ const loadTeamDeskAssignments = async () => {
 };
 
 const docStatusBadge = (status) => {
-  if (status === "approved") return `<span class="badge badge-ok">تأییدشده</span>`;
-  if (status === "rejected") return `<span class="badge badge-danger">رد شده</span>`;
+  if (status === "approved") return `<span class="badge badge-ok">تأیید‌شده</span>`;
+  if (status === "rejected") return `<span class="badge badge-danger">رد‌شده</span>`;
   if (status === "pending") return `<span class="badge badge-partial">در انتظار</span>`;
   return `<span class="badge">${escapeHtml(status || "—")}</span>`;
 };
@@ -1586,11 +1586,12 @@ const renderContractReviewTable = (rows, { showActions = false, showReason = fal
   if (!rows.length) {
     return renderEmptyState(showActions ? "موردی در انتظار تأیید نیست." : "مورد ردشده‌ای نیست.", { icon: "inbox" });
   }
+  const showActionColumn = showActions && canWrite;
   return `<div class="table-wrap"><table class="data-table review-list-table">
     <thead><tr>
       <th>نهاد</th><th>سال</th><th>بازه</th><th>مبلغ</th><th>پیوست عضویت</th><th>پیوست استقرار</th>
       ${showReason ? "<th>دلیل رد</th>" : ""}
-      ${showActions ? "<th>عملیات</th>" : "<th>وضعیت</th>"}
+      ${showActionColumn ? "<th>عملیات</th>" : "<th>وضعیت</th>"}
     </tr></thead>
     <tbody>${rows.map((row) => {
       const membership = row.files?.membership;
@@ -1604,15 +1605,15 @@ const renderContractReviewTable = (rows, { showActions = false, showReason = fal
         <td>${membership ? `<a class="text-link" href="${escapeHtml(membership.download_url)}" target="_blank" rel="noopener">${escapeHtml(membership.original_name)}</a>` : "<span class=\"hint\">ندارد</span>"}</td>
         <td>${settlement ? `<a class="text-link" href="${escapeHtml(settlement.download_url)}" target="_blank" rel="noopener">${escapeHtml(settlement.original_name)}</a>` : "<span class=\"hint\">ندارد</span>"}</td>
         ${showReason ? `<td class="reject-hint">${escapeHtml(row.rejection_reason || "—")}</td>` : ""}
-        <td>${showActions ? `<div class="review-list-actions">
-            <button type="button" class="button" data-approve-proposal="${row.id}" ${canApprove && canWrite ? "" : "disabled"}>تأیید</button>
-            <button type="button" class="button danger ghost" data-reject-proposal="${row.id}" ${canWrite ? "" : "disabled"}>رد</button>
+        <td>${showActionColumn ? `<div class="review-list-actions">
+            <button type="button" class="button" data-approve-proposal="${row.id}" ${canApprove ? "" : "disabled"}>تأیید</button>
+            <button type="button" class="button danger ghost" data-reject-proposal="${row.id}">رد</button>
             ${!canApprove ? `<div class="hint reject-hint">هر دو پیوست لازم است</div>` : ""}
           </div>` : docStatusBadge(row.status)}
         </td>
       </tr>`;
     }).join("")}</tbody>
-  </table></div>`;
+  </table></div>${showActions && !canWrite ? `<p class="hint">فقط مدیر ویرایشگر می‌تواند تأیید یا رد کند.</p>` : ""}`;
 };
 
 const bindContractReviewActions = (root) => {
@@ -1632,14 +1633,9 @@ const bindContractReviewActions = (root) => {
   });
   root.querySelectorAll("[data-reject-proposal]").forEach((button) => {
     button.addEventListener("click", async () => {
-      const reason = window.prompt("دلیل رد قرارداد:");
-      if (reason === null) return;
-      if (!String(reason).trim()) {
-        showToast("دلیل رد الزامی است.", "error");
-        return;
-      }
       button.disabled = true;
       try {
+        const reason = await askRejectReason({ required: true, title: "رد قرارداد" });
         await postJson("api.php?resource=pending-contract-proposals&action=reject", {
           id: Number(button.dataset.rejectProposal),
           reason: String(reason).trim(),
@@ -1647,7 +1643,7 @@ const bindContractReviewActions = (root) => {
         showToast("قرارداد رد شد و به فهرست ردشده‌ها منتقل شد.", "success");
         await loadPendingContractsQueue();
       } catch (error) {
-        showToast(error.message, "error");
+        if (error.message !== "cancelled") showToast(error.message, "error");
         button.disabled = false;
       }
     });
@@ -1696,14 +1692,15 @@ const loadTeamContractsSection = async () => {
 
     const filesHtml = `<div class="contract-files-grid">
       <div class="contract-file-slot"><div class="contract-file-slot-head"><h4>${escapeHtml(labels.membership || "قرارداد عضویت")}</h4></div>
-        ${membership ? `<div class="contract-file-meta"><strong>${escapeHtml(membership.original_name)}</strong>${docStatusBadge(membership.status)}<a class="text-link" href="${escapeHtml(membership.download_url)}" target="_blank" rel="noopener">دانلود</a></div>` : `<p class="hint">فایلی نیست</p>`}
+        ${membership ? `<div class="contract-file-meta"><strong>${escapeHtml(membership.original_name)}</strong>${docStatusBadge(membership.status)}<a class="text-link" href="${escapeHtml(membership.download_url)}" target="_blank" rel="noopener">دانلود</a></div>` : `<p class="hint">پیوستی بارگذاری نشده</p>`}
       </div>
       <div class="contract-file-slot"><div class="contract-file-slot-head"><h4>${escapeHtml(labels.settlement || "قرارداد استقرار")}</h4></div>
-        ${settlement ? `<div class="contract-file-meta"><strong>${escapeHtml(settlement.original_name)}</strong>${docStatusBadge(settlement.status)}<a class="text-link" href="${escapeHtml(settlement.download_url)}" target="_blank" rel="noopener">دانلود</a></div>` : `<p class="hint">فایلی نیست</p>`}
+        ${settlement ? `<div class="contract-file-meta"><strong>${escapeHtml(settlement.original_name)}</strong>${docStatusBadge(settlement.status)}<a class="text-link" href="${escapeHtml(settlement.download_url)}" target="_blank" rel="noopener">دانلود</a></div>` : `<p class="hint">پیوستی بارگذاری نشده</p>`}
       </div>
     </div>`;
 
-    const formHtml = canSubmit ? `<form class="year-contract-form team-contract-package" data-team-contract-package data-year="${escapeHtml(year)}">
+    const keepFiles = Boolean(membership && settlement);
+    const formHtml = canSubmit ? `<form class="year-contract-form team-contract-package" data-team-contract-package data-year="${escapeHtml(year)}" data-keep-files="${keepFiles ? "1" : "0"}">
       <h4>${proposal?.status === "rejected" ? "ارسال اصلاحیه قرارداد" : "ارسال قرارداد سال " + escapeHtml(year)}</h4>
       ${proposal?.rejection_reason ? `<p class="hint reject-hint">دلیل رد قبلی: ${escapeHtml(proposal.rejection_reason)}</p>` : ""}
       <div class="crud-grid year-form-grid">
@@ -1711,8 +1708,8 @@ const loadTeamContractsSection = async () => {
         <label><span>پایان قرارداد</span><input name="contract_end" type="text" required value="${escapeHtml(proposal?.contract_end || official?.contract_end || `${year}/12/29`)}" /></label>
         <label><span>مبلغ کل قرارداد رسمی (ریال)</span><input name="formal_contract_amount" type="number" min="0" step="1" required value="${escapeHtml(proposal?.formal_contract_amount ?? official?.formal_contract_amount ?? "")}" /></label>
         <label class="wide"><span>توضیحات</span><textarea name="notes" rows="2">${escapeHtml(proposal?.notes || official?.notes || "")}</textarea></label>
-        <label><span>${escapeHtml(labels.membership || "قرارداد عضویت")} (الزامی)</span><input name="membership_file" type="file" required accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx" /></label>
-        <label><span>${escapeHtml(labels.settlement || "قرارداد استقرار")} (الزامی)</span><input name="settlement_file" type="file" required accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx" /></label>
+        <label><span>${escapeHtml(labels.membership || "قرارداد عضویت")}${keepFiles ? " (در صورت نیاز جایگزین کنید)" : " (الزامی)"}</span><input name="membership_file" type="file" ${keepFiles ? "" : "required"} accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx" /></label>
+        <label><span>${escapeHtml(labels.settlement || "قرارداد استقرار")}${keepFiles ? " (در صورت نیاز جایگزین کنید)" : " (الزامی)"}</span><input name="settlement_file" type="file" ${keepFiles ? "" : "required"} accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx" /></label>
       </div>
       <div class="year-panel-actions"><button class="button" type="submit">ارسال برای تأیید مرکز</button></div>
     </form>` : (registered
@@ -1765,12 +1762,15 @@ const loadTeamContractsSection = async () => {
       event.preventDefault();
       const membership = form.membership_file?.files?.[0];
       const settlement = form.settlement_file?.files?.[0];
-      if (!membership || !settlement) {
+      const keepFiles = form.dataset.keepFiles === "1";
+      if (!keepFiles && (!membership || !settlement)) {
         showToast("هر دو فایل عضویت و استقرار الزامی است.", "error");
         return;
       }
       const body = new FormData(form);
       body.set("fiscal_year", form.dataset.year || "");
+      if (!membership) body.delete("membership_file");
+      if (!settlement) body.delete("settlement_file");
       const submit = form.querySelector('button[type="submit"]');
       submit.disabled = true;
       try {
@@ -1805,12 +1805,16 @@ const loadPerformanceSettingsForm = async () => {
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
       const payload = Object.fromEntries(new FormData(form).entries());
+      const submitButton = form.querySelector('button[type="submit"]');
+      if (submitButton) submitButton.disabled = true;
       try {
         await postJson("api.php?resource=performance-settings", payload);
         showToast("تنظیمات گزارش عملکرد ذخیره شد.", "success");
         await loadPerformanceReportsSection();
       } catch (error) {
         showToast(error.message, "error");
+      } finally {
+        if (submitButton) submitButton.disabled = false;
       }
     });
   }
@@ -1824,7 +1828,7 @@ const renderPerformanceAdminTable = (rows) => {
   }
   return `<div class="table-wrap"><table class="data-table review-list-table">
     <thead><tr>
-      <th>نهاد</th><th>سال</th><th>نیمه</th><th>فایل</th><th>وضعیت</th><th>دلیل رد</th><th>عملیات</th>
+      <th>نهاد</th><th>سال</th><th>نیمه</th><th>فایل</th><th>وضعیت</th><th>دلیل رد</th>${canWrite ? "<th>عملیات</th>" : ""}
     </tr></thead>
     <tbody>${rows.map((row) => `<tr>
       <td>${escapeHtml(row.team_name || "—")}<div class="hint">${escapeHtml(row.entity_code || "")}</div></td>
@@ -1833,12 +1837,12 @@ const renderPerformanceAdminTable = (rows) => {
       <td><a class="text-link" href="${escapeHtml(row.download_url)}" target="_blank" rel="noopener">${escapeHtml(row.original_name || "دانلود")}</a></td>
       <td>${docStatusBadge(row.status)}</td>
       <td class="reject-hint">${escapeHtml(row.rejection_reason || "—")}</td>
-      <td>${row.status === "pending" && canWrite ? `<div class="review-list-actions">
+      ${canWrite ? `<td>${row.status === "pending" ? `<div class="review-list-actions">
           <button type="button" class="button" data-approve-report="${row.id}">تأیید</button>
           <button type="button" class="button danger ghost" data-reject-report="${row.id}">رد</button>
-        </div>` : "—"}</td>
+        </div>` : "—"}</td>` : ""}
     </tr>`).join("")}</tbody>
-  </table></div>`;
+  </table></div>${canWrite ? "" : `<p class="hint">فقط مدیر ویرایشگر می‌تواند تأیید یا رد کند.</p>`}`;
 };
 
 const loadPerformanceReportsSection = async () => {
@@ -1874,24 +1878,22 @@ const loadPerformanceReportsSection = async () => {
 
     host.querySelectorAll("[data-approve-report]").forEach((button) => {
       button.addEventListener("click", async () => {
+        button.disabled = true;
         try {
           await postJson("api.php?resource=performance-reports&action=approve", { id: Number(button.dataset.approveReport) });
           showToast("گزارش تأیید شد.", "success");
           await loadPerformanceReportsSection();
         } catch (error) {
           showToast(error.message, "error");
+          button.disabled = false;
         }
       });
     });
     host.querySelectorAll("[data-reject-report]").forEach((button) => {
       button.addEventListener("click", async () => {
-        const reason = window.prompt("دلیل رد گزارش:");
-        if (reason === null) return;
-        if (!String(reason).trim()) {
-          showToast("دلیل رد الزامی است.", "error");
-          return;
-        }
+        button.disabled = true;
         try {
+          const reason = await askRejectReason({ required: true, title: "رد گزارش عملکرد" });
           await postJson("api.php?resource=performance-reports&action=reject", {
             id: Number(button.dataset.rejectReport),
             reason: String(reason).trim(),
@@ -1899,7 +1901,8 @@ const loadPerformanceReportsSection = async () => {
           showToast("گزارش رد شد.", "success");
           await loadPerformanceReportsSection();
         } catch (error) {
-          showToast(error.message, "error");
+          if (error.message !== "cancelled") showToast(error.message, "error");
+          button.disabled = false;
         }
       });
     });
@@ -1912,32 +1915,36 @@ const loadPerformanceReportsSection = async () => {
     host.innerHTML = renderEmptyState("بخش گزارش عملکرد فعلاً توسط مرکز غیرفعال است.", { icon: "inbox" });
     return;
   }
-  const guide = data.settings?.performance_report_guide || "";
+  const guide = String(data.settings?.performance_report_guide || "").trim();
   host.classList.add("is-ready");
   host.innerHTML = `
-    <p class="hint">${escapeHtml(guide)}</p>
+    ${guide ? `<p class="hint">${escapeHtml(guide)}</p>` : ""}
     <div class="table-wrap"><table class="data-table review-list-table">
-      <thead><tr><th>نیمه</th><th>بازه ارسال</th><th>وضعیت</th><th>فایل</th><th>ارسال / اصلاحیه</th></tr></thead>
+      <thead><tr><th>سال</th><th>نیمه</th><th>بازه ارسال</th><th>وضعیت</th><th>فایل</th><th>ارسال / اصلاحیه</th></tr></thead>
       <tbody>${(data.periods || []).map((period) => {
         const report = period.report;
+        const periodYear = String(period.fiscal_year || data.fiscal_year || "");
         const canSubmit = Boolean(period.can_submit) && (!report || report.status === "rejected");
-        const windowText = period.window?.open_from && period.window?.open_until
+        const windowConfigured = Boolean(period.window_configured)
+          || (period.window?.open_from && period.window?.open_until);
+        const windowText = windowConfigured
           ? `${period.window.open_from} تا ${period.window.open_until}`
-          : "تعیین‌نشده";
-        let actionCell = `<span class="hint">فعلاً باز نیست</span>`;
+          : "اعلام‌نشده";
+        let actionCell = windowConfigured
+          ? `<span class="hint">خارج از بازه ارسال</span>`
+          : `<span class="hint">بازه ارسال هنوز اعلام نشده</span>`;
         if (canSubmit) {
           actionCell = `<label class="contract-file-upload">
               <span>${report ? "انتخاب فایل اصلاحی" : "انتخاب فایل"}</span>
-              <input type="file" data-performance-upload data-period="${escapeHtml(period.period)}" data-year="${escapeHtml(data.fiscal_year)}" accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx" />
+              <input type="file" data-performance-upload data-period="${escapeHtml(period.period)}" data-year="${escapeHtml(periodYear)}" accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx" />
             </label>`;
         } else if (report?.status === "pending") {
           actionCell = `<span class="hint">در انتظار تأیید مرکز</span>`;
         } else if (report?.status === "approved") {
-          actionCell = `<span class="hint">تأیید شده</span>`;
-        } else if (period.can_submit) {
-          actionCell = "—";
+          actionCell = `<span class="hint">تأیید‌شده</span>`;
         }
         return `<tr>
+          <td>${escapeHtml(periodYear)}</td>
           <td>${escapeHtml(period.period_label)}</td>
           <td>${escapeHtml(windowText)}</td>
           <td>${report ? docStatusBadge(report.status) : `<span class="badge">ارسال‌نشده</span>`}</td>
@@ -1952,6 +1959,10 @@ const loadPerformanceReportsSection = async () => {
     input.addEventListener("change", async () => {
       const file = input.files?.[0];
       if (!file) return;
+      if (!window.confirm(`فایل «${file.name}» برای این نیمه ارسال شود؟`)) {
+        input.value = "";
+        return;
+      }
       const body = new FormData();
       body.append("file", file);
       body.append("fiscal_year", String(input.dataset.year || ""));
@@ -3637,7 +3648,9 @@ const askAccessCode = (memberName = "عضو") => new Promise((resolve, reject) =
   });
 });
 
-const askRejectReason = () => new Promise((resolve, reject) => {
+const askRejectReason = (options = {}) => new Promise((resolve, reject) => {
+  const required = options.required === true;
+  const title = options.title || "رد درخواست";
   let modal = document.getElementById("rejectModal");
   if (!modal) {
     document.body.insertAdjacentHTML("beforeend", `
@@ -3647,7 +3660,8 @@ const askRejectReason = () => new Promise((resolve, reject) => {
             <h2 id="rejectModalTitle">رد درخواست</h2>
             <button class="modal-close" type="button" data-reject-cancel aria-label="بستن">×</button>
           </div>
-          <label class="wide"><span>دلیل رد (اختیاری)</span><textarea id="rejectReasonInput" rows="3" placeholder="دلیل رد را بنویسید…"></textarea></label>
+          <label class="wide"><span id="rejectReasonLabel">دلیل رد (اختیاری)</span><textarea id="rejectReasonInput" rows="3" placeholder="دلیل رد را بنویسید…"></textarea></label>
+          <p class="hint reject-hint" id="rejectReasonError" hidden>دلیل رد الزامی است.</p>
           <div class="form-actions">
             <button type="button" class="button ghost" data-reject-cancel>انصراف</button>
             <button type="button" class="button danger" data-reject-confirm>رد کردن</button>
@@ -3661,6 +3675,12 @@ const askRejectReason = () => new Promise((resolve, reject) => {
   }
 
   const input = modal.querySelector("#rejectReasonInput");
+  const label = modal.querySelector("#rejectReasonLabel");
+  const error = modal.querySelector("#rejectReasonError");
+  const titleEl = modal.querySelector("#rejectModalTitle");
+  if (titleEl) titleEl.textContent = title;
+  if (label) label.textContent = required ? "دلیل رد (الزامی)" : "دلیل رد (اختیاری)";
+  if (error) error.hidden = true;
   input.value = "";
   modal.hidden = false;
   input.focus();
@@ -3683,6 +3703,11 @@ const askRejectReason = () => new Promise((resolve, reject) => {
   });
   modal.querySelector("[data-reject-confirm]").onclick = () => {
     const reason = input.value.trim();
+    if (required && !reason) {
+      if (error) error.hidden = false;
+      input.focus();
+      return;
+    }
     cleanup();
     resolve(reason);
   };
@@ -4489,12 +4514,18 @@ class DataTable extends HTMLElement {
       return;
     }
     if (button.dataset.action === "delete") {
-      if (!window.confirm("حذف شود؟")) return;
+      const deleteMessage = this.resource === "team_contracts"
+        ? "قرارداد و فایل‌های پیوست آن حذف شود؟ این عمل قابل بازگشت نیست."
+        : "حذف شود؟";
+      if (!window.confirm(deleteMessage)) return;
       try {
         await postJson(`api.php?resource=${encodeURIComponent(this.resource)}&action=delete`, { id });
         await this.load();
         await refreshAfterMutation(this.closest(".section")?.id || null);
-        showToast("حذف شد.", "success");
+        if (this.resource === "team_contracts") {
+          await loadPendingContractsQueue().catch(() => {});
+        }
+        showToast(this.resource === "team_contracts" ? "قرارداد و پیوست‌ها حذف شد." : "حذف شد.", "success");
       } catch (error) {
         showToast(error.message, "error");
       }

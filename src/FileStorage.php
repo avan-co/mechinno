@@ -172,10 +172,17 @@ final class FileStorage
             return $fallback;
         }
 
+        // Office Open XML files are often reported as zip — only accept that for docx/xlsx.
+        if (in_array($mime, ['application/zip', 'application/x-zip-compressed'], true)) {
+            if (!in_array($extension, ['docx', 'xlsx'], true)) {
+                throw new InvalidArgumentException('نوع فایل شناسایی‌شده مجاز نیست.');
+            }
+
+            return $fallback;
+        }
+
         $allowedMimes = array_unique(array_values(self::MIME_BY_EXTENSION));
-        $allowedMimes[] = 'application/zip'; // some docx/xlsx
         if (!in_array($mime, $allowedMimes, true) && !str_starts_with($mime, 'image/')) {
-            // Keep extension-based mime for office formats that finfo may report as zip.
             if (in_array($extension, ['docx', 'xlsx', 'doc', 'xls'], true)) {
                 return $fallback;
             }

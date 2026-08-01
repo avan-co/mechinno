@@ -88,8 +88,10 @@ final class ContractDocuments
         $official = (new TeamContracts($this->pdo))->contractForYear($teamId, $fiscalYear);
         $hasBothFiles = $byType[self::TYPE_MEMBERSHIP] !== null && $byType[self::TYPE_SETTLEMENT] !== null;
         // Team may submit a new package or a correction after rejection — not while pending review.
+        $proposalStatus = (string) ($proposal['status'] ?? '');
+        // Allow resubmit when rejected, or when an approved proposal was left without an official row.
         $canSubmit = $official === null
-            && ($proposal === null || (string) ($proposal['status'] ?? '') === 'rejected');
+            && ($proposal === null || in_array($proposalStatus, ['rejected', 'approved'], true));
 
         return [
             'team_id' => $teamId,
@@ -108,6 +110,46 @@ final class ContractDocuments
             'is_registered' => $official !== null,
             'doc_labels' => self::DOC_LABELS,
         ];
+    }
+
+    public function hasPendingProposal(int $teamId, string $fiscalYear): bool
+    {
+        $proposal = $this->proposalForTeamYear($teamId, $fiscalYear);
+
+        return $proposal !== null && (string) ($proposal['status'] ?? '') === 'pending';
+    }
+
+    /**
+     * When admin registers an official contract directly, clear any pending proposal for that year.
+     */
+    public function syncPendingProposalWithOfficial(int $teamId, string $fiscalYear): void
+    {
+        if (!Schema::tableExists($this->pdo, 'team_contract_proposals')) {
+            return;
+        }
+        $fiscalYear = JalaliDate::normalizeDigits($fiscalYear);
+        $proposal = $this->proposalForTeamYear($teamId, $fiscalYear);
+        if (!$proposal || (string) ($proposal['status'] ?? '') !== 'pending') {
+            return;
+        }
+        $now = date('c');
+        $existingNotes = trim((string) ($proposal['notes'] ?? ''));
+        $syncNote = 'هم‌تراز با ثبت مستقیم مرکز';
+        $notes = $existingNotes === '' ? $syncNote : ($existingNotes . ' — ' . $syncNote);
+        $this->pdo->prepare(
+            "UPDATE team_contract_proposals
+             SET status = 'approved',
+                 rejection_reason = NULL,
+                 notes = :notes,
+                 reviewed_at = :reviewed_at,
+                 updated_at = :updated_at
+             WHERE id = :id"
+        )->execute([
+            'notes' => $notes,
+            'reviewed_at' => $now,
+            'updated_at' => $now,
+            'id' => (int) $proposal['id'],
+        ]);
     }
 
     /**
@@ -168,9 +210,13 @@ final class ContractDocuments
         $now = date('c');
         $role = Access::role();
         $userId = Access::userId();
-        $status = ($asApproved || Access::canWrite()) ? 'approved' : 'pending';
         if (!Access::canWrite() && !Access::canTeamSubmit()) {
             throw new InvalidArgumentException('دسترسی کافی برای آپلود قرارداد ندارید.');
+        }
+        // Respect caller flag: admin profile upload may keep pending while a package is under review.
+        $status = $asApproved ? 'approved' : 'pending';
+        if (!$asApproved && Access::canWrite() && !$this->hasPendingProposal($teamId, $fiscalYear)) {
+            $status = 'approved';
         }
 
         $existing = $this->fileRow($teamId, $fiscalYear, $docType);
@@ -259,25 +305,28 @@ final class ContractDocuments
 
         $fiscalYear = $this->normalizeYear((string) ($payload['fiscal_year'] ?? ''));
         $official = (new TeamContracts($this->pdo))->contractForYear($teamId, $fiscalYear);
-        if ($official !== null && Access::isTeam()) {
+        if ($official !== null) {
             throw new InvalidArgumentException('قرارداد این سال قبلاً در سامانه ثبت شده است و ارسال مجدد مجاز نیست.');
         }
 
         $existingProposal = $this->proposalForTeamYear($teamId, $fiscalYear);
-        if ($existingProposal && Access::isTeam()) {
+        if ($existingProposal) {
             $proposalStatus = (string) ($existingProposal['status'] ?? '');
-            if ($proposalStatus === 'approved') {
-                throw new InvalidArgumentException('قرارداد این سال قبلاً تأیید شده است.');
-            }
             if ($proposalStatus === 'pending') {
                 throw new InvalidArgumentException('پیشنهاد این سال در انتظار تأیید مرکز است و ارسال مجدد مجاز نیست.');
             }
         }
 
-        if (!is_array($membershipUpload) || (int) ($membershipUpload['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+        $membershipProvided = is_array($membershipUpload)
+            && (int) ($membershipUpload['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE;
+        $settlementProvided = is_array($settlementUpload)
+            && (int) ($settlementUpload['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE;
+        $existingMembership = $this->fileRow($teamId, $fiscalYear, self::TYPE_MEMBERSHIP);
+        $existingSettlement = $this->fileRow($teamId, $fiscalYear, self::TYPE_SETTLEMENT);
+        if (!$membershipProvided && !$existingMembership) {
             throw new InvalidArgumentException('آپلود قرارداد عضویت الزامی است.');
         }
-        if (!is_array($settlementUpload) || (int) ($settlementUpload['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+        if (!$settlementProvided && !$existingSettlement) {
             throw new InvalidArgumentException('آپلود قرارداد استقرار الزامی است.');
         }
 
@@ -299,77 +348,119 @@ final class ContractDocuments
         $notes = trim((string) ($payload['notes'] ?? ''));
         $now = date('c');
 
-        // Store both attachments first (pending for team, approved only when admin uploads outside package).
-        $this->upsertFile($teamId, $fiscalYear, self::TYPE_MEMBERSHIP, $membershipUpload, false);
-        $this->upsertFile($teamId, $fiscalYear, self::TYPE_SETTLEMENT, $settlementUpload, false);
+        // Stage both new files on disk first so a later failure cannot leave half-updated DB.
+        $staged = [];
+        $oldPaths = [];
+        try {
+            if ($membershipProvided) {
+                $staged[self::TYPE_MEMBERSHIP] = FileStorage::storeUpload($membershipUpload, 'contracts');
+                if ($existingMembership) {
+                    $oldPaths[] = (string) ($existingMembership['stored_path'] ?? '');
+                }
+            }
+            if ($settlementProvided) {
+                $staged[self::TYPE_SETTLEMENT] = FileStorage::storeUpload($settlementUpload, 'contracts');
+                if ($existingSettlement) {
+                    $oldPaths[] = (string) ($existingSettlement['stored_path'] ?? '');
+                }
+            }
 
-        // Force pending status on both files for package review.
-        $this->pdo->prepare(
-            "UPDATE team_contract_files
-             SET status = 'pending', rejection_reason = NULL, submitted_at = :submitted_at, reviewed_at = NULL, updated_at = :updated_at
-             WHERE team_id = :team_id AND fiscal_year = :fiscal_year"
-        )->execute([
-            'submitted_at' => $now,
-            'updated_at' => $now,
-            'team_id' => $teamId,
-            'fiscal_year' => $fiscalYear,
-        ]);
+            $started = false;
+            if (!$this->pdo->inTransaction()) {
+                $this->pdo->beginTransaction();
+                $started = true;
+            }
+            try {
+                foreach ($staged as $docType => $stored) {
+                    $this->persistStoredFile($teamId, $fiscalYear, $docType, $stored, 'pending', $now);
+                }
 
-        if ($existingProposal) {
-            $statement = $this->pdo->prepare(
-                'UPDATE team_contract_proposals SET
-                    contract_start = :contract_start,
-                    contract_end = :contract_end,
-                    formal_contract_amount = :formal_contract_amount,
-                    charge_rate_override = :charge_rate_override,
-                    informal_rent_rate_override = :informal_rent_rate_override,
-                    notes = :notes,
-                    status = :status,
-                    rejection_reason = NULL,
-                    submitted_at = :submitted_at,
-                    reviewed_at = NULL,
-                    updated_at = :updated_at
-                 WHERE id = :id'
-            );
-            $statement->execute([
-                'contract_start' => $contractStart,
-                'contract_end' => $contractEnd,
-                'formal_contract_amount' => $amount,
-                'charge_rate_override' => $chargeOverride,
-                'informal_rent_rate_override' => $rentOverride,
-                'notes' => $notes !== '' ? $notes : null,
-                'status' => 'pending',
-                'submitted_at' => $now,
-                'updated_at' => $now,
-                'id' => (int) $existingProposal['id'],
-            ]);
-            $id = (int) $existingProposal['id'];
-        } else {
-            $statement = $this->pdo->prepare(
-                'INSERT INTO team_contract_proposals
-                    (team_id, fiscal_year, contract_start, contract_end, formal_contract_amount,
-                     charge_rate_override, informal_rent_rate_override, notes, status,
-                     submitted_at, created_at, updated_at)
-                 VALUES
-                    (:team_id, :fiscal_year, :contract_start, :contract_end, :formal_contract_amount,
-                     :charge_rate_override, :informal_rent_rate_override, :notes, :status,
-                     :submitted_at, :created_at, :updated_at)'
-            );
-            $statement->execute([
-                'team_id' => $teamId,
-                'fiscal_year' => $fiscalYear,
-                'contract_start' => $contractStart,
-                'contract_end' => $contractEnd,
-                'formal_contract_amount' => $amount,
-                'charge_rate_override' => $chargeOverride,
-                'informal_rent_rate_override' => $rentOverride,
-                'notes' => $notes !== '' ? $notes : null,
-                'status' => 'pending',
-                'submitted_at' => $now,
-                'created_at' => $now,
-                'updated_at' => $now,
-            ]);
-            $id = (int) $this->pdo->lastInsertId();
+                $this->pdo->prepare(
+                    "UPDATE team_contract_files
+                     SET status = 'pending', rejection_reason = NULL, submitted_at = :submitted_at, reviewed_at = NULL, updated_at = :updated_at
+                     WHERE team_id = :team_id AND fiscal_year = :fiscal_year"
+                )->execute([
+                    'submitted_at' => $now,
+                    'updated_at' => $now,
+                    'team_id' => $teamId,
+                    'fiscal_year' => $fiscalYear,
+                ]);
+
+                if ($existingProposal) {
+                    $this->pdo->prepare(
+                        'UPDATE team_contract_proposals SET
+                            contract_start = :contract_start,
+                            contract_end = :contract_end,
+                            formal_contract_amount = :formal_contract_amount,
+                            charge_rate_override = :charge_rate_override,
+                            informal_rent_rate_override = :informal_rent_rate_override,
+                            notes = :notes,
+                            status = :status,
+                            rejection_reason = NULL,
+                            submitted_at = :submitted_at,
+                            reviewed_at = NULL,
+                            updated_at = :updated_at
+                         WHERE id = :id'
+                    )->execute([
+                        'contract_start' => $contractStart,
+                        'contract_end' => $contractEnd,
+                        'formal_contract_amount' => $amount,
+                        'charge_rate_override' => $chargeOverride,
+                        'informal_rent_rate_override' => $rentOverride,
+                        'notes' => $notes !== '' ? $notes : null,
+                        'status' => 'pending',
+                        'submitted_at' => $now,
+                        'updated_at' => $now,
+                        'id' => (int) $existingProposal['id'],
+                    ]);
+                    $id = (int) $existingProposal['id'];
+                } else {
+                    $this->pdo->prepare(
+                        'INSERT INTO team_contract_proposals
+                            (team_id, fiscal_year, contract_start, contract_end, formal_contract_amount,
+                             charge_rate_override, informal_rent_rate_override, notes, status,
+                             submitted_at, created_at, updated_at)
+                         VALUES
+                            (:team_id, :fiscal_year, :contract_start, :contract_end, :formal_contract_amount,
+                             :charge_rate_override, :informal_rent_rate_override, :notes, :status,
+                             :submitted_at, :created_at, :updated_at)'
+                    )->execute([
+                        'team_id' => $teamId,
+                        'fiscal_year' => $fiscalYear,
+                        'contract_start' => $contractStart,
+                        'contract_end' => $contractEnd,
+                        'formal_contract_amount' => $amount,
+                        'charge_rate_override' => $chargeOverride,
+                        'informal_rent_rate_override' => $rentOverride,
+                        'notes' => $notes !== '' ? $notes : null,
+                        'status' => 'pending',
+                        'submitted_at' => $now,
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ]);
+                    $id = (int) $this->pdo->lastInsertId();
+                }
+
+                if ($started) {
+                    $this->pdo->commit();
+                }
+            } catch (Throwable $error) {
+                if ($started && $this->pdo->inTransaction()) {
+                    $this->pdo->rollBack();
+                }
+                throw $error;
+            }
+        } catch (Throwable $error) {
+            foreach ($staged as $stored) {
+                FileStorage::deleteRelative((string) ($stored['relative_path'] ?? ''));
+            }
+            throw $error;
+        }
+
+        foreach ($oldPaths as $oldPath) {
+            if ($oldPath !== '') {
+                FileStorage::deleteRelative($oldPath);
+            }
         }
 
         return $this->yearBundle($teamId, $fiscalYear) + ['proposal_id' => $id];
@@ -398,6 +489,11 @@ final class ContractDocuments
             throw new InvalidArgumentException('تأیید قرارداد بدون هر دو پیوست (عضویت و استقرار) ممکن نیست.');
         }
 
+        $contracts = new TeamContracts($this->pdo);
+        if ($contracts->contractForYear($teamId, $fiscalYear)) {
+            throw new InvalidArgumentException('برای این سال قبلاً قرارداد رسمی ثبت شده است. ابتدا همان قرارداد را ویرایش یا حذف کنید.');
+        }
+
         $payload = [
             'team_id' => (string) $teamId,
             'fiscal_year' => $fiscalYear,
@@ -409,32 +505,42 @@ final class ContractDocuments
             'notes' => (string) ($row['notes'] ?? ''),
         ];
 
-        $contracts = new TeamContracts($this->pdo);
-        $existingContract = $contracts->contractForYear($teamId, $fiscalYear);
-        $crud = new Crud($this->pdo);
-        if ($existingContract) {
-            $crud->update('team_contracts', (int) $existingContract['id'], $payload);
-        } else {
-            $crud->create('team_contracts', $payload);
+        $started = false;
+        if (!$this->pdo->inTransaction()) {
+            $this->pdo->beginTransaction();
+            $started = true;
         }
+        try {
+            $now = date('c');
+            // Mark proposal approved before creating the official row so create-time sync is a no-op.
+            $this->pdo->prepare(
+                "UPDATE team_contract_proposals
+                 SET status = 'approved', rejection_reason = NULL, reviewed_at = :reviewed_at, updated_at = :updated_at
+                 WHERE id = :id"
+            )->execute(['reviewed_at' => $now, 'updated_at' => $now, 'id' => $proposalId]);
 
-        $now = date('c');
-        $this->pdo->prepare(
-            "UPDATE team_contract_proposals
-             SET status = 'approved', rejection_reason = NULL, reviewed_at = :reviewed_at, updated_at = :updated_at
-             WHERE id = :id"
-        )->execute(['reviewed_at' => $now, 'updated_at' => $now, 'id' => $proposalId]);
+            $this->pdo->prepare(
+                "UPDATE team_contract_files
+                 SET status = 'approved', rejection_reason = NULL, reviewed_at = :reviewed_at, updated_at = :updated_at
+                 WHERE team_id = :team_id AND fiscal_year = :fiscal_year"
+            )->execute([
+                'reviewed_at' => $now,
+                'updated_at' => $now,
+                'team_id' => $teamId,
+                'fiscal_year' => $fiscalYear,
+            ]);
 
-        $this->pdo->prepare(
-            "UPDATE team_contract_files
-             SET status = 'approved', rejection_reason = NULL, reviewed_at = :reviewed_at, updated_at = :updated_at
-             WHERE team_id = :team_id AND fiscal_year = :fiscal_year"
-        )->execute([
-            'reviewed_at' => $now,
-            'updated_at' => $now,
-            'team_id' => $teamId,
-            'fiscal_year' => $fiscalYear,
-        ]);
+            (new Crud($this->pdo))->create('team_contracts', $payload);
+
+            if ($started) {
+                $this->pdo->commit();
+            }
+        } catch (Throwable $error) {
+            if ($started && $this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            throw $error;
+        }
 
         return $this->yearBundle($teamId, $fiscalYear);
     }
@@ -560,7 +666,10 @@ final class ContractDocuments
             $bundle = $this->yearBundle((int) $presented['team_id'], (string) $presented['fiscal_year']);
             $presented['files'] = $bundle['files'];
             $presented['has_both_files'] = (bool) ($bundle['has_both_files'] ?? false);
-            $presented['can_approve'] = $status === 'pending' && (bool) ($bundle['has_both_files'] ?? false);
+            $presented['has_official'] = (bool) ($bundle['is_registered'] ?? false);
+            $presented['can_approve'] = $status === 'pending'
+                && (bool) ($bundle['has_both_files'] ?? false)
+                && !($bundle['is_registered'] ?? false);
             $rows[] = $presented;
         }
 
@@ -577,14 +686,15 @@ final class ContractDocuments
             return;
         }
 
+        $paths = [];
         if (Schema::tableExists($this->pdo, 'team_contract_files')) {
             $statement = $this->pdo->prepare(
-                'SELECT id, stored_path FROM team_contract_files
+                'SELECT stored_path FROM team_contract_files
                  WHERE team_id = :team_id AND fiscal_year = :fiscal_year'
             );
             $statement->execute(['team_id' => $teamId, 'fiscal_year' => $fiscalYear]);
             foreach ($statement->fetchAll() ?: [] as $row) {
-                FileStorage::deleteRelative((string) ($row['stored_path'] ?? ''));
+                $paths[] = (string) ($row['stored_path'] ?? '');
             }
             $this->pdo->prepare(
                 'DELETE FROM team_contract_files WHERE team_id = :team_id AND fiscal_year = :fiscal_year'
@@ -596,6 +706,84 @@ final class ContractDocuments
                 'DELETE FROM team_contract_proposals WHERE team_id = :team_id AND fiscal_year = :fiscal_year'
             )->execute(['team_id' => $teamId, 'fiscal_year' => $fiscalYear]);
         }
+
+        // Unlink after DB deletes so a crash mid-way cannot leave approved proposals without an official contract.
+        foreach ($paths as $path) {
+            if ($path !== '') {
+                FileStorage::deleteRelative($path);
+            }
+        }
+    }
+
+    /**
+     * @param array{original_name:string, relative_path:string, mime:string, size_bytes:int} $stored
+     */
+    private function persistStoredFile(
+        int $teamId,
+        string $fiscalYear,
+        string $docType,
+        array $stored,
+        string $status,
+        string $now
+    ): void {
+        $existing = $this->fileRow($teamId, $fiscalYear, $docType);
+        $role = Access::role();
+        $userId = Access::userId();
+        if ($existing) {
+            $this->pdo->prepare(
+                'UPDATE team_contract_files SET
+                    original_name = :original_name,
+                    stored_path = :stored_path,
+                    mime = :mime,
+                    size_bytes = :size_bytes,
+                    status = :status,
+                    rejection_reason = NULL,
+                    uploaded_by_role = :uploaded_by_role,
+                    uploaded_by_user_id = :uploaded_by_user_id,
+                    submitted_at = :submitted_at,
+                    reviewed_at = :reviewed_at,
+                    updated_at = :updated_at
+                 WHERE id = :id'
+            )->execute([
+                'original_name' => $stored['original_name'],
+                'stored_path' => $stored['relative_path'],
+                'mime' => $stored['mime'],
+                'size_bytes' => $stored['size_bytes'],
+                'status' => $status,
+                'uploaded_by_role' => $role,
+                'uploaded_by_user_id' => $userId > 0 ? $userId : null,
+                'submitted_at' => $now,
+                'reviewed_at' => $status === 'approved' ? $now : null,
+                'updated_at' => $now,
+                'id' => (int) $existing['id'],
+            ]);
+
+            return;
+        }
+
+        $this->pdo->prepare(
+            'INSERT INTO team_contract_files
+                (team_id, fiscal_year, doc_type, original_name, stored_path, mime, size_bytes, status,
+                 uploaded_by_role, uploaded_by_user_id, submitted_at, reviewed_at, created_at, updated_at)
+             VALUES
+                (:team_id, :fiscal_year, :doc_type, :original_name, :stored_path, :mime, :size_bytes, :status,
+                 :uploaded_by_role, :uploaded_by_user_id, :submitted_at, :reviewed_at, :created_at, :updated_at)'
+        )->execute([
+            'team_id' => $teamId,
+            'fiscal_year' => $fiscalYear,
+            'doc_type' => $docType,
+            'original_name' => $stored['original_name'],
+            'stored_path' => $stored['relative_path'],
+            'mime' => $stored['mime'],
+            'size_bytes' => $stored['size_bytes'],
+            'status' => $status,
+            'uploaded_by_role' => $role,
+            'uploaded_by_user_id' => $userId > 0 ? $userId : null,
+            'submitted_at' => $now,
+            'reviewed_at' => $status === 'approved' ? $now : null,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
     }
 
     /**

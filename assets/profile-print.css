@@ -112,7 +112,7 @@ body {
 }
 
 .sheet-stamp {
-  text-align: left;
+  text-align: right;
   border: 1px solid var(--line);
   border-radius: 12px;
   padding: 0.65rem 0.8rem;
@@ -131,7 +131,6 @@ body {
 
 .block {
   margin: 0 0 14px;
-  break-inside: avoid;
 }
 
 .block h2 {
@@ -140,6 +139,11 @@ body {
   color: var(--accent);
   border-bottom: 1px solid var(--line);
   padding-bottom: 4px;
+  break-after: avoid;
+}
+
+.block tr {
+  break-inside: avoid;
 }
 
 .info-grid {

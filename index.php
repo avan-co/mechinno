@@ -406,17 +406,15 @@ $assetVer = (string) max(
             <section id="performance-reports" class="section">
               <div class="section-intro section-intro--blue">
                 <span class="section-intro-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 4h14v16H5V4Zm2 2v2h10V6H7Zm0 4v8h10v-8H7Zm2 2h6v2H9v-2Z" fill="currentColor"/></svg></span>
-                <div class="section-intro-copy"><p>گزارش‌های عملکرد ۶ماهه — ابتدا در انتظار، سپس تأیید/رد. موارد ردشده جدا فهرست می‌شوند.</p></div>
+                <div class="section-intro-copy"><p>گزارش‌های عملکرد ۶ماهه را با فیلتر وضعیت بررسی کنید. تأیید و رد فقط برای مدیر ویرایشگر فعال است.</p></div>
               </div>
               <article class="panel">
-                <div class="panel-head">
-                  <h2>گزارش‌های عملکرد</h2>
-                  <div class="filter-tabs" id="performanceStatusTabs" role="tablist" aria-label="فیلتر وضعیت گزارش">
-                    <button type="button" class="filter-tab active" data-perf-filter="pending" role="tab" aria-selected="true">در انتظار</button>
-                    <button type="button" class="filter-tab" data-perf-filter="approved" role="tab" aria-selected="false">تأییدشده</button>
-                    <button type="button" class="filter-tab" data-perf-filter="rejected" role="tab" aria-selected="false">ردشده</button>
-                    <button type="button" class="filter-tab" data-perf-filter="all" role="tab" aria-selected="false">همه</button>
-                  </div>
+                <div class="panel-head"><h2>گزارش‌های عملکرد</h2></div>
+                <div class="filter-tabs" id="performanceStatusTabs" role="tablist" aria-label="فیلتر وضعیت گزارش">
+                  <button type="button" class="filter-tab active" data-perf-filter="pending" role="tab" aria-selected="true">در انتظار</button>
+                  <button type="button" class="filter-tab" data-perf-filter="approved" role="tab" aria-selected="false">تأیید‌شده</button>
+                  <button type="button" class="filter-tab" data-perf-filter="rejected" role="tab" aria-selected="false">رد‌شده</button>
+                  <button type="button" class="filter-tab" data-perf-filter="all" role="tab" aria-selected="false">همه</button>
                 </div>
                 <div id="performanceReportsContent" class="review-list-host">در حال بارگذاری…</div>
               </article>
@@ -437,6 +435,7 @@ $assetVer = (string) max(
                   <label><span>پایان ارسال نیمه اول</span><input name="performance_h1_open_until" type="text" placeholder="1405/09/30" dir="ltr" class="ltr-input" /></label>
                   <label><span>شروع ارسال نیمه دوم</span><input name="performance_h2_open_from" type="text" placeholder="1406/01/01" dir="ltr" class="ltr-input" /></label>
                   <label><span>پایان ارسال نیمه دوم</span><input name="performance_h2_open_until" type="text" placeholder="1406/03/31" dir="ltr" class="ltr-input" /></label>
+                  <p class="hint wide">نیمه دوم سال ۱۴۰۵ معمولاً در بهار ۱۴۰۶ باز می‌شود؛ سامانه همان سال عملکرد (نه سال تقویمی ارسال) را ثبت می‌کند.</p>
                   <label class="wide"><span>راهنمای فرمت برای نهادها</span><textarea name="performance_report_guide" rows="3" placeholder="فرمت فایل و نکات تکمیل گزارش"></textarea></label>
                   <div class="form-actions wide"><button class="button" type="submit">ذخیره تنظیمات</button></div>
                 </form>

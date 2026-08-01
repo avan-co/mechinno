@@ -339,10 +339,7 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
                 <div class="section-intro-copy"><p>خلاصه سالانه نهاد، میزها و بدهی — ارسال و مدیریت قراردادها فقط از بخش <strong>قراردادها</strong> انجام می‌شود.</p></div>
               </div>
               <article class="panel">
-                <div class="panel-head">
-                  <h2>پروفایل و سوابق سالانه</h2>
-                  <a class="button ghost" href="profile-print.php" target="_blank" rel="noopener">چاپ پروفایل A4</a>
-                </div>
+                <div class="panel-head"><h2>پروفایل و سوابق سالانه</h2></div>
                 <div id="teamProfileContent" class="team-profile-content">در حال بارگذاری…</div>
               </article>
             </section>
@@ -354,7 +351,7 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
               </div>
               <article class="panel">
                 <div class="panel-head"><h2>قراردادهای نهاد</h2></div>
-                <div id="teamContractsContent">در حال بارگذاری…</div>
+                <div id="teamContractsContent" class="review-list-host">در حال بارگذاری…</div>
               </article>
             </section>
 
@@ -390,7 +387,7 @@ $entityLabel = $entityLabels[$team['entity_type'] ?? 'team'] ?? 'نهاد';
               </div>
               <article class="panel">
                 <div class="panel-head"><h2>گزارش عملکرد</h2></div>
-                <div id="performanceReportsContent">در حال بارگذاری…</div>
+                <div id="performanceReportsContent" class="review-list-host">در حال بارگذاری…</div>
               </article>
             </section>
 

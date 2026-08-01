@@ -578,13 +578,11 @@ final class Crud
         }
         if ($resource === 'team_contracts') {
             $record = $this->find($resource, $id);
-            (new TeamContracts($this->pdo))->syncTeamContractCache((int) ($data['team_id'] ?? 0));
-            $this->syncChargesForTeam(
-                (int) ($record['team_id'] ?? $data['team_id'] ?? 0),
-                [
-                    'fiscal_year' => (string) ($record['fiscal_year'] ?? $data['fiscal_year'] ?? ''),
-                ]
-            );
+            $teamId = (int) ($record['team_id'] ?? $data['team_id'] ?? 0);
+            $fiscalYear = (string) ($record['fiscal_year'] ?? $data['fiscal_year'] ?? '');
+            (new TeamContracts($this->pdo))->syncTeamContractCache($teamId);
+            (new ContractDocuments($this->pdo))->syncPendingProposalWithOfficial($teamId, $fiscalYear);
+            $this->syncChargesForTeam($teamId, ['fiscal_year' => $fiscalYear]);
         }
 
         return $this->find($resource, $id);
@@ -672,13 +670,11 @@ final class Crud
         }
         if ($resource === 'team_contracts') {
             $record = $this->find($resource, $id);
-            (new TeamContracts($this->pdo))->syncTeamContractCache((int) ($record['team_id'] ?? $data['team_id'] ?? 0));
-            $this->syncChargesForTeam(
-                (int) ($record['team_id'] ?? $data['team_id'] ?? 0),
-                [
-                    'fiscal_year' => (string) ($record['fiscal_year'] ?? $data['fiscal_year'] ?? ''),
-                ]
-            );
+            $teamId = (int) ($record['team_id'] ?? $data['team_id'] ?? 0);
+            $fiscalYear = (string) ($record['fiscal_year'] ?? $data['fiscal_year'] ?? '');
+            (new TeamContracts($this->pdo))->syncTeamContractCache($teamId);
+            (new ContractDocuments($this->pdo))->syncPendingProposalWithOfficial($teamId, $fiscalYear);
+            $this->syncChargesForTeam($teamId, ['fiscal_year' => $fiscalYear]);
         }
 
         return $this->find($resource, $id);
@@ -709,9 +705,26 @@ final class Crud
             $record = $this->find($resource, $id);
             $teamId = (int) ($record['team_id'] ?? 0);
             $fiscalYear = (string) ($record['fiscal_year'] ?? '');
-            $this->pdo->prepare(sprintf('DELETE FROM %s WHERE id = :id', $definition['table']))->execute(['id' => $id]);
+            $started = false;
+            if (!$this->pdo->inTransaction()) {
+                $this->pdo->beginTransaction();
+                $started = true;
+            }
+            try {
+                $this->pdo->prepare(sprintf('DELETE FROM %s WHERE id = :id', $definition['table']))->execute(['id' => $id]);
+                if ($teamId > 0) {
+                    (new ContractDocuments($this->pdo))->deleteForTeamYear($teamId, $fiscalYear);
+                }
+                if ($started) {
+                    $this->pdo->commit();
+                }
+            } catch (Throwable $error) {
+                if ($started && $this->pdo->inTransaction()) {
+                    $this->pdo->rollBack();
+                }
+                throw $error;
+            }
             if ($teamId > 0) {
-                (new ContractDocuments($this->pdo))->deleteForTeamYear($teamId, $fiscalYear);
                 (new TeamContracts($this->pdo))->syncTeamContractCache($teamId);
                 $this->syncChargesForTeam($teamId, ['fiscal_year' => $fiscalYear]);
             }

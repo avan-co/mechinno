@@ -305,6 +305,56 @@ $assert(($bundleAfterDelete['files']['membership'] ?? null) === null, 'membershi
 $assert(($bundleAfterDelete['files']['settlement'] ?? null) === null, 'settlement db row removed with contract');
 $assert(($bundleAfterDelete['proposal'] ?? null) === null, 'proposal removed with contract delete');
 
+// After rejection, team may resubmit metadata while keeping existing files.
+$_SESSION['mechinno_role'] = Access::ROLE_TEAM;
+$_SESSION['mechinno_team_id'] = 1;
+$resubmit = $contractDocs->submitPackage(1, [
+    'fiscal_year' => '1407',
+    'contract_start' => '1407/01/01',
+    'contract_end' => '1407/12/29',
+    'formal_contract_amount' => '750000',
+    'notes' => 'اصلاحیه بدون فایل جدید',
+], ['error' => UPLOAD_ERR_NO_FILE], ['error' => UPLOAD_ERR_NO_FILE]);
+$assert(($resubmit['proposal']['status'] ?? '') === 'pending', 'resubmit after reject keeps pending');
+$assert((int) ($resubmit['proposal']['formal_contract_amount'] ?? 0) === 750000, 'resubmit updates amount without new files');
+$assert(($resubmit['has_both_files'] ?? false) === true, 'resubmit reuses existing attachments');
+
+$_SESSION['mechinno_role'] = Access::ROLE_ADMIN_EDITOR;
+$perf = new PerformanceReports($pdo);
+$approvedReport = $perf->approve((int) $report['id']);
+$assert(($approvedReport['status'] ?? '') === 'approved', 'performance report approve works');
+
+$h2Year = null;
+$overview = $perf->teamOverview(1);
+foreach ($overview['periods'] as $periodRow) {
+    if (($periodRow['period'] ?? '') === 'h2') {
+        $h2Year = (string) ($periodRow['fiscal_year'] ?? '');
+    }
+}
+$assert($h2Year !== null && $h2Year !== '', 'performance overview exposes h2 fiscal year');
+
+$settingsError = false;
+try {
+    $perf->updateSettings([
+        'performance_reports_enabled' => 1,
+        'performance_h1_open_from' => '1405/09/01',
+        'performance_h1_open_until' => '1405/07/01',
+        'performance_h2_open_from' => '1406/01/01',
+        'performance_h2_open_until' => '1406/03/31',
+        'performance_report_guide' => 'x',
+    ]);
+} catch (InvalidArgumentException) {
+    $settingsError = true;
+}
+$assert($settingsError, 'performance settings reject inverted date window');
+
+$summaryAdmin = $repo->summary();
+$actionLabels = array_map(static fn (array $item): string => (string) ($item['label'] ?? ''), $summaryAdmin['action_items'] ?? []);
+$assert(
+    count(array_filter($actionLabels, static fn (string $label): bool => str_contains($label, 'قرارداد در انتظار'))) === 1,
+    'dashboard action item includes pending contracts'
+);
+
 $_SESSION['mechinno_role'] = Access::ROLE_TEAM;
 $_SESSION['mechinno_team_id'] = 1;
 

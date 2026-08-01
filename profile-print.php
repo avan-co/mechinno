@@ -55,6 +55,21 @@ $fmtMoney = static function (mixed $value): string {
     $n = (int) $value;
     return number_format($n) . ' ریال';
 };
+$usageLabels = [
+    'formal' => 'رسمی',
+    'informal' => 'موقت',
+    'mixed' => 'ترکیبی',
+];
+$approvalLabels = [
+    'approved' => 'تأیید‌شده',
+    'pending' => 'در انتظار',
+    'rejected' => 'رد‌شده',
+];
+$paymentStatusLabels = [
+    'approved' => 'تأیید‌شده',
+    'pending' => 'در انتظار',
+    'rejected' => 'رد‌شده',
+];
 ?>
 <!DOCTYPE html>
 <html lang="fa" dir="rtl">
@@ -75,7 +90,7 @@ $fmtMoney = static function (mixed $value): string {
     </div>
     <div class="print-toolbar-actions">
       <button type="button" onclick="window.print()">چاپ</button>
-      <button type="button" class="ghost" onclick="window.close()">بستن</button>
+      <button type="button" class="ghost" onclick="if (window.history.length > 1) history.back(); else window.close();">بازگشت</button>
     </div>
   </div>
 
@@ -97,8 +112,8 @@ $fmtMoney = static function (mixed $value): string {
       <div class="info-grid">
         <div><span>مسئول</span><strong><?= e((string) ($team['leader'] ?? '—')) ?></strong></div>
         <div><span>تماس</span><strong><?= e((string) ($team['phone'] ?? '—')) ?></strong></div>
-        <div><span>شروع قرارداد (کش)</span><strong><?= e((string) ($team['contract_start'] ?? '—')) ?></strong></div>
-        <div><span>پایان قرارداد (کش)</span><strong><?= e((string) ($team['contract_end'] ?? '—')) ?></strong></div>
+        <div><span>شروع قرارداد (کلی)</span><strong><?= e((string) ($team['contract_start'] ?? '—')) ?></strong></div>
+        <div><span>پایان قرارداد (کلی)</span><strong><?= e((string) ($team['contract_end'] ?? '—')) ?></strong></div>
         <div><span>جمع شارژ</span><strong><?= e($fmtMoney($summary['charge_total'] ?? 0)) ?></strong></div>
         <div><span>پرداخت‌شده</span><strong><?= e($fmtMoney($summary['paid_total'] ?? 0)) ?></strong></div>
         <div><span>مانده بدهی</span><strong><?= e($fmtMoney($summary['debt_total'] ?? 0)) ?></strong></div>
@@ -159,7 +174,7 @@ $fmtMoney = static function (mixed $value): string {
               <tr>
                 <td><?= e((string) ($row['fiscal_year'] ?? '—')) ?></td>
                 <td><?= e((string) ($row['desk_number'] ?? '—')) ?></td>
-                <td><?= e((string) ($row['usage_type'] ?? '—')) ?></td>
+                <td><?= e($usageLabels[(string) ($row['usage_type'] ?? '')] ?? (string) ($row['usage_type'] ?? '—')) ?></td>
                 <td><?= e((string) ($row['assignment_period'] ?? '—')) ?></td>
                 <td><?= e((string) ($row['notes'] ?? '—')) ?></td>
               </tr>
@@ -185,7 +200,7 @@ $fmtMoney = static function (mixed $value): string {
                 <td><?= e((string) ($row['full_name'] ?? '—')) ?></td>
                 <td><?= e((string) ($row['phone'] ?? '—')) ?></td>
                 <td><?= e((string) ($row['national_id'] ?? '—')) ?></td>
-                <td><?= e((string) ($row['approval_status'] ?? '—')) ?></td>
+                <td><?= e($approvalLabels[(string) ($row['approval_status'] ?? '')] ?? (string) ($row['approval_status'] ?? '—')) ?></td>
               </tr>
             <?php endforeach; ?>
           </tbody>
@@ -241,21 +256,29 @@ $fmtMoney = static function (mixed $value): string {
     </section>
 
     <section class="block">
-      <h2>دریافت‌های ثبت‌شده</h2>
-      <?php if (empty($profile['payments'])): ?>
-        <p class="empty">پرداختی ثبت نشده است.</p>
+      <h2>دریافت‌های تأیید‌شده</h2>
+      <?php
+        $approvedPayments = array_values(array_filter(
+            $profile['payments'] ?? [],
+            static fn (array $row): bool => (string) ($row['payment_status'] ?? '') === 'approved'
+                && (int) ($row['confirmed'] ?? 0) === 1
+        ));
+      ?>
+      <?php if ($approvedPayments === []): ?>
+        <p class="empty">پرداخت تأیید‌شده‌ای ثبت نشده است.</p>
       <?php else: ?>
         <table>
           <thead>
-            <tr><th>تاریخ</th><th>سال</th><th>ماه</th><th>مبلغ</th></tr>
+            <tr><th>تاریخ</th><th>سال</th><th>ماه</th><th>مبلغ</th><th>وضعیت</th></tr>
           </thead>
           <tbody>
-            <?php foreach ($profile['payments'] as $row): ?>
+            <?php foreach ($approvedPayments as $row): ?>
               <tr>
                 <td><?= e((string) ($row['tx_date'] ?? '—')) ?></td>
                 <td><?= e((string) ($row['fiscal_year'] ?? '—')) ?></td>
                 <td><?= e((string) ($row['month_name'] ?? $row['month_index'] ?? '—')) ?></td>
                 <td><?= e($fmtMoney($row['amount'] ?? 0)) ?></td>
+                <td><?= e($paymentStatusLabels[(string) ($row['payment_status'] ?? '')] ?? 'تأیید‌شده') ?></td>
               </tr>
             <?php endforeach; ?>
           </tbody>

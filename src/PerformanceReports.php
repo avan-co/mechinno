@@ -71,6 +71,16 @@ final class PerformanceReports
         $h2Until = $this->optionalDate($payload['performance_h2_open_until'] ?? $current['performance_h2_open_until']);
         $guide = trim((string) ($payload['performance_report_guide'] ?? $current['performance_report_guide']));
 
+        if ($h1From !== '' && $h1Until !== '' && $h1Until < $h1From) {
+            throw new InvalidArgumentException('پایان بازه نیمه اول نباید قبل از شروع باشد.');
+        }
+        if ($h2From !== '' && $h2Until !== '' && $h2Until < $h2From) {
+            throw new InvalidArgumentException('پایان بازه نیمه دوم نباید قبل از شروع باشد.');
+        }
+        if ($enabled && ($h1From === '' || $h1Until === '' || $h2From === '' || $h2Until === '')) {
+            throw new InvalidArgumentException('برای فعال‌سازی، بازه ارسال هر دو نیمه را کامل وارد کنید.');
+        }
+
         $this->pdo->prepare(
             'UPDATE center_settings SET
                 performance_reports_enabled = :enabled,
@@ -117,16 +127,22 @@ final class PerformanceReports
             ];
         }
 
-        $year = JalaliDate::normalizeDigits($fiscalYear ?: $this->currentFiscalYear());
+        $defaultYear = JalaliDate::normalizeDigits($fiscalYear ?: $this->currentFiscalYear());
         $periods = [];
         foreach (self::PERIODS as $period) {
-            $row = $this->reportRow($teamId, $year, $period);
+            $periodYear = $fiscalYear
+                ? JalaliDate::normalizeDigits($fiscalYear)
+                : $this->reportFiscalYearForPeriod($period);
+            $row = $this->reportRow($teamId, $periodYear, $period);
             $window = $this->windowForPeriod($period, $settings);
+            $windowConfigured = ($window['open_from'] ?? '') !== '' && ($window['open_until'] ?? '') !== '';
             $periods[] = [
                 'period' => $period,
                 'period_label' => self::PERIOD_LABELS[$period],
+                'fiscal_year' => $periodYear,
                 'report' => $row ? $this->present($row) : null,
                 'window' => $window,
+                'window_configured' => $windowConfigured,
                 'can_submit' => $this->canSubmitNow($period, $settings),
             ];
         }
@@ -134,7 +150,7 @@ final class PerformanceReports
         return [
             'enabled' => (bool) $settings['performance_reports_enabled'],
             'settings' => $settings,
-            'fiscal_year' => $year,
+            'fiscal_year' => $defaultYear,
             'periods' => $periods,
             'period_labels' => self::PERIOD_LABELS,
         ];
@@ -534,6 +550,22 @@ final class PerformanceReports
     private function currentFiscalYear(): string
     {
         return (string) JalaliDate::todayParts()['year'];
+    }
+
+    /**
+     * H2 of year Y is typically submitted in early Y+1 (Farvardin–Khordad).
+     * H1 of year Y is submitted later in the same year.
+     */
+    private function reportFiscalYearForPeriod(string $period): string
+    {
+        $parts = JalaliDate::todayParts();
+        $year = (int) $parts['year'];
+        $month = (int) $parts['month'];
+        if ($period === self::PERIOD_H2 && $month <= 6) {
+            return (string) ($year - 1);
+        }
+
+        return (string) $year;
     }
 
     private function ensureSettingsColumns(): void

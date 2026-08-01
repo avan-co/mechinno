@@ -183,6 +183,32 @@ final class Repository
             }
         }
 
+        if (Schema::tableExists($this->pdo, 'team_contract_proposals')) {
+            $pendingContracts = $this->scalar("SELECT COUNT(*) FROM team_contract_proposals WHERE status = 'pending'");
+            if ($pendingContracts > 0) {
+                $items[] = [
+                    'priority' => 11,
+                    'type' => 'contract',
+                    'label' => number_format($pendingContracts) . ' قرارداد در انتظار تأیید',
+                    'detail' => 'بررسی بسته قرارداد عضویت و استقرار',
+                    'section' => 'team-contracts',
+                ];
+            }
+        }
+
+        if (Schema::tableExists($this->pdo, 'team_performance_reports')) {
+            $pendingPerf = $this->scalar("SELECT COUNT(*) FROM team_performance_reports WHERE status = 'pending'");
+            if ($pendingPerf > 0) {
+                $items[] = [
+                    'priority' => 13,
+                    'type' => 'performance',
+                    'label' => number_format($pendingPerf) . ' گزارش عملکرد در انتظار',
+                    'detail' => 'بررسی و تأیید گزارش‌های ۶ماهه',
+                    'section' => 'performance-reports',
+                ];
+            }
+        }
+
         $totalDebt = $this->totalContractDebt();
         if ($totalDebt > 0) {
             $items[] = [
