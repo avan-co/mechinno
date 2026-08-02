@@ -85,11 +85,27 @@ $_SESSION['mechinno_authenticated'] = true;
 $_SESSION['mechinno_role'] = Access::ROLE_ADMIN_EDITOR;
 $fileManager = new UploadFileManager($pdo);
 $folders = $fileManager->listFolders();
-$assert(is_array($folders) && count($folders) >= 1, 'file-manager lists folders');
+$assert(is_array($folders) && count($folders) >= 5, 'file-manager lists canonical folders');
+$folderNames = array_map(static fn (array $row): string => (string) ($row['name'] ?? ''), $folders);
+$assert(($folderNames[0] ?? '') === 'members', 'file-manager folder order starts with members');
+$assert(($folderNames[1] ?? '') === 'teams', 'file-manager folder order includes teams second');
+$assert(($folderNames[2] ?? '') === 'member-requests', 'file-manager folder order includes member-requests');
+$assert(in_array('contracts', $folderNames, true) && in_array('performance', $folderNames, true), 'file-manager includes contracts and performance');
+foreach (FileStorage::CATEGORIES as $category) {
+    $assert(is_dir(FileStorage::rootDir() . '/' . $category), 'file-manager ensures category dir ' . $category);
+    $assert(is_file(FileStorage::rootDir() . '/' . $category . '/.htaccess'), 'file-manager hardens category ' . $category);
+}
 $broken = $fileManager->clearBrokenReferences();
 $assert(($broken['cleared'] ?? 0) >= 1, 'file-manager clears broken avatar refs');
 $memberAfterClear = $crud->find('members', (int) $member['id']);
 $assert((int) ($memberAfterClear['avatar_is_default'] ?? 0) === 1, 'avatar_is_default after clear');
+
+// Orphan purge removes unreferenced files and keeps referenced ones.
+$orphanPath = FileStorage::rootDir() . '/members/orphan-smoke-' . bin2hex(random_bytes(4)) . '.png';
+file_put_contents($orphanPath, base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5W7eQAAAAASUVORK5CYII='));
+$purged = $fileManager->purgeOrphanFiles('members');
+$assert(($purged['deleted'] ?? 0) >= 1, 'file-manager purges orphan files');
+$assert(!is_file($orphanPath), 'file-manager deleted orphan file from disk');
 unset($_SESSION['mechinno_role'], $_SESSION['mechinno_authenticated']);
 
 // Re-attach for later smoke assertions that expect a member row.

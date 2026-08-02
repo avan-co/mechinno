@@ -289,4 +289,17 @@ if (!source.includes("modal._pendingCancel")) {
   process.exit(1);
 }
 
+if (!source.includes("purge-orphans") || !source.includes("fileManagerPurgeOrphans")) {
+  console.error("file manager must support purge-orphans action");
+  process.exit(1);
+}
+if (!source.includes("file-folder-desc") || !source.includes("file-orphan-badge")) {
+  console.error("file manager UI must show folder descriptions and orphan badges");
+  process.exit(1);
+}
+if (!indexSource.includes('id="fileManagerPurgeOrphans"')) {
+  console.error("index.php must expose purge orphans button in file manager");
+  process.exit(1);
+}
+
 console.log("Frontend smoke tests passed");

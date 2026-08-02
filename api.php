@@ -515,15 +515,37 @@ try {
             if ($action === 'clear-broken') {
                 json_response(['ok' => true, 'result' => $files->clearBrokenReferences()]);
             }
+            if ($action === 'purge-orphans') {
+                $folder = trim((string) ($payload['folder'] ?? ''));
+                json_response([
+                    'ok' => true,
+                    'result' => $files->purgeOrphanFiles($folder !== '' ? $folder : null),
+                ]);
+            }
             json_response(['error' => 'عملیات مدیریت فایل نامعتبر است.'], 422);
         }
         $folder = trim((string) ($_GET['folder'] ?? ''));
         if ($folder !== '') {
             json_response($files->listFiles($folder));
         }
+        $folders = $files->listFolders();
+        $totalFiles = 0;
+        $totalOrphans = 0;
+        $totalBytes = 0;
+        foreach ($folders as $folderRow) {
+            $totalFiles += (int) ($folderRow['file_count'] ?? 0);
+            $totalOrphans += (int) ($folderRow['orphan_count'] ?? 0);
+            $totalBytes += (int) ($folderRow['total_bytes'] ?? 0);
+        }
         json_response([
-            'folders' => $files->listFolders(),
+            'folders' => $folders,
             'root' => 'data/uploads',
+            'summary' => [
+                'folder_count' => count($folders),
+                'file_count' => $totalFiles,
+                'orphan_count' => $totalOrphans,
+                'total_bytes' => $totalBytes,
+            ],
         ]);
     }
 

@@ -1022,10 +1022,13 @@ $assetVer = (string) max(
               <div class="section-intro section-intro--amber">
                 <span class="section-intro-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6Zm4 5h10v2H7v-2Zm0 4h7v2H7v-2Z" fill="currentColor"/></svg></span>
                 <div class="section-intro-copy">
-                  <p>مدیریت پوشه‌ای فایل‌های آپلودشده — تصاویر پروفایل، قراردادها و گزارش عملکرد. حذف فایل ارجاع دیتابیس را هم پاک می‌کند و تصویر پیش‌فرض جایگزین می‌شود.</p>
+                  <p>پوشه‌های استاندارد آپلود: تصاویر اعضا، تصاویر نهادها، درخواست عضو، قراردادها و گزارش عملکرد. حذف فایل ارجاع دیتابیس را پاک می‌کند؛ فایل‌های بدون ارجاع (یتیم) جداگانه قابل پاکسازی‌اند.</p>
                 </div>
                 <?php if (Access::canWrite()): ?>
-                <button type="button" class="button ghost section-intro-action" id="fileManagerClearBroken">پاکسازی ارجاعات شکسته</button>
+                <div class="section-intro-actions">
+                  <button type="button" class="button ghost section-intro-action" id="fileManagerClearBroken">پاکسازی ارجاعات شکسته</button>
+                  <button type="button" class="button ghost section-intro-action" id="fileManagerPurgeOrphans">حذف فایل‌های یتیم</button>
+                </div>
                 <?php endif; ?>
               </div>
               <div id="fileManagerContent" class="file-manager">

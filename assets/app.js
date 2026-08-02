@@ -1953,6 +1953,12 @@ const formatFileBytes = (bytes) => {
 
 const fileManagerState = { folder: "" };
 
+const fileFolderKindLabel = (kind) => ({
+  image: "تصویر",
+  document: "سند",
+  other: "سایر",
+}[kind] || "پوشه");
+
 const loadFileManager = async (folder = fileManagerState.folder) => {
   const host = document.getElementById("fileManagerContent");
   if (!host) return;
@@ -1960,16 +1966,23 @@ const loadFileManager = async (folder = fileManagerState.folder) => {
   if (!fileManagerState.folder) {
     const data = await fetchJson("api.php?resource=file-manager");
     const folders = data.folders || [];
+    const summary = data.summary || {};
     host.innerHTML = `
       <div class="file-manager-toolbar">
-        <p class="hint">ریشه آپلود: <code dir="ltr">${escapeHtml(data.root || "data/uploads")}</code></p>
+        <p class="hint">ریشه آپلود: <code dir="ltr">${escapeHtml(data.root || "data/uploads")}</code>
+          — ${escapeHtml(String(summary.file_count || 0))} فایل در ${escapeHtml(String(summary.folder_count || 0))} پوشه
+          · ${escapeHtml(formatFileBytes(summary.total_bytes))}
+          ${summary.orphan_count ? ` · <span class="file-orphan-badge">${escapeHtml(String(summary.orphan_count))} یتیم</span>` : ""}
+        </p>
       </div>
       <div class="file-folder-grid">
         ${folders.length ? folders.map((folderItem) => `
-          <button type="button" class="file-folder-card" data-open-folder="${escapeHtml(folderItem.name)}">
+          <button type="button" class="file-folder-card file-folder-card--${escapeHtml(folderItem.kind || "other")}${folderItem.known === false ? " is-unknown" : ""}" data-open-folder="${escapeHtml(folderItem.name)}">
+            <span class="file-folder-kind">${escapeHtml(fileFolderKindLabel(folderItem.kind))}</span>
             <strong>${escapeHtml(folderItem.label || folderItem.name)}</strong>
             <span dir="ltr">${escapeHtml(folderItem.name)}</span>
-            <em>${escapeHtml(String(folderItem.file_count || 0))} فایل · ${escapeHtml(formatFileBytes(folderItem.total_bytes))}</em>
+            <p class="file-folder-desc">${escapeHtml(folderItem.description || "")}</p>
+            <em>${escapeHtml(String(folderItem.file_count || 0))} فایل · ${escapeHtml(formatFileBytes(folderItem.total_bytes))}${folderItem.orphan_count ? ` · ${escapeHtml(String(folderItem.orphan_count))} یتیم` : ""}</em>
           </button>
         `).join("") : `<div class="empty-state"><p class="empty-state-text">هنوز فایلی آپلود نشده است.</p></div>`}
       </div>`;
@@ -1978,7 +1991,7 @@ const loadFileManager = async (folder = fileManagerState.folder) => {
         loadFileManager(button.dataset.openFolder).catch((error) => showToast(error.message, "error"));
       });
     });
-    bindFileManagerClearBroken();
+    bindFileManagerActions();
     return;
   }
 
@@ -1989,18 +2002,25 @@ const loadFileManager = async (folder = fileManagerState.folder) => {
       <button type="button" class="button ghost" data-file-back>بازگشت به پوشه‌ها</button>
       <div>
         <strong>${escapeHtml(data.label || data.folder)}</strong>
-        <p class="hint" dir="ltr">${escapeHtml(data.folder)}</p>
+        <p class="hint">${escapeHtml(data.description || "")} · <span dir="ltr">${escapeHtml(data.folder)}</span>
+          ${data.orphan_count ? ` · <span class="file-orphan-badge">${escapeHtml(String(data.orphan_count))} یتیم</span>` : ""}
+        </p>
       </div>
+      ${canWrite && data.orphan_count ? `<button type="button" class="button ghost" data-purge-folder="${escapeHtml(data.folder)}">حذف یتیم‌های این پوشه</button>` : ""}
     </div>
     ${files.length ? `<div class="table-wrap"><table class="data-table file-manager-table">
       <thead><tr><th>پیش‌نمایش</th><th>نام فایل</th><th>حجم</th><th>ارجاع</th><th>عملیات</th></tr></thead>
       <tbody>
         ${files.map((file) => `
-          <tr>
+          <tr class="${file.is_orphan ? "is-orphan-row" : ""}">
             <td>${file.is_image && file.preview_url
               ? `<img class="file-preview-thumb" src="${escapeHtml(file.preview_url)}" alt="" loading="lazy" />`
               : `<span class="file-preview-thumb file-preview-thumb--doc">فایل</span>`}</td>
-            <td><code dir="ltr">${escapeHtml(file.name)}</code></td>
+            <td>
+              <code dir="ltr">${escapeHtml(file.name)}</code>
+              ${file.original_name ? `<div class="hint">${escapeHtml(file.original_name)}</div>` : ""}
+              ${file.is_orphan ? `<div class="file-orphan-badge">بدون ارجاع</div>` : ""}
+            </td>
             <td>${escapeHtml(formatFileBytes(file.size_bytes))}</td>
             <td>${file.reference_count
               ? escapeHtml((file.references || []).map((ref) => ref.label).join("، "))
@@ -2017,6 +2037,21 @@ const loadFileManager = async (folder = fileManagerState.folder) => {
 
   host.querySelector("[data-file-back]")?.addEventListener("click", () => {
     loadFileManager("").catch((error) => showToast(error.message, "error"));
+  });
+  host.querySelector("[data-purge-folder]")?.addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    const targetFolder = button.dataset.purgeFolder || fileManagerState.folder;
+    if (!confirm(`فایل‌های بدون ارجاع پوشه «${targetFolder}» حذف شوند؟`)) return;
+    button.disabled = true;
+    try {
+      const result = await postJson("api.php?resource=file-manager&action=purge-orphans", { folder: targetFolder });
+      const deleted = Number(result?.result?.deleted || 0);
+      showToast(deleted > 0 ? `${deleted} فایل یتیم حذف شد.` : "فایل یتیمی نبود.", "success");
+      await loadFileManager(fileManagerState.folder);
+    } catch (error) {
+      showToast(error.message, "error");
+      button.disabled = false;
+    }
   });
   host.querySelectorAll("[data-delete-file]").forEach((button) => {
     button.addEventListener("click", async () => {
@@ -2035,27 +2070,47 @@ const loadFileManager = async (folder = fileManagerState.folder) => {
       }
     });
   });
-  bindFileManagerClearBroken();
+  bindFileManagerActions();
 };
 
-const bindFileManagerClearBroken = () => {
-  const button = document.getElementById("fileManagerClearBroken");
-  if (!button || button.dataset.bound === "1" || !canWrite) return;
-  button.dataset.bound = "1";
-  button.addEventListener("click", async () => {
-    if (!confirm("ارجاع‌های دیتابیس که فایلشان روی دیسک نیست پاک شوند؟")) return;
-    button.disabled = true;
-    try {
-      const result = await postJson("api.php?resource=file-manager&action=clear-broken", {});
-      const cleared = Number(result?.result?.cleared || 0);
-      showToast(cleared > 0 ? `${cleared} ارجاع شکسته پاک شد.` : "ارجاع شکسته‌ای پیدا نشد.", "success");
-      await loadFileManager(fileManagerState.folder);
-    } catch (error) {
-      showToast(error.message, "error");
-    } finally {
-      button.disabled = false;
-    }
-  });
+const bindFileManagerActions = () => {
+  const clearBroken = document.getElementById("fileManagerClearBroken");
+  if (clearBroken && clearBroken.dataset.bound !== "1" && canWrite) {
+    clearBroken.dataset.bound = "1";
+    clearBroken.addEventListener("click", async () => {
+      if (!confirm("ارجاع‌های دیتابیس که فایلشان روی دیسک نیست پاک شوند؟")) return;
+      clearBroken.disabled = true;
+      try {
+        const result = await postJson("api.php?resource=file-manager&action=clear-broken", {});
+        const cleared = Number(result?.result?.cleared || 0);
+        showToast(cleared > 0 ? `${cleared} ارجاع شکسته پاک شد.` : "ارجاع شکسته‌ای پیدا نشد.", "success");
+        await loadFileManager(fileManagerState.folder);
+      } catch (error) {
+        showToast(error.message, "error");
+      } finally {
+        clearBroken.disabled = false;
+      }
+    });
+  }
+
+  const purgeOrphans = document.getElementById("fileManagerPurgeOrphans");
+  if (purgeOrphans && purgeOrphans.dataset.bound !== "1" && canWrite) {
+    purgeOrphans.dataset.bound = "1";
+    purgeOrphans.addEventListener("click", async () => {
+      if (!confirm("همه فایل‌های آپلود بدون ارجاع دیتابیس حذف شوند؟ این عمل برگشت‌ناپذیر است.")) return;
+      purgeOrphans.disabled = true;
+      try {
+        const result = await postJson("api.php?resource=file-manager&action=purge-orphans", {});
+        const deleted = Number(result?.result?.deleted || 0);
+        showToast(deleted > 0 ? `${deleted} فایل یتیم حذف شد.` : "فایل یتیمی پیدا نشد.", "success");
+        await loadFileManager(fileManagerState.folder);
+      } catch (error) {
+        showToast(error.message, "error");
+      } finally {
+        purgeOrphans.disabled = false;
+      }
+    });
+  }
 };
 
 const loadPerformanceSettingsForm = async () => {

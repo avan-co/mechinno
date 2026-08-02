@@ -31,15 +31,48 @@ final class FileStorage
         return app_base_path() . '/data/uploads';
     }
 
+    /** Canonical upload categories used across the app. */
+    public const CATEGORIES = [
+        'members',
+        'teams',
+        'member-requests',
+        'contracts',
+        'performance',
+    ];
+
     public static function ensureRoot(): void
     {
         $root = self::rootDir();
         if (!is_dir($root) && !mkdir($root, 0750, true) && !is_dir($root)) {
             throw new RuntimeException('ساخت پوشه آپلود ممکن نشد.');
         }
-        $htaccess = $root . '/.htaccess';
+        self::writeDenyHtaccess($root);
+        self::ensureCategories();
+    }
+
+    /** Create known category folders and harden each with .htaccess. */
+    public static function ensureCategories(): void
+    {
+        $root = self::rootDir();
+        if (!is_dir($root) && !mkdir($root, 0750, true) && !is_dir($root)) {
+            throw new RuntimeException('ساخت پوشه آپلود ممکن نشد.');
+        }
+        self::writeDenyHtaccess($root);
+        foreach (self::CATEGORIES as $category) {
+            $dir = $root . '/' . $category;
+            if (!is_dir($dir) && !mkdir($dir, 0750, true) && !is_dir($dir)) {
+                throw new RuntimeException('ساخت پوشه «' . $category . '» ممکن نشد.');
+            }
+            self::writeDenyHtaccess($dir);
+        }
+    }
+
+    private static function writeDenyHtaccess(string $dir): void
+    {
+        $htaccess = rtrim($dir, '/\\') . '/.htaccess';
         if (!is_file($htaccess)) {
             file_put_contents($htaccess, "Require all denied\nDeny from all\n");
+            @chmod($htaccess, 0640);
         }
     }
 
