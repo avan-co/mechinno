@@ -56,7 +56,7 @@ $performanceRows = [];
 if (Schema::tableExists($pdo, 'team_performance_reports')) {
     $periodLabels = ['h1' => 'نیمه اول', 'h2' => 'نیمه دوم'];
     $perfStmt = $pdo->prepare(
-        'SELECT fiscal_year, period, status, original_name, rejection_reason
+        'SELECT fiscal_year, period, status, original_name, rejection_reason, submitted_at
          FROM team_performance_reports
          WHERE team_id = :team_id
          ORDER BY fiscal_year DESC, period ASC'
@@ -71,6 +71,7 @@ if (Schema::tableExists($pdo, 'team_performance_reports')) {
             'status' => (string) ($row['status'] ?? ''),
             'original_name' => (string) ($row['original_name'] ?? ''),
             'rejection_reason' => (string) ($row['rejection_reason'] ?? ''),
+            'submitted_at' => (string) ($row['submitted_at'] ?? ''),
         ];
     }
 }
@@ -236,7 +237,7 @@ $maskNationalId = static function (mixed $value): string {
       <h2>گزارش‌های عملکرد</h2>
       <table>
         <thead>
-          <tr><th>سال</th><th>نیمه</th><th>وضعیت</th><th>فایل</th><th>دلیل رد</th></tr>
+          <tr><th>سال</th><th>نیمه</th><th>وضعیت</th><th>تاریخ ارسال</th><th>فایل</th><th>دلیل رد</th></tr>
         </thead>
         <tbody>
           <?php foreach ($performanceRows as $report): ?>
@@ -244,6 +245,7 @@ $maskNationalId = static function (mixed $value): string {
               <td><?= e((string) ($report['fiscal_year'] ?? '—')) ?></td>
               <td><?= e((string) ($report['period_label'] ?? $report['period'] ?? '—')) ?></td>
               <td><?= e($approvalLabels[(string) ($report['status'] ?? '')] ?? (string) ($report['status'] ?? '—')) ?></td>
+              <td><?= e((string) (($report['submitted_at'] ?? '') !== '' ? $report['submitted_at'] : '—')) ?></td>
               <td><?= e((string) ($report['original_name'] ?? '—')) ?></td>
               <td><?= e((string) (($report['rejection_reason'] ?? '') !== '' ? $report['rejection_reason'] : '—')) ?></td>
             </tr>

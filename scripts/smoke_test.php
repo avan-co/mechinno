@@ -257,6 +257,14 @@ $assert((int) ($official['formal_contract_amount'] ?? 0) === 1000000, 'official 
 $assert(($approved['files']['membership']['status'] ?? '') === 'approved', 'membership file approved with package');
 $assert(($approved['files']['settlement']['status'] ?? '') === 'approved', 'settlement file approved with package');
 
+// Membership year expands contract year cards through the current year.
+$pdo->exec("UPDATE teams SET joined_at = '1403/01/15' WHERE id = 1");
+$yearOverview = $contractDocs->teamOverview(1);
+$overviewYears = array_map(static fn (array $row): string => (string) ($row['fiscal_year'] ?? ''), $yearOverview['years'] ?? []);
+$assert(in_array('1403', $overviewYears, true), 'contract overview includes membership year 1403');
+$assert(in_array('1404', $overviewYears, true), 'contract overview includes year 1404 after join');
+$assert(in_array((string) JalaliDate::todayParts()['year'], $overviewYears, true), 'contract overview includes current year');
+
 // Rejected proposals are listed separately from the pending queue.
 $tmpRejectA = tempnam($tmpDir, 'rej') . '.pdf';
 $tmpRejectB = tempnam($tmpDir, 'rej') . '.pdf';

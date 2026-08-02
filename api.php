@@ -271,31 +271,31 @@ try {
                 $contractDocs->deleteFile((int) ($payload['id'] ?? 0));
                 json_response(['ok' => true, 'deleted' => true]);
             }
-            json_response(['error' => 'عملیات قرارداد نامعتبر است.'], 422);
+            // approve/reject fall through to the shared workflow matcher below.
+            if (!in_array($action, ['approve', 'reject'], true)) {
+                json_response(['error' => 'عملیات قرارداد نامعتبر است.'], 422);
+            }
+        } else {
+            $teamId = Access::scopedTeamId() ?? (int) ($_GET['team_id'] ?? 0);
+            if ($teamId <= 0) {
+                json_response(['error' => 'نهاد معتبر نیست.'], 422);
+            }
+            if (isset($_GET['overview']) && (string) $_GET['overview'] === '1') {
+                json_response($contractDocs->teamOverview($teamId));
+            }
+            $fiscalYear = (string) ($_GET['fiscal_year'] ?? '');
+            if ($fiscalYear === '') {
+                json_response(['error' => 'سال مالی الزامی است.'], 422);
+            }
+            json_response($contractDocs->yearBundle($teamId, $fiscalYear));
         }
-
-        $teamId = Access::scopedTeamId() ?? (int) ($_GET['team_id'] ?? 0);
-        if ($teamId <= 0) {
-            json_response(['error' => 'نهاد معتبر نیست.'], 422);
-        }
-        if (isset($_GET['overview']) && (string) $_GET['overview'] === '1') {
-            json_response($contractDocs->teamOverview($teamId));
-        }
-        $fiscalYear = (string) ($_GET['fiscal_year'] ?? '');
-        if ($fiscalYear === '') {
-            json_response(['error' => 'سال مالی الزامی است.'], 422);
-        }
-        json_response($contractDocs->yearBundle($teamId, $fiscalYear));
     }
 
-    if ($resource === 'pending-contract-proposals') {
+    if ($resource === 'pending-contract-proposals' && $_SERVER['REQUEST_METHOD'] !== 'POST') {
         $pending = $contractDocs->pendingProposals();
-        $rejected = $contractDocs->rejectedProposals();
         json_response([
             'rows' => $pending,
-            'rejected' => $rejected,
             'total' => count($pending),
-            'rejected_total' => count($rejected),
             'page' => 1,
             'per_page' => 100,
             'pages' => 1,
@@ -337,7 +337,7 @@ try {
         json_response($performanceReports->teamOverview($teamId, $fiscalYear));
     }
 
-    if ($resource === 'pending-performance-reports') {
+    if ($resource === 'pending-performance-reports' && $_SERVER['REQUEST_METHOD'] !== 'POST') {
         $rows = $performanceReports->pendingList();
         json_response([
             'rows' => $rows,

@@ -128,6 +128,10 @@ final class PerformanceReports
         }
 
         $defaultYear = JalaliDate::normalizeDigits($fiscalYear ?: $this->currentFiscalYear());
+        $activeYears = [];
+        foreach (self::PERIODS as $period) {
+            $activeYears[$this->reportFiscalYearForPeriod($period)] = true;
+        }
         $periods = [];
         foreach (self::PERIODS as $period) {
             $periodYear = $fiscalYear
@@ -150,11 +154,34 @@ final class PerformanceReports
             ];
         }
 
+        // Past-year reports (from older contracts) for read-only history.
+        $history = [];
+        if ($fiscalYear === null && Schema::tableExists($this->pdo, 'team_performance_reports')) {
+            $statement = $this->pdo->prepare(
+                'SELECT * FROM team_performance_reports
+                 WHERE team_id = :team_id
+                 ORDER BY fiscal_year DESC, period ASC, id DESC'
+            );
+            $statement->execute(['team_id' => $teamId]);
+            foreach ($statement->fetchAll() ?: [] as $row) {
+                $year = (string) ($row['fiscal_year'] ?? '');
+                $period = (string) ($row['period'] ?? '');
+                $isActiveSlot = isset($activeYears[$year])
+                    && (($period === self::PERIOD_H1 && $this->reportFiscalYearForPeriod(self::PERIOD_H1) === $year)
+                        || ($period === self::PERIOD_H2 && $this->reportFiscalYearForPeriod(self::PERIOD_H2) === $year));
+                if ($isActiveSlot) {
+                    continue;
+                }
+                $history[] = $this->present($row);
+            }
+        }
+
         return [
             'enabled' => (bool) $settings['performance_reports_enabled'],
             'settings' => $settings,
             'fiscal_year' => $defaultYear,
             'periods' => $periods,
+            'history' => $history,
             'period_labels' => self::PERIOD_LABELS,
         ];
     }

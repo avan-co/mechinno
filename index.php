@@ -396,12 +396,8 @@ $assetVer = (string) max(
                 <div class="section-intro-copy"><p>پیشنهادهای در انتظار را با هر دو پیوست یکجا تأیید یا رد کنید. زیر آن، فهرست قراردادهای ثبت‌شده سال‌های مختلف آمده است.</p></div>
               </div>
               <article class="panel">
-                <div class="panel-head"><h2>در انتظار تأیید</h2></div>
+                <div class="panel-head"><h2>در انتظار تأیید</h2><span class="hint">تأیید → ثبت رسمی · رد → نهاد اصلاح می‌کند و دوباره می‌فرستد</span></div>
                 <div id="pendingContractsQueue" class="review-list-host">در حال بارگذاری…</div>
-              </article>
-              <article class="panel">
-                <div class="panel-head"><h2>ردشده‌ها</h2><span class="hint">جدا از صف تأیید؛ نهاد پس از رد می‌تواند بستهٔ جدید بفرستد</span></div>
-                <div id="rejectedContractsQueue" class="review-list-host">در حال بارگذاری…</div>
               </article>
               <data-table title="قراردادهای ثبت‌شده نهادها" endpoint="api.php?resource=team_contracts"></data-table>
             </section>

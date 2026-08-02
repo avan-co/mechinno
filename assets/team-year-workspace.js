@@ -10,6 +10,11 @@
 
   const collectYears = (profile) => {
     const years = new Set([currentFiscalYear()]);
+    const joined = S().normalizeDigits?.(profile.team?.joined_at || "") || String(profile.team?.joined_at || "");
+    const start = joined.length >= 4 ? Number(joined.slice(0, 4)) : Number(currentFiscalYear());
+    const end = Number(currentFiscalYear());
+    const joinedStart = Number.isFinite(start) && start > 1300 && start <= end ? start : end;
+    for (let year = joinedStart; year <= end; year += 1) years.add(String(year));
     (profile.year_summaries || []).forEach((row) => {
       if (row.fiscal_year) years.add(String(row.fiscal_year));
     });

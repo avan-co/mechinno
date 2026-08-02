@@ -1445,6 +1445,17 @@ final class Repository
         }
         $currentYear = $this->currentFiscalYear();
         $years[$currentYear] = true;
+        $joinedRow = $this->preparedRow('SELECT joined_at FROM teams WHERE id = :id', ['id' => $teamId]);
+        $joined = JalaliDate::normalizeDigits((string) ($joinedRow['joined_at'] ?? ''));
+        if (preg_match('/^(\d{4})/', $joined, $match)) {
+            $startYear = (int) $match[1];
+            $endYear = (int) $currentYear;
+            if ($startYear > 1300 && $startYear <= $endYear) {
+                for ($year = $startYear; $year <= $endYear; $year++) {
+                    $years[(string) $year] = true;
+                }
+            }
+        }
 
         $summaries = [];
         $contracts = $this->contracts();

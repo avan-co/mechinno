@@ -175,6 +175,20 @@ final class ContractDocuments
         $currentYear = (string) JalaliDate::todayParts()['year'];
         $years = [$currentYear => true];
 
+        // Membership year through current year (e.g. joined 1403 → 1403,1404,1405).
+        $joinedStmt = $this->pdo->prepare('SELECT joined_at FROM teams WHERE id = :id');
+        $joinedStmt->execute(['id' => $teamId]);
+        $joined = JalaliDate::normalizeDigits((string) ($joinedStmt->fetchColumn() ?: ''));
+        if (preg_match('/^(\d{4})/', $joined, $match)) {
+            $startYear = (int) $match[1];
+            $endYear = (int) $currentYear;
+            if ($startYear > 1300 && $startYear <= $endYear) {
+                for ($year = $startYear; $year <= $endYear; $year++) {
+                    $years[(string) $year] = true;
+                }
+            }
+        }
+
         foreach (['team_contracts', 'team_contract_proposals', 'team_contract_files'] as $table) {
             if (!Schema::tableExists($this->pdo, $table)) {
                 continue;

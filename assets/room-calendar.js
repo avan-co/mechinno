@@ -97,21 +97,30 @@
 
     grid.innerHTML = header + rows;
 
+    const pickDay = (date, roomId) => {
+      const meta = daysMeta.get(date);
+      if (meta?.is_closed || meta?.is_past) {
+        window.showToast?.(
+          meta.is_closed ? (meta.closed_note || "این روز تعطیل است.") : "رزرو برای تاریخ گذشته مجاز نیست.",
+          "error"
+        );
+        return;
+      }
+      if (date) window.setPanelBookingDate?.(date);
+      if (roomId) window.setPanelBookingRoom?.(Number(roomId));
+    };
+
     grid.querySelectorAll(".room-calendar-cell, .room-calendar-day-head").forEach((cell) => {
       cell.addEventListener("click", (event) => {
         if (event.target.closest(".room-calendar-block")) return;
-        const date = cell.dataset.date;
-        const roomId = cell.dataset.roomId;
-        const meta = daysMeta.get(date);
-        if (meta?.is_closed || meta?.is_past) {
-          window.showToast?.(
-            meta.is_closed ? (meta.closed_note || "این روز تعطیل است.") : "رزرو برای تاریخ گذشته مجاز نیست.",
-            "error"
-          );
-          return;
-        }
-        if (date) window.setPanelBookingDate?.(date);
-        if (roomId) window.setPanelBookingRoom?.(Number(roomId));
+        pickDay(cell.dataset.date, cell.dataset.roomId);
+      });
+    });
+    // Occupied blocks used to swallow clicks; select that day/room for a new booking instead.
+    grid.querySelectorAll(".room-calendar-block").forEach((block) => {
+      block.addEventListener("click", (event) => {
+        event.stopPropagation();
+        pickDay(block.dataset.date, block.dataset.roomId);
       });
     });
   };

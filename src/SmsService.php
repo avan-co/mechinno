@@ -563,6 +563,37 @@ final class SmsService
             return;
         }
 
+        // Only room_pending has a registered Melipayamak bodyId today; fall back so auto-approve still texts.
+        if ($templateKey !== 'room_pending') {
+            $resolved = trim($this->resolveWorkflowTemplate($templateKey));
+            if ($resolved === '' || SmsPatterns::templateUsesPlaceholder($resolved)) {
+                if ($event === 'approved') {
+                    $templateKey = 'room_pending';
+                } else {
+                    $this->insertLog([
+                        'batch_uid' => $this->newBatchUid(),
+                        'message_type' => 'room_' . $event,
+                        'member_id' => 0,
+                        'team_id' => (int) ($reservation['team_id'] ?? 0),
+                        'team_name' => (string) ($reservation['team_name'] ?? $reservation['booker_org'] ?? ''),
+                        'recipient_name' => (string) ($reservation['booker_name'] ?? ''),
+                        'phone' => TeamLeaders::normalizePhone((string) ($reservation['booker_phone'] ?? '')),
+                        'is_leader' => 0,
+                        'message_text' => '',
+                        'status' => 'skipped',
+                        'error_message' => 'الگوی پیامک اتاق هنوز در ملی‌پیامک ثبت نشده است (bodyId آزمایشی).',
+                        'provider_rec_id' => null,
+                        'provider_response' => null,
+                        'cost_rial' => 0,
+                        'delivery_status' => null,
+                        'api_confirmed' => 0,
+                    ]);
+
+                    return;
+                }
+            }
+        }
+
         $reason = self::optionalSmsValue((string) ($reservation['rejection_reason'] ?? $reservation['cancel_reason'] ?? ''));
         $this->notifyWorkflow(
             $templateKey,
@@ -681,28 +712,58 @@ final class SmsService
         string $messageType,
         array $logMeta = []
     ): void {
+        $phone = TeamLeaders::normalizePhone($phone);
+        $logSkip = function (string $reason) use ($messageType, $logMeta, $recipientName, $phone): void {
+            $this->insertLog([
+                'batch_uid' => $this->newBatchUid(),
+                'message_type' => $messageType,
+                'member_id' => (int) ($logMeta['member_id'] ?? 0),
+                'team_id' => (int) ($logMeta['team_id'] ?? 0),
+                'team_name' => (string) ($logMeta['team_name'] ?? ''),
+                'recipient_name' => $recipientName,
+                'phone' => $phone,
+                'is_leader' => (int) ($logMeta['is_leader'] ?? 0),
+                'message_text' => '',
+                'status' => 'skipped',
+                'error_message' => $reason,
+                'provider_rec_id' => null,
+                'provider_response' => null,
+                'cost_rial' => 0,
+                'delivery_status' => null,
+                'api_confirmed' => 0,
+            ]);
+        };
+
         if (!$this->isApiConfigured()) {
+            $logSkip('تنظیمات پیامک کامل نیست.');
             return;
         }
 
         $template = trim($this->resolveWorkflowTemplate($templateKey));
         if ($template === '') {
+            $logSkip('قالب پیامک خالی است.');
+            return;
+        }
+        if (SmsPatterns::templateUsesPlaceholder($template)) {
+            $logSkip('الگوی پیامک هنوز bodyId واقعی ندارد.');
             return;
         }
 
         $text = trim(self::renderTemplate($template, $vars));
         if ($text === '') {
+            $logSkip('متن پیامک پس از جایگذاری خالی شد.');
             return;
         }
 
         try {
             $this->assertDailyCapacity(1);
-        } catch (Throwable) {
+        } catch (Throwable $error) {
+            $logSkip($error->getMessage() !== '' ? $error->getMessage() : 'سقف روزانه پیامک پر است.');
             return;
         }
 
-        $phone = TeamLeaders::normalizePhone($phone);
         if ($phone === '' || !preg_match('/^09\d{9}$/', $phone)) {
+            $logSkip('شماره موبایل گیرنده معتبر نیست.');
             return;
         }
 

@@ -576,6 +576,30 @@ const formatPlain = (value) => {
   return String(value);
 };
 
+/** Display ISO (2026-08-02T…) or Jalali dates consistently. */
+const formatDateTime = (value) => {
+  const text = String(value || "").trim();
+  if (!text) return "—";
+  if (/^\d{4}\/\d{2}\/\d{2}/.test(normalizeDigits(text))) {
+    return formatPlain(normalizeDigits(text).slice(0, 16).replace("T", " "));
+  }
+  const parsed = Date.parse(text);
+  if (!Number.isNaN(parsed)) {
+    try {
+      return new Intl.DateTimeFormat("fa-IR-u-ca-persian", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      }).format(new Date(parsed));
+    } catch {
+      return text.slice(0, 16).replace("T", " ");
+    }
+  }
+  return formatPlain(text);
+};
+
 const formatNumber = (value) => {
   if (value === null || value === undefined || value === "") return "—";
   const maybe = Number(value);
@@ -688,12 +712,18 @@ const fetchResource = async (endpoint, {
   };
 };
 
-const postJson = (url, payload = {}) =>
-  fetchJson(url, {
+const postJson = async (url, payload = {}) => {
+  const data = await fetchJson(url, {
     method: "POST",
     headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken },
     body: JSON.stringify(payload),
   });
+  // Guard against list endpoints accidentally handling mutation POSTs as success.
+  if (String(url).includes("action=") && data && data.ok !== true && Array.isArray(data.rows)) {
+    throw new Error(data.error || "پاسخ نامعتبر از سرور برای این عملیات.");
+  }
+  return data;
+};
 
 const isMobile = () => window.matchMedia("(max-width: 768px)").matches;
 
@@ -745,6 +775,10 @@ const refreshAfterMutation = async (sectionId = null) => {
   if (sectionId) reloadSectionTables(sectionId, true);
   if (sectionId === "desks") {
     loadDeskGrid().catch((error) => showToast(error.message, "error"));
+  }
+  if (!sectionId || sectionId === "meeting-rooms" || sectionId === "room-reservations") {
+    window.refreshRoomCalendar?.();
+    window.refreshPanelMonthPicker?.();
   }
   try {
     await loadDashboard();
@@ -1130,7 +1164,6 @@ const activateSection = (id, options = {}) => {
     loadPendingContractsQueue().catch((error) => {
       showToast(error.message, "error");
       renderSectionLoadError("pendingContractsQueue", "بارگذاری صف قراردادها ناموفق بود.", () => loadPendingContractsQueue());
-      renderSectionLoadError("rejectedContractsQueue", "بارگذاری ردشده‌ها ناموفق بود.", () => loadPendingContractsQueue());
     });
   }
   if (id === "contracts" && panelMode === "team") {
@@ -1647,15 +1680,14 @@ const docStatusBadge = (status) => {
   return `<span class="badge">${escapeHtml(status || "—")}</span>`;
 };
 
-const renderContractReviewTable = (rows, { showActions = false, showReason = false } = {}) => {
+const renderContractReviewTable = (rows, { showActions = false } = {}) => {
   if (!rows.length) {
-    return renderEmptyState(showActions ? "موردی در انتظار تأیید نیست." : "مورد ردشده‌ای نیست.", { icon: "inbox" });
+    return renderEmptyState("موردی در انتظار تأیید نیست.", { icon: "inbox" });
   }
   const showActionColumn = showActions && canWrite;
   return `<div class="table-wrap"><table class="data-table review-list-table">
     <thead><tr>
       <th>نهاد</th><th>سال</th><th>بازه</th><th>مبلغ</th><th>پیوست عضویت</th><th>پیوست استقرار</th>
-      ${showReason ? "<th>دلیل رد</th>" : ""}
       ${showActionColumn ? "<th>عملیات</th>" : "<th>وضعیت</th>"}
     </tr></thead>
     <tbody>${rows.map((row) => {
@@ -1669,10 +1701,9 @@ const renderContractReviewTable = (rows, { showActions = false, showReason = fal
         <td>${escapeHtml(formatMoney(row.formal_contract_amount || 0))}</td>
         <td>${membership ? `<a class="text-link" href="${escapeHtml(membership.download_url)}" target="_blank" rel="noopener">${escapeHtml(membership.original_name)}</a>` : "<span class=\"hint\">ندارد</span>"}</td>
         <td>${settlement ? `<a class="text-link" href="${escapeHtml(settlement.download_url)}" target="_blank" rel="noopener">${escapeHtml(settlement.original_name)}</a>` : "<span class=\"hint\">ندارد</span>"}</td>
-        ${showReason ? `<td class="reject-hint">${escapeHtml(row.rejection_reason || "—")}</td>` : ""}
-        <td>${showActionColumn ? `<div class="review-list-actions">
-            <button type="button" class="button" data-approve-proposal="${row.id}" ${canApprove ? "" : "disabled"}>تأیید</button>
-            <button type="button" class="button danger ghost" data-reject-proposal="${row.id}">رد</button>
+        <td>${showActionColumn ? `<div class="row-actions review-list-actions">
+            <button class="mini-button primary" type="button" data-approve-proposal="${row.id}" ${canApprove ? "" : "disabled"}>تأیید</button>
+            <button class="mini-button danger" type="button" data-reject-proposal="${row.id}">رد</button>
             ${!canApprove ? `<div class="hint reject-hint">${row.has_official
               ? "برای این سال قرارداد رسمی ثبت شده — ابتدا همان را بررسی/حذف کنید یا پیشنهاد را رد کنید."
               : "هر دو پیوست لازم است — برای باز کردن مسیر نهاد، پیشنهاد را رد کنید."}</div>` : ""}
@@ -1712,7 +1743,7 @@ const bindContractReviewActions = (root) => {
           id: Number(button.dataset.rejectProposal),
           reason: String(reason).trim(),
         });
-        showToast("قرارداد رد شد و به فهرست ردشده‌ها منتقل شد.", "success");
+        showToast("قرارداد رد شد؛ نهاد می‌تواند اصلاحیه بفرستد.", "success");
         await loadPendingContractsQueue();
         await refreshAfterMutation("team-contracts");
       } catch (error) {
@@ -1725,20 +1756,11 @@ const bindContractReviewActions = (root) => {
 
 const loadPendingContractsQueue = async () => {
   const pendingHost = document.getElementById("pendingContractsQueue");
-  const rejectedHost = document.getElementById("rejectedContractsQueue");
-  if (!pendingHost && !rejectedHost) return;
+  if (!pendingHost) return;
   const data = await fetchJson("api.php?resource=pending-contract-proposals");
-  const pending = data.rows || [];
-  const rejected = data.rejected || [];
-  if (pendingHost) {
-    pendingHost.classList.add("is-ready");
-    pendingHost.innerHTML = renderContractReviewTable(pending, { showActions: true });
-    bindContractReviewActions(pendingHost);
-  }
-  if (rejectedHost) {
-    rejectedHost.classList.add("is-ready");
-    rejectedHost.innerHTML = renderContractReviewTable(rejected, { showReason: true });
-  }
+  pendingHost.classList.add("is-ready");
+  pendingHost.innerHTML = renderContractReviewTable(data.rows || [], { showActions: true });
+  bindContractReviewActions(pendingHost);
 };
 
 const loadTeamContractsSection = async () => {
@@ -1909,7 +1931,7 @@ const renderPerformanceAdminTable = (rows) => {
   }
   return `<div class="table-wrap"><table class="data-table review-list-table">
     <thead><tr>
-      <th>نهاد</th><th>سال</th><th>نیمه</th><th>فایل</th><th>وضعیت</th><th>دلیل رد</th>${canWrite ? "<th>عملیات</th>" : ""}
+      <th>نهاد</th><th>سال</th><th>نیمه</th><th>فایل</th><th>وضعیت</th><th>تاریخ ارسال</th><th>دلیل رد</th>${canWrite ? "<th>عملیات</th>" : ""}
     </tr></thead>
     <tbody>${rows.map((row) => `<tr>
       <td>${escapeHtml(row.team_name || "—")}<div class="hint">${escapeHtml(row.entity_code || "")}</div></td>
@@ -1918,9 +1940,10 @@ const renderPerformanceAdminTable = (rows) => {
       <td><a class="text-link" href="${escapeHtml(row.download_url)}" target="_blank" rel="noopener">${escapeHtml(row.original_name || "دانلود")}</a></td>
       <td>${docStatusBadge(row.status)}</td>
       <td class="reject-hint">${escapeHtml(row.rejection_reason || "—")}</td>
-      ${canWrite ? `<td>${row.status === "pending" ? `<div class="review-list-actions">
-          <button type="button" class="button" data-approve-report="${row.id}">تأیید</button>
-          <button type="button" class="button danger ghost" data-reject-report="${row.id}">رد</button>
+      <td>${escapeHtml(formatDateTime(row.submitted_at))}</td>
+      ${canWrite ? `<td>${row.status === "pending" ? `<div class="row-actions review-list-actions">
+          <button class="mini-button primary" type="button" data-approve-report="${row.id}">تأیید</button>
+          <button class="mini-button danger" type="button" data-reject-report="${row.id}">رد</button>
         </div>` : "—"}</td>` : ""}
     </tr>`).join("")}</tbody>
   </table></div>${canWrite ? "" : `<p class="hint">فقط مدیر ویرایشگر می‌تواند تأیید یا رد کند.</p>`}`;
@@ -2008,7 +2031,7 @@ const loadPerformanceReportsSection = async () => {
   host.innerHTML = `
     ${guide ? `<p class="hint">${escapeHtml(guide)}</p>` : ""}
     <div class="table-wrap"><table class="data-table review-list-table">
-      <thead><tr><th>سال</th><th>نیمه</th><th>بازه ارسال</th><th>وضعیت</th><th>فایل</th><th>اقدام</th></tr></thead>
+      <thead><tr><th>سال</th><th>نیمه</th><th>بازه ارسال</th><th>وضعیت</th><th>تاریخ ارسال</th><th>فایل</th><th>اقدام</th></tr></thead>
       <tbody>${(data.periods || []).map((period) => {
         const report = period.report;
         const periodYear = String(period.fiscal_year || data.fiscal_year || "");
@@ -2038,12 +2061,27 @@ const loadPerformanceReportsSection = async () => {
           <td>${escapeHtml(period.period_label)}</td>
           <td>${escapeHtml(windowText)}</td>
           <td>${report ? docStatusBadge(report.status) : `<span class="badge">ارسال‌نشده</span>`}</td>
+          <td>${escapeHtml(formatDateTime(report?.submitted_at))}</td>
           <td>${report ? `<a class="text-link" href="${escapeHtml(report.download_url)}" target="_blank" rel="noopener">${escapeHtml(report.original_name)}</a>
             ${report.rejection_reason ? `<div class="hint reject-hint">${escapeHtml(report.rejection_reason)}</div>` : ""}` : "—"}</td>
           <td>${actionCell}</td>
         </tr>`;
       }).join("")}</tbody>
-    </table></div>`;
+    </table></div>
+    ${(data.history || []).length ? `<div class="queue-block" style="margin-top:1rem">
+      <h3>سوابق گزارش‌های سال‌های قبل</h3>
+      <div class="table-wrap"><table class="data-table review-list-table">
+        <thead><tr><th>سال</th><th>نیمه</th><th>وضعیت</th><th>تاریخ ارسال</th><th>فایل</th></tr></thead>
+        <tbody>${data.history.map((row) => `<tr>
+          <td>${escapeHtml(row.fiscal_year || "—")}</td>
+          <td>${escapeHtml(row.period_label || row.period || "—")}</td>
+          <td>${docStatusBadge(row.status)}</td>
+          <td>${escapeHtml(formatDateTime(row.submitted_at))}</td>
+          <td><a class="text-link" href="${escapeHtml(row.download_url)}" target="_blank" rel="noopener">${escapeHtml(row.original_name || "دانلود")}</a>
+            ${row.rejection_reason ? `<div class="hint reject-hint">${escapeHtml(row.rejection_reason)}</div>` : ""}</td>
+        </tr>`).join("")}</tbody>
+      </table></div>
+    </div>` : ""}`;
 
   host.querySelectorAll("[data-performance-upload]").forEach((input) => {
     input.addEventListener("change", async () => {
