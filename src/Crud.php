@@ -728,6 +728,9 @@ final class Crud
             }
             (new ProfileImages($this->pdo))->deleteMemberAvatarFiles($id);
         }
+        if ($resource === 'member_requests') {
+            (new ProfileImages($this->pdo))->deleteMemberRequestAvatarFiles($id);
+        }
         if ($resource === 'panel_users') {
             $this->assertPanelUserDeletable($id);
         }

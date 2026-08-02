@@ -327,7 +327,7 @@ const resourceColumns = {
   "desk-assignments": ["assignment_status", "fiscal_year", "desk_number", "team_name", "usage_type", "billing_exemptions", "assignment_period", "notes"],
   lockers: ["locker_number", "status", "team_label", "delivered_at", "key_number", "spare_key"],
   "locker-requests": ["submitted_at", "status", "locker_number", "notes", "reviewed_at", "rejection_reason"],
-  "member-requests": ["submitted_at", "request_type", "current_full_name", "full_name", "phone", "email", "national_id", "status", "reviewed_at", "rejection_reason"],
+  "member-requests": ["submitted_at", "request_type", "avatar_url", "current_full_name", "full_name", "phone", "email", "national_id", "status", "reviewed_at", "rejection_reason"],
   "pending-member-requests": ["team_label", "submitted_at", "request_type", "avatar_url", "current_full_name", "full_name", "phone", "email", "national_id", "father_name", "wants_access", "notes"],
   "pending-locker-requests": ["team_label", "submitted_at", "notes"],
   rate_settings: ["fiscal_year", "title", "charge_rate", "informal_rent_rate", "effective_from", "notes"],
@@ -752,12 +752,22 @@ const postForm = async (url, formData) => {
   return data;
 };
 
-const profileThumb = (url, label = "") => {
+const PROFILE_IMAGE_MAX_BYTES = 2_097_152;
+
+const profileThumb = (url, label = "", fallback = "assets/brand/default-member.svg") => {
   if (!url) {
-    const initial = escapeHtml((label || "؟").trim().slice(0, 1) || "؟");
-    return `<span class="profile-thumb profile-thumb--empty" aria-hidden="true">${initial}</span>`;
+    return `<img class="profile-thumb" src="${escapeHtml(fallback)}" alt="" loading="lazy" />`;
   }
-  return `<img class="profile-thumb" src="${escapeHtml(url)}" alt="" loading="lazy" />`;
+  return `<img class="profile-thumb" src="${escapeHtml(url)}" alt="" loading="lazy" onerror="this.onerror=null;this.src='${escapeHtml(fallback)}';" />`;
+};
+
+const assertProfileImageFile = (file, label = "تصویر پروفایل") => {
+  if (!file || !file.size) {
+    throw new Error(`${label} الزامی است.`);
+  }
+  if (file.size > PROFILE_IMAGE_MAX_BYTES) {
+    throw new Error(`${label} نباید بیشتر از ۲ مگابایت باشد.`);
+  }
 };
 
 const isMobile = () => window.matchMedia("(max-width: 768px)").matches;
@@ -1976,7 +1986,7 @@ const loadFileManager = async (folder = fileManagerState.folder) => {
   const files = data.files || [];
   host.innerHTML = `
     <div class="file-manager-toolbar">
-      <button type="button" class="button ghost" data-file-back>← پوشه‌ها</button>
+      <button type="button" class="button ghost" data-file-back>بازگشت به پوشه‌ها</button>
       <div>
         <strong>${escapeHtml(data.label || data.folder)}</strong>
         <p class="hint" dir="ltr">${escapeHtml(data.folder)}</p>
@@ -2280,7 +2290,7 @@ const loadTeamProfile = async () => {
   const team = data.team || {};
   host.innerHTML = `
     <div class="profile-summary team-profile-grid">
-      <div class="profile-brand-cell"><span>تصویر نهاد</span><strong>${profileThumb(team.logo_url || "", team.name || "")}</strong></div>
+      <div class="profile-brand-cell"><span>تصویر نهاد</span><strong>${profileThumb(team.logo_url || "", team.name || "", "assets/brand/default-team.svg")}</strong></div>
       <div><span>نام نهاد</span><strong>${escapeHtml(team.name || "—")}</strong></div>
       <div><span>نوع</span><strong>${entityBadge(team.entity_type)}</strong></div>
       <div><span>کد نهاد</span><strong>${escapeHtml(team.entity_code || "—")}</strong></div>
@@ -3138,7 +3148,7 @@ const profileSection = (title, rows, cols, cellRenderer = null) => `
             return `<td class="num">${escapeHtml(formatMoney(value))}</td>`;
           }
           if (c === "avatar_url") return `<td>${profileThumb(value || "", row.full_name || "")}</td>`;
-          if (c === "logo_url") return `<td>${profileThumb(value || "", row.name || "")}</td>`;
+          if (c === "logo_url") return `<td>${profileThumb(value || "", row.name || "", "assets/brand/default-team.svg")}</td>`;
           if (c === "usage_type") return `<td>${usageLabels[value] || value || "—"}</td>`;
           if (c === "wants_access") return `<td>${accessStatusLabel(row)}</td>`;
           if (c === "approval_status") return `<td>${approvalStatusBadge(value)}</td>`;
@@ -3164,7 +3174,7 @@ const openTeamProfile = async (teamId, options = {}) => {
   const deskList = (data.desks || []).map((d) => d.number).join("، ") || "—";
   form.innerHTML = `
     <div class="profile-summary">
-      <div class="profile-brand-cell"><span>تصویر نهاد</span><strong>${profileThumb(data.team.logo_url || "", data.team.name || "")}</strong></div>
+      <div class="profile-brand-cell"><span>تصویر نهاد</span><strong>${profileThumb(data.team.logo_url || "", data.team.name || "", "assets/brand/default-team.svg")}</strong></div>
       <div><span>نوع</span><strong>${entityBadge(data.team.entity_type)}</strong></div>
       <div><span>مسئول</span><strong>${escapeHtml(data.team.leader || "—")}</strong></div>
       <div><span>میزها</span><strong>${escapeHtml(deskList)}</strong></div>
@@ -3658,28 +3668,39 @@ const openRecordModal = ({ resource, definition, record = null, onSaved, title =
     ? portalPasswordSectionHtml()
     : "";
   const usesProfileUpload = resource === "members" || resource === "teams";
+  const memberNeedsAvatar = resource === "members" && (!isEdit || Number(formRecord.has_avatar) !== 1);
+  const teamNeedsLogo = resource === "teams" && (!isEdit || Number(formRecord.has_logo) !== 1);
+  const incompleteMemberHint = resource === "members" && isEdit && (
+    Number(formRecord.has_avatar) !== 1
+    || !String(formRecord.father_name || "").trim()
+    || !String(formRecord.email || "").trim()
+    || !String(formRecord.address || "").trim()
+  )
+    ? `<p class="hint warning-text">پروفایل این عضو ناقص است. قبل از ذخیره، تصویر و مشخصات هویتی را تکمیل کنید.</p>`
+    : "";
   const memberAvatarBlock = resource === "members"
     ? `<label class="wide profile-upload-field">
-         <span>تصویر پروفایل${!isEdit ? " *" : " (در صورت نیاز جایگزین کنید)"}</span>
+         <span>تصویر پروفایل${memberNeedsAvatar ? " *" : " (در صورت نیاز جایگزین کنید)"}</span>
          <div class="profile-upload-row">
            ${profileThumb(formRecord.avatar_url || "", formRecord.full_name || "")}
-           <input name="avatar" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" ${!isEdit ? "required" : ""} />
+           <input name="avatar" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" ${memberNeedsAvatar ? "required" : ""} />
          </div>
          <p class="hint">فقط JPG، PNG یا WebP — حداکثر ۲ مگابایت</p>
        </label>`
     : "";
   const teamLogoBlock = resource === "teams"
     ? `<label class="wide profile-upload-field">
-         <span>تصویر پروفایل نهاد${!isEdit ? " *" : " (در صورت نیاز جایگزین کنید)"}</span>
+         <span>تصویر پروفایل نهاد${teamNeedsLogo ? " *" : " (در صورت نیاز جایگزین کنید)"}</span>
          <div class="profile-upload-row">
-           ${profileThumb(formRecord.logo_url || "", formRecord.name || "")}
-           <input name="logo" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" ${!isEdit ? "required" : ""} />
+           ${profileThumb(formRecord.logo_url || "", formRecord.name || "", "assets/brand/default-team.svg")}
+           <input name="logo" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" ${teamNeedsLogo ? "required" : ""} />
          </div>
          <p class="hint">فقط JPG، PNG یا WebP — حداکثر ۲ مگابایت</p>
        </label>`
     : "";
   form.innerHTML = `
     ${isEdit ? `<input type="hidden" name="id" value="${escapeHtml(String(record.id))}" />` : ""}
+    ${incompleteMemberHint}
     <div class="crud-grid">
       ${memberAvatarBlock}
       ${teamLogoBlock}
@@ -3715,17 +3736,25 @@ const openRecordModal = ({ resource, definition, record = null, onSaved, title =
           const portal = collectPortalPasswordPayload(form);
           Object.entries(portal).forEach(([key, value]) => body.set(key, value));
         }
-        if (resource === "members" && !isEdit && !body.get("avatar")?.size) {
-          throw new Error("تصویر پروفایل عضو الزامی است.");
+        const avatarFile = body.get("avatar");
+        const logoFile = body.get("logo");
+        if (resource === "members") {
+          if (memberNeedsAvatar) {
+            assertProfileImageFile(avatarFile instanceof File ? avatarFile : null, "تصویر پروفایل عضو");
+          } else if (avatarFile instanceof File && avatarFile.size) {
+            assertProfileImageFile(avatarFile, "تصویر پروفایل عضو");
+          } else {
+            body.delete("avatar");
+          }
         }
-        if (resource === "teams" && !isEdit && !body.get("logo")?.size) {
-          throw new Error("تصویر پروفایل نهاد الزامی است.");
-        }
-        if (isEdit && resource === "members" && body.get("avatar") && !body.get("avatar").size) {
-          body.delete("avatar");
-        }
-        if (isEdit && resource === "teams" && body.get("logo") && !body.get("logo").size) {
-          body.delete("logo");
+        if (resource === "teams") {
+          if (teamNeedsLogo) {
+            assertProfileImageFile(logoFile instanceof File ? logoFile : null, "تصویر پروفایل نهاد");
+          } else if (logoFile instanceof File && logoFile.size) {
+            assertProfileImageFile(logoFile, "تصویر پروفایل نهاد");
+          } else {
+            body.delete("logo");
+          }
         }
         await postForm(`api.php?resource=${encodeURIComponent(resource)}&action=${isEdit ? "update" : "create"}`, body);
       } else {
@@ -3896,7 +3925,10 @@ const openMemberRequestModal = (requestType, member) => {
         }
         body.set("phone", phone);
         body.set("national_id", nationalId);
-        if (body.get("avatar") && !body.get("avatar").size) {
+        const avatarFile = body.get("avatar");
+        if (avatarFile instanceof File && avatarFile.size) {
+          assertProfileImageFile(avatarFile, "تصویر پروفایل");
+        } else {
           body.delete("avatar");
         }
         await postForm("api.php?resource=member-requests&action=create", body);
@@ -4165,7 +4197,7 @@ const formatCell = (column, value, row, resource) => {
     return profileThumb(value || row.avatar_url || "", row.full_name || row.current_full_name || "");
   }
   if (column === "logo_url") {
-    return profileThumb(value || row.logo_url || "", row.name || "");
+    return profileThumb(value || row.logo_url || "", row.name || "", "assets/brand/default-team.svg");
   }
   if (column === "entity_type") return entityBadge(value);
   if (column === "is_leader") {

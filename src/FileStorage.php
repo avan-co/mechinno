@@ -153,6 +153,9 @@ final class FileStorage
         return self::rootDir() . '/' . $relativePath;
     }
 
+    /** @var list<string> */
+    private static array $queuedDeletes = [];
+
     public static function deleteRelative(string $relativePath): void
     {
         if ($relativePath === '') {
@@ -166,6 +169,30 @@ final class FileStorage
         if (is_file($path)) {
             @unlink($path);
         }
+    }
+
+    /** Queue a delete until after a successful DB commit. */
+    public static function queueDelete(string $relativePath): void
+    {
+        $relativePath = trim($relativePath);
+        if ($relativePath === '' || in_array($relativePath, self::$queuedDeletes, true)) {
+            return;
+        }
+        self::$queuedDeletes[] = $relativePath;
+    }
+
+    public static function flushQueuedDeletes(): void
+    {
+        $paths = self::$queuedDeletes;
+        self::$queuedDeletes = [];
+        foreach ($paths as $relativePath) {
+            self::deleteRelative($relativePath);
+        }
+    }
+
+    public static function clearQueuedDeletes(): void
+    {
+        self::$queuedDeletes = [];
     }
 
     public static function sendDownload(string $relativePath, string $originalName, string $mime): never

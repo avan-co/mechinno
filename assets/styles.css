@@ -4169,6 +4169,18 @@ body.is-mobile .mobile-card .row-actions {
   font-size: 22px;
 }
 
+.team-year-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.team-year-brand .profile-thumb {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  flex-shrink: 0;
+}
 .file-manager {
   display: grid;
   gap: 16px;
@@ -4217,4 +4229,17 @@ body.is-mobile .mobile-card .row-actions {
 }
 .file-manager-table td {
   vertical-align: middle;
+}
+@media (max-width: 720px) {
+  .file-manager-table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .file-folder-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .team-year-brand {
+    align-items: flex-start;
+  }
 }

@@ -572,15 +572,30 @@ try {
             } elseif (ProfileImages::hasUploadedFile($avatarFile)) {
                 $storedAvatar = $profiles->storeMemberAvatar(is_array($avatarFile) ? $avatarFile : []);
             }
+            $started = false;
             try {
+                if (!$pdo->inTransaction()) {
+                    $pdo->beginTransaction();
+                    $started = true;
+                }
                 $result = $action === 'create'
                     ? $crud->create('members', $payload)
                     : $crud->update('members', $id, $payload);
                 if ($storedAvatar !== null) {
                     $profiles->setMemberAvatarFields((int) $result['id'], $storedAvatar, $action === 'update');
                     $result = $crud->find('members', (int) $result['id']);
+                } elseif ($action === 'create') {
+                    throw new InvalidArgumentException('تصویر پروفایل عضو الزامی است.');
                 }
+                if ($started) {
+                    $pdo->commit();
+                }
+                FileStorage::flushQueuedDeletes();
             } catch (Throwable $error) {
+                if ($started && $pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
+                FileStorage::clearQueuedDeletes();
                 if ($storedAvatar !== null) {
                     FileStorage::deleteRelative($storedAvatar['avatar_path']);
                 }
@@ -598,7 +613,12 @@ try {
             if (ProfileImages::hasUploadedFile($logoFile)) {
                 $storedLogo = $profiles->storeTeamLogo(is_array($logoFile) ? $logoFile : []);
             }
+            $started = false;
             try {
+                if (!$pdo->inTransaction()) {
+                    $pdo->beginTransaction();
+                    $started = true;
+                }
                 $result = $action === 'create'
                     ? $crud->create('teams', $payload)
                     : $crud->update('teams', $id, $payload);
@@ -606,7 +626,15 @@ try {
                     $profiles->setTeamLogoFields((int) $result['id'], $storedLogo, $action === 'update');
                     $result = $crud->find('teams', (int) $result['id']);
                 }
+                if ($started) {
+                    $pdo->commit();
+                }
+                FileStorage::flushQueuedDeletes();
             } catch (Throwable $error) {
+                if ($started && $pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
+                FileStorage::clearQueuedDeletes();
                 if ($storedLogo !== null) {
                     FileStorage::deleteRelative($storedLogo['logo_path']);
                 }
@@ -618,20 +646,27 @@ try {
         if ($resource === 'member-requests' && $action === 'create') {
             $avatarFile = $_FILES['avatar'] ?? null;
             $storedAvatar = null;
-            $requestType = (string) ($payload['request_type'] ?? '');
-            if ($requestType === 'update' && !ProfileImages::hasUploadedFile($avatarFile)) {
-                // Optional on edit request if member already has avatar; required only when explicitly replacing.
-            }
             if (ProfileImages::hasUploadedFile($avatarFile)) {
                 $storedAvatar = $profiles->storeRequestAvatar(is_array($avatarFile) ? $avatarFile : []);
             }
+            $started = false;
             try {
+                if (!$pdo->inTransaction()) {
+                    $pdo->beginTransaction();
+                    $started = true;
+                }
                 $result = $crud->create('member_requests', $payload);
                 if ($storedAvatar !== null) {
                     $profiles->setMemberRequestAvatarFields((int) $result['id'], $storedAvatar);
                     $result = $crud->find('member_requests', (int) $result['id']);
                 }
+                if ($started) {
+                    $pdo->commit();
+                }
             } catch (Throwable $error) {
+                if ($started && $pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
                 if ($storedAvatar !== null) {
                     FileStorage::deleteRelative($storedAvatar['avatar_path']);
                 }

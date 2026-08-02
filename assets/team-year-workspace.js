@@ -267,9 +267,12 @@
     return `
       <div class="team-year-workspace" data-team-workspace data-team-id="${teamId}" data-selected-year="${S().escapeHtml(year)}">
         <div class="team-year-header">
-          <div>
-            <h2 class="team-year-title">${S().escapeHtml(team.name || "نهاد")}</h2>
-            <p class="hint">${S().entityBadge(team.entity_type)} · کد ${S().escapeHtml(team.entity_code || "—")} · مسئول ${S().escapeHtml(team.leader || "—")}</p>
+          <div class="team-year-brand">
+            ${S().profileThumb(team.logo_url || "", team.name || "", "assets/brand/default-team.svg")}
+            <div>
+              <h2 class="team-year-title">${S().escapeHtml(team.name || "نهاد")}</h2>
+              <p class="hint">${S().entityBadge(team.entity_type)} · کد ${S().escapeHtml(team.entity_code || "—")} · مسئول ${S().escapeHtml(team.leader || "—")}</p>
+            </div>
           </div>
           <div class="profile-actions team-year-top-actions">
             <a class="button ghost" href="profile-print.php?id=${encodeURIComponent(teamId)}" target="_blank" rel="noopener">چاپ پروفایل A4</a>

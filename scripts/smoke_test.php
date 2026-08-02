@@ -105,6 +105,46 @@ $avatarStored2 = (new ProfileImages($pdo))->storeMemberAvatar([
 (new ProfileImages($pdo))->setMemberAvatarFields((int) $member['id'], $avatarStored2, false);
 $member = $crud->find('members', (int) $member['id']);
 
+// Request avatar is copied into members/ on approve transfer.
+$tmpReqAvatar = tempnam(sys_get_temp_dir(), 'reqav');
+file_put_contents($tmpReqAvatar, base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5W7eQAAAAASUVORK5CYII='));
+$reqStored = (new ProfileImages($pdo))->storeRequestAvatar([
+    'name' => 'req.png',
+    'type' => 'image/png',
+    'tmp_name' => $tmpReqAvatar,
+    'error' => UPLOAD_ERR_OK,
+    'size' => filesize($tmpReqAvatar),
+]);
+$pdo->prepare(
+    "INSERT INTO member_requests (team_id, member_id, request_type, full_name, father_name, national_id, id_certificate_number, birth_date, birth_place, education, phone, email, address, wants_access, status, submitted_at, avatar_path, avatar_original_name, avatar_mime)
+     VALUES (1, :member_id, 'update', 'عضو تست', 'علی', '0012345678', '12345', '1370/01/01', 'تهران', 'کارشناسی', '09121234567', 'member@example.com', 'تهران', 0, 'pending', '1405/01/20', :avatar_path, :avatar_original_name, :avatar_mime)"
+)->execute([
+    'member_id' => (int) $member['id'],
+    'avatar_path' => $reqStored['avatar_path'],
+    'avatar_original_name' => $reqStored['avatar_original_name'],
+    'avatar_mime' => $reqStored['avatar_mime'],
+]);
+$requestId = (int) $pdo->lastInsertId();
+$oldMemberAvatar = $avatarStored2['avatar_path'];
+$_SESSION['mechinno_authenticated'] = true;
+$_SESSION['mechinno_role'] = Access::ROLE_ADMIN_EDITOR;
+$approvedRequest = (new Workflow($pdo))->approveMemberRequest($requestId);
+$assert(($approvedRequest['status'] ?? '') === 'approved', 'member request approved');
+$assert((int) ($approvedRequest['has_avatar'] ?? 1) === 0, 'approved request avatar cleared from response');
+$memberAfterTransfer = $pdo->query('SELECT avatar_path FROM members WHERE id = ' . (int) $member['id'])->fetch();
+$newAvatarPath = (string) ($memberAfterTransfer['avatar_path'] ?? '');
+$assert(str_starts_with($newAvatarPath, 'members/'), 'approved avatar moved under members/');
+$assert($newAvatarPath !== $reqStored['avatar_path'], 'approved avatar is not request path');
+$assert(!is_file(FileStorage::absolutePath($reqStored['avatar_path'])), 'request avatar file removed after approve');
+$assert(!is_file(FileStorage::absolutePath($oldMemberAvatar)), 'old member avatar removed after approve');
+$member = $crud->find('members', (int) $member['id']);
+$assert((int) ($member['has_avatar'] ?? 0) === 1, 'member has avatar after transfer');
+unset($_SESSION['mechinno_role'], $_SESSION['mechinno_authenticated']);
+
+$teamSummary = $repo->teamProfile(1);
+$assert(isset($teamSummary['team']['logo_url']), 'team profile has logo_url');
+$assert(!isset($teamSummary['team']['logo_path']), 'team profile hides logo_path');
+
 $locker = $crud->create('lockers', [
     'locker_number' => '7',
     'team_id' => '1',

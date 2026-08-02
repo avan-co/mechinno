@@ -106,7 +106,90 @@ final class ProfileImages
             'id' => $memberId,
         ]);
         if ($replaceOld && $oldPath !== '' && $oldPath !== $stored['avatar_path']) {
-            FileStorage::deleteRelative($oldPath);
+            $this->forgetStoredFile($oldPath);
+        }
+    }
+
+    /**
+     * Copy a request avatar into members/ and retarget the member row.
+     * Clears request avatar columns. Old files are queued for post-commit delete.
+     *
+     * @param array<string, mixed> $requestRow
+     */
+    public function transferRequestAvatarToMember(int $memberId, int $requestId, array $requestRow): void
+    {
+        $requestPath = trim((string) ($requestRow['avatar_path'] ?? ''));
+        if ($requestPath === '') {
+            return;
+        }
+        if (!self::relativeFileExists($requestPath)) {
+            $this->pdo->prepare(
+                'UPDATE member_requests
+                 SET avatar_path = NULL, avatar_original_name = NULL, avatar_mime = NULL
+                 WHERE id = :id'
+            )->execute(['id' => $requestId]);
+
+            return;
+        }
+
+        $source = FileStorage::absolutePath($requestPath);
+        $extension = strtolower(pathinfo($requestPath, PATHINFO_EXTENSION)) ?: 'jpg';
+        if (!in_array($extension, ['jpg', 'jpeg', 'png', 'webp'], true)) {
+            $extension = 'jpg';
+        }
+        FileStorage::ensureRoot();
+        $dir = FileStorage::rootDir() . '/' . self::MEMBER_CATEGORY;
+        if (!is_dir($dir) && !mkdir($dir, 0750, true) && !is_dir($dir)) {
+            throw new RuntimeException('ساخت پوشه تصاویر اعضا ممکن نشد.');
+        }
+        $storedName = bin2hex(random_bytes(16)) . '.' . $extension;
+        $absolute = $dir . '/' . $storedName;
+        if (!copy($source, $absolute)) {
+            throw new RuntimeException('انتقال تصویر پروفایل عضو انجام نشد.');
+        }
+        @chmod($absolute, 0640);
+
+        $member = $this->memberRow($memberId);
+        $oldPath = trim((string) ($member['avatar_path'] ?? ''));
+        $newPath = self::MEMBER_CATEGORY . '/' . $storedName;
+        $this->setMemberAvatarFields($memberId, [
+            'avatar_path' => $newPath,
+            'avatar_original_name' => (string) ($requestRow['avatar_original_name'] ?? ('avatar.' . $extension)),
+            'avatar_mime' => (string) ($requestRow['avatar_mime'] ?? 'image/jpeg'),
+        ], false);
+
+        $this->pdo->prepare(
+            'UPDATE member_requests
+             SET avatar_path = NULL, avatar_original_name = NULL, avatar_mime = NULL
+             WHERE id = :id'
+        )->execute(['id' => $requestId]);
+
+        $this->forgetStoredFile($requestPath);
+        if ($oldPath !== '' && $oldPath !== $requestPath && $oldPath !== $newPath) {
+            $this->forgetStoredFile($oldPath);
+        }
+    }
+
+    public function forgetStoredFile(string $relativePath): void
+    {
+        $relativePath = trim($relativePath);
+        if ($relativePath === '') {
+            return;
+        }
+        if ($this->pdo->inTransaction()) {
+            FileStorage::queueDelete($relativePath);
+        } else {
+            FileStorage::deleteRelative($relativePath);
+        }
+    }
+
+    public function deleteMemberRequestAvatarFiles(int $requestId): void
+    {
+        $statement = $this->pdo->prepare('SELECT avatar_path FROM member_requests WHERE id = :id');
+        $statement->execute(['id' => $requestId]);
+        $path = (string) ($statement->fetchColumn() ?: '');
+        if ($path !== '') {
+            $this->forgetStoredFile($path);
         }
     }
 
@@ -152,7 +235,7 @@ final class ProfileImages
             'id' => $teamId,
         ]);
         if ($replaceOld && $oldPath !== '' && $oldPath !== $stored['logo_path']) {
-            FileStorage::deleteRelative($oldPath);
+            $this->forgetStoredFile($oldPath);
         }
     }
 
@@ -344,7 +427,7 @@ final class ProfileImages
         $statement->execute(['id' => $memberId]);
         $path = (string) ($statement->fetchColumn() ?: '');
         if ($path !== '') {
-            FileStorage::deleteRelative($path);
+            $this->forgetStoredFile($path);
         }
     }
 

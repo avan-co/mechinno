@@ -305,31 +305,7 @@ final class Workflow
                     $payload['access_code'] = '';
                 }
                 $crud->update('members', $memberId, $payload);
-                $requestAvatar = trim((string) ($row['avatar_path'] ?? ''));
-                if ($requestAvatar !== '') {
-                    $member = $this->memberRow($memberId);
-                    $oldAvatar = trim((string) ($member['avatar_path'] ?? ''));
-                    $this->pdo->prepare(
-                        'UPDATE members
-                         SET avatar_path = :avatar_path,
-                             avatar_original_name = :avatar_original_name,
-                             avatar_mime = :avatar_mime
-                         WHERE id = :id'
-                    )->execute([
-                        'avatar_path' => $requestAvatar,
-                        'avatar_original_name' => (string) ($row['avatar_original_name'] ?? ''),
-                        'avatar_mime' => (string) ($row['avatar_mime'] ?? ''),
-                        'id' => $memberId,
-                    ]);
-                    $this->pdo->prepare(
-                        'UPDATE member_requests
-                         SET avatar_path = NULL, avatar_original_name = NULL, avatar_mime = NULL
-                         WHERE id = :id'
-                    )->execute(['id' => $id]);
-                    if ($oldAvatar !== '' && $oldAvatar !== $requestAvatar) {
-                        FileStorage::deleteRelative($oldAvatar);
-                    }
-                }
+                (new ProfileImages($this->pdo))->transferRequestAvatarToMember($memberId, $id, $row);
             } else {
                 throw new InvalidArgumentException('نوع درخواست عضو معتبر نیست.');
             }
@@ -337,10 +313,12 @@ final class Workflow
             if ($startedTransaction) {
                 $this->pdo->commit();
             }
+            FileStorage::flushQueuedDeletes();
         } catch (Throwable $exception) {
             if ($startedTransaction && $this->pdo->inTransaction()) {
                 $this->pdo->rollBack();
             }
+            FileStorage::clearQueuedDeletes();
             throw $exception;
         }
 
@@ -357,7 +335,8 @@ final class Workflow
         $today = JalaliDate::todayParts()['formatted'];
         $statement = $this->pdo->prepare(
             "UPDATE member_requests
-             SET status = 'rejected', reviewed_at = :reviewed_at, rejection_reason = :reason
+             SET status = 'rejected', reviewed_at = :reviewed_at, rejection_reason = :reason,
+                 avatar_path = NULL, avatar_original_name = NULL, avatar_mime = NULL
              WHERE id = :id AND status = 'pending'"
         );
         $statement->execute([
@@ -367,6 +346,10 @@ final class Workflow
         ]);
         if ($statement->rowCount() < 1) {
             throw new InvalidArgumentException('این درخواست عضو در انتظار تأیید نیست.');
+        }
+        $requestAvatar = trim((string) ($row['avatar_path'] ?? ''));
+        if ($requestAvatar !== '') {
+            FileStorage::deleteRelative($requestAvatar);
         }
 
         return $this->notifyMemberRequestAndReturn($id, 'rejected');
@@ -499,6 +482,6 @@ final class Workflow
             throw new InvalidArgumentException('درخواست عضو پیدا نشد.');
         }
 
-        return Repository::stripLegacyColumns($row);
+        return ProfileImages::enrichMemberRequestRow(Repository::stripLegacyColumns($row));
     }
 }

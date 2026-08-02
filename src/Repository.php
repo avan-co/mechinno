@@ -803,7 +803,7 @@ final class Repository
         $desks = $this->liveDesksForTeam($teamId);
 
         return [
-            'team' => self::stripLegacyColumns($team),
+            'team' => ProfileImages::enrichTeamRow(self::stripLegacyColumns($team)),
             'cards' => [
                 'members' => count(array_filter($members, static fn ($m) => ($m['approval_status'] ?? 'approved') === 'approved')),
                 'desks' => count($desks),
