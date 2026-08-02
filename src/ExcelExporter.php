@@ -31,16 +31,46 @@ final class ExcelExporter
             ],
             'members' => [
                 'title' => 'اعضا',
-                'query' => "SELECT m.member_code, m.full_name, t.name AS team_label,
-                    CASE t.entity_type WHEN 'team' THEN 'تیم' WHEN 'company' THEN 'شرکت' WHEN 'student' THEN 'دانشجو' ELSE t.entity_type END,
-                    (SELECT GROUP_CONCAT(d.number ORDER BY d.number) FROM desks d WHERE d.team_id = m.team_id),
-                    CASE m.wants_access WHEN 1 THEN 'بله' ELSE 'خیر' END,
-                    m.access_code, m.phone, m.national_id, m.notes
-                    FROM members m
-                    LEFT JOIN teams t ON t.id = m.team_id
-                    WHERE m.approval_status = 'approved' OR m.approval_status IS NULL
-                    ORDER BY t.name, m.full_name",
-                'headers' => ['کد عضو', 'نام', 'نهاد', 'نوع نهاد', 'میزهای نهاد', 'درخواست تردد', 'کد تردد', 'تماس', 'کدملی', 'توضیحات'],
+                'query' => self::membersSelectSql(),
+                'headers' => self::membersHeaders(),
+            ],
+            'meeting_rooms' => [
+                'title' => 'اتاق‌های جلسه',
+                'query' => "SELECT mr.code, mr.name, mr.capacity, mr.floor, mr.equipment,
+                    mr.open_time, mr.close_time, mr.slot_minutes,
+                    CASE mr.is_active WHEN 1 THEN 'فعال' ELSE 'غیرفعال' END,
+                    mr.notes
+                    FROM meeting_rooms mr
+                    ORDER BY mr.name, mr.id",
+                'headers' => ['کد', 'نام', 'ظرفیت', 'طبقه', 'تجهیزات', 'ساعت باز', 'ساعت بسته', 'بازه (دقیقه)', 'وضعیت', 'توضیحات'],
+            ],
+            'room_reservations' => [
+                'title' => 'رزرو اتاق',
+                'query' => "SELECT rr.public_token, mr.name AS room_name, rr.reserved_date, rr.start_time, rr.end_time,
+                    rr.duration_minutes, rr.booker_name, rr.booker_phone, rr.booker_org, t.name AS team_name,
+                    rr.purpose,
+                    CASE rr.status
+                        WHEN 'pending' THEN 'در انتظار'
+                        WHEN 'approved' THEN 'تأییدشده'
+                        WHEN 'rejected' THEN 'ردشده'
+                        WHEN 'cancelled' THEN 'لغوشده'
+                        ELSE rr.status
+                    END,
+                    CASE rr.source WHEN 'public' THEN 'عمومی' WHEN 'admin' THEN 'مدیر' WHEN 'team' THEN 'نهاد' ELSE rr.source END,
+                    rr.submitted_at, rr.reviewed_at, rr.rejection_reason, rr.cancel_reason
+                    FROM room_reservations rr
+                    LEFT JOIN meeting_rooms mr ON mr.id = rr.room_id
+                    LEFT JOIN teams t ON t.id = rr.team_id
+                    ORDER BY rr.reserved_date DESC, rr.start_time DESC, rr.id DESC",
+                'headers' => [
+                    'کد پیگیری', 'اتاق', 'تاریخ', 'شروع', 'پایان', 'مدت (دقیقه)', 'رزروکننده', 'موبایل',
+                    'سازمان', 'نهاد', 'هدف', 'وضعیت', 'منبع', 'ثبت', 'بررسی', 'دلیل رد', 'دلیل لغو',
+                ],
+            ],
+            'room_closed_days' => [
+                'title' => 'تعطیلی اتاق',
+                'query' => 'SELECT closed_date, note, created_at FROM room_closed_days ORDER BY closed_date',
+                'headers' => ['تاریخ تعطیل', 'یادداشت', 'ثبت'],
             ],
             'desks' => [
                 'title' => 'میزها',
@@ -120,8 +150,49 @@ final class ExcelExporter
 
     /** @var list<string> */
     private const EXPORT_ORDER = [
-        'summary', 'teams', 'members', 'desks', 'desk_assignments', 'lockers', 'rate_settings', 'charges', 'debts', 'transactions',
+        'summary', 'teams', 'members', 'desks', 'desk_assignments', 'lockers',
+        'meeting_rooms', 'room_reservations', 'room_closed_days',
+        'rate_settings', 'charges', 'debts', 'transactions',
     ];
+
+    /** @var list<string> */
+    private const ROOMS_ORDER = [
+        'meeting_rooms', 'room_reservations', 'room_closed_days',
+    ];
+
+    /** @return list<string> */
+    public static function membersHeaders(): array
+    {
+        return [
+            'کد عضو', 'نام', 'راهبر', 'نهاد', 'نوع نهاد', 'میزهای نهاد',
+            'وضعیت تأیید', 'تاریخ افزودن', 'تاریخ ارسال', 'تاریخ بررسی',
+            'نام پدر', 'کدملی', 'شماره شناسنامه', 'تاریخ تولد', 'محل تولد', 'تحصیلات',
+            'تماس', 'ایمیل', 'آدرس', 'درخواست تردد', 'کد تردد', 'مسیر تصویر', 'توضیحات',
+        ];
+    }
+
+    public static function membersSelectSql(): string
+    {
+        return "SELECT m.member_code, m.full_name,
+                    CASE m.is_leader WHEN 1 THEN 'بله' ELSE 'خیر' END,
+                    t.name AS team_label,
+                    CASE t.entity_type WHEN 'team' THEN 'تیم' WHEN 'company' THEN 'شرکت' WHEN 'student' THEN 'دانشجو' ELSE t.entity_type END,
+                    (SELECT GROUP_CONCAT(d.number ORDER BY d.number) FROM desks d WHERE d.team_id = m.team_id),
+                    CASE m.approval_status
+                        WHEN 'pending' THEN 'در انتظار'
+                        WHEN 'approved' THEN 'تأییدشده'
+                        WHEN 'rejected' THEN 'ردشده'
+                        ELSE COALESCE(m.approval_status, 'تأییدشده')
+                    END,
+                    m.joined_at, m.submitted_at, m.reviewed_at,
+                    m.father_name, m.national_id, m.id_certificate_number, m.birth_date, m.birth_place, m.education,
+                    m.phone, m.email, m.address,
+                    CASE m.wants_access WHEN 1 THEN 'بله' ELSE 'خیر' END,
+                    m.access_code, m.avatar_path, m.notes
+                    FROM members m
+                    LEFT JOIN teams t ON t.id = m.team_id
+                    WHERE (m.approval_status = 'approved' OR m.approval_status IS NULL)";
+    }
 
     /** @var list<string> */
     private const FINANCE_ORDER = [
@@ -141,7 +212,7 @@ final class ExcelExporter
     public function output(string $reportKey, array $filters = []): void
     {
         $reports = self::reports();
-        $allowed = array_merge(array_keys($reports), ['all', 'finance']);
+        $allowed = array_merge(array_keys($reports), ['all', 'finance', 'rooms']);
         if (!in_array($reportKey, $allowed, true)) {
             http_response_code(404);
             echo 'Report not found';
@@ -150,7 +221,7 @@ final class ExcelExporter
 
         $this->filters = $this->normalizeFilters($filters);
         $today = JalaliDate::todayParts();
-        $fileName = in_array($reportKey, ['all', 'finance'], true)
+        $fileName = in_array($reportKey, ['all', 'finance', 'rooms'], true)
             ? 'mechinno-report-' . str_replace('/', '-', $today['formatted']) . '.xls'
             : "mechinno-{$reportKey}-" . str_replace('/', '-', $today['formatted']) . '.xls';
 
@@ -161,6 +232,7 @@ final class ExcelExporter
         $keys = match ($reportKey) {
             'all' => self::EXPORT_ORDER,
             'finance' => self::FINANCE_ORDER,
+            'rooms' => self::ROOMS_ORDER,
             default => [$reportKey],
         };
 
@@ -356,14 +428,7 @@ final class ExcelExporter
         }
 
         if ($key === 'members') {
-            $sql = "SELECT m.member_code, m.full_name, t.name AS team_label,
-                    CASE t.entity_type WHEN 'team' THEN 'تیم' WHEN 'company' THEN 'شرکت' WHEN 'student' THEN 'دانشجو' ELSE t.entity_type END,
-                    (SELECT GROUP_CONCAT(d.number ORDER BY d.number) FROM desks d WHERE d.team_id = m.team_id),
-                    CASE m.wants_access WHEN 1 THEN 'بله' ELSE 'خیر' END,
-                    m.access_code, m.phone, m.national_id, m.notes
-                    FROM members m
-                    LEFT JOIN teams t ON t.id = m.team_id
-                    WHERE (m.approval_status = 'approved' OR m.approval_status IS NULL)";
+            $sql = self::membersSelectSql();
             $params = [];
             if (isset($this->filters['team_id'])) {
                 $sql .= ' AND m.team_id = :team_id';
@@ -372,6 +437,30 @@ final class ExcelExporter
             $sql .= ' ORDER BY t.name, m.full_name';
             $statement = $this->pdo->prepare($sql);
             $statement->execute($params);
+
+            return $statement->fetchAll(PDO::FETCH_NUM);
+        }
+
+        if ($key === 'room_reservations' && isset($this->filters['team_id'])) {
+            $sql = "SELECT rr.public_token, mr.name AS room_name, rr.reserved_date, rr.start_time, rr.end_time,
+                    rr.duration_minutes, rr.booker_name, rr.booker_phone, rr.booker_org, t.name AS team_name,
+                    rr.purpose,
+                    CASE rr.status
+                        WHEN 'pending' THEN 'در انتظار'
+                        WHEN 'approved' THEN 'تأییدشده'
+                        WHEN 'rejected' THEN 'ردشده'
+                        WHEN 'cancelled' THEN 'لغوشده'
+                        ELSE rr.status
+                    END,
+                    CASE rr.source WHEN 'public' THEN 'عمومی' WHEN 'admin' THEN 'مدیر' WHEN 'team' THEN 'نهاد' ELSE rr.source END,
+                    rr.submitted_at, rr.reviewed_at, rr.rejection_reason, rr.cancel_reason
+                    FROM room_reservations rr
+                    LEFT JOIN meeting_rooms mr ON mr.id = rr.room_id
+                    LEFT JOIN teams t ON t.id = rr.team_id
+                    WHERE rr.team_id = :team_id
+                    ORDER BY rr.reserved_date DESC, rr.start_time DESC, rr.id DESC";
+            $statement = $this->pdo->prepare($sql);
+            $statement->execute(['team_id' => $this->filters['team_id']]);
 
             return $statement->fetchAll(PDO::FETCH_NUM);
         }
@@ -643,7 +732,10 @@ final class ExcelExporter
             return false;
         }
 
-        $textHeaders = ['تماس', 'کدملی', 'کد تردد', 'کد عضو', 'کد', 'شماره کلید', 'کلید یدک', 'نام کاربری نهاد'];
+        $textHeaders = [
+            'تماس', 'موبایل', 'کدملی', 'کد تردد', 'کد عضو', 'کد', 'کد پیگیری',
+            'شماره شناسنامه', 'شماره کلید', 'کلید یدک', 'نام کاربری نهاد', 'ایمیل', 'مسیر تصویر',
+        ];
         foreach ($textHeaders as $needle) {
             if ($header !== '' && str_contains($header, $needle)) {
                 return false;

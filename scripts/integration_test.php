@@ -199,7 +199,9 @@ $member = $crud->create('members', [
     'email' => 'member1@example.com',
     'address' => 'اصفهان، خیابان نمونه',
     'wants_access' => '1',
+    'joined_at' => '1400/01/01', // client value must be ignored
 ]);
+$assert(($member['joined_at'] ?? '') === JalaliDate::todayParts()['formatted'], 'members: joined_at auto today on create');
 $tmpAvatar = tempnam(sys_get_temp_dir(), 'avatar');
 file_put_contents($tmpAvatar, base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5W7eQAAAAASUVORK5CYII='));
 $avatarStored = (new ProfileImages($pdo))->storeMemberAvatar([
@@ -215,6 +217,7 @@ $assert((int) ($member['has_avatar'] ?? 0) === 1, 'members: avatar attached');
 $membersAfter = $repo->paginatedResource('members', 1, 25);
 $assert(count($membersAfter['rows']) === count($members['rows']) + 1, 'crud: team member submitted');
 $assert(($member['approval_status'] ?? '') === 'pending', 'workflow: team member pending approval');
+$assert(($member['joined_at'] ?? '') === JalaliDate::todayParts()['formatted'], 'members: joined_at persists after avatar');
 
 $allowed = Access::allowedResources();
 $assert(in_array('transactions', $allowed, true), 'access: team can access transactions');
@@ -1008,7 +1011,16 @@ foreach ($membersReport['members'] as $memberRow) {
     $assert(($memberRow['approval_status'] ?? 'approved') === 'approved'
         || ($memberRow['approval_status'] ?? '') === '', 'reports: members export is approved-only');
     $assert(($memberRow['full_name'] ?? '') !== 'عضو رد شده گزارش', 'reports: rejected member excluded');
+    $assert(array_key_exists('joined_at', $memberRow), 'reports: members include joined_at');
+    $assert(array_key_exists('father_name', $memberRow), 'reports: members include father_name');
+    $assert(array_key_exists('email', $memberRow), 'reports: members include email');
 }
+$roomsReport = $builder->build([
+    'type' => 'rooms',
+    'period' => 'annual',
+    'fiscal_year' => '1405',
+]);
+$assert(isset($roomsReport['meeting_rooms'], $roomsReport['room_reservations'], $roomsReport['room_closed_days']), 'reports: rooms sections present');
 $quarterly = $builder->build([
     'type' => 'debts',
     'period' => 'quarterly',
@@ -1071,9 +1083,14 @@ $filtersProp->setValue($exporter, $normalizeMethod->invoke($exporter, [
     'month_to' => 5,
     'team_id' => $teamId,
 ]));
-$excelXml = (string) $workbookMethod->invoke($exporter, ['summary', 'charges', 'transactions', 'members'], '1405/05/09');
+$excelXml = (string) $workbookMethod->invoke($exporter, ['summary', 'charges', 'transactions', 'members', 'meeting_rooms', 'room_reservations'], '1405/05/09');
 $assert(str_contains($excelXml, 'بازه گزارش'), 'export: filtered summary includes period label');
 $assert(str_contains($excelXml, 'Worksheet ss:Name="شارژ ماهانه"'), 'export: charges sheet present');
+$assert(str_contains($excelXml, 'تاریخ افزودن'), 'export: members sheet has joined_at header');
+$assert(str_contains($excelXml, 'نام پدر'), 'export: members sheet has father_name header');
+$assert(str_contains($excelXml, 'مسیر تصویر'), 'export: members sheet has avatar path');
+$assert(str_contains($excelXml, 'Worksheet ss:Name="اتاق'), 'export: meeting rooms sheet present');
+$assert(str_contains($excelXml, 'Worksheet ss:Name="رزرو اتاق"'), 'export: room reservations sheet present');
 $assert(!str_contains($excelXml, 'عضو رد شده گزارش'), 'export: rejected members excluded from excel');
 $isNumericMethod = $excelRef->getMethod('isNumericCell');
 $isNumericMethod->setAccessible(true);
@@ -1140,6 +1157,31 @@ $liveRoomAfter = (int) $legacyPdo->query('SELECT COUNT(*) FROM meeting_rooms')->
 $assert($liveRoomAfter === $liveRoomBefore, 'backup: legacy restore preserves missing room tables');
 $legacyTeams = (int) $legacyPdo->query('SELECT COUNT(*) FROM teams')->fetchColumn();
 $assert($legacyTeams === (int) ($exportPayload['counts']['teams'] ?? 0), 'backup: legacy restore still replaces teams');
+
+// Full ZIP backup must include upload files (avatars/logos/contracts).
+$avatarRel = (string) ($pdo->query('SELECT avatar_path FROM members WHERE avatar_path IS NOT NULL AND avatar_path <> \'\' LIMIT 1')->fetchColumn() ?: '');
+$assert($avatarRel !== '', 'backup zip: member avatar path exists for archive test');
+$archive = $backupService->exportArchive();
+$assert(is_file($archive['path']), 'backup zip: archive file created');
+$assert(($archive['file_count'] ?? 0) >= 1, 'backup zip: includes at least one upload file');
+$zipProbe = new ZipArchive();
+$assert($zipProbe->open($archive['path']) === true, 'backup zip: opens');
+$assert($zipProbe->locateName('mechinno-backup.json') !== false, 'backup zip: contains json dump');
+$assert($zipProbe->locateName('uploads/' . $avatarRel) !== false, 'backup zip: contains member avatar file');
+$zipProbe->close();
+$zipRestoreDb = dirname(__DIR__) . '/data/integration_backup_zip.sqlite3';
+if (is_file($zipRestoreDb)) {
+    unlink($zipRestoreDb);
+}
+$zipRestorePdo = new PDO('sqlite:' . $zipRestoreDb);
+$zipRestorePdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+Schema::migrate($zipRestorePdo);
+// Point uploads root temporarily by restoring into the real uploads dir after wiping the avatar path copy check.
+$zipImported = (new DatabaseBackup($zipRestorePdo))->importArchive($archive['path']);
+$assert(($zipImported['members'] ?? 0) >= 1, 'backup zip: restores members');
+$assert((int) ($zipImported['_uploads_restored'] ?? 0) >= 1, 'backup zip: restores upload files');
+@unlink($archive['path']);
+
 // --- Delete team cascades related finance/member data ---
 $userBefore = (int) $pdo->query('SELECT COUNT(*) FROM panel_users WHERE team_id = ' . $teamId)->fetchColumn();
 $assert($userBefore === 1, 'entity: one portal user per team');

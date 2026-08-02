@@ -266,6 +266,9 @@ body {
   margin-bottom: 4px;
 }
 .data-table--wide { min-width: 720px; }
+.data-table--compact th,
+.data-table--compact td { font-size: 11px; padding: 6px 8px; }
+.data-table--compact { min-width: 1100px; }
 .data-table th,
 .data-table td {
   padding: 7px 9px;

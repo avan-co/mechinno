@@ -383,7 +383,6 @@ const createDefaults = {
   meeting_rooms: () => ({ is_active: "1", capacity: "10", slot_minutes: "60", open_time: "08:00", close_time: "20:00" }),
   members: () => ({
     wants_access: "0",
-    joined_at: window.MECHINNO?.today || "",
   }),
   "locker-requests": () => ({}),
 };
@@ -1124,6 +1123,7 @@ const initReportBuilder = async () => {
         members: "members",
         desks: "desks",
         lockers: "lockers",
+        rooms: "rooms",
         full: "all",
       })[filters.type] || "all";
       const params = new URLSearchParams({ report: excelReport });
@@ -3529,16 +3529,18 @@ const validateCrudForm = (form, definition) => {
 
 const fieldInput = (name, meta, value) => {
   const type = meta.type || "text";
-  const required = meta.required ? "required" : "";
+  const isReadonly = Boolean(meta.readonly || meta.auto);
+  const required = meta.required && !isReadonly ? "required" : "";
   const placeholder = meta.placeholder ? `placeholder="${escapeHtml(meta.placeholder)}"` : "";
   const safeValue = value ?? "";
   const ltr = ltrFields.has(name) ? 'dir="ltr" class="ltr-input"' : "";
+  const readonlyAttr = isReadonly ? "readonly" : "";
 
   if (type === "hidden") {
     return `<input type="hidden" name="${escapeHtml(name)}" value="${escapeHtml(safeValue)}" />`;
   }
   if (type === "textarea") {
-    return `<textarea name="${escapeHtml(name)}" ${required} ${placeholder}>${escapeHtml(safeValue)}</textarea>`;
+    return `<textarea name="${escapeHtml(name)}" ${required} ${readonlyAttr} ${placeholder}>${escapeHtml(safeValue)}</textarea>`;
   }
   if (type === "select") {
     const options = meta.options || {};
@@ -3546,7 +3548,7 @@ const fieldInput = (name, meta, value) => {
     const placeholder = meta.required
       ? ""
       : `<option value="">انتخاب کنید</option>`;
-    return `<select name="${escapeHtml(name)}" ${required}>
+    return `<select name="${escapeHtml(name)}" ${required} ${isReadonly ? "disabled" : ""}>
       ${placeholder}
       ${entries.map(([optionValue, optionLabel]) => {
         const selected = String(optionValue) === String(safeValue) ? "selected" : "";
@@ -3555,7 +3557,7 @@ const fieldInput = (name, meta, value) => {
     </select>`;
   }
   if (type === "number") {
-    return `<input name="${escapeHtml(name)}" type="number" value="${escapeHtml(safeValue)}" ${required} ${placeholder} ${ltr} />`;
+    return `<input name="${escapeHtml(name)}" type="number" value="${escapeHtml(safeValue)}" ${required} ${readonlyAttr} ${placeholder} ${ltr} />`;
   }
   if (type === "password") {
     return `<input name="${escapeHtml(name)}" type="password" value="" ${required} autocomplete="new-password" placeholder="برای تغییر وارد کنید" ${ltr} />`;
@@ -3567,7 +3569,7 @@ const fieldInput = (name, meta, value) => {
       : isJalaliDateField(name, meta)
         ? 'pattern="\\d{4}/\\d{2}/\\d{2}" title="مثلاً 1404/01/01"'
         : "";
-  return `<input name="${escapeHtml(name)}" type="text" value="${escapeHtml(safeValue)}" ${required} ${placeholder} ${ltr} ${patternAttr} />`;
+  return `<input name="${escapeHtml(name)}" type="text" value="${escapeHtml(safeValue)}" ${required} ${readonlyAttr} ${placeholder} ${ltr} ${patternAttr} />`;
 };
 
 const portalPasswordSectionHtml = (title = "رمز ورود پنل نهاد") => `
@@ -3708,10 +3710,18 @@ const openRecordModal = ({ resource, definition, record = null, onSaved, title =
         if (meta.type === "hidden") {
           return fieldInput(name, meta, formRecord[name] ?? "");
         }
+        // Auto fields (e.g. member joined_at) are stamped server-side on create.
+        if ((meta.auto || meta.readonly) && !isEdit) {
+          return "";
+        }
+        const hint = meta.auto || meta.readonly
+          ? '<p class="hint">به‌صورت خودکار ثبت شده و قابل ویرایش نیست.</p>'
+          : "";
         return `
         <label class="${meta.type === "textarea" ? "wide" : ""}">
-          <span>${escapeHtml(meta.label)}${meta.required ? " *" : ""}</span>
+          <span>${escapeHtml(meta.label)}${meta.required && !meta.readonly && !meta.auto ? " *" : ""}</span>
           ${fieldInput(name, meta, formRecord[name] ?? "")}
+          ${hint}
         </label>`;
       }).join("")}
     </div>
