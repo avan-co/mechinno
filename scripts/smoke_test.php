@@ -623,6 +623,43 @@ try {
 }
 $assert($reviveBlocked, 'rejected payment cannot be approved via race');
 
+// Team payment update/delete must not reopen or remove approved deposits (race-safe SQL guards).
+$pdo->prepare(
+    "INSERT INTO transactions (tx_date, description, amount, category, team_id, fiscal_year, month_index, payment_status, confirmed, source_file)
+     VALUES ('1405/02/01', 'واریز تأییدشده', 500, 'واریز تیم', 1, '1405', 2, 'approved', 1, 'manual')"
+)->execute();
+$approvedPayId = (int) $pdo->lastInsertId();
+$_SESSION['mechinno_authenticated'] = true;
+$_SESSION['mechinno_role'] = Access::ROLE_TEAM;
+$_SESSION['mechinno_team_id'] = 1;
+$teamReopenBlocked = false;
+try {
+    $crud->update('transactions', $approvedPayId, [
+        'notes' => 'تلاش بازگشایی',
+        'description' => 'واریز تأییدشده',
+        'amount' => '500',
+        'tx_date' => '1405/02/01',
+    ]);
+} catch (InvalidArgumentException) {
+    $teamReopenBlocked = true;
+}
+$assert($teamReopenBlocked, 'team cannot update approved deposit');
+$teamDeleteApprovedBlocked = false;
+try {
+    $crud->delete('transactions', $approvedPayId);
+} catch (InvalidArgumentException) {
+    $teamDeleteApprovedBlocked = true;
+}
+$assert($teamDeleteApprovedBlocked, 'team cannot delete approved deposit');
+$statusStillApproved = (string) $pdo->query(
+    "SELECT payment_status FROM transactions WHERE id = {$approvedPayId}"
+)->fetchColumn();
+$assert($statusStillApproved === 'approved', 'approved deposit status unchanged after team mutate attempts');
+$stillExists = (int) $pdo->query("SELECT COUNT(*) FROM transactions WHERE id = {$approvedPayId}")->fetchColumn();
+$assert($stillExists === 1, 'approved deposit still exists after team delete attempt');
+$_SESSION['mechinno_role'] = Access::ROLE_ADMIN_EDITOR;
+unset($_SESSION['mechinno_team_id']);
+
 // Removing desks must keep past/current system charges, but prune unsupported future months.
 $pdo->exec('UPDATE desks SET team_id = NULL WHERE team_id = 1');
 $pdo->prepare('DELETE FROM desk_assignments WHERE team_id = 1')->execute();

@@ -10,6 +10,9 @@ const smsState = {
   debtors: [],
   selectedDebtors: new Set(),
   chargeTemplateConfigured: false,
+  historyPage: 1,
+  historyPages: 1,
+  historyPerPage: 50,
 };
 
 let announcementEditor = null;
@@ -217,16 +220,22 @@ const sendSmsAnnouncement = async () => {
   if (!message) throw new Error("متن پیامک را وارد کنید.");
   if (!smsState.selected.size) throw new Error("حداقل یک گیرنده انتخاب کنید.");
   if (!window.confirm(`ارسال پیامک به ${smsState.selected.size} نفر انجام شود؟`)) return;
-  const result = await postJson("api.php?resource=sms-send", {
-    message,
-    member_ids: [...smsState.selected],
-  });
-  showToast(`ارسال انجام شد — موفق: ${result.result?.sent || 0}، ناموفق: ${result.result?.failed || 0}`, "success");
-  smsState.selected.clear();
-  await loadSmsStats();
-  await loadSmsHistory();
-  renderSmsRecipients();
-  scheduleDeliveryCheck(result.result?.batch_uid, result.result?.pending_delivery_log_ids || []);
+  const button = document.getElementById("smsSendAnnouncement");
+  if (button) button.disabled = true;
+  try {
+    const result = await postJson("api.php?resource=sms-send", {
+      message,
+      member_ids: [...smsState.selected],
+    });
+    showToast(`ارسال انجام شد — موفق: ${result.result?.sent || 0}، ناموفق: ${result.result?.failed || 0}`, "success");
+    smsState.selected.clear();
+    await loadSmsStats();
+    await loadSmsHistory();
+    renderSmsRecipients();
+    scheduleDeliveryCheck(result.result?.batch_uid, result.result?.pending_delivery_log_ids || []);
+  } finally {
+    if (button) button.disabled = false;
+  }
 };
 
 const initChargeReminderPanel = async () => {
@@ -338,15 +347,21 @@ const sendChargeReminders = async () => {
   if (!smsState.chargeTemplateConfigured) throw new Error("الگوی یادآوری شارژ را در تنظیمات ذخیره کنید.");
   if (!smsState.selectedDebtors.size) throw new Error("حداقل یک نهاد بدهکار انتخاب کنید.");
   if (!window.confirm(`ارسال یادآوری شارژ به ${smsState.selectedDebtors.size} نهاد انجام شود؟`)) return;
-  const result = await postJson("api.php?resource=sms-send-charge-reminders", {
-    team_ids: [...smsState.selectedDebtors],
-  });
-  showToast(`ارسال انجام شد — موفق: ${result.result?.sent || 0}، ناموفق: ${result.result?.failed || 0}، رد شده: ${result.result?.skipped || 0}`, "success");
-  smsState.selectedDebtors.clear();
-  await loadSmsStats();
-  await loadSmsHistory();
-  await loadChargeDebtors();
-  scheduleDeliveryCheck(result.result?.batch_uid, result.result?.pending_delivery_log_ids || []);
+  const button = document.getElementById("smsSendChargeReminders");
+  if (button) button.disabled = true;
+  try {
+    const result = await postJson("api.php?resource=sms-send-charge-reminders", {
+      team_ids: [...smsState.selectedDebtors],
+    });
+    showToast(`ارسال انجام شد — موفق: ${result.result?.sent || 0}، ناموفق: ${result.result?.failed || 0}، رد شده: ${result.result?.skipped || 0}`, "success");
+    smsState.selectedDebtors.clear();
+    await loadSmsStats();
+    await loadSmsHistory();
+    await loadChargeDebtors();
+    scheduleDeliveryCheck(result.result?.batch_uid, result.result?.pending_delivery_log_ids || []);
+  } finally {
+    if (button) button.disabled = false;
+  }
 };
 
 const messageTypeLabel = (type) => ({
@@ -362,10 +377,42 @@ const messageTypeLabel = (type) => ({
   member_request_rejected: "درخواست عضو — رد",
 }[type] || "ارسالی");
 
+const ensureSmsHistoryPager = () => {
+  const table = document.getElementById("smsHistoryTable");
+  if (!table || document.getElementById("smsHistoryPager")) return;
+  const pager = document.createElement("div");
+  pager.id = "smsHistoryPager";
+  pager.className = "table-pagination";
+  pager.innerHTML = `
+    <span class="pager-info"></span>
+    <div class="pager-actions">
+      <button type="button" class="button ghost" data-sms-history-prev>قبلی</button>
+      <button type="button" class="button ghost" data-sms-history-next>بعدی</button>
+    </div>`;
+  table.parentElement?.appendChild(pager);
+  pager.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-sms-history-prev], button[data-sms-history-next]");
+    if (!button) return;
+    if (button.hasAttribute("data-sms-history-prev") && smsState.historyPage > 1) {
+      smsState.historyPage -= 1;
+    }
+    if (button.hasAttribute("data-sms-history-next") && smsState.historyPage < smsState.historyPages) {
+      smsState.historyPage += 1;
+    }
+    loadSmsHistory().catch((error) => showToast(error.message, "error"));
+  });
+};
+
 const loadSmsHistory = async () => {
   const tbody = document.querySelector("#smsHistoryTable tbody");
   if (!tbody) return;
-  const result = await fetchResource("api.php?resource=sms-history", { page: 1, perPage: 100 });
+  ensureSmsHistoryPager();
+  const result = await fetchResource("api.php?resource=sms-history", {
+    page: smsState.historyPage,
+    perPage: smsState.historyPerPage,
+  });
+  smsState.historyPage = Number(result.page || 1);
+  smsState.historyPages = Math.max(1, Number(result.pages || 1));
   tbody.innerHTML = (result.rows || []).map((row) => `<tr>
     <td>${escapeHtml(formatPlain(row.created_at))}</td>
     <td>${escapeHtml(messageTypeLabel(row.message_type))}</td>
@@ -376,6 +423,16 @@ const loadSmsHistory = async () => {
     <td>${escapeHtml(row.delivery_status || "—")}</td>
     <td class="sms-history-message" title="${escapeHtml(row.message_text || "")}">${escapeHtml(row.message_text || "—")}</td>
   </tr>`).join("") || `<tr class="empty-row"><td colspan="8">تاریخچه‌ای ثبت نشده است.</td></tr>`;
+  const pager = document.getElementById("smsHistoryPager");
+  if (pager) {
+    pager.hidden = Number(result.total || 0) <= 0;
+    const info = pager.querySelector(".pager-info");
+    if (info) {
+      info.textContent = `صفحه ${smsState.historyPage.toLocaleString("fa-IR")} از ${smsState.historyPages.toLocaleString("fa-IR")} — ${Number(result.total || 0).toLocaleString("fa-IR")} پیامک`;
+    }
+    pager.querySelector("[data-sms-history-prev]")?.toggleAttribute("disabled", smsState.historyPage <= 1);
+    pager.querySelector("[data-sms-history-next]")?.toggleAttribute("disabled", smsState.historyPage >= smsState.historyPages);
+  }
 };
 
 document.getElementById("smsRecipientsPager")?.addEventListener("click", (event) => {

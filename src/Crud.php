@@ -671,12 +671,21 @@ final class Crud
                 array_keys($data)
             );
             $data['id'] = $id;
+            $where = 'id = :id';
+            if ($resource === 'transactions' && Access::isTeam()) {
+                $where .= " AND payment_status = 'pending' AND team_id = :guard_team_id AND category = 'واریز تیم'";
+                $data['guard_team_id'] = Access::scopedTeamId();
+            }
             $statement = $this->pdo->prepare(sprintf(
-                'UPDATE %s SET %s WHERE id = :id',
+                'UPDATE %s SET %s WHERE %s',
                 $definition['table'],
-                implode(', ', $assignments)
+                implode(', ', $assignments),
+                $where
             ));
             $statement->execute($data);
+            if ($resource === 'transactions' && Access::isTeam() && $statement->rowCount() < 1) {
+                throw new InvalidArgumentException('فقط اعلام‌های در انتظار تأیید قابل تغییر هستند.');
+            }
         }
 
         if ($resource === 'transactions') {
@@ -753,6 +762,7 @@ final class Crud
             $teamId = (int) ($record['team_id'] ?? 0);
             $fiscalYear = (string) ($record['fiscal_year'] ?? '');
             $started = false;
+            $orphanPaths = [];
             if (!$this->pdo->inTransaction()) {
                 $this->pdo->beginTransaction();
                 $started = true;
@@ -760,7 +770,7 @@ final class Crud
             try {
                 $this->pdo->prepare(sprintf('DELETE FROM %s WHERE id = :id', $definition['table']))->execute(['id' => $id]);
                 if ($teamId > 0) {
-                    (new ContractDocuments($this->pdo))->deleteForTeamYear($teamId, $fiscalYear);
+                    $orphanPaths = (new ContractDocuments($this->pdo))->deleteForTeamYear($teamId, $fiscalYear, false);
                 }
                 if ($started) {
                     $this->pdo->commit();
@@ -770,6 +780,11 @@ final class Crud
                     $this->pdo->rollBack();
                 }
                 throw $error;
+            }
+            foreach ($orphanPaths as $path) {
+                if ($path !== '') {
+                    FileStorage::deleteRelative($path);
+                }
             }
             if ($teamId > 0) {
                 (new TeamContracts($this->pdo))->syncTeamContractCache($teamId);
@@ -785,6 +800,19 @@ final class Crud
             $row = $this->find($resource, $id);
             if (CenterLedger::isSystemSource($row['source_file'] ?? null)) {
                 throw new InvalidArgumentException('این ردیف سیستمی منسوخ است و قابل حذف نیست.');
+            }
+            if (Access::isTeam()) {
+                $teamId = Access::scopedTeamId();
+                $statement = $this->pdo->prepare(
+                    "DELETE FROM transactions
+                     WHERE id = :id AND team_id = :team_id AND category = 'واریز تیم' AND payment_status = 'pending'"
+                );
+                $statement->execute(['id' => $id, 'team_id' => $teamId]);
+                if ($statement->rowCount() < 1) {
+                    throw new InvalidArgumentException('فقط اعلام‌های در انتظار تأیید قابل حذف هستند.');
+                }
+
+                return;
             }
         }
         if ($resource === 'desk_assignments') {
@@ -1386,10 +1414,11 @@ final class Crud
                 }
                 $data['category'] = 'واریز تیم';
                 $data['team_id'] = $teamId;
-                $data['confirmed'] = 0;
-                $data['payment_status'] = 'pending';
-                $data['announced_at'] = JalaliDate::todayParts()['formatted'];
                 if ($creating) {
+                    // Status fields only on create — updates must not reopen approved/rejected deposits.
+                    $data['confirmed'] = 0;
+                    $data['payment_status'] = 'pending';
+                    $data['announced_at'] = JalaliDate::todayParts()['formatted'];
                     $plan = $this->normalizeTeamPaymentPlan($teamId, $data['payment_plan'] ?? null);
                     $data['payment_plan'] = json_encode($plan, JSON_UNESCAPED_UNICODE);
                     $data['amount'] = array_sum(array_column($plan, 'amount'));
@@ -1405,6 +1434,8 @@ final class Crud
                     if ($dup > 0) {
                         throw new InvalidArgumentException('اعلام واریز دیگری در انتظار تأیید است. ابتدا آن را پیگیری یا حذف کنید.');
                     }
+                } else {
+                    unset($data['payment_status'], $data['confirmed'], $data['announced_at']);
                 }
             } elseif ($category !== 'واریز تیم') {
                 $data['team_id'] = null;

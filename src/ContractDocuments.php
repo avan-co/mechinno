@@ -446,7 +446,7 @@ final class ContractDocuments
                             submitted_at = :submitted_at,
                             reviewed_at = NULL,
                             updated_at = :updated_at
-                         WHERE id = :id AND status = \'rejected\''
+                         WHERE id = :id AND status IN (\'rejected\', \'approved\')'
                     );
                     $updateProposal->execute([
                         'contract_start' => $contractStart,
@@ -756,12 +756,14 @@ final class ContractDocuments
 
     /**
      * Delete contract files + proposals for a team/year (used when official contract is deleted).
+     *
+     * @return list<string> orphan file paths (unlinked when $unlinkFiles is true)
      */
-    public function deleteForTeamYear(int $teamId, string $fiscalYear): void
+    public function deleteForTeamYear(int $teamId, string $fiscalYear, bool $unlinkFiles = true): array
     {
         $fiscalYear = JalaliDate::normalizeDigits($fiscalYear);
         if ($teamId <= 0 || !preg_match('/^\d{4}$/', $fiscalYear)) {
-            return;
+            return [];
         }
 
         $paths = [];
@@ -772,7 +774,10 @@ final class ContractDocuments
             );
             $statement->execute(['team_id' => $teamId, 'fiscal_year' => $fiscalYear]);
             foreach ($statement->fetchAll() ?: [] as $row) {
-                $paths[] = (string) ($row['stored_path'] ?? '');
+                $path = (string) ($row['stored_path'] ?? '');
+                if ($path !== '') {
+                    $paths[] = $path;
+                }
             }
             $this->pdo->prepare(
                 'DELETE FROM team_contract_files WHERE team_id = :team_id AND fiscal_year = :fiscal_year'
@@ -785,12 +790,13 @@ final class ContractDocuments
             )->execute(['team_id' => $teamId, 'fiscal_year' => $fiscalYear]);
         }
 
-        // Unlink after DB deletes so a crash mid-way cannot leave approved proposals without an official contract.
-        foreach ($paths as $path) {
-            if ($path !== '') {
+        if ($unlinkFiles) {
+            foreach ($paths as $path) {
                 FileStorage::deleteRelative($path);
             }
         }
+
+        return $paths;
     }
 
     /**

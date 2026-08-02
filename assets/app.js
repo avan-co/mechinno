@@ -2201,8 +2201,8 @@ const renderPerformanceAdminTable = (rows) => {
       <td>${escapeHtml(row.period_label || row.period || "—")}</td>
       <td><a class="text-link" href="${escapeHtml(row.download_url)}" target="_blank" rel="noopener">${escapeHtml(row.original_name || "دانلود")}</a></td>
       <td>${docStatusBadge(row.status)}</td>
-      <td class="reject-hint">${escapeHtml(row.rejection_reason || "—")}</td>
       <td>${escapeHtml(formatDateTime(row.submitted_at))}</td>
+      <td class="reject-hint">${escapeHtml(row.rejection_reason || "—")}</td>
       ${canWrite ? `<td>${row.status === "pending" ? `<div class="row-actions review-list-actions">
           <button class="mini-button primary" type="button" data-approve-report="${row.id}">تأیید</button>
           <button class="mini-button danger" type="button" data-reject-report="${row.id}">رد</button>
@@ -2426,11 +2426,24 @@ const approvalStatusBadge = (status) => {
   return `<span class="badge ${map[status] || ""}">${escapeHtml(label)}</span>`;
 };
 
+
+const fetchAllResourcePages = async (url, params = {}, maxPages = 20) => {
+  const rows = [];
+  let page = 1;
+  let pages = 1;
+  do {
+    const result = await fetchResource(url, { ...params, page, perPage: params.perPage || 100 });
+    rows.push(...(result.rows || []));
+    pages = Number(result.pages || 1);
+    page += 1;
+  } while (page <= pages && page <= maxPages);
+  return rows;
+};
+
 const loadDevKanban = async () => {
   const host = document.getElementById("devKanban");
   if (!host) return;
-  const data = await fetchResource("api.php?resource=development_plans", { page: 1, perPage: 100 });
-  const rows = data.rows || [];
+  const rows = await fetchAllResourcePages("api.php?resource=development_plans", { perPage: 100 });
   const columns = [
     { key: "open", label: "باز" },
     { key: "in_progress", label: "در حال اجرا" },
@@ -2478,7 +2491,7 @@ const loadPaymentSettings = async () => {
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
       const submitButton = form.querySelector('button[type="submit"]');
-      submitButton.disabled = true;
+      if (submitButton) submitButton.disabled = true;
       try {
         const payload = Object.fromEntries(new FormData(form).entries());
         await postJson("api.php?resource=center-settings", payload);
@@ -2486,7 +2499,7 @@ const loadPaymentSettings = async () => {
       } catch (error) {
         showToast(error.message, "error");
       } finally {
-        submitButton.disabled = false;
+        if (submitButton) submitButton.disabled = false;
       }
     });
   }
@@ -2911,8 +2924,7 @@ const initDeskHistoryFilters = async () => {
 const loadDevProgramSummary = async () => {
   const host = document.getElementById("devProgramSummary");
   if (!host) return;
-  const data = await fetchResource("api.php?resource=development_plans", { page: 1, perPage: 100 });
-  const rows = data.rows || [];
+  const rows = await fetchAllResourcePages("api.php?resource=development_plans", { perPage: 100 });
   const counts = { idea: 0, action: 0, planned: 0, open: 0, in_progress: 0, done: 0 };
   rows.forEach((row) => {
     if (counts[row.category] !== undefined) counts[row.category] += 1;
@@ -3547,6 +3559,7 @@ const closeModal = () => {
 const focusTrapState = new WeakMap();
 
 const trapFocus = (modal) => {
+  releaseFocusTrap(modal);
   const card = modal.querySelector(".modal-card");
   if (!card) return;
   const focusable = card.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
@@ -4071,8 +4084,8 @@ const workflowApprove = async (resource, id, row = {}, workflowType = "") => {
   if (resource === "pending-locker-requests" || workflowType === "locker-request") {
     let emptyLockers = [];
     try {
-      const lockerData = await fetchResource("api.php?resource=lockers", { page: 1, perPage: 100 });
-      emptyLockers = lockerData.rows
+      const lockerRows = await fetchAllResourcePages("api.php?resource=lockers", { perPage: 100 });
+      emptyLockers = lockerRows
         .filter((locker) => locker.status === "خالی")
         .map((locker) => Number(locker.locker_number))
         .filter((n) => n > 0)

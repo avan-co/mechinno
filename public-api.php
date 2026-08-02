@@ -65,6 +65,9 @@ try {
     }
 
     if ($resource === 'lookup') {
+        if (!$settings['room_public_enabled']) {
+            json_response(['error' => 'رزرو عمومی اتاق جلسه غیرفعال است.'], 403);
+        }
         $token = trim((string) ($_GET['token'] ?? ''));
         json_response(['record' => $rooms->findByToken($token)]);
     }

@@ -333,6 +333,7 @@ body {
   .table-scroll { overflow: visible; border: none; }
   .data-table { font-size: 8pt; }
   .data-table--wide { min-width: 0; }
+  .data-table--compact { min-width: 0; }
   .kpi-grid { grid-template-columns: repeat(3, 1fr); gap: 6px; }
   .kpi-value { font-size: 11pt; }
   .report-section { break-inside: avoid-page; }

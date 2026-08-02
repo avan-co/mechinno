@@ -64,7 +64,7 @@ final class Repository
                 'formal_contract_year' => $this->totalFormalContractAmount($this->currentFiscalYear()),
             ],
             'monthly_charges' => $this->rows(
-                'SELECT fiscal_year, month_index, month_name, SUM(amount) AS amount
+                'SELECT fiscal_year, month_index, month_name, SUM(' . $this->chargeDueSql() . ') AS amount
                  FROM charges GROUP BY fiscal_year, month_index, month_name
                  ORDER BY fiscal_year, month_index'
             ),
@@ -2139,21 +2139,15 @@ final class Repository
     private function chargesForFiscalYear(string $fiscalYear, ?int $teamId = null): array
     {
         $fiscalYear = JalaliDate::normalizeDigits($fiscalYear);
-        $sql = 'SELECT team_id, month_index, charge_amount, rent_amount, amount, fiscal_year, note FROM charges';
-        $params = [];
+        $sql = 'SELECT team_id, month_index, charge_amount, rent_amount, amount, fiscal_year, note
+                FROM charges WHERE fiscal_year = :fiscal_year';
+        $params = ['fiscal_year' => $fiscalYear];
         if ($teamId !== null) {
-            $sql .= ' WHERE team_id = :team_id';
+            $sql .= ' AND team_id = :team_id';
             $params['team_id'] = $teamId;
         }
-        $rows = [];
-        foreach ($this->preparedRows($sql, $params) as $row) {
-            if (JalaliDate::normalizeDigits((string) ($row['fiscal_year'] ?? '')) !== $fiscalYear) {
-                continue;
-            }
-            $rows[] = $row;
-        }
 
-        return $rows;
+        return $this->preparedRows($sql, $params);
     }
 
     private function contractDebtForTeam(int $teamId): int

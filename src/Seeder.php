@@ -67,12 +67,9 @@ final class Seeder
                 return;
             }
 
-            if ($deleteExisting) {
-                $this->pdo->prepare(
-                    'DELETE FROM charges WHERE team_id = :team_id AND fiscal_year = :fiscal_year AND source_file = :source'
-                )->execute(['team_id' => $teamId, 'fiscal_year' => $fiscalYear, 'source' => 'system']);
-            }
-
+            // Upsert in place — never wipe all system charges first. Shrinking desk coverage
+            // must not erase already-accrued past/current months (payments would become overpay).
+            // Callers may still pass $deleteExisting; it is ignored intentionally.
             $amounts = $this->monthlyAmountsForTeam($teamId, $fiscalYear);
             $existingSystem = $this->pdo->prepare(
                 'SELECT id, month_index FROM charges
@@ -137,9 +134,17 @@ final class Seeder
             }
 
             if ($systemByMonth !== []) {
+                $today = JalaliDate::todayParts();
+                $currentYear = (string) ($today['year'] ?? '');
+                $currentMonth = (int) ($today['month'] ?? 0);
                 $deleteStale = $this->pdo->prepare('DELETE FROM charges WHERE id = :id');
-                foreach ($systemByMonth as $systemId) {
-                    $deleteStale->execute(['id' => $systemId]);
+                foreach ($systemByMonth as $monthIndex => $systemId) {
+                    // Only prune uncovered *future* months; keep past/current accrued charges.
+                    $isFuture = ($fiscalYear === $currentYear && (int) $monthIndex > $currentMonth)
+                        || ($currentYear !== '' && strcmp($fiscalYear, $currentYear) > 0);
+                    if ($isFuture) {
+                        $deleteStale->execute(['id' => $systemId]);
+                    }
                 }
             }
 
