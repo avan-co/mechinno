@@ -62,6 +62,7 @@ $excelUrl = 'export.php?' . http_build_query(array_filter([
         'members' => 'members',
         'desks' => 'desks',
         'lockers' => 'lockers',
+        'rooms' => 'rooms',
         default => 'all',
     },
     'fiscal_year' => $meta['fiscal_year'] ?? null,
@@ -315,24 +316,129 @@ $statusClass = static function (?string $status): string {
       <?php if (in_array('members', $sections, true)): ?>
       <section class="report-section report-section--break">
         <h2 class="section-title">اعضا</h2>
-        <p class="section-note">تعداد: <?= ReportData::count(count($data['members'] ?? [])) ?> عضو</p>
+        <p class="section-note">تعداد: <?= ReportData::count(count($data['members'] ?? [])) ?> عضو — شامل همه مشخصات هویتی</p>
         <div class="table-scroll">
-          <table class="data-table data-table--wide">
+          <table class="data-table data-table--wide data-table--compact">
             <thead>
-              <tr><th>کد عضو</th><th>نام</th><th>نهاد</th><th>تماس</th><th>کدملی</th><th>تردد</th></tr>
+              <tr>
+                <th>کد</th><th>نام</th><th>راهبر</th><th>نهاد</th><th>تاریخ افزودن</th>
+                <th>نام پدر</th><th>کدملی</th><th>ش.شناسنامه</th><th>تولد</th><th>محل تولد</th>
+                <th>تحصیلات</th><th>تماس</th><th>ایمیل</th><th>آدرس</th>
+                <th>تردد</th><th>کد تردد</th><th>تصویر</th><th>توضیحات</th>
+              </tr>
             </thead>
             <tbody>
               <?php if (($data['members'] ?? []) === []): ?>
-                <tr class="empty-row"><td colspan="6">عضوی ثبت نشده است.</td></tr>
+                <tr class="empty-row"><td colspan="18">عضوی ثبت نشده است.</td></tr>
               <?php else: ?>
                 <?php foreach ($data['members'] as $row): ?>
                   <tr>
                     <td><?= e(ReportData::cell($row['member_code'] ?? null)) ?></td>
                     <td><?= e(ReportData::cell($row['full_name'] ?? null)) ?></td>
+                    <td><?= e(ReportData::wantsAccessLabel($row['is_leader'] ?? null)) ?></td>
                     <td><?= e(ReportData::cell($row['team_label'] ?? null)) ?></td>
-                    <td><?= e(ReportData::plain($row['phone'] ?? null)) ?></td>
+                    <td><?= e(ReportData::cell($row['joined_at'] ?? null)) ?></td>
+                    <td><?= e(ReportData::cell($row['father_name'] ?? null)) ?></td>
                     <td><?= e(ReportData::plain($row['national_id'] ?? null)) ?></td>
+                    <td><?= e(ReportData::plain($row['id_certificate_number'] ?? null)) ?></td>
+                    <td><?= e(ReportData::cell($row['birth_date'] ?? null)) ?></td>
+                    <td><?= e(ReportData::cell($row['birth_place'] ?? null)) ?></td>
+                    <td><?= e(ReportData::cell($row['education'] ?? null)) ?></td>
+                    <td><?= e(ReportData::plain($row['phone'] ?? null)) ?></td>
+                    <td><?= e(ReportData::cell($row['email'] ?? null)) ?></td>
+                    <td><?= e(ReportData::cell($row['address'] ?? null)) ?></td>
                     <td><?= e(ReportData::wantsAccessLabel($row['wants_access'] ?? null)) ?></td>
+                    <td><?= e(ReportData::cell($row['access_code'] ?? null)) ?></td>
+                    <td><?= e(!empty($row['avatar_path']) || !empty($row['has_avatar']) ? 'دارد' : 'ندارد') ?></td>
+                    <td><?= e(ReportData::cell($row['notes'] ?? null)) ?></td>
+                  </tr>
+                <?php endforeach; ?>
+              <?php endif; ?>
+            </tbody>
+          </table>
+        </div>
+      </section>
+      <?php endif; ?>
+
+      <?php if (in_array('meeting_rooms', $sections, true)): ?>
+      <section class="report-section report-section--break">
+        <h2 class="section-title">اتاق‌های جلسه</h2>
+        <p class="section-note">تعداد: <?= ReportData::count(count($data['meeting_rooms'] ?? [])) ?></p>
+        <div class="table-scroll">
+          <table class="data-table data-table--wide">
+            <thead>
+              <tr><th>کد</th><th>نام</th><th>ظرفیت</th><th>طبقه</th><th>ساعات</th><th>بازه</th><th>وضعیت</th><th>تجهیزات</th></tr>
+            </thead>
+            <tbody>
+              <?php if (($data['meeting_rooms'] ?? []) === []): ?>
+                <tr class="empty-row"><td colspan="8">اتاقی ثبت نشده است.</td></tr>
+              <?php else: ?>
+                <?php foreach ($data['meeting_rooms'] as $row): ?>
+                  <tr>
+                    <td><?= e(ReportData::cell($row['code'] ?? null)) ?></td>
+                    <td><?= e(ReportData::cell($row['name'] ?? null)) ?></td>
+                    <td><?= e(ReportData::count($row['capacity'] ?? 0)) ?></td>
+                    <td><?= e(ReportData::cell($row['floor'] ?? null)) ?></td>
+                    <td><?= e(ReportData::cell(($row['open_time'] ?? '') . '–' . ($row['close_time'] ?? ''))) ?></td>
+                    <td><?= e(ReportData::count($row['slot_minutes'] ?? 0)) ?> دقیقه</td>
+                    <td><?= e(((int) ($row['is_active'] ?? 0) === 1) ? 'فعال' : 'غیرفعال') ?></td>
+                    <td><?= e(ReportData::cell($row['equipment'] ?? null)) ?></td>
+                  </tr>
+                <?php endforeach; ?>
+              <?php endif; ?>
+            </tbody>
+          </table>
+        </div>
+      </section>
+      <?php endif; ?>
+
+      <?php if (in_array('room_reservations', $sections, true)): ?>
+      <section class="report-section report-section--break">
+        <h2 class="section-title">رزرو اتاق جلسه</h2>
+        <p class="section-note">تعداد: <?= ReportData::count(count($data['room_reservations'] ?? [])) ?></p>
+        <div class="table-scroll">
+          <table class="data-table data-table--wide data-table--compact">
+            <thead>
+              <tr><th>کد پیگیری</th><th>اتاق</th><th>تاریخ</th><th>ساعت</th><th>رزروکننده</th><th>موبایل</th><th>نهاد</th><th>وضعیت</th><th>منبع</th></tr>
+            </thead>
+            <tbody>
+              <?php if (($data['room_reservations'] ?? []) === []): ?>
+                <tr class="empty-row"><td colspan="9">رزروی ثبت نشده است.</td></tr>
+              <?php else: ?>
+                <?php foreach ($data['room_reservations'] as $row): ?>
+                  <tr>
+                    <td dir="ltr"><?= e(ReportData::cell($row['public_token'] ?? null)) ?></td>
+                    <td><?= e(ReportData::cell($row['room_name'] ?? null)) ?></td>
+                    <td><?= e(ReportData::cell($row['reserved_date'] ?? null)) ?></td>
+                    <td><?= e(ReportData::cell(($row['start_time'] ?? '') . '–' . ($row['end_time'] ?? ''))) ?></td>
+                    <td><?= e(ReportData::cell($row['booker_name'] ?? null)) ?></td>
+                    <td><?= e(ReportData::plain($row['booker_phone'] ?? null)) ?></td>
+                    <td><?= e(ReportData::cell($row['team_name'] ?? $row['booker_org'] ?? null)) ?></td>
+                    <td><?= e(ReportData::cell($row['status'] ?? null)) ?></td>
+                    <td><?= e(ReportData::cell($row['source'] ?? null)) ?></td>
+                  </tr>
+                <?php endforeach; ?>
+              <?php endif; ?>
+            </tbody>
+          </table>
+        </div>
+      </section>
+      <?php endif; ?>
+
+      <?php if (in_array('room_closed_days', $sections, true)): ?>
+      <section class="report-section report-section--break">
+        <h2 class="section-title">روزهای تعطیل اتاق</h2>
+        <div class="table-scroll">
+          <table class="data-table">
+            <thead><tr><th>تاریخ</th><th>یادداشت</th></tr></thead>
+            <tbody>
+              <?php if (($data['room_closed_days'] ?? []) === []): ?>
+                <tr class="empty-row"><td colspan="2">روز تعطیلی ثبت نشده است.</td></tr>
+              <?php else: ?>
+                <?php foreach ($data['room_closed_days'] as $row): ?>
+                  <tr>
+                    <td><?= e(ReportData::cell($row['closed_date'] ?? null)) ?></td>
+                    <td><?= e(ReportData::cell($row['note'] ?? null)) ?></td>
                   </tr>
                 <?php endforeach; ?>
               <?php endif; ?>

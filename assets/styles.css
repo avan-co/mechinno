@@ -3170,6 +3170,13 @@ body.is-mobile .mobile-card .row-actions {
 .section-intro p { margin: 0; font-size: 13px; line-height: 1.7; color: var(--muted); }
 .section-intro p strong { color: var(--text); }
 .section-intro-action { flex-shrink: 0; align-self: center; }
+.section-intro-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  flex-shrink: 0;
+}
 .section-intro--purple { background: color-mix(in srgb, var(--purple) 6%, var(--surface)); border-color: color-mix(in srgb, var(--purple) 18%, var(--line)); }
 .section-intro--purple .section-intro-icon { background: color-mix(in srgb, var(--purple) 14%, var(--surface-2)); color: var(--purple); }
 .section-intro--teal { background: color-mix(in srgb, var(--teal) 6%, var(--surface)); border-color: color-mix(in srgb, var(--teal) 18%, var(--line)); }

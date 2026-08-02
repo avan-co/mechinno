@@ -6,6 +6,8 @@ final class DatabaseBackup
 {
     public const FORMAT = 'mechinno-backup';
     public const VERSION = 1;
+    public const ARCHIVE_FORMAT = 'mechinno-backup-zip';
+    public const MAX_RESTORE_BYTES = 268_435_456; // 256 MB
 
     /** @var list<string> */
     private const TABLE_ORDER = [
@@ -29,6 +31,7 @@ final class DatabaseBackup
         'meeting_rooms',
         'room_closed_days',
         'room_reservations',
+        'sms_patterns',
         'sms_logs',
     ];
 
@@ -96,6 +99,271 @@ final class DatabaseBackup
         $stamp = str_replace('/', '-', $stamp);
 
         return 'mechinno-backup-' . $stamp . '.json';
+    }
+
+    public function suggestedArchiveFilename(): string
+    {
+        $stamp = str_replace('/', '-', JalaliDate::todayParts()['formatted']);
+
+        return 'mechinno-backup-' . $stamp . '.zip';
+    }
+
+    /**
+     * Full backup: JSON database dump + uploaded files (avatars, logos, contracts, …).
+     *
+     * @return array{path:string,filename:string,file_count:int,bytes:int}
+     */
+    public function exportArchive(): array
+    {
+        if (!class_exists(ZipArchive::class)) {
+            throw new RuntimeException('افزونه ZipArchive روی سرور فعال نیست.');
+        }
+
+        FileStorage::ensureRoot();
+        $filename = $this->suggestedArchiveFilename();
+        $tempPath = sys_get_temp_dir() . '/mechinno-backup-' . bin2hex(random_bytes(8)) . '.zip';
+        $zip = new ZipArchive();
+        if ($zip->open($tempPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
+            throw new RuntimeException('ساخت فایل فشرده پشتیبان ممکن نشد.');
+        }
+
+        $payload = $this->export();
+        $payload['archive_format'] = self::ARCHIVE_FORMAT;
+        $payload['includes_uploads'] = true;
+        $json = json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+        $zip->addFromString('mechinno-backup.json', $json);
+
+        $fileCount = $this->addUploadsToZip($zip, 'uploads');
+        $manifest = json_encode([
+            'format' => self::ARCHIVE_FORMAT,
+            'json' => 'mechinno-backup.json',
+            'uploads_prefix' => 'uploads/',
+            'file_count' => $fileCount,
+            'exported_at' => $payload['exported_at'] ?? '',
+        ], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+        $zip->addFromString('manifest.json', $manifest);
+        $zip->close();
+
+        $bytes = (int) filesize($tempPath);
+
+        return [
+            'path' => $tempPath,
+            'filename' => $filename,
+            'file_count' => $fileCount,
+            'bytes' => $bytes,
+        ];
+    }
+
+    /**
+     * Restore from JSON string/array or from a ZIP archive path.
+     *
+     * @return array<string, int|string>
+     */
+    public function importFromUpload(string $tmpPath, string $originalName = ''): array
+    {
+        if ($tmpPath === '' || !is_readable($tmpPath)) {
+            throw new InvalidArgumentException('فایل پشتیبان قابل خواندن نیست.');
+        }
+        $size = (int) filesize($tmpPath);
+        if ($size <= 0) {
+            throw new InvalidArgumentException('فایل پشتیبان خالی است.');
+        }
+        if ($size > self::MAX_RESTORE_BYTES) {
+            throw new InvalidArgumentException('حداکثر اندازه فایل پشتیبان ۲۵۶ مگابایت است.');
+        }
+
+        $name = strtolower($originalName);
+        $isZip = str_ends_with($name, '.zip') || $this->looksLikeZip($tmpPath);
+        if ($isZip) {
+            return $this->importArchive($tmpPath);
+        }
+
+        $json = file_get_contents($tmpPath);
+        if ($json === false || trim($json) === '') {
+            throw new RuntimeException('خواندن فایل پشتیبان ناموفق بود.');
+        }
+
+        return $this->import($json);
+    }
+
+    /**
+     * @return array<string, int|string>
+     */
+    public function importArchive(string $zipPath): array
+    {
+        if (!class_exists(ZipArchive::class)) {
+            throw new RuntimeException('افزونه ZipArchive روی سرور فعال نیست.');
+        }
+
+        $zip = new ZipArchive();
+        if ($zip->open($zipPath) !== true) {
+            throw new InvalidArgumentException('فایل ZIP پشتیبان معتبر نیست.');
+        }
+
+        $extractDir = sys_get_temp_dir() . '/mechinno-restore-' . bin2hex(random_bytes(8));
+        if (!mkdir($extractDir, 0700, true) && !is_dir($extractDir)) {
+            $zip->close();
+            throw new RuntimeException('ساخت پوشه موقت بازیابی ممکن نشد.');
+        }
+
+        try {
+            if (!$zip->extractTo($extractDir)) {
+                throw new RuntimeException('استخراج فایل پشتیبان ناموفق بود.');
+            }
+            $zip->close();
+            $zip = null;
+
+            $jsonPath = $this->findBackupJson($extractDir);
+            $json = file_get_contents($jsonPath);
+            if ($json === false || trim($json) === '') {
+                throw new RuntimeException('فایل داده داخل ZIP پیدا نشد.');
+            }
+
+            $imported = $this->import($json);
+            $uploadsRestored = $this->restoreUploadsFromDir($extractDir . '/uploads');
+            $imported['_uploads_restored'] = $uploadsRestored;
+
+            return $imported;
+        } finally {
+            if ($zip instanceof ZipArchive) {
+                $zip->close();
+            }
+            $this->removeDirectory($extractDir);
+        }
+    }
+
+    private function addUploadsToZip(ZipArchive $zip, string $prefix): int
+    {
+        $root = FileStorage::rootDir();
+        if (!is_dir($root)) {
+            return 0;
+        }
+
+        $count = 0;
+        $iterator = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS)
+        );
+        /** @var SplFileInfo $file */
+        foreach ($iterator as $file) {
+            if (!$file->isFile()) {
+                continue;
+            }
+            $absolute = $file->getPathname();
+            $relative = ltrim(str_replace('\\', '/', substr($absolute, strlen($root))), '/');
+            if ($relative === '' || str_contains($relative, '..')) {
+                continue;
+            }
+            // Skip directory guards; restore recreates .htaccess via FileStorage::ensureRoot().
+            if (basename($relative) === '.htaccess') {
+                continue;
+            }
+            $zip->addFile($absolute, $prefix . '/' . $relative);
+            $count++;
+        }
+
+        return $count;
+    }
+
+    private function restoreUploadsFromDir(string $sourceDir): int
+    {
+        if (!is_dir($sourceDir)) {
+            return 0;
+        }
+
+        FileStorage::ensureRoot();
+        $root = FileStorage::rootDir();
+        $count = 0;
+        $iterator = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($sourceDir, FilesystemIterator::SKIP_DOTS)
+        );
+        /** @var SplFileInfo $file */
+        foreach ($iterator as $file) {
+            if (!$file->isFile()) {
+                continue;
+            }
+            $absolute = $file->getPathname();
+            $relative = ltrim(str_replace('\\', '/', substr($absolute, strlen($sourceDir))), '/');
+            if ($relative === '' || str_contains($relative, '..') || str_starts_with($relative, '/')) {
+                continue;
+            }
+            if (basename($relative) === '.htaccess') {
+                continue;
+            }
+            $target = $root . '/' . $relative;
+            $targetDir = dirname($target);
+            if (!is_dir($targetDir) && !mkdir($targetDir, 0750, true) && !is_dir($targetDir)) {
+                throw new RuntimeException('بازسازی پوشه آپلود ممکن نشد.');
+            }
+            if (!copy($absolute, $target)) {
+                throw new RuntimeException('بازسازی فایل آپلود ناموفق بود: ' . $relative);
+            }
+            @chmod($target, 0640);
+            $count++;
+        }
+
+        return $count;
+    }
+
+    private function findBackupJson(string $extractDir): string
+    {
+        $candidates = [
+            $extractDir . '/mechinno-backup.json',
+            $extractDir . '/backup.json',
+            $extractDir . '/data.json',
+        ];
+        foreach ($candidates as $path) {
+            if (is_file($path)) {
+                return $path;
+            }
+        }
+        $matches = glob($extractDir . '/*.json') ?: [];
+        foreach ($matches as $path) {
+            if (basename($path) === 'manifest.json') {
+                continue;
+            }
+            $raw = file_get_contents($path);
+            if (!is_string($raw)) {
+                continue;
+            }
+            $decoded = json_decode($raw, true);
+            if (is_array($decoded) && ($decoded['format'] ?? '') === self::FORMAT) {
+                return $path;
+            }
+        }
+
+        throw new InvalidArgumentException('داخل ZIP فایل پشتیبان Mechinno پیدا نشد.');
+    }
+
+    private function looksLikeZip(string $path): bool
+    {
+        $handle = fopen($path, 'rb');
+        if ($handle === false) {
+            return false;
+        }
+        $magic = (string) fread($handle, 4);
+        fclose($handle);
+
+        return str_starts_with($magic, "PK\x03\x04") || str_starts_with($magic, "PK\x05\x06");
+    }
+
+    private function removeDirectory(string $dir): void
+    {
+        if (!is_dir($dir)) {
+            return;
+        }
+        $iterator = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS),
+            RecursiveIteratorIterator::CHILD_FIRST
+        );
+        foreach ($iterator as $item) {
+            $path = $item->getPathname();
+            if ($item->isDir()) {
+                @rmdir($path);
+            } else {
+                @unlink($path);
+            }
+        }
+        @rmdir($dir);
     }
 
     /**

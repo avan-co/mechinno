@@ -12,6 +12,7 @@ final class ReportBuilder
     public const TYPE_MEMBERS = 'members';
     public const TYPE_DESKS = 'desks';
     public const TYPE_LOCKERS = 'lockers';
+    public const TYPE_ROOMS = 'rooms';
     public const TYPE_TRANSACTIONS = 'transactions';
     public const TYPE_FULL = 'full';
 
@@ -55,9 +56,10 @@ final class ReportBuilder
                 ['id' => self::TYPE_DEBTS, 'label' => 'مطالبات و بدهی‌ها', 'description' => 'وضعیت پرداخت هر نهاد در بازه', 'supports_period' => true],
                 ['id' => self::TYPE_TRANSACTIONS, 'label' => 'گردش تراکنش‌ها', 'description' => 'لیست تراکنش‌های تأییدشده', 'supports_period' => true],
                 ['id' => self::TYPE_TEAMS, 'label' => 'نهادها', 'description' => 'فهرست تیم‌ها، شرکت‌ها و دانشجویان', 'supports_period' => false],
-                ['id' => self::TYPE_MEMBERS, 'label' => 'اعضا', 'description' => 'فهرست اعضای تأییدشده', 'supports_period' => false],
+                ['id' => self::TYPE_MEMBERS, 'label' => 'اعضا', 'description' => 'فهرست کامل اعضای تأییدشده با همه مشخصات', 'supports_period' => false],
                 ['id' => self::TYPE_DESKS, 'label' => 'میزها', 'description' => 'وضعیت ۲۴ میز و تخصیص فعلی', 'supports_period' => false],
                 ['id' => self::TYPE_LOCKERS, 'label' => 'کمدها', 'description' => 'وضعیت و تخصیص کمدها', 'supports_period' => false],
+                ['id' => self::TYPE_ROOMS, 'label' => 'اتاق جلسه', 'description' => 'اتاق‌ها، رزروها و روزهای تعطیل', 'supports_period' => false],
                 ['id' => self::TYPE_FULL, 'label' => 'گزارش جامع', 'description' => 'همه بخش‌ها در یک سند', 'supports_period' => true],
             ],
             'periods' => [
@@ -111,7 +113,11 @@ final class ReportBuilder
             self::TYPE_MEMBERS => ['members'],
             self::TYPE_DESKS => ['desks'],
             self::TYPE_LOCKERS => ['lockers'],
-            self::TYPE_FULL => ['kpis', 'finance_summary', 'monthly_breakdown', 'debts', 'charges', 'transactions', 'teams', 'members', 'desks', 'lockers'],
+            self::TYPE_ROOMS => ['meeting_rooms', 'room_reservations', 'room_closed_days'],
+            self::TYPE_FULL => [
+                'kpis', 'finance_summary', 'monthly_breakdown', 'debts', 'charges', 'transactions',
+                'teams', 'members', 'desks', 'lockers', 'meeting_rooms', 'room_reservations', 'room_closed_days',
+            ],
             default => throw new InvalidArgumentException('نوع گزارش معتبر نیست.'),
         };
 
@@ -202,6 +208,28 @@ final class ReportBuilder
                 ));
             }
             $data['lockers'] = $lockers;
+        }
+        if (in_array('meeting_rooms', $sections, true)) {
+            $data['meeting_rooms'] = Schema::tableExists($this->pdo, 'meeting_rooms')
+                ? $repo->resource('meeting-rooms')
+                : [];
+        }
+        if (in_array('room_reservations', $sections, true)) {
+            $reservations = Schema::tableExists($this->pdo, 'room_reservations')
+                ? $repo->resource('room-reservations')
+                : [];
+            if ($normalized['team_id'] > 0) {
+                $reservations = array_values(array_filter(
+                    $reservations,
+                    static fn (array $row): bool => (int) ($row['team_id'] ?? 0) === $normalized['team_id']
+                ));
+            }
+            $data['room_reservations'] = $reservations;
+        }
+        if (in_array('room_closed_days', $sections, true)) {
+            $data['room_closed_days'] = Schema::tableExists($this->pdo, 'room_closed_days')
+                ? (new RoomReservations($this->pdo))->listClosedDays()
+                : [];
         }
 
         return $data;

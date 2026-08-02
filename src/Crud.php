@@ -79,7 +79,13 @@ final class Crud
                     'phone' => ['label' => 'تماس', 'type' => 'text', 'required' => true],
                     'email' => ['label' => 'ایمیل', 'type' => 'text', 'required' => true, 'placeholder' => 'name@example.com'],
                     'address' => ['label' => 'آدرس محل سکونت', 'type' => 'textarea', 'required' => true],
-                    'joined_at' => ['label' => 'تاریخ افزودن عضو', 'type' => 'date', 'placeholder' => '1404/01/01'],
+                    'joined_at' => [
+                        'label' => 'تاریخ افزودن عضو',
+                        'type' => 'date',
+                        'readonly' => true,
+                        'auto' => true,
+                        'placeholder' => 'خودکار — امروز',
+                    ],
                     'access_code' => ['label' => 'کد دستگاه تردد', 'type' => 'text'],
                     'wants_access' => [
                         'label' => 'دسترسی تردد',
@@ -1114,9 +1120,8 @@ final class Crud
                     throw new InvalidArgumentException('نام و نام خانوادگی الزامی است.');
                 }
             }
-            if ($this->blank($data['joined_at'] ?? null)) {
-                $data['joined_at'] = JalaliDate::todayParts()['formatted'];
-            }
+            // Always stamp join date on create — not editable by client.
+            $data['joined_at'] = JalaliDate::todayParts()['formatted'];
             if (isset($data['wants_access'])) {
                 $data['wants_access'] = (int) $data['wants_access'];
             } else {
@@ -1125,6 +1130,7 @@ final class Crud
             $this->assertMemberProfileFields($data, true);
         }
         if ($resource === 'members' && !$creating) {
+            unset($data['joined_at']);
             if (!empty($data['access_code'])) {
                 $data['wants_access'] = 1;
             }

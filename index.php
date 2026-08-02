@@ -451,7 +451,13 @@ $assetVer = (string) max(
             <section id="members" class="section">
               <div class="section-intro section-intro--teal">
                 <span class="section-intro-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M16 11c1.7 0 3-1.3 3-3S17.7 5 16 5s-3 1.3-3 3 1.3 3 3 3ZM8 11c1.7 0 3-1.3 3-3S9.7 5 8 5 5 6.3 5 8s1.3 3 3 3Zm0 2c-2.7 0-8 1.3-8 4v3h10v-3c0-1.1.4-2.1 1.1-2.9C9.8 13.1 8.9 13 8 13Zm8 0c-.9 0-1.8.1-2.6.3.7.8 1.1 1.8 1.1 2.9v3h7v-3c0-2.7-5.3-4-8-4Z" fill="currentColor"/></svg></span>
-                <div class="section-intro-copy"><p>اعضای تأییدشده در لیست اصلی نمایش داده می‌شوند. درخواست‌های نهادها در جدول «در انتظار تأیید» بررسی می‌شود. کد تردد پس از تأیید، به‌صورت حضوری و با تأخیر ثبت می‌شود.</p></div>
+                <div class="section-intro-copy"><p>اعضای تأییدشده در لیست اصلی نمایش داده می‌شوند. تاریخ افزودن عضو به‌صورت خودکار ثبت می‌شود. درخواست‌های نهادها در جدول «در انتظار تأیید» بررسی می‌شود.</p></div>
+                <?php if (Access::isAdmin()): ?>
+                <div class="section-intro-actions">
+                  <a class="button ghost section-intro-action" href="export.php?report=members">Excel اعضا</a>
+                  <a class="button ghost section-intro-action" href="report.php?type=members" target="_blank" rel="noopener">چاپ گزارش اعضا</a>
+                </div>
+                <?php endif; ?>
               </div>
               <?php if (Access::isAdmin()): ?>
               <data-table title="اعضا — در انتظار تأیید نهاد" endpoint="api.php?resource=pending-members" data-workflow="members" data-workflow-type="member-approve" data-table-key="pending-members" data-readonly></data-table>
