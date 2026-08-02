@@ -395,6 +395,10 @@ final class ContractDocuments
                 $started = true;
             }
             try {
+                // Re-check official contract inside the write txn (admin may have registered meanwhile).
+                if ((new TeamContracts($this->pdo))->contractForYear($teamId, $fiscalYear) !== null) {
+                    throw new InvalidArgumentException('قرارداد این سال قبلاً در سامانه ثبت شده است و ارسال مجدد مجاز نیست.');
+                }
                 foreach ($staged as $docType => $stored) {
                     $this->persistStoredFile($teamId, $fiscalYear, $docType, $stored, 'pending', $now);
                 }
@@ -841,18 +845,25 @@ final class ContractDocuments
     /**
      * Delete all contract documents for a team (cascade).
      */
-    public function deleteForTeam(int $teamId): void
+    /**
+     * @return list<string> stored paths (unlinked when $unlinkFiles is true)
+     */
+    public function deleteForTeam(int $teamId, bool $unlinkFiles = true): array
     {
         if ($teamId <= 0) {
-            return;
+            return [];
         }
+        $paths = [];
         if (Schema::tableExists($this->pdo, 'team_contract_files')) {
             $statement = $this->pdo->prepare(
                 'SELECT stored_path FROM team_contract_files WHERE team_id = :team_id'
             );
             $statement->execute(['team_id' => $teamId]);
             foreach ($statement->fetchAll() ?: [] as $row) {
-                FileStorage::deleteRelative((string) ($row['stored_path'] ?? ''));
+                $path = (string) ($row['stored_path'] ?? '');
+                if ($path !== '') {
+                    $paths[] = $path;
+                }
             }
             $this->pdo->prepare('DELETE FROM team_contract_files WHERE team_id = :team_id')
                 ->execute(['team_id' => $teamId]);
@@ -861,6 +872,13 @@ final class ContractDocuments
             $this->pdo->prepare('DELETE FROM team_contract_proposals WHERE team_id = :team_id')
                 ->execute(['team_id' => $teamId]);
         }
+        if ($unlinkFiles) {
+            foreach ($paths as $path) {
+                FileStorage::deleteRelative($path);
+            }
+        }
+
+        return $paths;
     }
 
     /**
@@ -1000,11 +1018,14 @@ final class ContractDocuments
 
     private function nullableMoney(mixed $value): ?int
     {
-        $text = trim((string) ($value ?? ''));
+        $text = trim(JalaliDate::normalizeDigits((string) ($value ?? '')));
         if ($text === '') {
             return null;
         }
+        if (!preg_match('/^\d+$/', $text)) {
+            throw new InvalidArgumentException('مبلغ نرخ اختصاصی معتبر نیست.');
+        }
 
-        return (int) preg_replace('/\D+/', '', $text);
+        return (int) $text;
     }
 }

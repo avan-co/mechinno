@@ -285,8 +285,12 @@ const formatMonthRange = (from, until) => {
   return monthNames[untilMonth] || String(untilMonth);
 };
 
+const normalizeDigits = (value) => String(value ?? "").trim()
+  .replace(/[۰-۹]/g, (ch) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(ch)))
+  .replace(/[٠-٩]/g, (ch) => String("٠١٢٣٤٥٦٧٨٩".indexOf(ch)));
+
 const monthIndexFromDate = (value) => {
-  const text = String(value || "").trim();
+  const text = normalizeDigits(value);
   if (!text) return "";
   if (/^\d{1,2}$/.test(text)) return text;
   const parts = text.split("/");
@@ -299,7 +303,7 @@ const validAssignmentMonth = (value, fallback = "") => {
 };
 
 const fiscalYearFromDate = (value) => {
-  const text = String(value || "").trim();
+  const text = normalizeDigits(value);
   return text.length >= 4 ? text.slice(0, 4) : "";
 };
 
@@ -1075,6 +1079,18 @@ const activateSection = (id, options = {}) => {
   if (options.highlightDesk !== undefined) highlightDesk = options.highlightDesk;
   if (options.highlightLocker !== undefined) highlightLocker = options.highlightLocker;
 
+  const target = document.getElementById(id);
+  if (!target || !target.classList.contains("section")) {
+    // Missing section (e.g. desk-history on team panel) must not blank the whole UI.
+    const fallback = document.querySelector(".section.active")?.id
+      || document.querySelector(".nav-item, .bottom-nav-item[data-section]")?.dataset?.section
+      || "";
+    if (fallback && fallback !== id) {
+      activateSection(fallback, { ...options, updateHash: options.updateHash });
+    }
+    return;
+  }
+
   document.querySelectorAll(".section").forEach((s) => s.classList.toggle("active", s.id === id));
   document.querySelectorAll(".nav-item, .bottom-nav-item[data-section]").forEach((i) => {
     i.classList.toggle("active", i.dataset.section === id);
@@ -1657,7 +1673,9 @@ const renderContractReviewTable = (rows, { showActions = false, showReason = fal
         <td>${showActionColumn ? `<div class="review-list-actions">
             <button type="button" class="button" data-approve-proposal="${row.id}" ${canApprove ? "" : "disabled"}>تأیید</button>
             <button type="button" class="button danger ghost" data-reject-proposal="${row.id}">رد</button>
-            ${!canApprove ? `<div class="hint reject-hint">هر دو پیوست لازم است — برای باز کردن مسیر نهاد، پیشنهاد را رد کنید.</div>` : ""}
+            ${!canApprove ? `<div class="hint reject-hint">${row.has_official
+              ? "برای این سال قرارداد رسمی ثبت شده — ابتدا همان را بررسی/حذف کنید یا پیشنهاد را رد کنید."
+              : "هر دو پیوست لازم است — برای باز کردن مسیر نهاد، پیشنهاد را رد کنید."}</div>` : ""}
           </div>` : docStatusBadge(row.status)}
         </td>
       </tr>`;
@@ -1666,9 +1684,14 @@ const renderContractReviewTable = (rows, { showActions = false, showReason = fal
 };
 
 const bindContractReviewActions = (root) => {
+  const lockRowActions = (button, locked) => {
+    button.closest(".review-list-actions")?.querySelectorAll("button").forEach((btn) => {
+      btn.disabled = locked;
+    });
+  };
   root.querySelectorAll("[data-approve-proposal]").forEach((button) => {
     button.addEventListener("click", async () => {
-      button.disabled = true;
+      lockRowActions(button, true);
       try {
         await postJson("api.php?resource=pending-contract-proposals&action=approve", { id: Number(button.dataset.approveProposal) });
         showToast("قرارداد با پیوست‌ها تأیید و ثبت شد.", "success");
@@ -1676,13 +1699,13 @@ const bindContractReviewActions = (root) => {
         await refreshAfterMutation("team-contracts");
       } catch (error) {
         showToast(error.message, "error");
-        button.disabled = false;
+        lockRowActions(button, false);
       }
     });
   });
   root.querySelectorAll("[data-reject-proposal]").forEach((button) => {
     button.addEventListener("click", async () => {
-      button.disabled = true;
+      lockRowActions(button, true);
       try {
         const reason = await askRejectReason({ required: true, title: "رد قرارداد" });
         await postJson("api.php?resource=pending-contract-proposals&action=reject", {
@@ -1691,9 +1714,10 @@ const bindContractReviewActions = (root) => {
         });
         showToast("قرارداد رد شد و به فهرست ردشده‌ها منتقل شد.", "success");
         await loadPendingContractsQueue();
+        await refreshAfterMutation("team-contracts");
       } catch (error) {
         if (error.message !== "cancelled") showToast(error.message, "error");
-        button.disabled = false;
+        lockRowActions(button, false);
       }
     });
   });
@@ -1933,22 +1957,28 @@ const loadPerformanceReportsSection = async () => {
       }
     });
 
+    const lockPerfActions = (button, locked) => {
+      button.closest("tr, .review-list-actions")?.querySelectorAll("button").forEach((btn) => {
+        btn.disabled = locked;
+      });
+    };
     host.querySelectorAll("[data-approve-report]").forEach((button) => {
       button.addEventListener("click", async () => {
-        button.disabled = true;
+        lockPerfActions(button, true);
         try {
           await postJson("api.php?resource=performance-reports&action=approve", { id: Number(button.dataset.approveReport) });
           showToast("گزارش تأیید شد.", "success");
           await loadPerformanceReportsSection();
+          await refreshAfterMutation("performance-reports");
         } catch (error) {
           showToast(error.message, "error");
-          button.disabled = false;
+          lockPerfActions(button, false);
         }
       });
     });
     host.querySelectorAll("[data-reject-report]").forEach((button) => {
       button.addEventListener("click", async () => {
-        button.disabled = true;
+        lockPerfActions(button, true);
         try {
           const reason = await askRejectReason({ required: true, title: "رد گزارش عملکرد" });
           await postJson("api.php?resource=performance-reports&action=reject", {
@@ -1957,9 +1987,10 @@ const loadPerformanceReportsSection = async () => {
           });
           showToast("گزارش رد شد.", "success");
           await loadPerformanceReportsSection();
+          await refreshAfterMutation("performance-reports");
         } catch (error) {
           if (error.message !== "cancelled") showToast(error.message, "error");
-          button.disabled = false;
+          lockPerfActions(button, false);
         }
       });
     });
@@ -2609,7 +2640,7 @@ const accessStatusLabel = (row = {}) => {
 const formatBankValue = (label, value) => {
   if (!value) return "";
   if (label === "شماره کارت") {
-    const digits = String(value).replace(/\D/g, "");
+    const digits = normalizeDigits(value).replace(/\D/g, "");
     const grouped = digits.replace(/(.{4})/g, "$1 ").trim();
     return grouped || String(value);
   }
@@ -3256,10 +3287,6 @@ const isJalaliDateField = (name, meta) => {
   if (jalaliDateFieldNames.has(name)) return true;
   return /(?:^|_)(?:date|at)$/.test(name) || name.endsWith("_from") || name.endsWith("_until");
 };
-
-const normalizeDigits = (value) => String(value ?? "").trim()
-  .replace(/[۰-۹]/g, (ch) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(ch)))
-  .replace(/[٠-٩]/g, (ch) => String("٠١٢٣٤٥٦٧٨٩".indexOf(ch)));
 
 const isValidJalaliDate = (value) => /^\d{4}\/\d{2}\/\d{2}$/.test(normalizeDigits(value));
 
@@ -4747,6 +4774,7 @@ window.MechinnoShared = {
   labels,
   monthNames,
   formatMonthRange,
+  normalizeDigits,
   monthIndexFromDate,
   validAssignmentMonth,
   fiscalYearFromDate,

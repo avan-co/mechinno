@@ -288,13 +288,14 @@ final class Repository
             ];
         }
 
-        $freeDesks = $this->scalar('SELECT COUNT(*) FROM desks WHERE team_id IS NULL');
+        $desksTotal = (int) $this->scalar('SELECT COUNT(*) FROM desks');
+        $freeDesks = max(0, $desksTotal - $this->liveOccupiedDeskCount());
         if ($freeDesks > 0) {
             $items[] = [
                 'priority' => 70,
                 'type' => 'desk',
                 'label' => number_format($freeDesks) . ' میز آزاد',
-                'detail' => 'از ۲۴ میز قابل تخصیص',
+                'detail' => 'از ' . number_format($desksTotal) . ' میز قابل تخصیص',
                 'section' => 'desks',
             ];
         }
@@ -363,7 +364,7 @@ final class Repository
             return match ($name) {
                 'teams' => 1,
                 'members' => $this->preparedScalar('SELECT COUNT(*) FROM members WHERE team_id = :id', ['id' => $teamId]),
-                'desks' => $this->preparedScalar('SELECT COUNT(*) FROM desks WHERE team_id = :id', ['id' => $teamId]),
+                'desks' => $this->liveDeskCountForTeam($teamId),
                 'lockers' => $this->preparedScalar('SELECT COUNT(*) FROM lockers WHERE team_id = :id', ['id' => $teamId]),
                 'charges' => $this->preparedScalar('SELECT COUNT(*) FROM charges WHERE team_id = :id', ['id' => $teamId]),
                 'transactions' => $this->teamTransactionCount($teamId, $filters),
@@ -503,14 +504,26 @@ final class Repository
     private function resourceSql(string $name, array $filters = []): string
     {
         $teamId = Access::scopedTeamId();
+        $todaySql = $this->pdo->quote(JalaliDate::todayParts()['formatted']);
 
         return match ($name) {
             'teams' => "SELECT t.id, t.entity_code, t.entity_type, t.name, t.leader, t.phone, t.joined_at,
                         t.contract_start, t.contract_end, t.is_active, t.warning, t.notes,
                         u.username AS portal_username,
                         CASE WHEN u.password_hash IS NOT NULL AND u.password_hash <> '' THEN 1 ELSE 0 END AS portal_has_password,
-                        (SELECT COUNT(*) FROM desks d WHERE d.team_id = t.id) AS desk_count,
-                        (SELECT COALESCE(SUM(d.informal_seats), 0) FROM desks d WHERE d.team_id = t.id) AS informal_seats
+                        (SELECT COUNT(DISTINCT da.desk_id) FROM desk_assignments da
+                          WHERE da.team_id = t.id
+                            AND da.assigned_from <= {$todaySql}
+                            AND (da.assigned_until IS NULL OR da.assigned_until = '' OR da.assigned_until >= {$todaySql})
+                        ) AS desk_count,
+                        (SELECT COALESCE(SUM(d.informal_seats), 0)
+                          FROM desks d
+                          INNER JOIN desk_assignments da ON da.desk_id = d.id
+                          WHERE da.team_id = t.id
+                            AND da.assigned_from <= {$todaySql}
+                            AND (da.assigned_until IS NULL OR da.assigned_until = '' OR da.assigned_until >= {$todaySql})
+                            AND da.usage_type IN ('informal', 'mixed')
+                        ) AS informal_seats
                  FROM teams t
                  LEFT JOIN panel_users u ON u.team_id = t.id AND u.role = 'team'"
                 . ($teamId !== null ? " WHERE t.id = {$teamId}" : '')
@@ -769,10 +782,7 @@ final class Repository
             'SELECT approval_status FROM members WHERE team_id = :id',
             ['id' => $teamId]
         );
-        $desks = $this->preparedRows(
-            'SELECT number FROM desks WHERE team_id = :id ORDER BY number',
-            ['id' => $teamId]
-        );
+        $desks = $this->liveDesksForTeam($teamId);
 
         return [
             'team' => self::stripLegacyColumns($team),
@@ -1271,7 +1281,7 @@ final class Repository
             'has_informal_desk' => $this->contracts()->hasInformalDeskInYear($teamId, $this->currentFiscalYear()),
             'desks' => array_map(
                 fn (array $row): array => $this->stripLegacyRow($row),
-                $this->preparedRows('SELECT id, number, team_id, usage_type, formal_seats, informal_seats, row_index, col_index, notes FROM desks WHERE team_id = :id ORDER BY number', ['id' => $teamId])
+                $this->liveDesksForTeam($teamId)
             ),
             'members' => $this->preparedRows(
                 'SELECT m.id, m.member_code, m.full_name, m.access_code, m.wants_access, m.phone, m.national_id, m.notes, m.approval_status
@@ -1640,6 +1650,51 @@ final class Repository
                AND (da.assigned_until IS NULL OR da.assigned_until = \'\' OR da.assigned_until >= :today)',
             ['today' => $today]
         );
+    }
+
+    private function liveDeskCountForTeam(int $teamId): int
+    {
+        return count($this->liveDesksForTeam($teamId));
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function liveDesksForTeam(int $teamId): array
+    {
+        if ($teamId <= 0) {
+            return [];
+        }
+        if (!Schema::tableExists($this->pdo, 'desk_assignments')) {
+            return $this->preparedRows(
+                'SELECT id, number, team_id, usage_type, formal_seats, informal_seats, row_index, col_index, notes
+                 FROM desks WHERE team_id = :id ORDER BY number',
+                ['id' => $teamId]
+            );
+        }
+        $today = JalaliDate::todayParts()['formatted'];
+        $rows = $this->preparedRows(
+            'SELECT d.id, d.number, da.team_id, da.usage_type, d.formal_seats, d.informal_seats,
+                    d.row_index, d.col_index, d.notes
+             FROM desk_assignments da
+             INNER JOIN desks d ON d.id = da.desk_id
+             WHERE da.team_id = :team_id
+               AND da.assigned_from <= :today
+               AND (da.assigned_until IS NULL OR da.assigned_until = \'\' OR da.assigned_until >= :today)
+             ORDER BY da.assigned_from DESC, da.id DESC, d.number',
+            ['team_id' => $teamId, 'today' => $today]
+        );
+        $unique = [];
+        foreach ($rows as $row) {
+            $deskId = (int) ($row['id'] ?? 0);
+            if ($deskId > 0 && !isset($unique[$deskId])) {
+                $unique[$deskId] = $row;
+            }
+        }
+        $list = array_values($unique);
+        usort($list, static fn (array $a, array $b): int => ((int) ($a['number'] ?? 0)) <=> ((int) ($b['number'] ?? 0)));
+
+        return $list;
     }
 
     /**

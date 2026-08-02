@@ -19,15 +19,7 @@ final class DeskAssignments
         $assignedUntil = JalaliDate::tryNormalize($desk['assignment_until'] ?? $desk['assigned_until'] ?? '');
 
         if ($teamId <= 0) {
-            $current = $this->findCurrentAssignment($deskId);
-            if ($current !== null) {
-                $this->closeAssignment((int) $current['id'], $today);
-            } else {
-                $open = $this->findOpenAssignment($deskId);
-                if ($open !== null) {
-                    $this->closeAssignment((int) $open['id'], $today);
-                }
-            }
+            $this->releaseDesk($deskId, $today);
 
             return;
         }
@@ -518,6 +510,20 @@ final class DeskAssignments
      */
     private function syncDeskFromAssignment(int $deskId, array $record): void
     {
+        // Only pin desks.team_id for assignments that are live today; future ranges must not occupy the cache.
+        if (!$this->assignmentIsLive($record)) {
+            $live = $this->findCurrentAssignment($deskId);
+            if ($live !== null) {
+                $record = $live;
+            } else {
+                $this->pdo->prepare(
+                    'UPDATE desks SET team_id = NULL, usage_type = :usage_type, notes = NULL WHERE id = :id'
+                )->execute(['usage_type' => 'formal', 'id' => $deskId]);
+
+                return;
+            }
+        }
+
         $this->pdo->prepare(
             'UPDATE desks SET team_id = :team_id, usage_type = :usage_type, notes = :notes WHERE id = :id'
         )->execute([
@@ -538,6 +544,56 @@ final class DeskAssignments
                 'UPDATE desks SET team_id = NULL, usage_type = :usage_type, notes = NULL WHERE id = :id'
             )->execute(['usage_type' => 'formal', 'id' => $deskId]);
         }
+    }
+
+    /**
+     * Free a desk: end the live assignment, drop future segments, and clear the occupancy cache.
+     */
+    private function releaseDesk(int $deskId, string $today): void
+    {
+        $current = $this->findCurrentAssignment($deskId);
+        if ($current !== null) {
+            $this->closeAssignment((int) $current['id'], $today);
+        }
+
+        // Future closed ranges would re-occupy/re-bill later if left behind.
+        $this->pdo->prepare(
+            'DELETE FROM desk_assignments
+             WHERE desk_id = :desk_id AND assigned_from > :today'
+        )->execute(['desk_id' => $deskId, 'today' => $today]);
+
+        $open = $this->findOpenAssignment($deskId);
+        if ($open !== null) {
+            $from = (string) ($open['assigned_from'] ?? '');
+            if ($from !== '' && JalaliDate::compare($from, $today) > 0) {
+                $this->pdo->prepare('DELETE FROM desk_assignments WHERE id = :id')
+                    ->execute(['id' => (int) $open['id']]);
+            } else {
+                $this->closeAssignment((int) $open['id'], $today);
+            }
+        }
+
+        $this->pdo->prepare(
+            'UPDATE desks SET team_id = NULL, usage_type = :usage_type, notes = NULL WHERE id = :id'
+        )->execute(['usage_type' => 'formal', 'id' => $deskId]);
+    }
+
+    /**
+     * @param array<string, mixed> $record
+     */
+    private function assignmentIsLive(array $record): bool
+    {
+        $today = JalaliDate::todayParts()['formatted'];
+        $from = JalaliDate::tryNormalize((string) ($record['assigned_from'] ?? ''));
+        if ($from === '' || JalaliDate::compare($from, $today) > 0) {
+            return false;
+        }
+        $until = JalaliDate::tryNormalize((string) ($record['assigned_until'] ?? ''));
+        if ($until === '') {
+            return true;
+        }
+
+        return JalaliDate::compare($until, $today) >= 0;
     }
 
     private function assertNoOverlap(int $deskId, string $from, mixed $until, ?int $excludeId = null): void

@@ -193,7 +193,7 @@
     </article>`;
   };
 
-  const renderDeskPanel = (profile, year) => {
+  const renderDeskPanel = (profile, year, writable = false) => {
     const desks = desksForYear(profile, year);
     const rows = desks.length
       ? desks.map((row) => `
@@ -209,7 +209,9 @@
     return `<article class="year-panel">
       <div class="year-panel-head">
         <h3>میزهای سال ${S().escapeHtml(year)}</h3>
-        <button type="button" class="button ghost" data-go-desk-history>ثبت / ویرایش در تاریخچه تخصیص</button>
+        ${writable
+          ? `<button type="button" class="button ghost" data-go-desk-history>ثبت / ویرایش در تاریخچه تخصیص</button>`
+          : `<button type="button" class="button ghost" data-go-desks>مشاهده نقشه میز</button>`}
       </div>
       <div class="table-wrap">
         <table class="data-table year-desk-table">
@@ -276,7 +278,7 @@
         <div class="year-workspace-panels">
           ${renderContractPanel(profile, year, summary, teamId, writable)}
           ${renderBillingSummary(profile, year)}
-          ${renderDeskPanel(profile, year)}
+          ${renderDeskPanel(profile, year, writable)}
           ${renderChargesPanel(profile, year, teamId, writable)}
         </div>
         <details class="year-extra-section">
@@ -406,6 +408,12 @@
       button.addEventListener("click", () => {
         S().closeModal();
         S().activateSection("desk-history");
+      });
+    });
+    container.querySelectorAll("[data-go-desks]").forEach((button) => {
+      button.addEventListener("click", () => {
+        S().closeModal();
+        S().activateSection("desks");
       });
     });
 

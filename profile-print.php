@@ -106,7 +106,7 @@ $paymentStatusLabels = [
     'rejected' => 'رد‌شده',
 ];
 $maskNationalId = static function (mixed $value): string {
-    $id = preg_replace('/\D+/', '', (string) $value) ?? '';
+    $id = preg_replace('/\D+/', '', JalaliDate::normalizeDigits((string) $value)) ?? '';
     if ($id === '') {
         return '—';
     }

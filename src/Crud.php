@@ -775,12 +775,16 @@ final class Crud
             )->execute(['id' => $teamId]);
             $this->pdo->prepare('UPDATE members SET locker_id = NULL WHERE team_id = :id')->execute(['id' => $teamId]);
 
-            (new ContractDocuments($this->pdo))->deleteForTeam($teamId);
+            // Defer file unlinks until after commit so a cascade rollback cannot leave missing files.
+            $orphanPaths = (new ContractDocuments($this->pdo))->deleteForTeam($teamId, false);
             if (Schema::tableExists($this->pdo, 'team_performance_reports')) {
                 $perfRows = $this->pdo->prepare('SELECT stored_path FROM team_performance_reports WHERE team_id = :id');
                 $perfRows->execute(['id' => $teamId]);
                 foreach ($perfRows->fetchAll() ?: [] as $perfRow) {
-                    FileStorage::deleteRelative((string) ($perfRow['stored_path'] ?? ''));
+                    $path = (string) ($perfRow['stored_path'] ?? '');
+                    if ($path !== '') {
+                        $orphanPaths[] = $path;
+                    }
                 }
                 $this->pdo->prepare('DELETE FROM team_performance_reports WHERE team_id = :id')->execute(['id' => $teamId]);
             }
@@ -808,6 +812,9 @@ final class Crud
 
             if ($startedTransaction) {
                 $this->pdo->commit();
+            }
+            foreach ($orphanPaths as $path) {
+                FileStorage::deleteRelative($path);
             }
         } catch (Throwable $exception) {
             if ($startedTransaction && $this->pdo->inTransaction()) {
@@ -1833,10 +1840,9 @@ final class Crud
             return;
         }
 
-        // SQLite serializes writers; touch the team row inside the open transaction.
-        $statement = $this->pdo->prepare('SELECT id FROM teams WHERE id = :id');
-        $statement->execute(['id' => $teamId]);
-        $statement->fetchColumn();
+        // SQLite: a no-op write upgrades the deferred txn to RESERVED so concurrent writers wait.
+        $this->pdo->prepare('UPDATE teams SET entity_code = entity_code WHERE id = :id')
+            ->execute(['id' => $teamId]);
     }
 
     private function findChargeId(int $teamId, string $fiscalYear, int $monthIndex): ?int

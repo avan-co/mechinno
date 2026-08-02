@@ -501,13 +501,57 @@ try {
 }
 $assert($reviveBlocked, 'rejected payment cannot be approved via race');
 
-// Removing desks must not wipe historical system charges for the year.
+// Removing desks must keep past/current system charges, but prune unsupported future months.
 $pdo->exec('UPDATE desks SET team_id = NULL WHERE team_id = 1');
 $pdo->prepare('DELETE FROM desk_assignments WHERE team_id = 1')->execute();
-$beforeWipe = (int) $pdo->query("SELECT COUNT(*) FROM charges WHERE team_id = 1 AND fiscal_year = '1405' AND source_file = 'system'")->fetchColumn();
+$todayParts = JalaliDate::todayParts();
+$currentMonth = (int) ($todayParts['month'] ?? 0);
+$beforePast = (int) $pdo->query(
+    "SELECT COUNT(*) FROM charges WHERE team_id = 1 AND fiscal_year = '1405' AND source_file = 'system' AND month_index <= {$currentMonth}"
+)->fetchColumn();
 (new Seeder($pdo))->recalculateChargesForTeam(1, '1405', true);
-$afterWipe = (int) $pdo->query("SELECT COUNT(*) FROM charges WHERE team_id = 1 AND fiscal_year = '1405' AND source_file = 'system'")->fetchColumn();
-$assert($beforeWipe === $afterWipe, 'recalc without desk preserves historical system charges');
+$afterPast = (int) $pdo->query(
+    "SELECT COUNT(*) FROM charges WHERE team_id = 1 AND fiscal_year = '1405' AND source_file = 'system' AND month_index <= {$currentMonth}"
+)->fetchColumn();
+$afterFuture = (int) $pdo->query(
+    "SELECT COUNT(*) FROM charges WHERE team_id = 1 AND fiscal_year = '1405' AND source_file = 'system' AND month_index > {$currentMonth}"
+)->fetchColumn();
+$assert($beforePast === $afterPast, 'recalc without desk preserves past/current system charges');
+$assert($afterFuture === 0, 'recalc without desk prunes future system charges');
+
+// Freeing a desk cancels future assignment segments.
+$desk2 = (int) $pdo->query('SELECT id FROM desks WHERE number = 2')->fetchColumn();
+$pdo->prepare(
+    "INSERT INTO desk_assignments (desk_id, desk_number, team_id, usage_type, assigned_from, assigned_until, notes)
+     VALUES (:desk_id, 2, 1, 'formal', '1405/07/01', '1405/12/29', 'future')"
+)->execute(['desk_id' => $desk2]);
+$pdo->exec("UPDATE desks SET team_id = 1 WHERE id = {$desk2}");
+(new DeskAssignments($pdo))->syncDeskAssignment($desk2, [
+    'number' => 2,
+    'team_id' => 0,
+    'usage_type' => 'formal',
+]);
+$futureLeft = (int) $pdo->query(
+    "SELECT COUNT(*) FROM desk_assignments WHERE desk_id = {$desk2} AND assigned_from > '{$todayParts['formatted']}'"
+)->fetchColumn();
+$assert($futureLeft === 0, 'freeing desk cancels future assignments');
+$assert((int) $pdo->query("SELECT team_id FROM desks WHERE id = {$desk2}")->fetchColumn() === 0
+    || $pdo->query("SELECT team_id FROM desks WHERE id = {$desk2}")->fetchColumn() === null,
+    'freeing desk clears occupancy cache');
+
+// Workflow reject is conditional on pending status.
+$pdo->prepare(
+    "INSERT INTO locker_requests (team_id, status, submitted_at, notes)
+     VALUES (1, 'approved', '1405/01/01', 'race')"
+)->execute();
+$lockerReqId = (int) $pdo->lastInsertId();
+$rejectLockerBlocked = false;
+try {
+    (new Workflow($pdo))->rejectLockerRequest($lockerReqId, 'late');
+} catch (InvalidArgumentException) {
+    $rejectLockerBlocked = true;
+}
+$assert($rejectLockerBlocked, 'non-pending locker request cannot be rejected');
 
 $token = RoomReservations::normalizePublicToken('mn-1234567890');
 $assert($token === 'MN-1234567890', 'public room token normalizes 10-digit codes');

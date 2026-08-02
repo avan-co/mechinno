@@ -227,13 +227,19 @@ final class Workflow
         }
 
         $today = JalaliDate::todayParts()['formatted'];
-        $this->pdo->prepare(
-            "UPDATE locker_requests SET status = 'rejected', reviewed_at = :reviewed_at, rejection_reason = :reason WHERE id = :id"
-        )->execute([
+        $statement = $this->pdo->prepare(
+            "UPDATE locker_requests
+             SET status = 'rejected', reviewed_at = :reviewed_at, rejection_reason = :reason
+             WHERE id = :id AND status = 'pending'"
+        );
+        $statement->execute([
             'reviewed_at' => $today,
             'reason' => $reason !== '' ? $reason : null,
             'id' => $id,
         ]);
+        if ($statement->rowCount() < 1) {
+            throw new InvalidArgumentException('این درخواست کمد در انتظار تأیید نیست.');
+        }
 
         return $this->fetchLockerRequest($id);
     }
@@ -255,6 +261,18 @@ final class Workflow
         }
 
         try {
+            // Claim the pending row first so a concurrent reject cannot race past side effects.
+            $today = JalaliDate::todayParts()['formatted'];
+            $claim = $this->pdo->prepare(
+                "UPDATE member_requests
+                 SET status = 'approved', reviewed_at = :reviewed_at, rejection_reason = NULL
+                 WHERE id = :id AND status = 'pending'"
+            );
+            $claim->execute(['reviewed_at' => $today, 'id' => $id]);
+            if ($claim->rowCount() < 1) {
+                throw new InvalidArgumentException('این درخواست عضو در انتظار تأیید نیست.');
+            }
+
             if ($type === 'delete') {
                 $member = $this->memberRow($memberId);
                 // Preserve display name on the request so SMS still has the member after delete.
@@ -284,11 +302,6 @@ final class Workflow
                 throw new InvalidArgumentException('نوع درخواست عضو معتبر نیست.');
             }
 
-            $today = JalaliDate::todayParts()['formatted'];
-            $this->pdo->prepare(
-                "UPDATE member_requests SET status = 'approved', reviewed_at = :reviewed_at, rejection_reason = NULL WHERE id = :id"
-            )->execute(['reviewed_at' => $today, 'id' => $id]);
-
             if ($startedTransaction) {
                 $this->pdo->commit();
             }
@@ -310,13 +323,19 @@ final class Workflow
         }
 
         $today = JalaliDate::todayParts()['formatted'];
-        $this->pdo->prepare(
-            "UPDATE member_requests SET status = 'rejected', reviewed_at = :reviewed_at, rejection_reason = :reason WHERE id = :id"
-        )->execute([
+        $statement = $this->pdo->prepare(
+            "UPDATE member_requests
+             SET status = 'rejected', reviewed_at = :reviewed_at, rejection_reason = :reason
+             WHERE id = :id AND status = 'pending'"
+        );
+        $statement->execute([
             'reviewed_at' => $today,
             'reason' => $reason !== '' ? $reason : null,
             'id' => $id,
         ]);
+        if ($statement->rowCount() < 1) {
+            throw new InvalidArgumentException('این درخواست عضو در انتظار تأیید نیست.');
+        }
 
         return $this->notifyMemberRequestAndReturn($id, 'rejected');
     }

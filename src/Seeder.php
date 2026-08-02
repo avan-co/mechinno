@@ -57,7 +57,9 @@ final class Seeder
 
             $contracts = new TeamContracts($this->pdo);
             // Guard before wipe: removing the last desk/contract must not erase historical system charges.
+            // Still drop unsupported *future* months in the current year so debt does not inflate.
             if (!$contracts->hasContractInYear($teamId, $fiscalYear) || !$contracts->hasDeskInFiscalYear($teamId, $fiscalYear)) {
+                $this->pruneFutureSystemChargesWithoutDesk($teamId, $fiscalYear);
                 if ($startedTransaction) {
                     $this->pdo->commit();
                 }
@@ -150,6 +152,34 @@ final class Seeder
             }
             throw $exception;
         }
+    }
+
+    /**
+     * Keep past/current system charges when desks disappear; drop future months that can no longer accrue.
+     */
+    private function pruneFutureSystemChargesWithoutDesk(int $teamId, string $fiscalYear): void
+    {
+        $today = JalaliDate::todayParts();
+        $currentYear = (string) ($today['year'] ?? '');
+        if ($fiscalYear !== $currentYear) {
+            return;
+        }
+        $currentMonth = (int) ($today['month'] ?? 0);
+        if ($currentMonth < 1 || $currentMonth > 12) {
+            return;
+        }
+        $this->pdo->prepare(
+            'DELETE FROM charges
+             WHERE team_id = :team_id
+               AND fiscal_year = :fiscal_year
+               AND source_file = :source
+               AND month_index > :month_index'
+        )->execute([
+            'team_id' => $teamId,
+            'fiscal_year' => $fiscalYear,
+            'source' => 'system',
+            'month_index' => $currentMonth,
+        ]);
     }
 
     /**

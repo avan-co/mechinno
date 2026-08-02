@@ -452,46 +452,63 @@ final class RoomReservations
             self::assertPublicRateLimit($bookerPhone);
         }
 
-        $room = $this->roomRow($roomId);
-        $this->validateBookingWindow($room, $date, $startTime, $endTime, $bookerPhone);
-
         $duration = self::timeToMinutes($endTime) - self::timeToMinutes($startTime);
         $status = $settings['room_auto_approve'] ? 'approved' : 'pending';
         $today = JalaliDate::todayParts()['formatted'];
         $token = $this->generatePublicToken();
+        $reservationId = 0;
 
-        $statement = $this->pdo->prepare(
-            'INSERT INTO room_reservations (
-                room_id, reserved_date, start_time, end_time, duration_minutes,
-                team_id, member_id, booker_name, booker_phone, booker_org, purpose,
-                status, source, public_token, submitted_at, created_at, updated_at
-             ) VALUES (
-                :room_id, :reserved_date, :start_time, :end_time, :duration_minutes,
-                :team_id, :member_id, :booker_name, :booker_phone, :booker_org, :purpose,
-                :status, :source, :public_token, :submitted_at, :created_at, :updated_at
-             )'
-        );
-        $statement->execute([
-            'room_id' => $roomId,
-            'reserved_date' => $date,
-            'start_time' => $startTime,
-            'end_time' => $endTime,
-            'duration_minutes' => $duration,
-            'team_id' => $teamId > 0 ? $teamId : null,
-            'member_id' => $memberId > 0 ? $memberId : null,
-            'booker_name' => $bookerName,
-            'booker_phone' => $bookerPhone,
-            'booker_org' => $bookerOrg !== '' ? $bookerOrg : null,
-            'purpose' => $purpose !== '' ? $purpose : null,
-            'status' => $status,
-            'source' => $source,
-            'public_token' => $token,
-            'submitted_at' => $today,
-            'created_at' => $today,
-            'updated_at' => $today,
-        ]);
+        $started = false;
+        if (!$this->pdo->inTransaction()) {
+            $this->pdo->beginTransaction();
+            $started = true;
+        }
+        try {
+            $room = $this->lockRoomRow($roomId);
+            $this->validateBookingWindow($room, $date, $startTime, $endTime, $bookerPhone);
 
-        $reservation = $this->findById((int) $this->pdo->lastInsertId());
+            $statement = $this->pdo->prepare(
+                'INSERT INTO room_reservations (
+                    room_id, reserved_date, start_time, end_time, duration_minutes,
+                    team_id, member_id, booker_name, booker_phone, booker_org, purpose,
+                    status, source, public_token, submitted_at, created_at, updated_at
+                 ) VALUES (
+                    :room_id, :reserved_date, :start_time, :end_time, :duration_minutes,
+                    :team_id, :member_id, :booker_name, :booker_phone, :booker_org, :purpose,
+                    :status, :source, :public_token, :submitted_at, :created_at, :updated_at
+                 )'
+            );
+            $statement->execute([
+                'room_id' => $roomId,
+                'reserved_date' => $date,
+                'start_time' => $startTime,
+                'end_time' => $endTime,
+                'duration_minutes' => $duration,
+                'team_id' => $teamId > 0 ? $teamId : null,
+                'member_id' => $memberId > 0 ? $memberId : null,
+                'booker_name' => $bookerName,
+                'booker_phone' => $bookerPhone,
+                'booker_org' => $bookerOrg !== '' ? $bookerOrg : null,
+                'purpose' => $purpose !== '' ? $purpose : null,
+                'status' => $status,
+                'source' => $source,
+                'public_token' => $token,
+                'submitted_at' => $today,
+                'created_at' => $today,
+                'updated_at' => $today,
+            ]);
+            $reservationId = (int) $this->pdo->lastInsertId();
+            if ($started) {
+                $this->pdo->commit();
+            }
+        } catch (Throwable $error) {
+            if ($started && $this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            throw $error;
+        }
+
+        $reservation = $this->findById($reservationId);
         $this->notifyReservation($reservation, $status === 'approved' ? 'approved' : 'pending');
 
         return $reservation;
@@ -580,29 +597,45 @@ final class RoomReservations
             throw new InvalidArgumentException('این رزرو در انتظار تأیید نیست.');
         }
 
-        $this->validateBookingWindow(
-            $this->roomRow((int) $row['room_id']),
-            (string) $row['reserved_date'],
-            (string) $row['start_time'],
-            (string) $row['end_time'],
-            (string) $row['booker_phone'],
-            (int) $row['id']
-        );
+        $started = false;
+        if (!$this->pdo->inTransaction()) {
+            $this->pdo->beginTransaction();
+            $started = true;
+        }
+        try {
+            $room = $this->lockRoomRow((int) $row['room_id']);
+            $this->validateBookingWindow(
+                $room,
+                (string) $row['reserved_date'],
+                (string) $row['start_time'],
+                (string) $row['end_time'],
+                (string) $row['booker_phone'],
+                (int) $row['id']
+            );
 
-        $today = JalaliDate::todayParts()['formatted'];
-        $statement = $this->pdo->prepare(
-            "UPDATE room_reservations
-             SET status = 'approved', reviewed_at = :reviewed_at, reviewed_by = :reviewed_by, updated_at = :updated_at, rejection_reason = NULL
-             WHERE id = :id AND status = 'pending'"
-        );
-        $statement->execute([
-            'reviewed_at' => $today,
-            'reviewed_by' => Access::userId() > 0 ? Access::userId() : null,
-            'updated_at' => $today,
-            'id' => $id,
-        ]);
-        if ($statement->rowCount() < 1) {
-            throw new InvalidArgumentException('این رزرو در انتظار تأیید نیست.');
+            $today = JalaliDate::todayParts()['formatted'];
+            $statement = $this->pdo->prepare(
+                "UPDATE room_reservations
+                 SET status = 'approved', reviewed_at = :reviewed_at, reviewed_by = :reviewed_by, updated_at = :updated_at, rejection_reason = NULL
+                 WHERE id = :id AND status = 'pending'"
+            );
+            $statement->execute([
+                'reviewed_at' => $today,
+                'reviewed_by' => Access::userId() > 0 ? Access::userId() : null,
+                'updated_at' => $today,
+                'id' => $id,
+            ]);
+            if ($statement->rowCount() < 1) {
+                throw new InvalidArgumentException('این رزرو در انتظار تأیید نیست.');
+            }
+            if ($started) {
+                $this->pdo->commit();
+            }
+        } catch (Throwable $error) {
+            if ($started && $this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            throw $error;
         }
 
         $reservation = $this->findById($id);
@@ -857,6 +890,32 @@ final class RoomReservations
         }
 
         return $row;
+    }
+
+    /**
+     * Lock the room row so create/approve cannot race past overlap checks.
+     *
+     * @return array<string, mixed>
+     */
+    private function lockRoomRow(int $roomId): array
+    {
+        $room = $this->roomRow($roomId);
+        if ($this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql') {
+            $statement = $this->pdo->prepare('SELECT * FROM meeting_rooms WHERE id = :id FOR UPDATE');
+            $statement->execute(['id' => $roomId]);
+            $locked = $statement->fetch();
+            if ($locked === false) {
+                throw new InvalidArgumentException('اتاق پیدا نشد.');
+            }
+
+            return $locked;
+        }
+
+        // SQLite: no-op write upgrades deferred txn so concurrent book/approve wait.
+        $this->pdo->prepare('UPDATE meeting_rooms SET name = name WHERE id = :id')
+            ->execute(['id' => $roomId]);
+
+        return $room;
     }
 
     private function ensureSettingsColumns(): void
