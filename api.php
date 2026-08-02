@@ -503,6 +503,30 @@ try {
         json_response(['ok' => true, 'record' => $result]);
     }
 
+    if ($resource === 'file-manager') {
+        $files = new UploadFileManager($pdo);
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            require_csrf_json();
+            Access::requireWriteJson();
+            $payload = read_json_body();
+            if ($action === 'delete') {
+                json_response(['ok' => true, 'result' => $files->deleteFile((string) ($payload['path'] ?? ''))]);
+            }
+            if ($action === 'clear-broken') {
+                json_response(['ok' => true, 'result' => $files->clearBrokenReferences()]);
+            }
+            json_response(['error' => 'عملیات مدیریت فایل نامعتبر است.'], 422);
+        }
+        $folder = trim((string) ($_GET['folder'] ?? ''));
+        if ($folder !== '') {
+            json_response($files->listFiles($folder));
+        }
+        json_response([
+            'folders' => $files->listFolders(),
+            'root' => 'data/uploads',
+        ]);
+    }
+
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($action, ['create', 'update', 'delete', 'status'], true)) {
         require_csrf_json();
         if (in_array($resource, ['members', 'transactions', 'locker-requests', 'member-requests'], true) && $action === 'create') {

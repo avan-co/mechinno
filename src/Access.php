@@ -99,6 +99,7 @@ final class Access
         'room-calendar',
         'room-month',
         'room-closed-days',
+        'file-manager',
     ];
 
     public static function role(): string

@@ -8,8 +8,34 @@ final class ProfileImages
     public const TEAM_CATEGORY = 'teams';
     public const REQUEST_CATEGORY = 'member-requests';
 
+    public const DEFAULT_MEMBER_AVATAR = 'assets/brand/default-member.svg';
+    public const DEFAULT_TEAM_LOGO = 'assets/brand/default-team.svg';
+
     public function __construct(private readonly PDO $pdo)
     {
+    }
+
+    public static function defaultMemberAvatarUrl(): string
+    {
+        return self::DEFAULT_MEMBER_AVATAR;
+    }
+
+    public static function defaultTeamLogoUrl(): string
+    {
+        return self::DEFAULT_TEAM_LOGO;
+    }
+
+    public static function relativeFileExists(string $relativePath): bool
+    {
+        $relativePath = trim($relativePath);
+        if ($relativePath === '') {
+            return false;
+        }
+        try {
+            return is_file(FileStorage::absolutePath($relativePath));
+        } catch (InvalidArgumentException) {
+            return false;
+        }
     }
 
     /**
@@ -159,8 +185,8 @@ final class ProfileImages
         $member = $this->memberRow($memberId);
         Access::assertTeamAccess((int) ($member['team_id'] ?? 0));
         $path = (string) ($member['avatar_path'] ?? '');
-        if ($path === '') {
-            throw new InvalidArgumentException('تصویر پروفایل عضو ثبت نشده است.');
+        if (!self::relativeFileExists($path)) {
+            self::sendDefaultAsset(self::DEFAULT_MEMBER_AVATAR, 'default-member.svg');
         }
         FileStorage::sendInline(
             $path,
@@ -174,8 +200,8 @@ final class ProfileImages
         Access::assertTeamAccess($teamId);
         $team = $this->teamRow($teamId);
         $path = (string) ($team['logo_path'] ?? '');
-        if ($path === '') {
-            throw new InvalidArgumentException('تصویر پروفایل نهاد ثبت نشده است.');
+        if (!self::relativeFileExists($path)) {
+            self::sendDefaultAsset(self::DEFAULT_TEAM_LOGO, 'default-team.svg');
         }
         FileStorage::sendInline(
             $path,
@@ -191,11 +217,12 @@ final class ProfileImages
     public static function enrichMemberRow(array $row): array
     {
         $id = (int) ($row['id'] ?? 0);
-        $hasAvatar = trim((string) ($row['avatar_path'] ?? '')) !== '';
+        $hasAvatar = self::relativeFileExists((string) ($row['avatar_path'] ?? ''));
         $row['has_avatar'] = $hasAvatar ? 1 : 0;
+        $row['avatar_is_default'] = $hasAvatar ? 0 : 1;
         $row['avatar_url'] = $hasAvatar && $id > 0
             ? 'download.php?resource=member-avatar&id=' . $id
-            : '';
+            : self::defaultMemberAvatarUrl();
         unset($row['avatar_path'], $row['avatar_mime'], $row['avatar_original_name']);
 
         return $row;
@@ -208,11 +235,12 @@ final class ProfileImages
     public static function enrichTeamRow(array $row): array
     {
         $id = (int) ($row['id'] ?? 0);
-        $hasLogo = trim((string) ($row['logo_path'] ?? '')) !== '';
+        $hasLogo = self::relativeFileExists((string) ($row['logo_path'] ?? ''));
         $row['has_logo'] = $hasLogo ? 1 : 0;
+        $row['logo_is_default'] = $hasLogo ? 0 : 1;
         $row['logo_url'] = $hasLogo && $id > 0
             ? 'download.php?resource=team-logo&id=' . $id
-            : '';
+            : self::defaultTeamLogoUrl();
         unset($row['logo_path'], $row['logo_mime'], $row['logo_original_name']);
 
         return $row;
@@ -225,11 +253,12 @@ final class ProfileImages
     public static function enrichMemberRequestRow(array $row): array
     {
         $id = (int) ($row['id'] ?? 0);
-        $hasAvatar = trim((string) ($row['avatar_path'] ?? '')) !== '';
+        $hasAvatar = self::relativeFileExists((string) ($row['avatar_path'] ?? ''));
         $row['has_avatar'] = $hasAvatar ? 1 : 0;
+        $row['avatar_is_default'] = $hasAvatar ? 0 : 1;
         $row['avatar_url'] = $hasAvatar && $id > 0
             ? 'download.php?resource=member-request-avatar&id=' . $id
-            : '';
+            : self::defaultMemberAvatarUrl();
         unset($row['avatar_path'], $row['avatar_mime'], $row['avatar_original_name']);
 
         return $row;
@@ -245,14 +274,32 @@ final class ProfileImages
         }
         Access::assertTeamAccess((int) ($row['team_id'] ?? 0));
         $path = (string) ($row['avatar_path'] ?? '');
-        if ($path === '') {
-            throw new InvalidArgumentException('تصویر پروفایل در این درخواست ثبت نشده است.');
+        if (!self::relativeFileExists($path)) {
+            self::sendDefaultAsset(self::DEFAULT_MEMBER_AVATAR, 'default-member.svg');
         }
         FileStorage::sendInline(
             $path,
             (string) ($row['avatar_original_name'] ?? 'avatar.jpg'),
             (string) ($row['avatar_mime'] ?? 'image/jpeg')
         );
+    }
+
+    private static function sendDefaultAsset(string $webPath, string $downloadName): never
+    {
+        $absolute = app_base_path() . '/' . ltrim($webPath, '/');
+        if (!is_file($absolute)) {
+            http_response_code(404);
+            header('Content-Type: text/plain; charset=utf-8');
+            echo 'تصویر پیش‌فرض پیدا نشد.';
+            exit;
+        }
+        header('Content-Type: image/svg+xml; charset=utf-8');
+        header('Content-Length: ' . (string) filesize($absolute));
+        header('Content-Disposition: inline; filename="' . rawurlencode($downloadName) . '"');
+        header('X-Content-Type-Options: nosniff');
+        header('Cache-Control: public, max-age=86400');
+        readfile($absolute);
+        exit;
     }
 
     /**

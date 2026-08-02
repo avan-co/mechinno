@@ -17,6 +17,7 @@ require_once __DIR__ . '/JalaliDate.php';
 require_once __DIR__ . '/TeamContracts.php';
 require_once __DIR__ . '/FileStorage.php';
 require_once __DIR__ . '/ProfileImages.php';
+require_once __DIR__ . '/UploadFileManager.php';
 require_once __DIR__ . '/ContractDocuments.php';
 require_once __DIR__ . '/PerformanceReports.php';
 require_once __DIR__ . '/DeskAssignments.php';

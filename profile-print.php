@@ -144,9 +144,7 @@ $maskNationalId = static function (mixed $value): string {
   <main class="sheet">
     <header class="sheet-header">
       <div class="sheet-brand">
-        <?php if (!empty($team['logo_url'])): ?>
-          <img class="team-logo-print" src="<?= e((string) $team['logo_url']) ?>" alt="" />
-        <?php endif; ?>
+        <img class="team-logo-print" src="<?= e((string) ($team['logo_url'] ?? 'assets/brand/default-team.svg')) ?>" alt="" />
         <div>
           <p class="eyebrow">مرکز نوآوری مکانیک · مکینو</p>
           <h1><?= e((string) ($team['name'] ?? 'نهاد')) ?></h1>
@@ -297,11 +295,7 @@ $maskNationalId = static function (mixed $value): string {
             <?php foreach ($profile['members'] as $row): ?>
               <tr>
                 <td class="avatar-cell">
-                  <?php if (!empty($row['avatar_url'])): ?>
-                    <img class="member-avatar-print" src="<?= e((string) $row['avatar_url']) ?>" alt="" />
-                  <?php else: ?>
-                    —
-                  <?php endif; ?>
+                  <img class="member-avatar-print" src="<?= e((string) ($row['avatar_url'] ?? 'assets/brand/default-member.svg')) ?>" alt="" />
                 </td>
                 <td><?= e((string) ($row['member_code'] ?? '—')) ?></td>
                 <td><?= e((string) ($row['full_name'] ?? '—')) ?></td>

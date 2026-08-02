@@ -4168,3 +4168,53 @@ body.is-mobile .mobile-card .row-actions {
   border-radius: 16px;
   font-size: 22px;
 }
+
+.file-manager {
+  display: grid;
+  gap: 16px;
+}
+.file-manager-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.file-folder-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+}
+.file-folder-card {
+  display: grid;
+  gap: 4px;
+  text-align: start;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface, #fff) 92%, transparent);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.file-folder-card:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+}
+.file-folder-card span,
+.file-folder-card em {
+  font-size: 12px;
+  color: var(--muted, #6a645e);
+  font-style: normal;
+}
+.file-preview-thumb {
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: 10px;
+  display: inline-grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  font-size: 11px;
+}
+.file-manager-table td {
+  vertical-align: middle;
+}

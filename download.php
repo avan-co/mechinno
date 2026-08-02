@@ -8,6 +8,13 @@ try {
     require_auth();
     $pdo = require_database();
     $resource = (string) ($_GET['resource'] ?? '');
+
+    if ($resource === 'upload-file') {
+        $path = (string) ($_GET['path'] ?? '');
+        $inline = (string) ($_GET['inline'] ?? '') === '1';
+        (new UploadFileManager($pdo))->download($path, $inline);
+    }
+
     $id = (int) ($_GET['id'] ?? 0);
     if ($id <= 0) {
         http_response_code(422);

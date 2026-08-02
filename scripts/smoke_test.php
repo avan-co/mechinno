@@ -72,6 +72,39 @@ $member = $crud->find('members', (int) $member['id']);
 $assert((int) ($member['has_avatar'] ?? 0) === 1, 'member avatar attached');
 $assert(str_contains((string) ($member['avatar_url'] ?? ''), 'member-avatar'), 'member avatar_url present');
 
+// Default avatar when file is missing / cleared.
+FileStorage::deleteRelative($avatarStored['avatar_path']);
+$memberMissing = $crud->find('members', (int) $member['id']);
+$assert((int) ($memberMissing['has_avatar'] ?? 1) === 0, 'missing avatar marked absent');
+$assert(str_contains((string) ($memberMissing['avatar_url'] ?? ''), 'default-member'), 'default member avatar url used');
+
+if (session_status() !== PHP_SESSION_ACTIVE) {
+    session_start();
+}
+$_SESSION['mechinno_authenticated'] = true;
+$_SESSION['mechinno_role'] = Access::ROLE_ADMIN_EDITOR;
+$fileManager = new UploadFileManager($pdo);
+$folders = $fileManager->listFolders();
+$assert(is_array($folders) && count($folders) >= 1, 'file-manager lists folders');
+$broken = $fileManager->clearBrokenReferences();
+$assert(($broken['cleared'] ?? 0) >= 1, 'file-manager clears broken avatar refs');
+$memberAfterClear = $crud->find('members', (int) $member['id']);
+$assert((int) ($memberAfterClear['avatar_is_default'] ?? 0) === 1, 'avatar_is_default after clear');
+unset($_SESSION['mechinno_role'], $_SESSION['mechinno_authenticated']);
+
+// Re-attach for later smoke assertions that expect a member row.
+$tmpAvatar2 = tempnam(sys_get_temp_dir(), 'avatar');
+file_put_contents($tmpAvatar2, base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5W7eQAAAAASUVORK5CYII='));
+$avatarStored2 = (new ProfileImages($pdo))->storeMemberAvatar([
+    'name' => 'avatar2.png',
+    'type' => 'image/png',
+    'tmp_name' => $tmpAvatar2,
+    'error' => UPLOAD_ERR_OK,
+    'size' => filesize($tmpAvatar2),
+]);
+(new ProfileImages($pdo))->setMemberAvatarFields((int) $member['id'], $avatarStored2, false);
+$member = $crud->find('members', (int) $member['id']);
+
 $locker = $crud->create('lockers', [
     'locker_number' => '7',
     'team_id' => '1',

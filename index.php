@@ -250,6 +250,10 @@ $assetVer = (string) max(
                   <span class="nav-icon nav-icon--purple"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm-8 9a8 8 0 0 1 16 0Z" fill="currentColor"/></svg></span>
                   <span class="nav-label">کاربران مدیر</span>
                 </button>
+                <button class="nav-item" data-section="file-manager" type="button">
+                  <span class="nav-icon nav-icon--amber"><svg viewBox="0 0 24 24"><path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6Zm4 5h10v2H7v-2Zm0 4h7v2H7v-2Z" fill="currentColor"/></svg></span>
+                  <span class="nav-label">مدیریت فایل‌ها</span>
+                </button>
                 <?php endif; ?>
               </div>
             </div>
@@ -1013,6 +1017,20 @@ $assetVer = (string) max(
                 <div class="section-intro-copy"><p>کاربران مدیر پنل — نقش ویرایشگر یا مشاهده‌گر. رمز ورود نهادها از بخش نهادها مدیریت می‌شود.</p></div>
               </div>
               <data-table title="کاربران مدیر" endpoint="api.php?resource=panel_users"></data-table>
+            </section>
+            <section id="file-manager" class="section">
+              <div class="section-intro section-intro--amber">
+                <span class="section-intro-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6Zm4 5h10v2H7v-2Zm0 4h7v2H7v-2Z" fill="currentColor"/></svg></span>
+                <div class="section-intro-copy">
+                  <p>مدیریت پوشه‌ای فایل‌های آپلودشده — تصاویر پروفایل، قراردادها و گزارش عملکرد. حذف فایل ارجاع دیتابیس را هم پاک می‌کند و تصویر پیش‌فرض جایگزین می‌شود.</p>
+                </div>
+                <?php if (Access::canWrite()): ?>
+                <button type="button" class="button ghost section-intro-action" id="fileManagerClearBroken">پاکسازی ارجاعات شکسته</button>
+                <?php endif; ?>
+              </div>
+              <div id="fileManagerContent" class="file-manager">
+                <div class="empty-state"><p class="empty-state-text">در حال بارگذاری پوشه‌ها…</p></div>
+              </div>
             </section>
             <?php endif; ?>
           </main>

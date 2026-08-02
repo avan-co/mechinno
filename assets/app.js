@@ -200,6 +200,7 @@ const sectionMeta = {
   reports: { eyebrow: "گزارش‌گیری", title: "گزارش‌ساز", subtitle: "انتخاب نوع گزارش، بازه ماهانه/سه‌ماهه/سالانه و خروجی چاپ یا Excel" },
   development: { eyebrow: "برنامه‌ریزی", title: "برنامه توسعه", subtitle: "کارهای جاری مرکز — اولویت‌بندی و پیگیری ساده" },
   users: { eyebrow: "دسترسی", title: "کاربران پنل", subtitle: "مدیریت نقش‌ها و پنل اختصاصی نهادها" },
+  "file-manager": { eyebrow: "فایل‌ها", title: "مدیریت فایل‌های آپلود", subtitle: "مرور پوشه‌ای، دانلود، پیش‌نمایش و حذف امن فایل‌ها" },
   "meeting-rooms": { eyebrow: "اتاق جلسه", title: "مدیریت اتاق‌های جلسه", subtitle: "تعریف اتاق‌ها، رزروها و تنظیمات" },
   "room-settings": { eyebrow: "اتاق جلسه", title: "تنظیمات رزرو", subtitle: "قوانین رزرو عمومی و تأیید خودکار" },
   sms: { eyebrow: "اطلاع‌رسانی", title: "ارسال پیامک", subtitle: "ارسال اطلاعیه به اعضا و مسئولین نهادها" },
@@ -1207,6 +1208,12 @@ const activateSection = (id, options = {}) => {
     });
   }
   if (id === "performance-settings") loadPerformanceSettingsForm().catch((error) => showToast(error.message, "error"));
+  if (id === "file-manager" && panelMode === "admin") {
+    loadFileManager().catch((error) => {
+      showToast(error.message, "error");
+      renderSectionLoadError("fileManagerContent", "بارگذاری مدیریت فایل ناموفق بود.", () => loadFileManager());
+    });
+  }
   if (id === "profile" && panelMode === "team") loadTeamProfile().catch((error) => showToast(error.message, "error"));
   if (id === "charges") {
     loadChargesCollage().catch((error) => showToast(error.message, "error"));
@@ -1924,6 +1931,120 @@ const loadTeamContractsSection = async () => {
         submit.disabled = false;
       }
     });
+  });
+};
+
+const formatFileBytes = (bytes) => {
+  const n = Number(bytes) || 0;
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+};
+
+const fileManagerState = { folder: "" };
+
+const loadFileManager = async (folder = fileManagerState.folder) => {
+  const host = document.getElementById("fileManagerContent");
+  if (!host) return;
+  fileManagerState.folder = folder || "";
+  if (!fileManagerState.folder) {
+    const data = await fetchJson("api.php?resource=file-manager");
+    const folders = data.folders || [];
+    host.innerHTML = `
+      <div class="file-manager-toolbar">
+        <p class="hint">ریشه آپلود: <code dir="ltr">${escapeHtml(data.root || "data/uploads")}</code></p>
+      </div>
+      <div class="file-folder-grid">
+        ${folders.length ? folders.map((folderItem) => `
+          <button type="button" class="file-folder-card" data-open-folder="${escapeHtml(folderItem.name)}">
+            <strong>${escapeHtml(folderItem.label || folderItem.name)}</strong>
+            <span dir="ltr">${escapeHtml(folderItem.name)}</span>
+            <em>${escapeHtml(String(folderItem.file_count || 0))} فایل · ${escapeHtml(formatFileBytes(folderItem.total_bytes))}</em>
+          </button>
+        `).join("") : `<div class="empty-state"><p class="empty-state-text">هنوز فایلی آپلود نشده است.</p></div>`}
+      </div>`;
+    host.querySelectorAll("[data-open-folder]").forEach((button) => {
+      button.addEventListener("click", () => {
+        loadFileManager(button.dataset.openFolder).catch((error) => showToast(error.message, "error"));
+      });
+    });
+    bindFileManagerClearBroken();
+    return;
+  }
+
+  const data = await fetchJson(`api.php?resource=file-manager&folder=${encodeURIComponent(fileManagerState.folder)}`);
+  const files = data.files || [];
+  host.innerHTML = `
+    <div class="file-manager-toolbar">
+      <button type="button" class="button ghost" data-file-back>← پوشه‌ها</button>
+      <div>
+        <strong>${escapeHtml(data.label || data.folder)}</strong>
+        <p class="hint" dir="ltr">${escapeHtml(data.folder)}</p>
+      </div>
+    </div>
+    ${files.length ? `<div class="table-wrap"><table class="data-table file-manager-table">
+      <thead><tr><th>پیش‌نمایش</th><th>نام فایل</th><th>حجم</th><th>ارجاع</th><th>عملیات</th></tr></thead>
+      <tbody>
+        ${files.map((file) => `
+          <tr>
+            <td>${file.is_image && file.preview_url
+              ? `<img class="file-preview-thumb" src="${escapeHtml(file.preview_url)}" alt="" loading="lazy" />`
+              : `<span class="file-preview-thumb file-preview-thumb--doc">فایل</span>`}</td>
+            <td><code dir="ltr">${escapeHtml(file.name)}</code></td>
+            <td>${escapeHtml(formatFileBytes(file.size_bytes))}</td>
+            <td>${file.reference_count
+              ? escapeHtml((file.references || []).map((ref) => ref.label).join("، "))
+              : "<span class=\"hint\">بدون ارجاع</span>"}</td>
+            <td class="row-actions">
+              <a class="mini-button" href="${escapeHtml(file.download_url)}" target="_blank" rel="noopener">دانلود</a>
+              ${file.preview_url ? `<a class="mini-button" href="${escapeHtml(file.preview_url)}" target="_blank" rel="noopener">نمایش</a>` : ""}
+              ${canWrite ? `<button type="button" class="mini-button danger" data-delete-file="${escapeHtml(file.relative_path)}">حذف</button>` : ""}
+            </td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table></div>` : `<div class="empty-state"><p class="empty-state-text">این پوشه خالی است.</p></div>`}`;
+
+  host.querySelector("[data-file-back]")?.addEventListener("click", () => {
+    loadFileManager("").catch((error) => showToast(error.message, "error"));
+  });
+  host.querySelectorAll("[data-delete-file]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      if (!confirm("این فایل حذف شود؟ ارجاع‌های دیتابیس هم پاک می‌شوند و در صورت نیاز تصویر پیش‌فرض نمایش داده می‌شود.")) {
+        return;
+      }
+      button.disabled = true;
+      try {
+        const result = await postJson("api.php?resource=file-manager&action=delete", { path: button.dataset.deleteFile });
+        const cleared = Number(result?.result?.cleared_references || 0);
+        showToast(cleared > 0 ? `فایل حذف شد و ${cleared} ارجاع پاک شد.` : "فایل حذف شد.", "success");
+        await loadFileManager(fileManagerState.folder);
+      } catch (error) {
+        showToast(error.message, "error");
+        button.disabled = false;
+      }
+    });
+  });
+  bindFileManagerClearBroken();
+};
+
+const bindFileManagerClearBroken = () => {
+  const button = document.getElementById("fileManagerClearBroken");
+  if (!button || button.dataset.bound === "1" || !canWrite) return;
+  button.dataset.bound = "1";
+  button.addEventListener("click", async () => {
+    if (!confirm("ارجاع‌های دیتابیس که فایلشان روی دیسک نیست پاک شوند؟")) return;
+    button.disabled = true;
+    try {
+      const result = await postJson("api.php?resource=file-manager&action=clear-broken", {});
+      const cleared = Number(result?.result?.cleared || 0);
+      showToast(cleared > 0 ? `${cleared} ارجاع شکسته پاک شد.` : "ارجاع شکسته‌ای پیدا نشد.", "success");
+      await loadFileManager(fileManagerState.folder);
+    } catch (error) {
+      showToast(error.message, "error");
+    } finally {
+      button.disabled = false;
+    }
   });
 };
 
