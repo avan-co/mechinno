@@ -5,9 +5,13 @@ declare(strict_types=1);
 final class FileStorage
 {
     public const MAX_BYTES = 10_485_760; // 10 MB
+    public const MAX_IMAGE_BYTES = 2_097_152; // 2 MB
 
     /** @var list<string> */
     private const ALLOWED_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png', 'webp', 'doc', 'docx', 'xls', 'xlsx'];
+
+    /** @var list<string> */
+    private const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp'];
 
     /** @var array<string, string> */
     private const MIME_BY_EXTENSION = [
@@ -45,6 +49,44 @@ final class FileStorage
      */
     public static function storeUpload(array $file, string $category): array
     {
+        return self::storeValidatedUpload($file, $category, self::ALLOWED_EXTENSIONS, self::MAX_BYTES, 'فرمت فایل مجاز نیست. فرمت‌های مجاز: PDF، تصویر، Word، Excel.');
+    }
+
+    /**
+     * Image-only upload for member/team profile photos.
+     *
+     * @param array<string, mixed> $file $_FILES entry
+     * @return array{stored_name:string, original_name:string, mime:string, size_bytes:int, relative_path:string}
+     */
+    public static function storeImageUpload(array $file, string $category): array
+    {
+        $stored = self::storeValidatedUpload(
+            $file,
+            $category,
+            self::IMAGE_EXTENSIONS,
+            self::MAX_IMAGE_BYTES,
+            'فقط تصویر JPG، PNG یا WebP مجاز است.'
+        );
+        if (!str_starts_with($stored['mime'], 'image/')) {
+            self::deleteRelative($stored['relative_path']);
+            throw new InvalidArgumentException('فایل انتخاب‌شده تصویر معتبر نیست.');
+        }
+
+        return $stored;
+    }
+
+    /**
+     * @param array<string, mixed> $file $_FILES entry
+     * @param list<string> $allowedExtensions
+     * @return array{stored_name:string, original_name:string, mime:string, size_bytes:int, relative_path:string}
+     */
+    private static function storeValidatedUpload(
+        array $file,
+        string $category,
+        array $allowedExtensions,
+        int $maxBytes,
+        string $extensionError
+    ): array {
         self::ensureRoot();
         $category = preg_replace('/[^a-z0-9_-]+/i', '', $category) ?: 'files';
         $error = (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE);
@@ -63,14 +105,15 @@ final class FileStorage
         if ($size <= 0) {
             throw new InvalidArgumentException('فایل خالی است.');
         }
-        if ($size > self::MAX_BYTES) {
-            throw new InvalidArgumentException('حجم فایل نباید بیشتر از ۱۰ مگابایت باشد.');
+        if ($size > $maxBytes) {
+            $limitMb = (int) round($maxBytes / 1_048_576);
+            throw new InvalidArgumentException("حجم فایل نباید بیشتر از {$limitMb} مگابایت باشد.");
         }
 
         $original = self::sanitizeOriginalName((string) ($file['name'] ?? 'file'));
         $extension = strtolower(pathinfo($original, PATHINFO_EXTENSION));
-        if (!in_array($extension, self::ALLOWED_EXTENSIONS, true)) {
-            throw new InvalidArgumentException('فرمت فایل مجاز نیست. فرمت‌های مجاز: PDF، تصویر، Word، Excel.');
+        if (!in_array($extension, $allowedExtensions, true)) {
+            throw new InvalidArgumentException($extensionError);
         }
 
         $detectedMime = self::detectMime($tmp, $extension);
@@ -127,6 +170,16 @@ final class FileStorage
 
     public static function sendDownload(string $relativePath, string $originalName, string $mime): never
     {
+        self::sendFile($relativePath, $originalName, $mime, false);
+    }
+
+    public static function sendInline(string $relativePath, string $originalName, string $mime): never
+    {
+        self::sendFile($relativePath, $originalName, $mime, true);
+    }
+
+    private static function sendFile(string $relativePath, string $originalName, string $mime, bool $inline): never
+    {
         $path = self::absolutePath($relativePath);
         if (!is_file($path)) {
             http_response_code(404);
@@ -136,9 +189,10 @@ final class FileStorage
         }
 
         $safeName = self::sanitizeOriginalName($originalName !== '' ? $originalName : basename($path));
+        $disposition = $inline ? 'inline' : 'attachment';
         header('Content-Type: ' . ($mime !== '' ? $mime : 'application/octet-stream'));
         header('Content-Length: ' . (string) filesize($path));
-        header('Content-Disposition: attachment; filename="' . rawurlencode($safeName) . '"; filename*=UTF-8\'\'' . rawurlencode($safeName));
+        header('Content-Disposition: ' . $disposition . '; filename="' . rawurlencode($safeName) . '"; filename*=UTF-8\'\'' . rawurlencode($safeName));
         header('X-Content-Type-Options: nosniff');
         header('Cache-Control: private, no-store');
         readfile($path);

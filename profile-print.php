@@ -143,10 +143,15 @@ $maskNationalId = static function (mixed $value): string {
 
   <main class="sheet">
     <header class="sheet-header">
-      <div>
-        <p class="eyebrow">مرکز نوآوری مکانیک · مکینو</p>
-        <h1><?= e((string) ($team['name'] ?? 'نهاد')) ?></h1>
-        <p class="meta"><?= e($entityLabel) ?> · کد <?= e((string) ($team['entity_code'] ?? '—')) ?></p>
+      <div class="sheet-brand">
+        <?php if (!empty($team['logo_url'])): ?>
+          <img class="team-logo-print" src="<?= e((string) $team['logo_url']) ?>" alt="" />
+        <?php endif; ?>
+        <div>
+          <p class="eyebrow">مرکز نوآوری مکانیک · مکینو</p>
+          <h1><?= e((string) ($team['name'] ?? 'نهاد')) ?></h1>
+          <p class="meta"><?= e($entityLabel) ?> · کد <?= e((string) ($team['entity_code'] ?? '—')) ?></p>
+        </div>
       </div>
       <div class="sheet-stamp">
         <strong>پروفایل نهاد</strong>
@@ -286,15 +291,24 @@ $maskNationalId = static function (mixed $value): string {
       <?php else: ?>
         <table>
           <thead>
-            <tr><th>کد</th><th>نام</th><th>تماس</th><th>کدملی</th><th>وضعیت</th></tr>
+            <tr><th></th><th>کد</th><th>نام</th><th>ایمیل</th><th>تماس</th><th>کدملی</th><th>عضویت</th><th>وضعیت</th></tr>
           </thead>
           <tbody>
             <?php foreach ($profile['members'] as $row): ?>
               <tr>
+                <td class="avatar-cell">
+                  <?php if (!empty($row['avatar_url'])): ?>
+                    <img class="member-avatar-print" src="<?= e((string) $row['avatar_url']) ?>" alt="" />
+                  <?php else: ?>
+                    —
+                  <?php endif; ?>
+                </td>
                 <td><?= e((string) ($row['member_code'] ?? '—')) ?></td>
                 <td><?= e((string) ($row['full_name'] ?? '—')) ?></td>
+                <td><?= e((string) ($row['email'] ?? '—')) ?></td>
                 <td><?= e((string) ($row['phone'] ?? '—')) ?></td>
                 <td><?= e($maskNationalId($row['national_id'] ?? '')) ?></td>
+                <td><?= e((string) ($row['joined_at'] ?? '—')) ?></td>
                 <td><?= e($approvalLabels[(string) ($row['approval_status'] ?? '')] ?? (string) ($row['approval_status'] ?? '—')) ?></td>
               </tr>
             <?php endforeach; ?>

@@ -41,6 +41,7 @@ final class Crud
                     ],
                     'warning' => ['label' => 'اخطار', 'type' => 'text'],
                     'notes' => ['label' => 'توضیحات', 'type' => 'textarea'],
+                    // logo handled via multipart upload (ProfileImages), not JSON fields.
                 ],
             ],
             'team_contracts' => [
@@ -68,15 +69,23 @@ final class Crud
                 'source' => true,
                 'fields' => [
                     'team_id' => ['label' => 'نهاد (تیم / شرکت / دانشجو)', 'type' => 'select', 'options' => [], 'required' => true],
-                    'full_name' => ['label' => 'نام', 'type' => 'text', 'required' => true],
+                    'full_name' => ['label' => 'نام و نام خانوادگی', 'type' => 'text', 'required' => true],
+                    'father_name' => ['label' => 'نام پدر', 'type' => 'text', 'required' => true],
+                    'national_id' => ['label' => 'کدملی', 'type' => 'text', 'required' => true],
+                    'id_certificate_number' => ['label' => 'شماره شناسنامه', 'type' => 'text', 'required' => true],
+                    'birth_date' => ['label' => 'تاریخ تولد', 'type' => 'date', 'required' => true, 'placeholder' => '1370/01/01'],
+                    'birth_place' => ['label' => 'محل تولد', 'type' => 'text', 'required' => true],
+                    'education' => ['label' => 'تحصیلات', 'type' => 'text', 'required' => true],
+                    'phone' => ['label' => 'تماس', 'type' => 'text', 'required' => true],
+                    'email' => ['label' => 'ایمیل', 'type' => 'text', 'required' => true, 'placeholder' => 'name@example.com'],
+                    'address' => ['label' => 'آدرس محل سکونت', 'type' => 'textarea', 'required' => true],
+                    'joined_at' => ['label' => 'تاریخ افزودن عضو', 'type' => 'date', 'placeholder' => '1404/01/01'],
                     'access_code' => ['label' => 'کد دستگاه تردد', 'type' => 'text'],
                     'wants_access' => [
                         'label' => 'دسترسی تردد',
                         'type' => 'select',
                         'options' => ['0' => 'خیر', '1' => 'بله — نیاز به کد تردد دارد'],
                     ],
-                    'phone' => ['label' => 'تماس', 'type' => 'text'],
-                    'national_id' => ['label' => 'کدملی', 'type' => 'text'],
                     'notes' => ['label' => 'توضیحات', 'type' => 'textarea'],
                 ],
             ],
@@ -106,9 +115,16 @@ final class Crud
                         'options' => ['update' => 'ویرایش اطلاعات', 'delete' => 'حذف عضو'],
                         'required' => true,
                     ],
-                    'full_name' => ['label' => 'نام جدید', 'type' => 'text'],
-                    'phone' => ['label' => 'موبایل جدید', 'type' => 'text'],
-                    'national_id' => ['label' => 'کد ملی جدید', 'type' => 'text'],
+                    'full_name' => ['label' => 'نام و نام خانوادگی', 'type' => 'text'],
+                    'father_name' => ['label' => 'نام پدر', 'type' => 'text'],
+                    'national_id' => ['label' => 'کد ملی', 'type' => 'text'],
+                    'id_certificate_number' => ['label' => 'شماره شناسنامه', 'type' => 'text'],
+                    'birth_date' => ['label' => 'تاریخ تولد', 'type' => 'date', 'placeholder' => '1370/01/01'],
+                    'birth_place' => ['label' => 'محل تولد', 'type' => 'text'],
+                    'education' => ['label' => 'تحصیلات', 'type' => 'text'],
+                    'phone' => ['label' => 'موبایل', 'type' => 'text'],
+                    'email' => ['label' => 'ایمیل', 'type' => 'text', 'placeholder' => 'name@example.com'],
+                    'address' => ['label' => 'آدرس محل سکونت', 'type' => 'textarea'],
                     'wants_access' => [
                         'label' => 'دسترسی تردد',
                         'type' => 'select',
@@ -410,19 +426,30 @@ final class Crud
         if (Access::isTeam() && $resource === 'members') {
             return [
                 'full_name' => array_merge($fields['full_name'], ['required' => true]),
-                'phone' => array_merge($fields['phone'], ['required' => true]),
+                'father_name' => array_merge($fields['father_name'], ['required' => true]),
                 'national_id' => array_merge($fields['national_id'], ['required' => true]),
+                'id_certificate_number' => array_merge($fields['id_certificate_number'], ['required' => true]),
+                'birth_date' => array_merge($fields['birth_date'], ['required' => true]),
+                'birth_place' => array_merge($fields['birth_place'], ['required' => true]),
+                'education' => array_merge($fields['education'], ['required' => true]),
+                'phone' => array_merge($fields['phone'], ['required' => true]),
+                'email' => array_merge($fields['email'], ['required' => true]),
+                'address' => array_merge($fields['address'], ['required' => true]),
                 'wants_access' => array_merge($fields['wants_access'], ['required' => true]),
                 'notes' => $fields['notes'],
             ];
         }
         if (!Access::isTeam() && $resource === 'members') {
-            $optional = [];
+            $requiredKeys = [
+                'team_id', 'full_name', 'father_name', 'national_id', 'id_certificate_number',
+                'birth_date', 'birth_place', 'education', 'phone', 'email', 'address',
+            ];
+            $shaped = [];
             foreach ($fields as $key => $meta) {
-                $optional[$key] = array_merge($meta, ['required' => $key === 'team_id' ? true : false]);
+                $shaped[$key] = array_merge($meta, ['required' => in_array($key, $requiredKeys, true)]);
             }
 
-            return $optional;
+            return $shaped;
         }
         if (Access::isTeam() && $resource === 'transactions') {
             return [
@@ -436,12 +463,19 @@ final class Crud
             unset($fields['is_active']);
         }
         if (Access::isTeam() && $resource === 'member_requests') {
-            // full_name/phone/national_id required only for update — enforced in applyResourceRules.
+            // Profile fields required only for update — enforced in applyResourceRules.
             return [
                 'request_type' => $fields['request_type'],
                 'full_name' => $fields['full_name'],
-                'phone' => $fields['phone'],
+                'father_name' => $fields['father_name'],
                 'national_id' => $fields['national_id'],
+                'id_certificate_number' => $fields['id_certificate_number'],
+                'birth_date' => $fields['birth_date'],
+                'birth_place' => $fields['birth_place'],
+                'education' => $fields['education'],
+                'phone' => $fields['phone'],
+                'email' => $fields['email'],
+                'address' => $fields['address'],
                 'wants_access' => $fields['wants_access'],
                 'notes' => $fields['notes'],
             ];
@@ -692,6 +726,7 @@ final class Crud
             if ((int) ($row['is_leader'] ?? 0) === 1) {
                 throw new InvalidArgumentException('ابتدا مسئول نهاد را از دکمه «تغییر مسئول» به عضو دیگر منتقل کنید.');
             }
+            (new ProfileImages($this->pdo))->deleteMemberAvatarFiles($id);
         }
         if ($resource === 'panel_users') {
             $this->assertPanelUserDeletable($id);
@@ -777,6 +812,7 @@ final class Crud
 
             // Defer file unlinks until after commit so a cascade rollback cannot leave missing files.
             $orphanPaths = (new ContractDocuments($this->pdo))->deleteForTeam($teamId, false);
+            $orphanPaths = array_merge($orphanPaths, (new ProfileImages($this->pdo))->orphanPathsForTeam($teamId));
             if (Schema::tableExists($this->pdo, 'team_performance_reports')) {
                 $perfRows = $this->pdo->prepare('SELECT stored_path FROM team_performance_reports WHERE team_id = :id');
                 $perfRows->execute(['id' => $teamId]);
@@ -852,8 +888,60 @@ final class Crud
         if ($resource === 'desks') {
             $row = $this->enrichDeskAssignment($row);
         }
+        if ($resource === 'members') {
+            $row = ProfileImages::enrichMemberRow($row);
+        }
+        if ($resource === 'teams') {
+            $row = ProfileImages::enrichTeamRow($row);
+        }
+        if ($resource === 'member_requests') {
+            $row = ProfileImages::enrichMemberRequestRow($row);
+        }
 
         return $row;
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    private function assertMemberProfileFields(array $data, bool $requireAll): void
+    {
+        $required = [
+            'full_name' => 'نام و نام خانوادگی',
+            'father_name' => 'نام پدر',
+            'national_id' => 'کدملی',
+            'id_certificate_number' => 'شماره شناسنامه',
+            'birth_date' => 'تاریخ تولد',
+            'birth_place' => 'محل تولد',
+            'education' => 'تحصیلات',
+            'phone' => 'تماس',
+            'email' => 'ایمیل',
+            'address' => 'آدرس محل سکونت',
+        ];
+        foreach ($required as $field => $label) {
+            if (!$requireAll && !array_key_exists($field, $data)) {
+                continue;
+            }
+            if ($this->blank($data[$field] ?? null)) {
+                throw new InvalidArgumentException($label . ' الزامی است.');
+            }
+        }
+        if (array_key_exists('email', $data) && !$this->blank($data['email'] ?? null)) {
+            $email = trim((string) $data['email']);
+            if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                throw new InvalidArgumentException('ایمیل معتبر نیست.');
+            }
+        }
+        if (array_key_exists('birth_date', $data) && !$this->blank($data['birth_date'] ?? null)) {
+            if (!JalaliDate::isValid((string) $data['birth_date'])) {
+                throw new InvalidArgumentException('تاریخ تولد باید به صورت 1370/01/01 باشد.');
+            }
+        }
+        if (array_key_exists('joined_at', $data) && !$this->blank($data['joined_at'] ?? null)) {
+            if (!JalaliDate::isValid((string) $data['joined_at'])) {
+                throw new InvalidArgumentException('تاریخ افزودن عضو باید به صورت 1404/01/01 باشد.');
+            }
+        }
     }
 
     /**
@@ -1020,14 +1108,18 @@ final class Crud
             } else {
                 $data['approval_status'] = 'approved';
                 if ($this->blank($data['full_name'] ?? null)) {
-                    $data['full_name'] = 'بدون نام';
+                    throw new InvalidArgumentException('نام و نام خانوادگی الزامی است.');
                 }
+            }
+            if ($this->blank($data['joined_at'] ?? null)) {
+                $data['joined_at'] = JalaliDate::todayParts()['formatted'];
             }
             if (isset($data['wants_access'])) {
                 $data['wants_access'] = (int) $data['wants_access'];
             } else {
                 $data['wants_access'] = 0;
             }
+            $this->assertMemberProfileFields($data, true);
         }
         if ($resource === 'members' && !$creating) {
             if (!empty($data['access_code'])) {
@@ -1036,6 +1128,7 @@ final class Crud
             if (array_key_exists('wants_access', $data) && (int) $data['wants_access'] === 0) {
                 $data['access_code'] = '';
             }
+            $this->assertMemberProfileFields($data, false);
         }
         if ($resource === 'locker_requests' && $creating) {
             $teamId = Access::scopedTeamId();
@@ -1080,11 +1173,19 @@ final class Crud
                 $data['full_name'] = null;
                 $data['phone'] = null;
                 $data['national_id'] = null;
+                $data['father_name'] = null;
+                $data['id_certificate_number'] = null;
+                $data['birth_date'] = null;
+                $data['birth_place'] = null;
+                $data['education'] = null;
+                $data['email'] = null;
+                $data['address'] = null;
                 $data['wants_access'] = null;
+                $data['avatar_path'] = null;
+                $data['avatar_original_name'] = null;
+                $data['avatar_mime'] = null;
             } else {
-                if ($this->blank($data['full_name'] ?? null) || $this->blank($data['phone'] ?? null) || $this->blank($data['national_id'] ?? null)) {
-                    throw new InvalidArgumentException('نام، موبایل و کد ملی برای ویرایش الزامی است.');
-                }
+                $this->assertMemberProfileFields($data, true);
                 $data['wants_access'] = (int) ($data['wants_access'] ?? 0);
             }
         }

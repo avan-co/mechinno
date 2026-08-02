@@ -247,3 +247,24 @@ th {
     box-shadow: none;
   }
 }
+
+.sheet-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.team-logo-print,
+.member-avatar-print {
+  width: 48px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+}
+.member-avatar-print {
+  width: 28px;
+  height: 28px;
+}
+.avatar-cell {
+  width: 34px;
+}

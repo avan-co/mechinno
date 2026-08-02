@@ -327,8 +327,17 @@ final class Repository
         if ($name === 'desks') {
             $rows = $this->enrichDeskAssignmentRows($rows);
         }
+        if ($name === 'teams') {
+            $rows = array_map(static fn (array $row): array => ProfileImages::enrichTeamRow($row), $rows);
+        }
         if ($name === 'teams' && Access::isAdmin()) {
             $rows = $this->enrichTeamStatusRows($rows);
+        }
+        if (in_array($name, ['members', 'pending-members'], true)) {
+            $rows = array_map(static fn (array $row): array => ProfileImages::enrichMemberRow($row), $rows);
+        }
+        if (in_array($name, ['member-requests', 'pending-member-requests'], true)) {
+            $rows = array_map(static fn (array $row): array => ProfileImages::enrichMemberRequestRow($row), $rows);
         }
         if ($name === 'team_contracts') {
             $rows = $this->enrichContractStatusRows($rows);
@@ -509,6 +518,7 @@ final class Repository
         return match ($name) {
             'teams' => "SELECT t.id, t.entity_code, t.entity_type, t.name, t.leader, t.phone, t.joined_at,
                         t.contract_start, t.contract_end, t.is_active, t.warning, t.notes,
+                        t.logo_path, t.logo_original_name, t.logo_mime,
                         u.username AS portal_username,
                         CASE WHEN u.password_hash IS NOT NULL AND u.password_hash <> '' THEN 1 ELSE 0 END AS portal_has_password,
                         (SELECT COUNT(DISTINCT da.desk_id) FROM desk_assignments da
@@ -546,6 +556,8 @@ final class Repository
                     tc.fiscal_year DESC,
                     t.name',
             'members' => "SELECT m.id, m.member_code, m.team_id, m.access_code, m.full_name, m.phone, m.national_id, m.notes,
+                        m.email, m.birth_date, m.father_name, m.id_certificate_number, m.birth_place, m.education, m.address, m.joined_at,
+                        m.avatar_path, m.avatar_original_name, m.avatar_mime,
                         m.approval_status, m.submitted_at, m.reviewed_at, m.rejection_reason, m.wants_access, m.is_leader,
                         t.name AS team_label, t.entity_type,
                         (SELECT GROUP_CONCAT(d.number ORDER BY d.number)
@@ -612,6 +624,8 @@ final class Repository
                 . $this->searchClause('transactions', $filters, $teamId !== null || ($filters['category'] ?? '') !== '' || ($filters['payment_status'] ?? '') !== '')
                 . ' ORDER BY t.tx_date DESC, t.id DESC',
             'pending-members' => "SELECT m.id, m.member_code, m.full_name, m.phone, m.national_id, m.wants_access, m.submitted_at,
+                        m.email, m.birth_date, m.father_name, m.id_certificate_number, m.birth_place, m.education, m.address, m.joined_at,
+                        m.avatar_path, m.avatar_original_name, m.avatar_mime,
                         t.name AS team_label, t.id AS team_id
                  FROM members m
                  INNER JOIN teams t ON t.id = m.team_id
@@ -638,6 +652,8 @@ final class Repository
                  ORDER BY lr.submitted_at DESC, lr.id DESC",
             'pending-member-requests' => "SELECT mr.id, mr.team_id, mr.member_id, mr.request_type, mr.full_name, mr.phone,
                         mr.national_id, mr.wants_access, mr.notes, mr.submitted_at,
+                        mr.email, mr.birth_date, mr.father_name, mr.id_certificate_number, mr.birth_place, mr.education, mr.address,
+                        mr.avatar_path, mr.avatar_original_name, mr.avatar_mime,
                         m.full_name AS current_full_name, m.member_code, t.name AS team_label
                  FROM member_requests mr
                  INNER JOIN teams t ON t.id = mr.team_id
@@ -646,6 +662,8 @@ final class Repository
                  ORDER BY mr.submitted_at DESC, mr.id DESC",
             'member-requests' => "SELECT mr.id, mr.team_id, mr.member_id, mr.request_type, mr.full_name, mr.phone,
                         mr.national_id, mr.wants_access, mr.notes, mr.status, mr.submitted_at, mr.reviewed_at,
+                        mr.email, mr.birth_date, mr.father_name, mr.id_certificate_number, mr.birth_place, mr.education, mr.address,
+                        mr.avatar_path, mr.avatar_original_name, mr.avatar_mime,
                         mr.rejection_reason, m.full_name AS current_full_name, m.member_code, t.name AS team_label
                  FROM member_requests mr
                  LEFT JOIN teams t ON t.id = mr.team_id
@@ -1270,7 +1288,7 @@ final class Repository
         }
 
         return [
-            'team' => self::stripLegacyColumns($team),
+            'team' => ProfileImages::enrichTeamRow(self::stripLegacyColumns($team)),
             'contracts' => $this->preparedRows(
                 'SELECT id, fiscal_year, contract_start, contract_end, formal_contract_amount, notes, created_at'
                 . $this->teamContractRateOverrideSelect() . '
@@ -1283,10 +1301,15 @@ final class Repository
                 fn (array $row): array => $this->stripLegacyRow($row),
                 $this->liveDesksForTeam($teamId)
             ),
-            'members' => $this->preparedRows(
-                'SELECT m.id, m.member_code, m.full_name, m.access_code, m.wants_access, m.phone, m.national_id, m.notes, m.approval_status
-                 FROM members m WHERE m.team_id = :id ORDER BY m.full_name',
-                ['id' => $teamId]
+            'members' => array_map(
+                static fn (array $row): array => ProfileImages::enrichMemberRow($row),
+                $this->preparedRows(
+                    'SELECT m.id, m.member_code, m.full_name, m.access_code, m.wants_access, m.phone, m.national_id, m.notes, m.approval_status,
+                            m.email, m.birth_date, m.father_name, m.id_certificate_number, m.birth_place, m.education, m.address, m.joined_at,
+                            m.avatar_path, m.avatar_original_name, m.avatar_mime
+                     FROM members m WHERE m.team_id = :id ORDER BY m.full_name',
+                    ['id' => $teamId]
+                )
             ),
             'lockers' => $this->preparedRows(
                 'SELECT l.id, l.locker_number, l.status, l.delivered_at'
@@ -2038,7 +2061,7 @@ final class Repository
         $expr = match ($name) {
             'teams' => "t.name LIKE {$quoted} OR t.leader LIKE {$quoted} OR t.phone LIKE {$quoted} OR t.entity_code LIKE {$quoted} OR COALESCE(u.username, '') LIKE {$quoted}",
             'team_contracts' => "t.name LIKE {$quoted} OR COALESCE(tc.fiscal_year, '') LIKE {$quoted} OR COALESCE(tc.notes, '') LIKE {$quoted}",
-            'members' => "m.full_name LIKE {$quoted} OR COALESCE(m.phone, '') LIKE {$quoted} OR COALESCE(m.national_id, '') LIKE {$quoted} OR COALESCE(m.member_code, '') LIKE {$quoted} OR COALESCE(t.name, '') LIKE {$quoted}",
+            'members' => "m.full_name LIKE {$quoted} OR COALESCE(m.phone, '') LIKE {$quoted} OR COALESCE(m.national_id, '') LIKE {$quoted} OR COALESCE(m.member_code, '') LIKE {$quoted} OR COALESCE(m.email, '') LIKE {$quoted} OR COALESCE(m.father_name, '') LIKE {$quoted} OR COALESCE(t.name, '') LIKE {$quoted}",
             'desks' => "CAST(d.number AS TEXT) LIKE {$quoted} OR COALESCE(t.name, '') LIKE {$quoted} OR COALESCE(d.notes, '') LIKE {$quoted}",
             'lockers' => "CAST(l.locker_number AS TEXT) LIKE {$quoted} OR COALESCE(t.name, '') LIKE {$quoted} OR COALESCE(l.notes, '') LIKE {$quoted}",
             'charges' => "COALESCE(t.name, '') LIKE {$quoted} OR COALESCE(c.note, '') LIKE {$quoted} OR COALESCE(c.fiscal_year, '') LIKE {$quoted}",

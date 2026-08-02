@@ -11,6 +11,17 @@ const labels = {
   formal_contract_amount: "مبلغ قرارداد رسمی",
   fiscal_year: "سال مالی",
   full_name: "نام",
+  father_name: "نام پدر",
+  id_certificate_number: "شماره شناسنامه",
+  birth_date: "تاریخ تولد",
+  birth_place: "محل تولد",
+  education: "تحصیلات",
+  email: "ایمیل",
+  address: "آدرس سکونت",
+  avatar: "تصویر",
+  avatar_url: "تصویر",
+  logo: "لوگو",
+  logo_url: "لوگو",
   team_id: "نهاد",
   team_name: "نهاد",
   team_is_active: "وضعیت نهاد",
@@ -308,21 +319,21 @@ const fiscalYearFromDate = (value) => {
 };
 
 const resourceColumns = {
-  teams: ["entity_code", "entity_type", "name", "is_active", "year_status", "leader", "phone", "joined_at", "portal_username", "portal_has_password", "desk_count", "warning", "notes"],
+  teams: ["logo_url", "entity_code", "entity_type", "name", "is_active", "year_status", "leader", "phone", "joined_at", "portal_username", "portal_has_password", "desk_count", "warning", "notes"],
   team_contracts: ["team_name", "fiscal_year", "contract_status", "contract_start", "contract_end", "formal_contract_amount", "charge_rate_override", "informal_rent_rate_override", "notes"],
-  members: ["member_code", "full_name", "is_leader", "team_label", "entity_type", "desk_numbers", "wants_access", "access_code", "phone", "national_id", "approval_status", "rejection_reason"],
+  members: ["avatar_url", "member_code", "full_name", "is_leader", "team_label", "entity_type", "desk_numbers", "wants_access", "access_code", "phone", "email", "national_id", "joined_at", "approval_status", "rejection_reason"],
   desks: ["number", "team_name", "usage_type", "assignment_period", "notes"],
   "desk-assignments": ["assignment_status", "fiscal_year", "desk_number", "team_name", "usage_type", "billing_exemptions", "assignment_period", "notes"],
   lockers: ["locker_number", "status", "team_label", "delivered_at", "key_number", "spare_key"],
   "locker-requests": ["submitted_at", "status", "locker_number", "notes", "reviewed_at", "rejection_reason"],
-  "member-requests": ["submitted_at", "request_type", "current_full_name", "full_name", "phone", "national_id", "status", "reviewed_at", "rejection_reason"],
-  "pending-member-requests": ["team_label", "submitted_at", "request_type", "current_full_name", "full_name", "phone", "national_id", "wants_access", "notes"],
+  "member-requests": ["submitted_at", "request_type", "current_full_name", "full_name", "phone", "email", "national_id", "status", "reviewed_at", "rejection_reason"],
+  "pending-member-requests": ["team_label", "submitted_at", "request_type", "avatar_url", "current_full_name", "full_name", "phone", "email", "national_id", "father_name", "wants_access", "notes"],
   "pending-locker-requests": ["team_label", "submitted_at", "notes"],
   rate_settings: ["fiscal_year", "title", "charge_rate", "informal_rent_rate", "effective_from", "notes"],
   panel_users: ["username", "role", "full_name", "is_active"],
   charges: ["fiscal_year", "team_name", "month_name", "charge_amount", "rent_amount", "amount", "note"],
   transactions: ["tx_date", "description", "amount", "category", "team_name", "fiscal_year", "month_name", "payment_status", "payment_reference", "confirmed"],
-  "pending-members": ["member_code", "full_name", "team_label", "phone", "national_id", "wants_access", "submitted_at"],
+  "pending-members": ["avatar_url", "member_code", "full_name", "team_label", "phone", "email", "national_id", "father_name", "wants_access", "joined_at", "submitted_at"],
   "pending-payments": ["tx_date", "team_name", "fiscal_year", "month_name", "amount", "payment_reference", "announced_at", "notes", "description"],
   "payment-history": ["tx_date", "team_name", "fiscal_year", "month_name", "amount", "payment_status", "payment_reference", "announced_at", "reviewed_at", "notes"],
   development_plans: ["title", "status", "priority", "due_date", "notes"],
@@ -369,7 +380,10 @@ const createDefaults = {
   }),
   development_plans: () => ({ priority: "medium", status: "open" }),
   meeting_rooms: () => ({ is_active: "1", capacity: "10", slot_minutes: "60", open_time: "08:00", close_time: "20:00" }),
-  members: () => ({ wants_access: "0" }),
+  members: () => ({
+    wants_access: "0",
+    joined_at: window.MECHINNO?.today || "",
+  }),
   "locker-requests": () => ({}),
 };
 const csrfToken = window.MECHINNO?.csrfToken || "";
@@ -723,6 +737,26 @@ const postJson = async (url, payload = {}) => {
     throw new Error(data.error || "پاسخ نامعتبر از سرور برای این عملیات.");
   }
   return data;
+};
+
+const postForm = async (url, formData) => {
+  const data = await fetchJson(url, {
+    method: "POST",
+    headers: { "X-CSRF-Token": csrfToken },
+    body: formData,
+  });
+  if (String(url).includes("action=") && data && data.ok !== true && Array.isArray(data.rows)) {
+    throw new Error(data.error || "پاسخ نامعتبر از سرور برای این عملیات.");
+  }
+  return data;
+};
+
+const profileThumb = (url, label = "") => {
+  if (!url) {
+    const initial = escapeHtml((label || "؟").trim().slice(0, 1) || "؟");
+    return `<span class="profile-thumb profile-thumb--empty" aria-hidden="true">${initial}</span>`;
+  }
+  return `<img class="profile-thumb" src="${escapeHtml(url)}" alt="" loading="lazy" />`;
 };
 
 const isMobile = () => window.matchMedia("(max-width: 768px)").matches;
@@ -2125,6 +2159,7 @@ const loadTeamProfile = async () => {
   const team = data.team || {};
   host.innerHTML = `
     <div class="profile-summary team-profile-grid">
+      <div class="profile-brand-cell"><span>تصویر نهاد</span><strong>${profileThumb(team.logo_url || "", team.name || "")}</strong></div>
       <div><span>نام نهاد</span><strong>${escapeHtml(team.name || "—")}</strong></div>
       <div><span>نوع</span><strong>${entityBadge(team.entity_type)}</strong></div>
       <div><span>کد نهاد</span><strong>${escapeHtml(team.entity_code || "—")}</strong></div>
@@ -2141,7 +2176,7 @@ const loadTeamProfile = async () => {
     ${team.warning ? `<p class="hint warning-text">اخطار: ${escapeHtml(team.warning)}</p>` : ""}
     ${team.notes ? `<p class="hint">${escapeHtml(team.notes)}</p>` : ""}
     ${profileSection("میزها و تاریخ تخصیص", data.desk_assignments || [], ["fiscal_year", "desk_number", "usage_type", "assignment_period", "notes"])}
-    ${profileSection("اعضا", data.members || [], ["full_name", "wants_access", "phone", "national_id", "approval_status"])}
+    ${profileSection("اعضا", data.members || [], ["avatar_url", "full_name", "email", "phone", "national_id", "joined_at", "approval_status"])}
     ${profileSection("کمدهای تخصیص‌یافته", data.lockers || [], ["locker_number", "status", "delivered_at"])}
     ${profileSection("درخواست‌های کمد", data.locker_requests || [], ["submitted_at", "status", "locker_number", "notes"])}`;
   host.classList.add("is-ready");
@@ -2981,6 +3016,8 @@ const profileSection = (title, rows, cols, cellRenderer = null) => `
           if (["amount", "charge_amount", "rent_amount", "formal_contract_amount", "charge_rate", "informal_rent_rate", "charge_rate_override", "informal_rent_rate_override"].includes(c)) {
             return `<td class="num">${escapeHtml(formatMoney(value))}</td>`;
           }
+          if (c === "avatar_url") return `<td>${profileThumb(value || "", row.full_name || "")}</td>`;
+          if (c === "logo_url") return `<td>${profileThumb(value || "", row.name || "")}</td>`;
           if (c === "usage_type") return `<td>${usageLabels[value] || value || "—"}</td>`;
           if (c === "wants_access") return `<td>${accessStatusLabel(row)}</td>`;
           if (c === "approval_status") return `<td>${approvalStatusBadge(value)}</td>`;
@@ -3006,6 +3043,7 @@ const openTeamProfile = async (teamId, options = {}) => {
   const deskList = (data.desks || []).map((d) => d.number).join("، ") || "—";
   form.innerHTML = `
     <div class="profile-summary">
+      <div class="profile-brand-cell"><span>تصویر نهاد</span><strong>${profileThumb(data.team.logo_url || "", data.team.name || "")}</strong></div>
       <div><span>نوع</span><strong>${entityBadge(data.team.entity_type)}</strong></div>
       <div><span>مسئول</span><strong>${escapeHtml(data.team.leader || "—")}</strong></div>
       <div><span>میزها</span><strong>${escapeHtml(deskList)}</strong></div>
@@ -3024,7 +3062,7 @@ const openTeamProfile = async (teamId, options = {}) => {
     ${profileSection("قراردادهای سالانه", data.contracts || [], ["fiscal_year", "contract_start", "contract_end", "formal_contract_amount", "notes"])}
     ${profileSection("میزهای نهاد", data.desks, ["number", "usage_type", "notes"])}
     ${profileSection("تاریخچه تخصیص میز", data.desk_assignments || [], ["fiscal_year", "desk_number", "usage_type", "assigned_from", "assigned_until", "notes"])}
-    ${profileSection("اعضا", data.members, ["member_code", "full_name", "access_code", "phone", "national_id"])}
+    ${profileSection("اعضا", data.members, ["avatar_url", "member_code", "full_name", "email", "phone", "national_id", "joined_at"])}
     ${profileSection("کمدها", data.lockers, ["locker_number", "status", "delivered_at", "key_number"], (column, row) => {
       if (column === "locker_number") return lockerLink(row.locker_number);
       if (column === "status") return lockerStatusBadge(row.status);
@@ -3312,10 +3350,11 @@ const releaseFocusTrap = (modal) => {
 const ltrFields = new Set([
   "access_code", "phone", "national_id", "portal_username", "portal_password",
   "account_number", "card_number", "sheba", "payment_reference", "entity_code", "member_code",
+  "email", "id_certificate_number",
 ]);
 
 const jalaliDateFieldNames = new Set([
-  "joined_at", "contract_start", "contract_end", "tx_date", "assigned_from", "assigned_until",
+  "joined_at", "birth_date", "contract_start", "contract_end", "tx_date", "assigned_from", "assigned_until",
   "submitted_at", "reviewed_at", "effective_from", "announced_at", "created_at", "updated_at",
   "sent_at",
 ]);
@@ -3331,6 +3370,8 @@ const isValidJalaliDate = (value) => /^\d{4}\/\d{2}\/\d{2}$/.test(normalizeDigit
 const isValidIranPhone = (value) => /^09\d{9}$/.test(normalizeDigits(value));
 
 const isValidNationalId = (value) => /^\d{10}$/.test(normalizeDigits(value));
+
+const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || "").trim());
 
 const validateCrudForm = (form, definition) => {
   const payload = Object.fromEntries(new FormData(form).entries());
@@ -3348,6 +3389,9 @@ const validateCrudForm = (form, definition) => {
     }
     if (name === "national_id" && !isValidNationalId(value)) {
       throw new Error("کد ملی باید ۱۰ رقم باشد.");
+    }
+    if (name === "email" && !isValidEmail(value)) {
+      throw new Error("ایمیل معتبر نیست.");
     }
   }
 };
@@ -3492,9 +3536,32 @@ const openRecordModal = ({ resource, definition, record = null, onSaved, title =
   const portalPasswordBlock = resource === "teams" && !isEdit && canWrite && panelMode !== "team"
     ? portalPasswordSectionHtml()
     : "";
+  const usesProfileUpload = resource === "members" || resource === "teams";
+  const memberAvatarBlock = resource === "members"
+    ? `<label class="wide profile-upload-field">
+         <span>تصویر پروفایل${!isEdit ? " *" : " (در صورت نیاز جایگزین کنید)"}</span>
+         <div class="profile-upload-row">
+           ${profileThumb(formRecord.avatar_url || "", formRecord.full_name || "")}
+           <input name="avatar" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" ${!isEdit ? "required" : ""} />
+         </div>
+         <p class="hint">فقط JPG، PNG یا WebP — حداکثر ۲ مگابایت</p>
+       </label>`
+    : "";
+  const teamLogoBlock = resource === "teams"
+    ? `<label class="wide profile-upload-field">
+         <span>تصویر پروفایل نهاد${!isEdit ? " *" : " (در صورت نیاز جایگزین کنید)"}</span>
+         <div class="profile-upload-row">
+           ${profileThumb(formRecord.logo_url || "", formRecord.name || "")}
+           <input name="logo" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" ${!isEdit ? "required" : ""} />
+         </div>
+         <p class="hint">فقط JPG، PNG یا WebP — حداکثر ۲ مگابایت</p>
+       </label>`
+    : "";
   form.innerHTML = `
     ${isEdit ? `<input type="hidden" name="id" value="${escapeHtml(String(record.id))}" />` : ""}
     <div class="crud-grid">
+      ${memberAvatarBlock}
+      ${teamLogoBlock}
       ${Object.entries(definition.fields).map(([name, meta]) => {
         if (meta.type === "hidden") {
           return fieldInput(name, meta, formRecord[name] ?? "");
@@ -3520,10 +3587,32 @@ const openRecordModal = ({ resource, definition, record = null, onSaved, title =
     submitButton.disabled = true;
     try {
       validateCrudForm(form, definition);
-      const payload = Object.fromEntries(new FormData(form).entries());
-      if (isEdit) payload.id = payload.id || record.id;
-      if (portalPasswordBlock) Object.assign(payload, collectPortalPasswordPayload(form));
-      await postJson(`api.php?resource=${encodeURIComponent(resource)}&action=${isEdit ? "update" : "create"}`, payload);
+      if (usesProfileUpload) {
+        const body = new FormData(form);
+        if (isEdit) body.set("id", String(payloadId(record, body)));
+        if (portalPasswordBlock) {
+          const portal = collectPortalPasswordPayload(form);
+          Object.entries(portal).forEach(([key, value]) => body.set(key, value));
+        }
+        if (resource === "members" && !isEdit && !body.get("avatar")?.size) {
+          throw new Error("تصویر پروفایل عضو الزامی است.");
+        }
+        if (resource === "teams" && !isEdit && !body.get("logo")?.size) {
+          throw new Error("تصویر پروفایل نهاد الزامی است.");
+        }
+        if (isEdit && resource === "members" && body.get("avatar") && !body.get("avatar").size) {
+          body.delete("avatar");
+        }
+        if (isEdit && resource === "teams" && body.get("logo") && !body.get("logo").size) {
+          body.delete("logo");
+        }
+        await postForm(`api.php?resource=${encodeURIComponent(resource)}&action=${isEdit ? "update" : "create"}`, body);
+      } else {
+        const payload = Object.fromEntries(new FormData(form).entries());
+        if (isEdit) payload.id = payload.id || record.id;
+        if (portalPasswordBlock) Object.assign(payload, collectPortalPasswordPayload(form));
+        await postJson(`api.php?resource=${encodeURIComponent(resource)}&action=${isEdit ? "update" : "create"}`, payload);
+      }
       closeModal();
       await onSaved();
     } catch (error) {
@@ -3535,6 +3624,8 @@ const openRecordModal = ({ resource, definition, record = null, onSaved, title =
   modal.hidden = false;
   trapFocus(modal);
 };
+
+const payloadId = (record, body) => body.get("id") || record?.id || "";
 
 const devCategoryLabels = { idea: "ایده", action: "اقدام", planned: "برنامه‌ریزی‌شده" };
 const devStatusLabels = { open: "باز", in_progress: "در حال اجرا", done: "انجام‌شده", cancelled: "لغو‌شده" };
@@ -3623,15 +3714,29 @@ const openMemberRequestModal = (requestType, member) => {
          <button class="button ghost" type="button" data-close-modal>انصراف</button>
        </div>`
     : `<div class="crud-grid">
-         <label><span>نام *</span><input name="full_name" type="text" required value="${escapeHtml(member.full_name || "")}" /></label>
-         <label><span>موبایل *</span><input name="phone" type="text" required value="${escapeHtml(member.phone || "")}" /></label>
-         <label><span>کد ملی *</span><input name="national_id" type="text" required value="${escapeHtml(member.national_id || "")}" /></label>
+         <label class="wide profile-upload-field">
+           <span>تصویر پروفایل (در صورت نیاز جایگزین کنید)</span>
+           <div class="profile-upload-row">
+             ${profileThumb(member.avatar_url || "", member.full_name || "")}
+             <input name="avatar" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" />
+           </div>
+         </label>
+         <label><span>نام و نام خانوادگی *</span><input name="full_name" type="text" required value="${escapeHtml(member.full_name || "")}" /></label>
+         <label><span>نام پدر *</span><input name="father_name" type="text" required value="${escapeHtml(member.father_name || "")}" /></label>
+         <label><span>کد ملی *</span><input name="national_id" type="text" required dir="ltr" class="ltr-input" value="${escapeHtml(member.national_id || "")}" /></label>
+         <label><span>شماره شناسنامه *</span><input name="id_certificate_number" type="text" required dir="ltr" class="ltr-input" value="${escapeHtml(member.id_certificate_number || "")}" /></label>
+         <label><span>تاریخ تولد *</span><input name="birth_date" type="text" required placeholder="1370/01/01" value="${escapeHtml(member.birth_date || "")}" /></label>
+         <label><span>محل تولد *</span><input name="birth_place" type="text" required value="${escapeHtml(member.birth_place || "")}" /></label>
+         <label><span>تحصیلات *</span><input name="education" type="text" required value="${escapeHtml(member.education || "")}" /></label>
+         <label><span>موبایل *</span><input name="phone" type="text" required dir="ltr" class="ltr-input" value="${escapeHtml(member.phone || "")}" /></label>
+         <label><span>ایمیل *</span><input name="email" type="text" required dir="ltr" class="ltr-input" value="${escapeHtml(member.email || "")}" /></label>
          <label><span>دسترسی تردد</span>
            <select name="wants_access">
              <option value="0" ${Number(member.wants_access) !== 1 ? "selected" : ""}>خیر</option>
              <option value="1" ${Number(member.wants_access) === 1 ? "selected" : ""}>بله — نیاز به کد تردد دارد</option>
            </select>
          </label>
+         <label class="wide"><span>آدرس محل سکونت *</span><textarea name="address" rows="2" required>${escapeHtml(member.address || "")}</textarea></label>
          <label class="wide"><span>توضیح</span><textarea name="notes" rows="2">${escapeHtml(member.notes || "")}</textarea></label>
        </div>
        <div class="modal-actions">
@@ -3644,24 +3749,37 @@ const openMemberRequestModal = (requestType, member) => {
     const submitButton = form.querySelector('button[type="submit"]');
     submitButton.disabled = true;
     try {
-      const payload = {
-        member_id: String(member.id),
-        request_type: requestType,
-        ...Object.fromEntries(new FormData(form).entries()),
-      };
-      if (!isDelete) {
-        const phone = String(payload.phone || "").replace(/\D/g, "");
-        const nationalId = String(payload.national_id || "").replace(/\D/g, "");
+      if (isDelete) {
+        await postJson("api.php?resource=member-requests&action=create", {
+          member_id: String(member.id),
+          request_type: requestType,
+          ...Object.fromEntries(new FormData(form).entries()),
+        });
+      } else {
+        const body = new FormData(form);
+        body.set("member_id", String(member.id));
+        body.set("request_type", requestType);
+        const phone = normalizeDigits(String(body.get("phone") || "")).replace(/\D/g, "");
+        const nationalId = normalizeDigits(String(body.get("national_id") || "")).replace(/\D/g, "");
         if (!/^09\d{9}$/.test(phone)) {
           throw new Error("شماره موبایل باید ۱۱ رقم و با ۰۹ شروع شود.");
         }
         if (!/^\d{10}$/.test(nationalId)) {
           throw new Error("کد ملی باید ۱۰ رقم باشد.");
         }
-        payload.phone = phone;
-        payload.national_id = nationalId;
+        if (!isValidEmail(String(body.get("email") || ""))) {
+          throw new Error("ایمیل معتبر نیست.");
+        }
+        if (!isValidJalaliDate(String(body.get("birth_date") || ""))) {
+          throw new Error("تاریخ تولد باید به فرمت 1370/01/01 باشد.");
+        }
+        body.set("phone", phone);
+        body.set("national_id", nationalId);
+        if (body.get("avatar") && !body.get("avatar").size) {
+          body.delete("avatar");
+        }
+        await postForm("api.php?resource=member-requests&action=create", body);
       }
-      await postJson("api.php?resource=member-requests&action=create", payload);
       closeModal();
       showToast("درخواست ثبت شد.", "success");
       document.querySelector('data-table[endpoint*="member-requests"]')?.load?.();
@@ -3922,6 +4040,12 @@ document.getElementById("addExpenseButton")?.addEventListener("click", () => {
 });
 
 const formatCell = (column, value, row, resource) => {
+  if (column === "avatar_url") {
+    return profileThumb(value || row.avatar_url || "", row.full_name || row.current_full_name || "");
+  }
+  if (column === "logo_url") {
+    return profileThumb(value || row.logo_url || "", row.name || "");
+  }
   if (column === "entity_type") return entityBadge(value);
   if (column === "is_leader") {
     return Number(value) === 1
@@ -4789,6 +4913,8 @@ window.MechinnoShared = {
   fetchJson,
   fetchResource,
   postJson,
+  postForm,
+  profileThumb,
   escapeHtml,
   formatMoney,
   formatPlain,

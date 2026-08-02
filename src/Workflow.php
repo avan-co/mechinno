@@ -289,8 +289,15 @@ final class Workflow
                 $wantsAccess = (int) ($row['wants_access'] ?? 0) === 1 ? 1 : 0;
                 $payload = [
                     'full_name' => (string) ($row['full_name'] ?? ''),
-                    'phone' => (string) ($row['phone'] ?? ''),
+                    'father_name' => (string) ($row['father_name'] ?? ''),
                     'national_id' => (string) ($row['national_id'] ?? ''),
+                    'id_certificate_number' => (string) ($row['id_certificate_number'] ?? ''),
+                    'birth_date' => (string) ($row['birth_date'] ?? ''),
+                    'birth_place' => (string) ($row['birth_place'] ?? ''),
+                    'education' => (string) ($row['education'] ?? ''),
+                    'phone' => (string) ($row['phone'] ?? ''),
+                    'email' => (string) ($row['email'] ?? ''),
+                    'address' => (string) ($row['address'] ?? ''),
                     'wants_access' => (string) $wantsAccess,
                     'notes' => (string) ($row['notes'] ?? ''),
                 ];
@@ -298,6 +305,31 @@ final class Workflow
                     $payload['access_code'] = '';
                 }
                 $crud->update('members', $memberId, $payload);
+                $requestAvatar = trim((string) ($row['avatar_path'] ?? ''));
+                if ($requestAvatar !== '') {
+                    $member = $this->memberRow($memberId);
+                    $oldAvatar = trim((string) ($member['avatar_path'] ?? ''));
+                    $this->pdo->prepare(
+                        'UPDATE members
+                         SET avatar_path = :avatar_path,
+                             avatar_original_name = :avatar_original_name,
+                             avatar_mime = :avatar_mime
+                         WHERE id = :id'
+                    )->execute([
+                        'avatar_path' => $requestAvatar,
+                        'avatar_original_name' => (string) ($row['avatar_original_name'] ?? ''),
+                        'avatar_mime' => (string) ($row['avatar_mime'] ?? ''),
+                        'id' => $memberId,
+                    ]);
+                    $this->pdo->prepare(
+                        'UPDATE member_requests
+                         SET avatar_path = NULL, avatar_original_name = NULL, avatar_mime = NULL
+                         WHERE id = :id'
+                    )->execute(['id' => $id]);
+                    if ($oldAvatar !== '' && $oldAvatar !== $requestAvatar) {
+                        FileStorage::deleteRelative($oldAvatar);
+                    }
+                }
             } else {
                 throw new InvalidArgumentException('نوع درخواست عضو معتبر نیست.');
             }

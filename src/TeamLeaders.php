@@ -42,16 +42,18 @@ final class TeamLeaders
         }
 
         $memberCode = (new Identifier($this->pdo))->nextMemberCode();
+        $today = JalaliDate::todayParts()['formatted'];
         $this->pdo->prepare(
-            'INSERT INTO members (member_code, team_id, full_name, phone, wants_access, approval_status, is_leader, reviewed_at, notes, source_file, source_sheet)
-             VALUES (:member_code, :team_id, :full_name, :phone, 0, :approval_status, 1, :reviewed_at, :notes, :source_file, :source_sheet)'
+            'INSERT INTO members (member_code, team_id, full_name, phone, wants_access, approval_status, is_leader, reviewed_at, joined_at, notes, source_file, source_sheet)
+             VALUES (:member_code, :team_id, :full_name, :phone, 0, :approval_status, 1, :reviewed_at, :joined_at, :notes, :source_file, :source_sheet)'
         )->execute([
             'member_code' => $memberCode,
             'team_id' => $teamId,
             'full_name' => $leaderName,
             'phone' => $phone !== '' ? $phone : null,
             'approval_status' => 'approved',
-            'reviewed_at' => JalaliDate::todayParts()['formatted'],
+            'reviewed_at' => $today,
+            'joined_at' => $today,
             'notes' => 'مسئول نهاد — ایجاد خودکار',
             'source_file' => 'manual',
             'source_sheet' => 'leader',

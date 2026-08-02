@@ -519,7 +519,13 @@ try {
         if ($resource === 'panel_users' && !Access::canWrite()) {
             json_response(['error' => 'مدیریت کاربران فقط برای مدیر ویرایشگر مجاز است.'], 403);
         }
-        $payload = read_json_body();
+
+        $contentType = strtolower((string) ($_SERVER['CONTENT_TYPE'] ?? $_SERVER['HTTP_CONTENT_TYPE'] ?? ''));
+        $isMultipart = str_contains($contentType, 'multipart/form-data') || !empty($_FILES);
+        $payload = $isMultipart ? $_POST : read_json_body();
+        if (!is_array($payload)) {
+            $payload = [];
+        }
         $id = (int) ($payload['id'] ?? 0);
         $crudResource = match ($resource) {
             'locker-requests' => 'locker_requests',
@@ -528,6 +534,87 @@ try {
             'meeting-rooms' => 'meeting_rooms',
             default => $resource,
         };
+
+        $profiles = new ProfileImages($pdo);
+
+        if ($resource === 'members' && in_array($action, ['create', 'update'], true)) {
+            $avatarFile = $_FILES['avatar'] ?? null;
+            $storedAvatar = null;
+            if ($action === 'create') {
+                if (!ProfileImages::hasUploadedFile($avatarFile)) {
+                    json_response(['error' => 'تصویر پروفایل عضو الزامی است.'], 422);
+                }
+                $storedAvatar = $profiles->storeMemberAvatar(is_array($avatarFile) ? $avatarFile : []);
+            } elseif (ProfileImages::hasUploadedFile($avatarFile)) {
+                $storedAvatar = $profiles->storeMemberAvatar(is_array($avatarFile) ? $avatarFile : []);
+            }
+            try {
+                $result = $action === 'create'
+                    ? $crud->create('members', $payload)
+                    : $crud->update('members', $id, $payload);
+                if ($storedAvatar !== null) {
+                    $profiles->setMemberAvatarFields((int) $result['id'], $storedAvatar, $action === 'update');
+                    $result = $crud->find('members', (int) $result['id']);
+                }
+            } catch (Throwable $error) {
+                if ($storedAvatar !== null) {
+                    FileStorage::deleteRelative($storedAvatar['avatar_path']);
+                }
+                throw $error;
+            }
+            json_response(['ok' => true, 'record' => $result]);
+        }
+
+        if ($resource === 'teams' && in_array($action, ['create', 'update'], true)) {
+            $logoFile = $_FILES['logo'] ?? null;
+            $storedLogo = null;
+            if ($action === 'create' && $isMultipart && !ProfileImages::hasUploadedFile($logoFile)) {
+                json_response(['error' => 'تصویر پروفایل نهاد الزامی است.'], 422);
+            }
+            if (ProfileImages::hasUploadedFile($logoFile)) {
+                $storedLogo = $profiles->storeTeamLogo(is_array($logoFile) ? $logoFile : []);
+            }
+            try {
+                $result = $action === 'create'
+                    ? $crud->create('teams', $payload)
+                    : $crud->update('teams', $id, $payload);
+                if ($storedLogo !== null) {
+                    $profiles->setTeamLogoFields((int) $result['id'], $storedLogo, $action === 'update');
+                    $result = $crud->find('teams', (int) $result['id']);
+                }
+            } catch (Throwable $error) {
+                if ($storedLogo !== null) {
+                    FileStorage::deleteRelative($storedLogo['logo_path']);
+                }
+                throw $error;
+            }
+            json_response(['ok' => true, 'record' => $result]);
+        }
+
+        if ($resource === 'member-requests' && $action === 'create') {
+            $avatarFile = $_FILES['avatar'] ?? null;
+            $storedAvatar = null;
+            $requestType = (string) ($payload['request_type'] ?? '');
+            if ($requestType === 'update' && !ProfileImages::hasUploadedFile($avatarFile)) {
+                // Optional on edit request if member already has avatar; required only when explicitly replacing.
+            }
+            if (ProfileImages::hasUploadedFile($avatarFile)) {
+                $storedAvatar = $profiles->storeRequestAvatar(is_array($avatarFile) ? $avatarFile : []);
+            }
+            try {
+                $result = $crud->create('member_requests', $payload);
+                if ($storedAvatar !== null) {
+                    $profiles->setMemberRequestAvatarFields((int) $result['id'], $storedAvatar);
+                    $result = $crud->find('member_requests', (int) $result['id']);
+                }
+            } catch (Throwable $error) {
+                if ($storedAvatar !== null) {
+                    FileStorage::deleteRelative($storedAvatar['avatar_path']);
+                }
+                throw $error;
+            }
+            json_response(['ok' => true, 'record' => $result]);
+        }
 
         $result = match ($action) {
             'create' => $crud->create($crudResource, $payload),

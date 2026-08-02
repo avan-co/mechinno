@@ -4130,3 +4130,41 @@ body.is-mobile .mobile-card .row-actions {
   .account-menu-dropdown { animation: none; }
   .account-menu-caret { transition: none; }
 }
+
+.profile-thumb {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  object-fit: cover;
+  background: color-mix(in srgb, var(--accent, #1f3a56) 14%, transparent);
+  color: var(--text, #171513);
+  font-size: 13px;
+  font-weight: 800;
+  vertical-align: middle;
+}
+.profile-thumb--empty {
+  border: 1px solid color-mix(in srgb, var(--line, #ccc) 80%, transparent);
+}
+.profile-upload-field .profile-upload-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.profile-upload-field .profile-thumb {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  font-size: 18px;
+}
+.profile-brand-cell strong {
+  display: flex;
+  align-items: center;
+}
+.profile-brand-cell .profile-thumb {
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  font-size: 22px;
+}

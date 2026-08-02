@@ -189,10 +189,29 @@ $members = $repo->paginatedResource('members', 1, 25);
 $member = $crud->create('members', [
     'team_id' => (string) $teamId,
     'full_name' => 'عضو یک',
+    'father_name' => 'حسین',
     'phone' => '09121111111',
     'national_id' => '1234567890',
+    'id_certificate_number' => '556677',
+    'birth_date' => '1372/05/10',
+    'birth_place' => 'اصفهان',
+    'education' => 'کارشناسی ارشد',
+    'email' => 'member1@example.com',
+    'address' => 'اصفهان، خیابان نمونه',
     'wants_access' => '1',
 ]);
+$tmpAvatar = tempnam(sys_get_temp_dir(), 'avatar');
+file_put_contents($tmpAvatar, base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5W7eQAAAAASUVORK5CYII='));
+$avatarStored = (new ProfileImages($pdo))->storeMemberAvatar([
+    'name' => 'avatar.png',
+    'type' => 'image/png',
+    'tmp_name' => $tmpAvatar,
+    'error' => UPLOAD_ERR_OK,
+    'size' => filesize($tmpAvatar),
+]);
+(new ProfileImages($pdo))->setMemberAvatarFields((int) $member['id'], $avatarStored, false);
+$member = $crud->find('members', (int) $member['id']);
+$assert((int) ($member['has_avatar'] ?? 0) === 1, 'members: avatar attached');
 $membersAfter = $repo->paginatedResource('members', 1, 25);
 $assert(count($membersAfter['rows']) === count($members['rows']) + 1, 'crud: team member submitted');
 $assert(($member['approval_status'] ?? '') === 'pending', 'workflow: team member pending approval');
@@ -850,8 +869,15 @@ $memberRequest = $crud->create('member_requests', [
     'member_id' => (string) ($member['id'] ?? 0),
     'request_type' => 'update',
     'full_name' => 'عضو یک ویرایش‌شده',
+    'father_name' => 'حسین',
     'phone' => '09121111111',
     'national_id' => '1234567890',
+    'id_certificate_number' => '556677',
+    'birth_date' => '1372/05/10',
+    'birth_place' => 'اصفهان',
+    'education' => 'دکتری',
+    'email' => 'member1b@example.com',
+    'address' => 'اصفهان، خیابان ویرایش',
     'wants_access' => '1',
     'notes' => 'درخواست تست',
 ]);

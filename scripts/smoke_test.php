@@ -40,12 +40,37 @@ $pdo->exec('UPDATE desks SET team_id = 1, usage_type = "mixed", formal_seats = 1
 $member = $crud->create('members', [
     'team_id' => '1',
     'full_name' => 'عضو تست',
+    'father_name' => 'علی',
     'access_code' => '12345',
     'phone' => '09121234567',
     'national_id' => '0012345678',
+    'id_certificate_number' => '12345',
+    'birth_date' => '1370/01/01',
+    'birth_place' => 'تهران',
+    'education' => 'کارشناسی',
+    'email' => 'member@example.com',
+    'address' => 'تهران، خیابان تست',
+    'joined_at' => '1405/01/15',
 ]);
 $assert(isset($member['member_code']), 'member_code generated');
+$assert(($member['email'] ?? '') === 'member@example.com', 'member email saved');
+$assert(($member['joined_at'] ?? '') === '1405/01/15', 'member joined_at saved');
 $assert(!isset($member['locker_id']) || $member['locker_id'] === null, 'member has no locker_id');
+
+$tmpAvatar = tempnam(sys_get_temp_dir(), 'avatar');
+// Minimal valid 1x1 PNG
+file_put_contents($tmpAvatar, base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5W7eQAAAAASUVORK5CYII='));
+$avatarStored = (new ProfileImages($pdo))->storeMemberAvatar([
+    'name' => 'avatar.png',
+    'type' => 'image/png',
+    'tmp_name' => $tmpAvatar,
+    'error' => UPLOAD_ERR_OK,
+    'size' => filesize($tmpAvatar),
+]);
+(new ProfileImages($pdo))->setMemberAvatarFields((int) $member['id'], $avatarStored, false);
+$member = $crud->find('members', (int) $member['id']);
+$assert((int) ($member['has_avatar'] ?? 0) === 1, 'member avatar attached');
+$assert(str_contains((string) ($member['avatar_url'] ?? ''), 'member-avatar'), 'member avatar_url present');
 
 $locker = $crud->create('lockers', [
     'locker_number' => '7',

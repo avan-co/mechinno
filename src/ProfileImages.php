@@ -1,0 +1,333 @@
+<?php
+
+declare(strict_types=1);
+
+final class ProfileImages
+{
+    public const MEMBER_CATEGORY = 'members';
+    public const TEAM_CATEGORY = 'teams';
+    public const REQUEST_CATEGORY = 'member-requests';
+
+    public function __construct(private readonly PDO $pdo)
+    {
+    }
+
+    /**
+     * @param array<string, mixed> $file $_FILES entry
+     * @return array{avatar_path:string, avatar_original_name:string, avatar_mime:string}
+     */
+    public function storeMemberAvatar(array $file): array
+    {
+        $stored = FileStorage::storeImageUpload($file, self::MEMBER_CATEGORY);
+
+        return [
+            'avatar_path' => $stored['relative_path'],
+            'avatar_original_name' => $stored['original_name'],
+            'avatar_mime' => $stored['mime'],
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $file $_FILES entry
+     * @return array{logo_path:string, logo_original_name:string, logo_mime:string}
+     */
+    public function storeTeamLogo(array $file): array
+    {
+        $stored = FileStorage::storeImageUpload($file, self::TEAM_CATEGORY);
+
+        return [
+            'logo_path' => $stored['relative_path'],
+            'logo_original_name' => $stored['original_name'],
+            'logo_mime' => $stored['mime'],
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $file $_FILES entry
+     * @return array{avatar_path:string, avatar_original_name:string, avatar_mime:string}
+     */
+    public function storeRequestAvatar(array $file): array
+    {
+        $stored = FileStorage::storeImageUpload($file, self::REQUEST_CATEGORY);
+
+        return [
+            'avatar_path' => $stored['relative_path'],
+            'avatar_original_name' => $stored['original_name'],
+            'avatar_mime' => $stored['mime'],
+        ];
+    }
+
+    /**
+     * @param array{avatar_path:string, avatar_original_name:string, avatar_mime:string} $stored
+     */
+    public function setMemberAvatarFields(int $memberId, array $stored, bool $replaceOld = true): void
+    {
+        $oldPath = '';
+        if ($replaceOld) {
+            $member = $this->memberRow($memberId);
+            $oldPath = (string) ($member['avatar_path'] ?? '');
+        }
+        $this->pdo->prepare(
+            'UPDATE members
+             SET avatar_path = :avatar_path,
+                 avatar_original_name = :avatar_original_name,
+                 avatar_mime = :avatar_mime
+             WHERE id = :id'
+        )->execute([
+            'avatar_path' => $stored['avatar_path'],
+            'avatar_original_name' => $stored['avatar_original_name'],
+            'avatar_mime' => $stored['avatar_mime'],
+            'id' => $memberId,
+        ]);
+        if ($replaceOld && $oldPath !== '' && $oldPath !== $stored['avatar_path']) {
+            FileStorage::deleteRelative($oldPath);
+        }
+    }
+
+    /**
+     * @param array{avatar_path:string, avatar_original_name:string, avatar_mime:string} $stored
+     */
+    public function setMemberRequestAvatarFields(int $requestId, array $stored): void
+    {
+        $this->pdo->prepare(
+            'UPDATE member_requests
+             SET avatar_path = :avatar_path,
+                 avatar_original_name = :avatar_original_name,
+                 avatar_mime = :avatar_mime
+             WHERE id = :id'
+        )->execute([
+            'avatar_path' => $stored['avatar_path'],
+            'avatar_original_name' => $stored['avatar_original_name'],
+            'avatar_mime' => $stored['avatar_mime'],
+            'id' => $requestId,
+        ]);
+    }
+
+    /**
+     * @param array{logo_path:string, logo_original_name:string, logo_mime:string} $stored
+     */
+    public function setTeamLogoFields(int $teamId, array $stored, bool $replaceOld = true): void
+    {
+        $oldPath = '';
+        if ($replaceOld) {
+            $team = $this->teamRow($teamId);
+            $oldPath = (string) ($team['logo_path'] ?? '');
+        }
+        $this->pdo->prepare(
+            'UPDATE teams
+             SET logo_path = :logo_path,
+                 logo_original_name = :logo_original_name,
+                 logo_mime = :logo_mime
+             WHERE id = :id'
+        )->execute([
+            'logo_path' => $stored['logo_path'],
+            'logo_original_name' => $stored['logo_original_name'],
+            'logo_mime' => $stored['logo_mime'],
+            'id' => $teamId,
+        ]);
+        if ($replaceOld && $oldPath !== '' && $oldPath !== $stored['logo_path']) {
+            FileStorage::deleteRelative($oldPath);
+        }
+    }
+
+    public function attachMemberAvatar(int $memberId, array $file): array
+    {
+        $member = $this->memberRow($memberId);
+        Access::assertTeamAccess((int) ($member['team_id'] ?? 0));
+        $stored = $this->storeMemberAvatar($file);
+        $this->setMemberAvatarFields($memberId, $stored, true);
+
+        return (new Crud($this->pdo))->find('members', $memberId);
+    }
+
+    public function attachTeamLogo(int $teamId, array $file): array
+    {
+        Access::assertTeamAccess($teamId);
+        $stored = $this->storeTeamLogo($file);
+        $this->setTeamLogoFields($teamId, $stored, true);
+
+        return (new Crud($this->pdo))->find('teams', $teamId);
+    }
+
+    public static function hasUploadedFile(mixed $file): bool
+    {
+        return is_array($file) && (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE;
+    }
+
+    public function downloadMemberAvatar(int $memberId): never
+    {
+        $member = $this->memberRow($memberId);
+        Access::assertTeamAccess((int) ($member['team_id'] ?? 0));
+        $path = (string) ($member['avatar_path'] ?? '');
+        if ($path === '') {
+            throw new InvalidArgumentException('تصویر پروفایل عضو ثبت نشده است.');
+        }
+        FileStorage::sendInline(
+            $path,
+            (string) ($member['avatar_original_name'] ?? 'avatar.jpg'),
+            (string) ($member['avatar_mime'] ?? 'image/jpeg')
+        );
+    }
+
+    public function downloadTeamLogo(int $teamId): never
+    {
+        Access::assertTeamAccess($teamId);
+        $team = $this->teamRow($teamId);
+        $path = (string) ($team['logo_path'] ?? '');
+        if ($path === '') {
+            throw new InvalidArgumentException('تصویر پروفایل نهاد ثبت نشده است.');
+        }
+        FileStorage::sendInline(
+            $path,
+            (string) ($team['logo_original_name'] ?? 'logo.jpg'),
+            (string) ($team['logo_mime'] ?? 'image/jpeg')
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     * @return array<string, mixed>
+     */
+    public static function enrichMemberRow(array $row): array
+    {
+        $id = (int) ($row['id'] ?? 0);
+        $hasAvatar = trim((string) ($row['avatar_path'] ?? '')) !== '';
+        $row['has_avatar'] = $hasAvatar ? 1 : 0;
+        $row['avatar_url'] = $hasAvatar && $id > 0
+            ? 'download.php?resource=member-avatar&id=' . $id
+            : '';
+        unset($row['avatar_path'], $row['avatar_mime'], $row['avatar_original_name']);
+
+        return $row;
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     * @return array<string, mixed>
+     */
+    public static function enrichTeamRow(array $row): array
+    {
+        $id = (int) ($row['id'] ?? 0);
+        $hasLogo = trim((string) ($row['logo_path'] ?? '')) !== '';
+        $row['has_logo'] = $hasLogo ? 1 : 0;
+        $row['logo_url'] = $hasLogo && $id > 0
+            ? 'download.php?resource=team-logo&id=' . $id
+            : '';
+        unset($row['logo_path'], $row['logo_mime'], $row['logo_original_name']);
+
+        return $row;
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     * @return array<string, mixed>
+     */
+    public static function enrichMemberRequestRow(array $row): array
+    {
+        $id = (int) ($row['id'] ?? 0);
+        $hasAvatar = trim((string) ($row['avatar_path'] ?? '')) !== '';
+        $row['has_avatar'] = $hasAvatar ? 1 : 0;
+        $row['avatar_url'] = $hasAvatar && $id > 0
+            ? 'download.php?resource=member-request-avatar&id=' . $id
+            : '';
+        unset($row['avatar_path'], $row['avatar_mime'], $row['avatar_original_name']);
+
+        return $row;
+    }
+
+    public function downloadMemberRequestAvatar(int $requestId): never
+    {
+        $statement = $this->pdo->prepare('SELECT * FROM member_requests WHERE id = :id');
+        $statement->execute(['id' => $requestId]);
+        $row = $statement->fetch();
+        if ($row === false) {
+            throw new InvalidArgumentException('درخواست عضو پیدا نشد.');
+        }
+        Access::assertTeamAccess((int) ($row['team_id'] ?? 0));
+        $path = (string) ($row['avatar_path'] ?? '');
+        if ($path === '') {
+            throw new InvalidArgumentException('تصویر پروفایل در این درخواست ثبت نشده است.');
+        }
+        FileStorage::sendInline(
+            $path,
+            (string) ($row['avatar_original_name'] ?? 'avatar.jpg'),
+            (string) ($row['avatar_mime'] ?? 'image/jpeg')
+        );
+    }
+
+    /**
+     * Collect avatar/logo paths for a team before cascade delete.
+     *
+     * @return list<string>
+     */
+    public function orphanPathsForTeam(int $teamId): array
+    {
+        $paths = [];
+        $team = $this->pdo->prepare('SELECT logo_path FROM teams WHERE id = :id');
+        $team->execute(['id' => $teamId]);
+        $logo = (string) ($team->fetchColumn() ?: '');
+        if ($logo !== '') {
+            $paths[] = $logo;
+        }
+
+        $members = $this->pdo->prepare('SELECT avatar_path FROM members WHERE team_id = :id');
+        $members->execute(['id' => $teamId]);
+        foreach ($members->fetchAll() ?: [] as $row) {
+            $path = (string) ($row['avatar_path'] ?? '');
+            if ($path !== '') {
+                $paths[] = $path;
+            }
+        }
+
+        $requests = $this->pdo->prepare('SELECT avatar_path FROM member_requests WHERE team_id = :id');
+        $requests->execute(['id' => $teamId]);
+        foreach ($requests->fetchAll() ?: [] as $row) {
+            $path = (string) ($row['avatar_path'] ?? '');
+            if ($path !== '') {
+                $paths[] = $path;
+            }
+        }
+
+        return $paths;
+    }
+
+    public function deleteMemberAvatarFiles(int $memberId): void
+    {
+        $statement = $this->pdo->prepare('SELECT avatar_path FROM members WHERE id = :id');
+        $statement->execute(['id' => $memberId]);
+        $path = (string) ($statement->fetchColumn() ?: '');
+        if ($path !== '') {
+            FileStorage::deleteRelative($path);
+        }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function memberRow(int $id): array
+    {
+        $statement = $this->pdo->prepare('SELECT * FROM members WHERE id = :id');
+        $statement->execute(['id' => $id]);
+        $row = $statement->fetch();
+        if ($row === false) {
+            throw new InvalidArgumentException('عضو پیدا نشد.');
+        }
+
+        return $row;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function teamRow(int $id): array
+    {
+        $statement = $this->pdo->prepare('SELECT * FROM teams WHERE id = :id');
+        $statement->execute(['id' => $id]);
+        $row = $statement->fetch();
+        if ($row === false) {
+            throw new InvalidArgumentException('نهاد پیدا نشد.');
+        }
+
+        return $row;
+    }
+}

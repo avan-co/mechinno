@@ -16,9 +16,13 @@ try {
         exit;
     }
 
+    $profiles = new ProfileImages($pdo);
     match ($resource) {
         'contract-file' => (new ContractDocuments($pdo))->downloadFile($id),
         'performance-report' => (new PerformanceReports($pdo))->download($id),
+        'member-avatar' => $profiles->downloadMemberAvatar($id),
+        'team-logo' => $profiles->downloadTeamLogo($id),
+        'member-request-avatar' => $profiles->downloadMemberRequestAvatar($id),
         default => (static function (): never {
             http_response_code(404);
             header('Content-Type: text/plain; charset=utf-8');

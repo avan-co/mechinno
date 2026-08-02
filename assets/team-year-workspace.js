@@ -288,7 +288,7 @@
         </div>
         <details class="year-extra-section">
           <summary>اعضا، کمدها و پرداخت‌ها</summary>
-          ${S().profileSection("اعضا", profile.members || [], ["member_code", "full_name", "access_code", "phone", "national_id"])}
+          ${S().profileSection("اعضا", profile.members || [], ["avatar_url", "member_code", "full_name", "email", "phone", "national_id", "joined_at"])}
           ${S().profileSection("کمدها", profile.lockers || [], ["locker_number", "status", "delivered_at", "key_number"])}
           ${S().profileSection("دریافت شارژ از نهاد", profile.payments || [], ["tx_date", "fiscal_year", "month_name", "amount", "payment_status"])}
         </details>
