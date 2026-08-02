@@ -54,7 +54,7 @@ $member = $crud->create('members', [
 ]);
 $assert(isset($member['member_code']), 'member_code generated');
 $assert(($member['email'] ?? '') === 'member@example.com', 'member email saved');
-$assert(($member['joined_at'] ?? '') === '1405/01/15', 'member joined_at saved');
+$assert(($member['joined_at'] ?? '') === JalaliDate::todayParts()['formatted'], 'member joined_at auto-stamped to today');
 $assert(!isset($member['locker_id']) || $member['locker_id'] === null, 'member has no locker_id');
 
 $tmpAvatar = tempnam(sys_get_temp_dir(), 'avatar');
@@ -694,6 +694,83 @@ $viewerMeta = $crud->meta();
 $assert(isset($viewerMeta['resources']['panel_users']), 'viewer can read panel_users meta');
 $assert(!isset($viewerMeta['resources']['panel_users']['fields']['team_id']), 'panel_users form has no team_id');
 $assert(isset($viewerMeta['resources']['transactions']), 'viewer can read transactions meta');
+
+$_SESSION['mechinno_role'] = Access::ROLE_ADMIN_EDITOR;
+
+// Hardening: invalid phone/national_id rejected server-side.
+$badPhone = false;
+try {
+    $crud->create('members', [
+        'team_id' => '1',
+        'full_name' => 'تلفن بد',
+        'father_name' => 'علی',
+        'phone' => '123',
+        'national_id' => '0012345679',
+        'id_certificate_number' => '1',
+        'birth_date' => '1370/01/01',
+        'birth_place' => 'تهران',
+        'education' => 'کارشناسی',
+        'joined_at' => '1405/01/15',
+    ]);
+} catch (InvalidArgumentException) {
+    $badPhone = true;
+}
+$assert($badPhone, 'invalid member phone rejected');
+
+// Hardening: last active admin-editor cannot be deactivated.
+$adminCount = (int) $pdo->query(
+    "SELECT COUNT(*) FROM panel_users WHERE role = 'admin_editor' AND is_active = 1"
+)->fetchColumn();
+if ($adminCount === 1) {
+    $adminId = (int) $pdo->query(
+        "SELECT id FROM panel_users WHERE role = 'admin_editor' AND is_active = 1 LIMIT 1"
+    )->fetchColumn();
+    $blocked = false;
+    try {
+        $crud->update('panel_users', $adminId, ['is_active' => '0']);
+    } catch (InvalidArgumentException) {
+        $blocked = true;
+    }
+    $assert($blocked, 'last admin editor cannot be deactivated');
+}
+
+// Hardening: approve with wants_access requires access code.
+$pdo->prepare(
+    "INSERT INTO members (team_id, full_name, father_name, phone, national_id, approval_status, wants_access, joined_at)
+     VALUES (1, 'تردد', 'پدر', '09121112233', '0011223344', 'pending', 1, '1405/01/01')"
+)->execute();
+$pendingAccessId = (int) $pdo->lastInsertId();
+$accessBlocked = false;
+try {
+    (new Workflow($pdo))->approveMember($pendingAccessId, '');
+} catch (InvalidArgumentException) {
+    $accessBlocked = true;
+}
+$assert($accessBlocked, 'wants_access member approve requires access code');
+
+// Hardening: file manager folder listing is paginated.
+$_SESSION['mechinno_authenticated'] = true;
+$_SESSION['mechinno_role'] = Access::ROLE_ADMIN_EDITOR;
+$fm = new UploadFileManager($pdo);
+$listed = $fm->listFiles('members', 1, 10);
+$assert(isset($listed['page'], $listed['per_page'], $listed['pages'], $listed['files']), 'file-manager list returns pagination keys');
+$assert((int) $listed['per_page'] === 10, 'file-manager respects per_page');
+
+// Hardening: resource dump is hard-capped.
+$capped = $repo->resource('members', 999999);
+$assert(count($capped) <= Repository::RESOURCE_HARD_LIMIT, 'resource dump respects hard limit');
+
+// Hardening: debt summary uses batched allocation (smoke: callable + consistent).
+$debtRows = $repo->chargeDebtRows();
+$assert(is_array($debtRows), 'chargeDebtRows returns array');
+$summaryCards = $repo->summary();
+$assert(isset($summaryCards['cards']['debt_total']), 'summary exposes debt_total after allocation batching');
+
+// Hardening: compact backup JSON encode path.
+require_once dirname(__DIR__) . '/src/DatabaseBackup.php';
+$backupJson = (new DatabaseBackup($pdo))->exportJson();
+$assert(str_contains($backupJson, '"format"'), 'backup json exports');
+$assert(!str_contains($backupJson, "\n    \""), 'backup json is compact (no pretty indent)');
 
 $_SESSION = [];
 

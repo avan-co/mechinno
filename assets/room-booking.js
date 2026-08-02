@@ -424,8 +424,16 @@
 
     const loadTeams = async () => {
       if (!teamSelect) return;
-      const data = await fetchJson("api.php?resource=teams&per_page=200");
-      state.teams = (data.rows || []).filter((team) => Number(team.is_active ?? 1) === 1);
+      const teams = [];
+      let page = 1;
+      let pages = 1;
+      do {
+        const data = await fetchJson(`api.php?resource=teams&page=${page}&per_page=100`);
+        teams.push(...(data.rows || []));
+        pages = Number(data.pages || 1);
+        page += 1;
+      } while (page <= pages && page <= 20);
+      state.teams = teams.filter((team) => Number(team.is_active ?? 1) === 1);
       teamSelect.innerHTML = '<option value="">— بدون نهاد / مهمان —</option>' + state.teams.map((team) => {
         const label = `${team.name || "—"}${team.entity_code ? ` (${team.entity_code})` : ""}`;
         return `<option value="${team.id}">${escapeHtml(label)}</option>`;

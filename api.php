@@ -526,7 +526,11 @@ try {
         }
         $folder = trim((string) ($_GET['folder'] ?? ''));
         if ($folder !== '') {
-            json_response($files->listFiles($folder));
+            json_response($files->listFiles(
+                $folder,
+                (int) ($_GET['page'] ?? 1),
+                (int) ($_GET['per_page'] ?? 50)
+            ));
         }
         $folders = $files->listFolders();
         $totalFiles = 0;
@@ -613,11 +617,13 @@ try {
                     $pdo->commit();
                 }
                 FileStorage::flushQueuedDeletes();
+                FileStorage::clearQueuedCreations();
             } catch (Throwable $error) {
                 if ($started && $pdo->inTransaction()) {
                     $pdo->rollBack();
                 }
                 FileStorage::clearQueuedDeletes();
+                FileStorage::flushQueuedCreationsOnRollback();
                 if ($storedAvatar !== null) {
                     FileStorage::deleteRelative($storedAvatar['avatar_path']);
                 }
@@ -629,7 +635,7 @@ try {
         if ($resource === 'teams' && in_array($action, ['create', 'update'], true)) {
             $logoFile = $_FILES['logo'] ?? null;
             $storedLogo = null;
-            if ($action === 'create' && $isMultipart && !ProfileImages::hasUploadedFile($logoFile)) {
+            if ($action === 'create' && !ProfileImages::hasUploadedFile($logoFile)) {
                 json_response(['error' => 'تصویر پروفایل نهاد الزامی است.'], 422);
             }
             if (ProfileImages::hasUploadedFile($logoFile)) {
@@ -652,11 +658,13 @@ try {
                     $pdo->commit();
                 }
                 FileStorage::flushQueuedDeletes();
+                FileStorage::clearQueuedCreations();
             } catch (Throwable $error) {
                 if ($started && $pdo->inTransaction()) {
                     $pdo->rollBack();
                 }
                 FileStorage::clearQueuedDeletes();
+                FileStorage::flushQueuedCreationsOnRollback();
                 if ($storedLogo !== null) {
                     FileStorage::deleteRelative($storedLogo['logo_path']);
                 }

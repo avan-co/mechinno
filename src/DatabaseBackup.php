@@ -85,7 +85,8 @@ final class DatabaseBackup
 
     public function exportJson(): string
     {
-        $json = json_encode($this->export(), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+        // Avoid PRETTY_PRINT — large installs can exhaust memory on download.
+        $json = json_encode($this->export(), JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
         if (!is_string($json)) {
             throw new RuntimeException('ساخت فایل پشتیبان ناموفق بود.');
         }
@@ -130,7 +131,8 @@ final class DatabaseBackup
         $payload = $this->export();
         $payload['archive_format'] = self::ARCHIVE_FORMAT;
         $payload['includes_uploads'] = true;
-        $json = json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+        // Compact JSON — pretty-print can OOM on large installs.
+        $json = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
         $zip->addFromString('mechinno-backup.json', $json);
 
         $fileCount = $this->addUploadsToZip($zip, 'uploads');

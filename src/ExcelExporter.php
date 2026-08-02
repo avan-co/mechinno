@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 final class ExcelExporter
 {
+    /** Prevent huge workbooks from exhausting memory. */
+    public const MAX_ROWS_PER_SHEET = 10000;
+
     /**
      * @return array<string, array{title:string,query:string,headers:list<string>}>
      */
@@ -308,10 +311,16 @@ final class ExcelExporter
                     $row['amount_paid'] ?? 0,
                     $row['status'] ?? '',
                 ], $debtRows);
+                if (count($rows) > self::MAX_ROWS_PER_SHEET) {
+                    $rows = array_slice($rows, 0, self::MAX_ROWS_PER_SHEET);
+                }
                 $xml .= $this->worksheetXml($report['title'], $report['headers'], $rows, $generatedAt);
                 continue;
             }
             $rows = $this->filteredQueryRows($key, $report['query']);
+            if (count($rows) > self::MAX_ROWS_PER_SHEET) {
+                $rows = array_slice($rows, 0, self::MAX_ROWS_PER_SHEET);
+            }
             $xml .= $this->worksheetXml($report['title'], $report['headers'], $rows, $generatedAt);
         }
 

@@ -426,7 +426,9 @@ const tableSuppressesAdd = (table) => {
 const tableAllowsAdd = (table, definition = null) => {
   const resource = table.resource || "";
   if (tableSuppressesAdd(table)) return false;
-  if (!(canWrite || (canTeamSubmit && ["members", "transactions", "locker-requests"].includes(resource)))) {
+  // Team deposits must go through the payment wizard (needs payment_plan).
+  if (panelMode === "team" && resource === "transactions") return false;
+  if (!(canWrite || (canTeamSubmit && ["members", "locker-requests"].includes(resource)))) {
     return false;
   }
   if (!definition || !isEditableResource(resource)) return false;
@@ -461,6 +463,7 @@ const rowAllowsTeamEdit = (resource, row) => {
   if (!canTeamSubmit || panelMode !== "team") return false;
   if (resource === "transactions") return row.payment_status === "pending";
   if (resource === "locker-requests") return row.status === "pending";
+  if (resource === "members") return row.approval_status === "pending";
   return false;
 };
 
@@ -1001,23 +1004,29 @@ const previewReport = async () => {
       blocks.push(`<h3 class="report-preview-title">مطالبات</h3>`);
       blocks.push(renderReportPreviewTable(
         ["نهاد", "سال", "ماه", "مستحق", "دریافت", "مانده", "وضعیت"],
-        data.debts.map((row) => [
+        data.debts.slice(0, 50).map((row) => [
           row.team_name, row.fiscal_year, row.month_name, row.amount_due, row.amount_paid, row.amount_remaining, row.status,
         ]),
         "مطالبه‌ای در این بازه نیست.",
         ["text", "text", "text", "money", "money", "money", "text"]
       ));
+      if (data.debts.length > 50) {
+        blocks.push(`<p class="hint">نمایش ۵۰ ردیف اول از ${formatNumber(data.debts.length)} مورد.</p>`);
+      }
     }
     if (data.charges) {
       blocks.push(`<h3 class="report-preview-title">شارژ</h3>`);
       blocks.push(renderReportPreviewTable(
         ["نهاد", "سال", "ماه", "شارژ", "اجاره", "جمع", "یادداشت"],
-        data.charges.map((row) => [
+        data.charges.slice(0, 50).map((row) => [
           row.team_name, row.fiscal_year, row.month_name, row.charge_amount, row.rent_amount, row.amount, row.note || "—",
         ]),
         "شارژی در این بازه نیست.",
         ["text", "text", "text", "money", "money", "money", "text"]
       ));
+      if (data.charges.length > 50) {
+        blocks.push(`<p class="hint">نمایش ۵۰ ردیف اول از ${formatNumber(data.charges.length)} مورد.</p>`);
+      }
     }
     if (data.transactions) {
       blocks.push(`<h3 class="report-preview-title">تراکنش‌ها</h3>`);
@@ -1037,10 +1046,13 @@ const previewReport = async () => {
       blocks.push(`<h3 class="report-preview-title">نهادها</h3>`);
       blocks.push(renderReportPreviewTable(
         ["کد", "نام", "مسئول", "میز"],
-        data.teams.map((row) => [row.entity_code, row.name, row.leader, row.desk_count || 0]),
+        data.teams.slice(0, 50).map((row) => [row.entity_code, row.name, row.leader, row.desk_count || 0]),
         null,
         ["text", "text", "text", "count"]
       ));
+      if (data.teams.length > 50) {
+        blocks.push(`<p class="hint">نمایش ۵۰ نهاد اول از ${formatNumber(data.teams.length)} مورد.</p>`);
+      }
     }
     if (data.members) {
       blocks.push(`<h3 class="report-preview-title">اعضا</h3>`);
@@ -1050,12 +1062,15 @@ const previewReport = async () => {
         "عضوی نیست.",
         ["text", "text", "text", "text"]
       ));
+      if (data.members.length > 50) {
+        blocks.push(`<p class="hint">نمایش ۵۰ عضو اول از ${formatNumber(data.members.length)} مورد.</p>`);
+      }
     }
     if (data.desks) {
       blocks.push(`<h3 class="report-preview-title">میزها</h3>`);
       blocks.push(renderReportPreviewTable(
         ["شماره", "نهاد", "نوع"],
-        data.desks.map((row) => [row.number, row.team_name || "آزاد", usageLabels[row.usage_type] || row.usage_type || "—"]),
+        data.desks.slice(0, 50).map((row) => [row.number, row.team_name || "آزاد", usageLabels[row.usage_type] || row.usage_type || "—"]),
         null,
         ["count", "text", "text"]
       ));
@@ -1064,7 +1079,7 @@ const previewReport = async () => {
       blocks.push(`<h3 class="report-preview-title">کمدها</h3>`);
       blocks.push(renderReportPreviewTable(
         ["شماره", "وضعیت", "نهاد"],
-        data.lockers.map((row) => [row.locker_number, row.status, row.team_label || "—"]),
+        data.lockers.slice(0, 50).map((row) => [row.locker_number, row.status, row.team_label || "—"]),
         null,
         ["count", "text", "text"]
       ));
@@ -1681,7 +1696,7 @@ const loadLedger = async (page = ledgerPage) => {
 const loadTeamDeskAssignments = async () => {
   const host = document.getElementById("teamDeskAssignments");
   if (!host) return;
-  const { rows } = await fetchResource("api.php?resource=desk-assignments", { page: 1, perPage: 200 });
+  const { rows } = await fetchResource("api.php?resource=desk-assignments", { page: 1, perPage: 100 });
   if (!rows.length) {
     host.classList.add("is-ready");
     host.innerHTML = renderEmptyState("هنوز سابقه تخصیص میزی برای نهاد شما ثبت نشده است.", { icon: "desk" });
@@ -1951,7 +1966,7 @@ const formatFileBytes = (bytes) => {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 };
 
-const fileManagerState = { folder: "" };
+const fileManagerState = { folder: "", page: 1, perPage: 50 };
 
 const fileFolderKindLabel = (kind) => ({
   image: "تصویر",
@@ -1959,10 +1974,16 @@ const fileFolderKindLabel = (kind) => ({
   other: "سایر",
 }[kind] || "پوشه");
 
-const loadFileManager = async (folder = fileManagerState.folder) => {
+const loadFileManager = async (folder = fileManagerState.folder, page = fileManagerState.page) => {
   const host = document.getElementById("fileManagerContent");
   if (!host) return;
-  fileManagerState.folder = folder || "";
+  const nextFolder = folder || "";
+  if (nextFolder !== fileManagerState.folder) {
+    fileManagerState.page = 1;
+  } else {
+    fileManagerState.page = Math.max(1, Number(page) || 1);
+  }
+  fileManagerState.folder = nextFolder;
   if (!fileManagerState.folder) {
     const data = await fetchJson("api.php?resource=file-manager");
     const folders = data.folders || [];
@@ -1995,8 +2016,21 @@ const loadFileManager = async (folder = fileManagerState.folder) => {
     return;
   }
 
-  const data = await fetchJson(`api.php?resource=file-manager&folder=${encodeURIComponent(fileManagerState.folder)}`);
+  const data = await fetchJson(
+    `api.php?resource=file-manager&folder=${encodeURIComponent(fileManagerState.folder)}&page=${fileManagerState.page}&per_page=${fileManagerState.perPage}`
+  );
   const files = data.files || [];
+  fileManagerState.page = Number(data.page || fileManagerState.page);
+  const pages = Math.max(1, Number(data.pages || 1));
+  const totalFiles = Number(data.file_count || files.length);
+  const pagerHtml = totalFiles > 0 ? `
+    <div class="table-pagination file-manager-pager">
+      <span class="pager-info">صفحه ${escapeHtml(String(fileManagerState.page))} از ${escapeHtml(String(pages))} — ${escapeHtml(String(totalFiles))} فایل</span>
+      <div class="pager-actions">
+        <button type="button" class="button ghost" data-file-page="prev" ${fileManagerState.page <= 1 ? "disabled" : ""}>قبلی</button>
+        <button type="button" class="button ghost" data-file-page="next" ${fileManagerState.page >= pages ? "disabled" : ""}>بعدی</button>
+      </div>
+    </div>` : "";
   host.innerHTML = `
     <div class="file-manager-toolbar">
       <button type="button" class="button ghost" data-file-back>بازگشت به پوشه‌ها</button>
@@ -2024,7 +2058,7 @@ const loadFileManager = async (folder = fileManagerState.folder) => {
             <td>${escapeHtml(formatFileBytes(file.size_bytes))}</td>
             <td>${file.reference_count
               ? escapeHtml((file.references || []).map((ref) => ref.label).join("، "))
-              : "<span class=\"hint\">بدون ارجاع</span>"}</td>
+              : `<span class="hint">بدون ارجاع</span>`}</td>
             <td class="row-actions">
               <a class="mini-button" href="${escapeHtml(file.download_url)}" target="_blank" rel="noopener">دانلود</a>
               ${file.preview_url ? `<a class="mini-button" href="${escapeHtml(file.preview_url)}" target="_blank" rel="noopener">نمایش</a>` : ""}
@@ -2033,10 +2067,18 @@ const loadFileManager = async (folder = fileManagerState.folder) => {
           </tr>
         `).join("")}
       </tbody>
-    </table></div>` : `<div class="empty-state"><p class="empty-state-text">این پوشه خالی است.</p></div>`}`;
+    </table></div>${pagerHtml}` : `<div class="empty-state"><p class="empty-state-text">این پوشه خالی است.</p></div>`}`;
 
   host.querySelector("[data-file-back]")?.addEventListener("click", () => {
+    fileManagerState.page = 1;
     loadFileManager("").catch((error) => showToast(error.message, "error"));
+  });
+  host.querySelectorAll("[data-file-page]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const dir = button.dataset.filePage;
+      const next = dir === "next" ? fileManagerState.page + 1 : fileManagerState.page - 1;
+      loadFileManager(fileManagerState.folder, next).catch((error) => showToast(error.message, "error"));
+    });
   });
   host.querySelector("[data-purge-folder]")?.addEventListener("click", async (event) => {
     const button = event.currentTarget;
@@ -4413,12 +4455,20 @@ const resolveColumns = (rows, resource) => {
 };
 
 const openChangeLeaderModal = async (teamId, teamName) => {
-  const { rows } = await fetchResource("api.php?resource=members", {
-    page: 1,
-    perPage: 200,
-    teamId: String(teamId),
-    approvalStatus: "approved",
-  });
+  const rows = [];
+  let page = 1;
+  let pages = 1;
+  do {
+    const result = await fetchResource("api.php?resource=members", {
+      page,
+      perPage: 100,
+      teamId: String(teamId),
+      approvalStatus: "approved",
+    });
+    rows.push(...(result.rows || []));
+    pages = Number(result.pages || 1);
+    page += 1;
+  } while (page <= pages && page <= 20);
   if (!rows.length) {
     throw new Error("برای این نهاد عضو تأیید‌شده‌ای وجود ندارد.");
   }

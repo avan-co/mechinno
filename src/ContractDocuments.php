@@ -136,20 +136,24 @@ final class ContractDocuments
         $existingNotes = trim((string) ($proposal['notes'] ?? ''));
         $syncNote = 'هم‌تراز با ثبت مستقیم مرکز';
         $notes = $existingNotes === '' ? $syncNote : ($existingNotes . ' — ' . $syncNote);
-        $this->pdo->prepare(
+        $sync = $this->pdo->prepare(
             "UPDATE team_contract_proposals
              SET status = 'approved',
                  rejection_reason = NULL,
                  notes = :notes,
                  reviewed_at = :reviewed_at,
                  updated_at = :updated_at
-             WHERE id = :id"
-        )->execute([
+             WHERE id = :id AND status = 'pending'"
+        );
+        $sync->execute([
             'notes' => $notes,
             'reviewed_at' => $now,
             'updated_at' => $now,
             'id' => (int) $proposal['id'],
         ]);
+        if ($sync->rowCount() < 1) {
+            return;
+        }
 
         if (Schema::tableExists($this->pdo, 'team_contract_files')) {
             $this->pdo->prepare(
@@ -429,7 +433,7 @@ final class ContractDocuments
                 ]);
 
                 if ($existingProposal) {
-                    $this->pdo->prepare(
+                    $updateProposal = $this->pdo->prepare(
                         'UPDATE team_contract_proposals SET
                             contract_start = :contract_start,
                             contract_end = :contract_end,
@@ -442,8 +446,9 @@ final class ContractDocuments
                             submitted_at = :submitted_at,
                             reviewed_at = NULL,
                             updated_at = :updated_at
-                         WHERE id = :id'
-                    )->execute([
+                         WHERE id = :id AND status = \'rejected\''
+                    );
+                    $updateProposal->execute([
                         'contract_start' => $contractStart,
                         'contract_end' => $contractEnd,
                         'formal_contract_amount' => $amount,
@@ -455,6 +460,9 @@ final class ContractDocuments
                         'updated_at' => $now,
                         'id' => (int) $existingProposal['id'],
                     ]);
+                    if ($updateProposal->rowCount() < 1) {
+                        throw new InvalidArgumentException('وضعیت پیشنهاد قرارداد تغییر کرده و ارسال مجدد ممکن نیست.');
+                    }
                     $id = (int) $existingProposal['id'];
                 } else {
                     $this->pdo->prepare(

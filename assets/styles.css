@@ -3619,7 +3619,8 @@ body.is-mobile .mobile-card .row-actions {
   .content { padding: 0 !important; }
   .section:not(.active) { display: none !important; }
   .panel, .report-preview, .collage-table { break-inside: avoid; }
-  .charges-collage { overflow: visible; }
+  .charges-collage { overflow: auto; max-width: 100%; }
+  .collage-table { font-size: 10px; }
   .desk-map { break-inside: avoid; }
 }
 

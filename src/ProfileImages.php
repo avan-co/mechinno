@@ -152,6 +152,8 @@ final class ProfileImages
         $member = $this->memberRow($memberId);
         $oldPath = trim((string) ($member['avatar_path'] ?? ''));
         $newPath = self::MEMBER_CATEGORY . '/' . $storedName;
+        // If the surrounding DB transaction rolls back, remove this newly copied file.
+        FileStorage::queueCreatedForRollback($newPath);
         $this->setMemberAvatarFields($memberId, [
             'avatar_path' => $newPath,
             'avatar_original_name' => (string) ($requestRow['avatar_original_name'] ?? ('avatar.' . $extension)),

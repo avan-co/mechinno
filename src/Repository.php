@@ -496,14 +496,19 @@ final class Repository
         );
     }
 
+    /** Hard ceiling for unbounded resource dumps (reports/exports). */
+    public const RESOURCE_HARD_LIMIT = 5000;
+
     /**
      * @return list<array<string, mixed>>
      */
-    public function resource(string $name): array
+    public function resource(string $name, int $limit = self::RESOURCE_HARD_LIMIT): array
     {
+        $limit = max(1, min(self::RESOURCE_HARD_LIMIT, $limit));
+
         return array_map(
             fn (array $row): array => $this->stripLegacyRow($row),
-            $this->rows($this->resourceSql($name))
+            $this->rows($this->resourceSql($name) . ' LIMIT ' . $limit)
         );
     }
 
@@ -1196,7 +1201,6 @@ final class Repository
      */
     public function chargeDebtRows(): array
     {
-        $contracts = $this->contracts();
         $allocationMap = $this->paymentAllocationByTeamMonth();
         $aggregated = [];
         foreach ($this->rows(
@@ -1252,6 +1256,7 @@ final class Repository
                 'status' => $due <= 0 ? '—' : ($paid >= $due ? 'پرداخت‌شده' : ($paid > 0 ? 'ناقص' : 'بدهکار به مرکز')),
             ];
         }
+
 
         return $rows;
     }
@@ -1809,8 +1814,8 @@ final class Repository
     public function totalContractDebt(): int
     {
         $total = 0;
-        foreach ($this->rows('SELECT id FROM teams') as $team) {
-            $total += $this->contractDebtForTeam((int) $team['id']);
+        foreach ($this->chargeDebtRows() as $row) {
+            $total += max(0, (int) ($row['amount_due'] ?? 0) - (int) ($row['amount_paid'] ?? 0));
         }
 
         return $total;
@@ -1854,19 +1859,27 @@ final class Repository
      */
     private function debtByTeamRows(): array
     {
-        $rows = [];
-        foreach ($this->rows('SELECT id, name FROM teams ORDER BY name') as $team) {
-            $debt = $this->contractDebtForTeam((int) $team['id']);
-            if ($debt <= 0) {
+        $byTeam = [];
+        foreach ($this->chargeDebtRows() as $row) {
+            $teamId = (int) ($row['team_id'] ?? 0);
+            if ($teamId <= 0) {
                 continue;
             }
-            $rows[] = [
-                'team_id' => (int) $team['id'],
-                'team_name' => (string) ($team['name'] ?? ''),
-                'debt' => $debt,
-            ];
+            $remaining = max(0, (int) ($row['amount_due'] ?? 0) - (int) ($row['amount_paid'] ?? 0));
+            if ($remaining <= 0) {
+                continue;
+            }
+            if (!isset($byTeam[$teamId])) {
+                $byTeam[$teamId] = [
+                    'team_id' => $teamId,
+                    'team_name' => (string) ($row['team_name'] ?? ''),
+                    'debt' => 0,
+                ];
+            }
+            $byTeam[$teamId]['debt'] += $remaining;
         }
 
+        $rows = array_values($byTeam);
         usort($rows, static fn (array $a, array $b): int => ($b['debt'] ?? 0) <=> ($a['debt'] ?? 0));
 
         return array_slice($rows, 0, 10);
@@ -1899,17 +1912,20 @@ final class Repository
      */
     private function currentMonthDebtors(string $year, int $month, int $limit = 5): array
     {
+        $year = JalaliDate::normalizeDigits($year);
+        $teamNames = [];
+        foreach ($this->rows('SELECT id, name FROM teams') as $team) {
+            $teamNames[(int) $team['id']] = (string) ($team['name'] ?? '');
+        }
         $rows = [];
-        foreach ($this->rows('SELECT id, name FROM teams ORDER BY name') as $team) {
-            $teamId = (int) $team['id'];
-            $debt = $this->teamMonthDebt($teamId, $year, $month);
+        foreach ($this->currentMonthTeamDebts($year, $month) as $teamId => $debt) {
             if ($debt <= 0) {
                 continue;
             }
             $rows[] = [
-                'team_id' => $teamId,
-                'team_name' => (string) ($team['name'] ?? ''),
-                'debt' => $debt,
+                'team_id' => (int) $teamId,
+                'team_name' => $teamNames[(int) $teamId] ?? '',
+                'debt' => (int) $debt,
             ];
         }
 
@@ -1923,10 +1939,27 @@ final class Repository
      */
     private function currentMonthTeamDebts(string $year, int $month): array
     {
+        $year = JalaliDate::normalizeDigits($year);
+        $allocationMap = $this->paymentAllocationByTeamMonth();
+        $chargeByTeam = [];
+        foreach ($this->preparedRows(
+            'SELECT team_id, COALESCE(SUM(' . $this->chargeDueSql() . '), 0) AS due_total
+             FROM charges
+             WHERE fiscal_year = :year AND month_index = :month AND team_id IS NOT NULL AND team_id > 0
+             GROUP BY team_id',
+            ['year' => $year, 'month' => $month]
+        ) as $row) {
+            $chargeByTeam[(int) $row['team_id']] = (int) ($row['due_total'] ?? 0);
+        }
+
         $debts = [];
-        foreach ($this->rows('SELECT id FROM teams') as $team) {
-            $teamId = (int) $team['id'];
-            $debts[$teamId] = $this->teamMonthDebt($teamId, $year, $month);
+        foreach ($chargeByTeam as $teamId => $chargeTotal) {
+            if ($chargeTotal <= 0) {
+                $debts[$teamId] = 0;
+                continue;
+            }
+            $paidTotal = (int) (($allocationMap[$teamId] ?? [])[$year . '-' . $month] ?? 0);
+            $debts[$teamId] = max(0, $chargeTotal - $paidTotal);
         }
 
         return $debts;
@@ -2217,12 +2250,30 @@ final class Repository
      */
     private function allocatedPaymentsForTeam(int $teamId): array
     {
-        $contracts = $this->contracts();
-        $charges = [];
-        foreach ($this->preparedRows(
-            'SELECT fiscal_year, month_index, charge_amount, rent_amount, amount FROM charges WHERE team_id = :id ORDER BY fiscal_year, month_index',
-            ['id' => $teamId]
+        $all = $this->ensureTeamPaymentAllocations();
+
+        return $all[$teamId] ?? ['by_month' => [], 'remaining' => 0];
+    }
+
+    /**
+     * Batch-load charges + approved deposits once per request and waterfill per team.
+     *
+     * @return array<int, array{by_month: array<string, int>, remaining: int}>
+     */
+    private function ensureTeamPaymentAllocations(): array
+    {
+        /** @var array<int, array<string, int>> $chargesByTeam */
+        $chargesByTeam = [];
+        foreach ($this->rows(
+            'SELECT team_id, fiscal_year, month_index, charge_amount, rent_amount, amount
+             FROM charges
+             WHERE team_id IS NOT NULL AND team_id > 0
+             ORDER BY team_id, fiscal_year, month_index'
         ) as $row) {
+            $teamId = (int) ($row['team_id'] ?? 0);
+            if ($teamId <= 0) {
+                continue;
+            }
             $fy = JalaliDate::normalizeDigits((string) ($row['fiscal_year'] ?? ''));
             if ($fy === '') {
                 continue;
@@ -2236,20 +2287,54 @@ final class Repository
                 continue;
             }
             $key = $fy . '-' . $mi;
-            $charges[$key] = ($charges[$key] ?? 0) + $due;
+            $chargesByTeam[$teamId][$key] = ($chargesByTeam[$teamId][$key] ?? 0) + $due;
         }
 
+        /** @var array<int, list<array<string, mixed>>> $paymentsByTeam */
+        $paymentsByTeam = [];
+        /** @var array<int, int> $paidTotals */
+        $paidTotals = [];
+        foreach ($this->rows(
+            "SELECT team_id, amount" . $this->transactionPaymentPlanSelect() . "
+             FROM transactions
+             WHERE team_id IS NOT NULL AND team_id > 0
+               AND category = 'واریز تیم'
+               AND payment_status = 'approved'
+               AND confirmed = 1
+             ORDER BY team_id, COALESCE(reviewed_at, tx_date), id"
+        ) as $payment) {
+            $teamId = (int) ($payment['team_id'] ?? 0);
+            if ($teamId <= 0) {
+                continue;
+            }
+            $paymentsByTeam[$teamId][] = $payment;
+            $paidTotals[$teamId] = ($paidTotals[$teamId] ?? 0) + (int) ($payment['amount'] ?? 0);
+        }
+
+        $teamIds = array_unique(array_merge(array_keys($chargesByTeam), array_keys($paymentsByTeam)));
+        $cache = [];
+        foreach ($teamIds as $teamId) {
+            $cache[(int) $teamId] = $this->allocatePaymentsForChargeMap(
+                $chargesByTeam[(int) $teamId] ?? [],
+                $paymentsByTeam[(int) $teamId] ?? [],
+                (int) ($paidTotals[(int) $teamId] ?? 0)
+            );
+        }
+
+        return $cache;
+    }
+
+    /**
+     * @param array<string, int> $charges month key => due
+     * @param list<array<string, mixed>> $payments
+     * @return array{by_month: array<string, int>, remaining: int}
+     */
+    private function allocatePaymentsForChargeMap(array $charges, array $payments, int $totalPaid): array
+    {
         $byMonth = [];
         foreach (array_keys($charges) as $key) {
             $byMonth[$key] = 0;
         }
-
-        $payments = $this->preparedRows(
-            "SELECT amount" . $this->transactionPaymentPlanSelect() . " FROM transactions
-             WHERE team_id = :id AND category = 'واریز تیم' AND payment_status = 'approved' AND confirmed = 1
-             ORDER BY COALESCE(reviewed_at, tx_date), id",
-            ['id' => $teamId]
-        );
 
         foreach ($payments as $payment) {
             $remaining = (int) ($payment['amount'] ?? 0);
@@ -2287,7 +2372,6 @@ final class Repository
             }
         }
 
-        $totalPaid = $this->contractPaidTotalForTeam($teamId);
         $allocated = array_sum($byMonth);
 
         return ['by_month' => $byMonth, 'remaining' => max(0, $totalPaid - $allocated)];
@@ -2651,25 +2735,8 @@ final class Repository
     private function paymentAllocationByTeamMonth(): array
     {
         $map = [];
-        $teamIds = $this->pdo->query(
-            "SELECT DISTINCT team_id FROM (
-                SELECT team_id FROM charges WHERE team_id IS NOT NULL AND team_id > 0
-                UNION
-                SELECT team_id FROM transactions
-                WHERE team_id IS NOT NULL AND team_id > 0
-                  AND category = 'واریز تیم'
-                  AND payment_status = 'approved'
-                  AND confirmed = 1
-             ) AS finance_teams"
-        )->fetchAll(PDO::FETCH_COLUMN);
-
-        foreach ($teamIds as $teamIdRaw) {
-            $teamId = (int) $teamIdRaw;
-            if ($teamId <= 0) {
-                continue;
-            }
-            $allocation = $this->allocatedPaymentsForTeam($teamId);
-            $map[$teamId] = $allocation['by_month'];
+        foreach ($this->ensureTeamPaymentAllocations() as $teamId => $allocation) {
+            $map[(int) $teamId] = $allocation['by_month'];
         }
 
         return $map;

@@ -189,6 +189,9 @@ final class FileStorage
     /** @var list<string> */
     private static array $queuedDeletes = [];
 
+    /** @var list<string> Files created inside a txn; deleted if the txn rolls back. */
+    private static array $queuedCreations = [];
+
     public static function deleteRelative(string $relativePath): void
     {
         if ($relativePath === '') {
@@ -226,6 +229,30 @@ final class FileStorage
     public static function clearQueuedDeletes(): void
     {
         self::$queuedDeletes = [];
+    }
+
+    /** Track a newly written file so a later rollBack can remove it. */
+    public static function queueCreatedForRollback(string $relativePath): void
+    {
+        $relativePath = trim($relativePath);
+        if ($relativePath === '' || in_array($relativePath, self::$queuedCreations, true)) {
+            return;
+        }
+        self::$queuedCreations[] = $relativePath;
+    }
+
+    public static function clearQueuedCreations(): void
+    {
+        self::$queuedCreations = [];
+    }
+
+    public static function flushQueuedCreationsOnRollback(): void
+    {
+        $paths = self::$queuedCreations;
+        self::$queuedCreations = [];
+        foreach ($paths as $relativePath) {
+            self::deleteRelative($relativePath);
+        }
     }
 
     public static function sendDownload(string $relativePath, string $originalName, string $mime): never

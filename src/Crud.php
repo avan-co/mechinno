@@ -547,19 +547,22 @@ final class Crud
         }
 
         $lockTeamPayment = $resource === 'transactions'
-            && Access::isTeam()
-            && (string) ($data['category'] ?? '') === 'واریز تیم'
-            && (string) ($data['payment_status'] ?? '') === 'pending';
+            && (string) ($data['category'] ?? '') === 'واریز تیم';
         $startedTransaction = false;
         if ($lockTeamPayment && !$this->pdo->inTransaction()) {
             $this->beginImmediateTransaction();
             $startedTransaction = true;
             $this->lockTeamRow((int) ($data['team_id'] ?? 0));
+            // Re-check under lock for both team announcements and admin direct deposits.
             if ($this->countPendingTeamPayment((int) ($data['team_id'] ?? 0)) > 0) {
                 if ($startedTransaction) {
                     $this->pdo->rollBack();
                 }
-                throw new InvalidArgumentException('اعلام واریز دیگری در انتظار تأیید است. ابتدا آن را پیگیری یا حذف کنید.');
+                throw new InvalidArgumentException(
+                    Access::isTeam()
+                        ? 'اعلام واریز دیگری در انتظار تأیید است. ابتدا آن را پیگیری یا حذف کنید.'
+                        : 'این نهاد اعلام واریز در انتظار تأیید دارد. ابتدا همان را تأیید/رد کنید، سپس دریافت مستقیم ثبت کنید.'
+                );
             }
         }
 
@@ -951,6 +954,23 @@ final class Crud
                 throw new InvalidArgumentException('تاریخ افزودن عضو باید به صورت 1404/01/01 باشد.');
             }
         }
+        if (array_key_exists('phone', $data) && !$this->blank($data['phone'] ?? null)) {
+            $phone = preg_replace('/\D+/', '', JalaliDate::normalizeDigits((string) $data['phone'])) ?? '';
+            if (str_starts_with($phone, '98') && strlen($phone) === 12) {
+                $phone = '0' . substr($phone, 2);
+            }
+            if (preg_match('/^09\d{9}$/', $phone) !== 1) {
+                throw new InvalidArgumentException('شماره موبایل باید ۱۱ رقم و با ۰۹ شروع شود.');
+            }
+            $data['phone'] = $phone;
+        }
+        if (array_key_exists('national_id', $data) && !$this->blank($data['national_id'] ?? null)) {
+            $nationalId = preg_replace('/\D+/', '', JalaliDate::normalizeDigits((string) $data['national_id'])) ?? '';
+            if (preg_match('/^\d{10}$/', $nationalId) !== 1) {
+                throw new InvalidArgumentException('کدملی باید دقیقاً ۱۰ رقم باشد.');
+            }
+            $data['national_id'] = $nationalId;
+        }
     }
 
     /**
@@ -1031,19 +1051,45 @@ final class Crud
             throw new InvalidArgumentException('نمی‌توانید حساب کاربری خود را حذف کنید.');
         }
 
-        $statement = $this->pdo->prepare('SELECT role FROM panel_users WHERE id = :id');
+        $statement = $this->pdo->prepare('SELECT role, is_active FROM panel_users WHERE id = :id');
         $statement->execute(['id' => $id]);
-        $role = (string) ($statement->fetchColumn() ?: '');
-        if ($role !== Access::ROLE_ADMIN_EDITOR) {
+        $row = $statement->fetch() ?: [];
+        $role = (string) ($row['role'] ?? '');
+        if ($role !== Access::ROLE_ADMIN_EDITOR || (int) ($row['is_active'] ?? 0) !== 1) {
             return;
         }
 
+        $this->assertActiveEditorCountAbove(1);
+    }
+
+    private function assertPanelUserRemainsEditable(int $id, string $newRole, bool $willBeActive): void
+    {
+        if ($id <= 0) {
+            return;
+        }
+        $statement = $this->pdo->prepare('SELECT role, is_active FROM panel_users WHERE id = :id');
+        $statement->execute(['id' => $id]);
+        $row = $statement->fetch() ?: [];
+        $wasActiveEditor = ((string) ($row['role'] ?? '') === Access::ROLE_ADMIN_EDITOR)
+            && ((int) ($row['is_active'] ?? 0) === 1);
+        if (!$wasActiveEditor) {
+            return;
+        }
+        $staysActiveEditor = ($newRole === Access::ROLE_ADMIN_EDITOR) && $willBeActive;
+        if ($staysActiveEditor) {
+            return;
+        }
+        $this->assertActiveEditorCountAbove(1);
+    }
+
+    private function assertActiveEditorCountAbove(int $minimum): void
+    {
         $countStatement = $this->pdo->prepare(
             'SELECT COUNT(*) FROM panel_users WHERE role = :role AND is_active = 1'
         );
         $countStatement->execute(['role' => Access::ROLE_ADMIN_EDITOR]);
         $count = (int) $countStatement->fetchColumn();
-        if ($count <= 1) {
+        if ($count <= $minimum) {
             throw new InvalidArgumentException('حداقل یک مدیر ویرایشگر باید فعال بماند.');
         }
     }
@@ -1582,6 +1628,13 @@ final class Crud
             if (!isset($data['is_active'])) {
                 $data['is_active'] = 1;
             }
+            if (!$creating && $recordId > 0) {
+                $this->assertPanelUserRemainsEditable(
+                    $recordId,
+                    $role,
+                    (int) ($data['is_active'] ?? 1) === 1
+                );
+            }
         }
         if ($resource === 'development_plans') {
             $today = JalaliDate::todayParts()['formatted'];
@@ -1904,13 +1957,17 @@ final class Crud
             return;
         }
 
-        if ($resource === 'members' && $action === 'delete') {
+        if ($resource === 'members' && in_array($action, ['delete', 'update'], true)) {
             $row = $this->find($resource, $id);
             if ((int) ($row['team_id'] ?? 0) !== $teamId) {
                 throw new InvalidArgumentException('دسترسی به این رکورد مجاز نیست.');
             }
             if (($row['approval_status'] ?? '') !== 'pending') {
-                throw new InvalidArgumentException('فقط اعضای در انتظار تأیید قابل حذف هستند.');
+                throw new InvalidArgumentException(
+                    $action === 'delete'
+                        ? 'فقط اعضای در انتظار تأیید قابل حذف هستند.'
+                        : 'فقط اعضای در انتظار تأیید قابل ویرایش هستند.'
+                );
             }
 
             return;

@@ -527,8 +527,16 @@ try {
 $assert($directBlockedWhilePending, 'crud: admin direct deposit blocked while team payment pending');
 
 $workflow = new Workflow($pdo);
-$approvedMember = $workflow->approveMember((int) $member['id']);
+$approveWithoutCodeBlocked = false;
+try {
+    $workflow->approveMember((int) $member['id'], '');
+} catch (InvalidArgumentException) {
+    $approveWithoutCodeBlocked = true;
+}
+$assert($approveWithoutCodeBlocked, 'workflow: wants_access approve requires access code');
+$approvedMember = $workflow->approveMember((int) $member['id'], 'ACC-1001');
 $assert(($approvedMember['approval_status'] ?? '') === 'approved', 'workflow: member approved');
+$assert(trim((string) ($approvedMember['access_code'] ?? '')) === 'ACC-1001', 'workflow: access code stored on approve');
 $approvedPayment = $workflow->approvePayment((int) $payment['id']);
 $assert(($approvedPayment['payment_status'] ?? '') === 'approved', 'workflow: payment approved');
 $assert((int) ($approvedPayment['confirmed'] ?? 0) === 1, 'workflow: payment confirmed in income');

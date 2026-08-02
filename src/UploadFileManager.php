@@ -101,14 +101,19 @@ final class UploadFileManager
      *   known:bool,
      *   file_count:int,
      *   orphan_count:int,
+     *   page:int,
+     *   per_page:int,
+     *   pages:int,
      *   files:list<array<string, mixed>>
      * }
      */
-    public function listFiles(string $folder): array
+    public function listFiles(string $folder, int $page = 1, int $perPage = 50): array
     {
         $this->assertAdmin();
         FileStorage::ensureCategories();
         $folder = $this->sanitizeFolder($folder);
+        $page = max(1, $page);
+        $perPage = min(100, max(10, $perPage));
         $meta = self::FOLDERS[$folder] ?? [
             'label' => $folder,
             'description' => '',
@@ -121,21 +126,13 @@ final class UploadFileManager
         if (is_dir($dir)) {
             foreach ($this->scanFiles($dir) as $fileMeta) {
                 $relative = $folder . '/' . $fileMeta['name'];
-                $links = $this->findReferences($relative);
-                $isOrphan = $links === [] && !isset($referenced[$relative]);
+                $isOrphan = !isset($referenced[$relative]);
                 if ($isOrphan) {
                     $orphanCount++;
                 }
-                $originalName = '';
-                foreach ($links as $link) {
-                    if (($link['original_name'] ?? '') !== '') {
-                        $originalName = (string) $link['original_name'];
-                        break;
-                    }
-                }
+                // Defer reference lookups until after pagination to keep large folders responsive.
                 $files[] = [
                     'name' => $fileMeta['name'],
-                    'original_name' => $originalName,
                     'relative_path' => $relative,
                     'size_bytes' => $fileMeta['size_bytes'],
                     'modified_at' => $fileMeta['modified_at'],
@@ -146,13 +143,10 @@ final class UploadFileManager
                     'preview_url' => str_starts_with($fileMeta['mime'], 'image/')
                         ? 'download.php?resource=upload-file&path=' . rawurlencode($relative) . '&inline=1'
                         : '',
-                    'references' => $links,
-                    'reference_count' => count($links),
                 ];
             }
         }
         usort($files, static function (array $a, array $b): int {
-            // Orphans first, then newest.
             if ((bool) $a['is_orphan'] !== (bool) $b['is_orphan']) {
                 return $a['is_orphan'] ? -1 : 1;
             }
@@ -160,15 +154,37 @@ final class UploadFileManager
             return strcmp((string) $b['modified_at'], (string) $a['modified_at']);
         });
 
+        $total = count($files);
+        $pages = max(1, (int) ceil($total / $perPage));
+        $page = min($page, $pages);
+        $slice = array_slice($files, ($page - 1) * $perPage, $perPage);
+        foreach ($slice as &$file) {
+            $links = $this->findReferences((string) $file['relative_path']);
+            $originalName = '';
+            foreach ($links as $link) {
+                if (($link['original_name'] ?? '') !== '') {
+                    $originalName = (string) $link['original_name'];
+                    break;
+                }
+            }
+            $file['original_name'] = $originalName;
+            $file['references'] = $links;
+            $file['reference_count'] = count($links);
+        }
+        unset($file);
+
         return [
             'folder' => $folder,
             'label' => $meta['label'],
             'description' => $meta['description'],
             'kind' => $meta['kind'],
             'known' => isset(self::FOLDERS[$folder]),
-            'file_count' => count($files),
+            'file_count' => $total,
             'orphan_count' => $orphanCount,
-            'files' => $files,
+            'page' => $page,
+            'per_page' => $perPage,
+            'pages' => $pages,
+            'files' => $slice,
         ];
     }
 
@@ -287,7 +303,7 @@ final class UploadFileManager
 
         return [
             'deleted' => count($deleted),
-            'paths' => $deleted,
+            'paths' => array_slice($deleted, 0, 25),
         ];
     }
 

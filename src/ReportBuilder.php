@@ -21,6 +21,11 @@ final class ReportBuilder
     public const PERIOD_ANNUAL = 'annual';
     public const PERIOD_CUSTOM = 'custom';
 
+    public const MAX_TRANSACTION_ROWS = 2000;
+
+    /** @var list<array<string, mixed>>|null */
+    private ?array $chargeDebtRowsCache = null;
+
     public function __construct(private readonly PDO $pdo)
     {
     }
@@ -525,7 +530,7 @@ final class ReportBuilder
         $months = array_fill_keys($period['months'], true);
         $year = $period['fiscal_year'];
         $rows = [];
-        foreach ((new Repository($this->pdo))->chargeDebtRows() as $row) {
+        foreach ($this->allChargeDebtRows() as $row) {
             if ((string) ($row['fiscal_year'] ?? '') !== $year) {
                 continue;
             }
@@ -541,6 +546,18 @@ final class ReportBuilder
         }
 
         return $rows;
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function allChargeDebtRows(): array
+    {
+        if ($this->chargeDebtRowsCache === null) {
+            $this->chargeDebtRowsCache = (new Repository($this->pdo))->chargeDebtRows();
+        }
+
+        return $this->chargeDebtRowsCache;
     }
 
     /**
@@ -568,11 +585,16 @@ final class ReportBuilder
             $sql .= ' AND t.team_id = :team_id';
             $params['team_id'] = $teamId;
         }
-        $sql .= ' ORDER BY t.tx_date ASC, t.id ASC';
+        $sql .= ' ORDER BY t.tx_date ASC, t.id ASC LIMIT ' . (self::MAX_TRANSACTION_ROWS + 1);
         $statement = $this->pdo->prepare($sql);
         $statement->execute($params);
+        $fetched = $statement->fetchAll();
+        $truncated = count($fetched) > self::MAX_TRANSACTION_ROWS;
+        if ($truncated) {
+            $fetched = array_slice($fetched, 0, self::MAX_TRANSACTION_ROWS);
+        }
 
-        return array_map(static function (array $row): array {
+        $rows = array_map(static function (array $row): array {
             $monthIndex = (int) ($row['month_index'] ?? 0);
 
             return [
@@ -590,7 +612,26 @@ final class ReportBuilder
                 'month_name' => JalaliDate::monthName($monthIndex),
                 'notes' => (string) ($row['notes'] ?? ''),
             ];
-        }, $statement->fetchAll());
+        }, $fetched);
+        if ($truncated && $rows !== []) {
+            $rows[] = [
+                'id' => 0,
+                'tx_date' => '',
+                'description' => '… فهرست کوتاه شده است (حداکثر ' . self::MAX_TRANSACTION_ROWS . ' تراکنش)',
+                'amount' => 0,
+                'category' => '',
+                'category_label' => '',
+                'finance_subtype' => '',
+                'team_id' => 0,
+                'team_name' => '',
+                'fiscal_year' => '',
+                'month_index' => 0,
+                'month_name' => '',
+                'notes' => '',
+            ];
+        }
+
+        return $rows;
     }
 
     /**

@@ -17,10 +17,13 @@ final class Workflow
 
         $today = JalaliDate::todayParts()['formatted'];
         $code = trim($accessCode);
+        if ((int) ($row['wants_access'] ?? 0) === 1 && $code === '') {
+            throw new InvalidArgumentException('برای عضوی که درخواست تردد دارد، کد دستگاه تردد الزامی است.');
+        }
         if ($code !== '') {
             $statement = $this->pdo->prepare(
                 "UPDATE members
-                 SET approval_status = 'approved', access_code = :access_code, reviewed_at = :reviewed_at, rejection_reason = NULL
+                 SET approval_status = 'approved', access_code = :access_code, wants_access = 1, reviewed_at = :reviewed_at, rejection_reason = NULL
                  WHERE id = :id AND approval_status = 'pending'"
             );
             $statement->execute(['access_code' => $code, 'reviewed_at' => $today, 'id' => $id]);
@@ -143,7 +146,6 @@ final class Workflow
         }
 
         $teamId = (int) ($row['team_id'] ?? 0);
-        Schema::ensureLockerNumbers($this->pdo, [$lockerNumber]);
 
         $today = JalaliDate::todayParts()['formatted'];
         $startedTransaction = false;
@@ -153,6 +155,8 @@ final class Workflow
         }
 
         try {
+            // DML-only ensure stays inside the txn so a failed approve does not leave a stray locker.
+            Schema::ensureLockerNumbers($this->pdo, [$lockerNumber]);
             $lockerStatement = $this->pdo->prepare('SELECT id, status, team_id FROM lockers WHERE locker_number = :number');
             $lockerStatement->execute(['number' => $lockerNumber]);
             $locker = $lockerStatement->fetch();
@@ -314,11 +318,13 @@ final class Workflow
                 $this->pdo->commit();
             }
             FileStorage::flushQueuedDeletes();
+            FileStorage::clearQueuedCreations();
         } catch (Throwable $exception) {
             if ($startedTransaction && $this->pdo->inTransaction()) {
                 $this->pdo->rollBack();
             }
             FileStorage::clearQueuedDeletes();
+            FileStorage::flushQueuedCreationsOnRollback();
             throw $exception;
         }
 

@@ -239,8 +239,7 @@ final class PerformanceReports
 
         try {
             if ($existing) {
-                $this->pdo->prepare(
-                    'UPDATE team_performance_reports SET
+                $sql = 'UPDATE team_performance_reports SET
                         original_name = :original_name,
                         stored_path = :stored_path,
                         mime = :mime,
@@ -253,8 +252,13 @@ final class PerformanceReports
                         submitted_at = :submitted_at,
                         reviewed_at = :reviewed_at,
                         updated_at = :updated_at
-                     WHERE id = :id'
-                )->execute([
+                     WHERE id = :id';
+                // Team resubmit must not clobber an already-approved report (race with admin approve).
+                if (Access::isTeam()) {
+                    $sql .= " AND status = 'rejected'";
+                }
+                $update = $this->pdo->prepare($sql);
+                $update->execute([
                     'original_name' => $stored['original_name'],
                     'stored_path' => $stored['relative_path'],
                     'mime' => $stored['mime'],
@@ -268,6 +272,9 @@ final class PerformanceReports
                     'updated_at' => $now,
                     'id' => (int) $existing['id'],
                 ]);
+                if ($update->rowCount() < 1) {
+                    throw new InvalidArgumentException('وضعیت گزارش تغییر کرده است. صفحه را تازه کنید و دوباره تلاش کنید.');
+                }
                 $id = (int) $existing['id'];
             } else {
                 $this->pdo->prepare(
