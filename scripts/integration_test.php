@@ -1426,6 +1426,15 @@ $assert(($afterEdit['notes'] ?? '') === 'ویرایش یادداشت', 'admin tx
 $rooms = new RoomReservations($pdo);
 $publicRoomId = (int) ($pdo->query('SELECT id FROM meeting_rooms ORDER BY id ASC LIMIT 1')->fetchColumn() ?: 0);
 $publicDate = JalaliDate::addDays(JalaliDate::todayParts()['formatted'], 2);
+
+// Regression: settings()/migrate must never end an open booking transaction
+// (MySQL DDL implicit-commit → "There is no active transaction" on public book).
+$pdo->beginTransaction();
+$rooms->settings();
+Schema::migrate($pdo);
+$assert($pdo->inTransaction(), 'room booking: settings/migrate keep open transaction');
+$pdo->rollBack();
+
 $publicBooking = $rooms->createFromPayload([
     'room_id' => $publicRoomId,
     'reserved_date' => $publicDate,
@@ -1436,8 +1445,27 @@ $publicBooking = $rooms->createFromPayload([
     'team_id' => (string) $handAId,
     'member_id' => '999',
 ], 'public');
+$assert(($publicBooking['id'] ?? 0) > 0, 'public booking: created successfully');
+$assert(in_array((string) ($publicBooking['status'] ?? ''), ['pending', 'approved'], true), 'public booking: active status');
 $assert(($publicBooking['team_id'] ?? null) === null || (int) ($publicBooking['team_id'] ?? 0) === 0, 'public booking: team_id ignored');
 $assert(($publicBooking['member_id'] ?? null) === null || (int) ($publicBooking['member_id'] ?? 0) === 0, 'public booking: member_id ignored');
+
+// Manual-approve path uses the same transactional validateBookingWindow.
+$pdo->exec('UPDATE center_settings SET room_auto_approve = 0 WHERE id = 1');
+$roomsPending = new RoomReservations($pdo);
+$pendingDate = JalaliDate::addDays(JalaliDate::todayParts()['formatted'], 3);
+$pendingBooking = $roomsPending->createFromPayload([
+    'room_id' => $publicRoomId,
+    'reserved_date' => $pendingDate,
+    'start_time' => '12:00',
+    'end_time' => '13:00',
+    'booker_name' => 'مهمان ۲',
+    'booker_phone' => '09121230001',
+], 'public');
+$assert(($pendingBooking['status'] ?? '') === 'pending', 'public booking: pending when auto-approve off');
+$approvedBooking = $roomsPending->approve((int) $pendingBooking['id']);
+$assert(($approvedBooking['status'] ?? '') === 'approved', 'room approve: succeeds inside transaction');
+$pdo->exec('UPDATE center_settings SET room_auto_approve = 1 WHERE id = 1');
 
 // Second locker request cannot reuse an already assigned locker.
 $_SESSION = [

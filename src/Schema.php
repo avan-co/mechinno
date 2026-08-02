@@ -8,6 +8,13 @@ final class Schema
 
     public static function migrate(PDO $pdo): void
     {
+        // MySQL (and some SQLite builds) implicitly commit on DDL. Running migrate inside an
+        // open PDO transaction ends that transaction and later commit() fails with
+        // "There is no active transaction" — which broke public room booking.
+        if ($pdo->inTransaction()) {
+            return;
+        }
+
         if (self::storedVersion($pdo) >= self::VERSION) {
             self::ensureColumns($pdo);
             self::ensureMeetingRoomTables($pdo);

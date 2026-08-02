@@ -6,6 +6,9 @@ final class RoomReservations
 {
     private const ACTIVE_STATUSES = ['pending', 'approved'];
 
+    /** @var array<string, mixed>|null */
+    private ?array $settingsCache = null;
+
     public function __construct(private readonly PDO $pdo)
     {
     }
@@ -15,6 +18,10 @@ final class RoomReservations
      */
     public function settings(): array
     {
+        if ($this->settingsCache !== null) {
+            return $this->settingsCache;
+        }
+
         $defaults = [
             'room_auto_approve' => true,
             'room_max_advance_days' => 14,
@@ -23,8 +30,9 @@ final class RoomReservations
             'room_public_enabled' => true,
         ];
 
-        $this->ensureSettingsColumns();
-
+        // Do not call Schema::migrate here: booking/approve run inside a transaction, and
+        // MySQL DDL from migrate would implicitly commit it ("There is no active transaction").
+        // Schema is already applied via public_database()/require_database().
         try {
             $row = $this->pdo->query(
                 'SELECT room_auto_approve, room_max_advance_days, room_max_hours_per_day, room_slot_minutes, room_public_enabled
@@ -34,7 +42,7 @@ final class RoomReservations
             return $defaults;
         }
 
-        return [
+        $this->settingsCache = [
             'room_auto_approve' => (int) ($row['room_auto_approve'] ?? 1) === 1,
             'room_max_advance_days' => max(1, (int) ($row['room_max_advance_days'] ?? 14)),
             'room_max_hours_per_day' => max(1, (int) ($row['room_max_hours_per_day'] ?? 2)),
@@ -43,6 +51,8 @@ final class RoomReservations
                 : 30,
             'room_public_enabled' => (int) ($row['room_public_enabled'] ?? 1) === 1,
         ];
+
+        return $this->settingsCache;
     }
 
     /**
@@ -498,7 +508,7 @@ final class RoomReservations
                 'updated_at' => $today,
             ]);
             $reservationId = (int) $this->pdo->lastInsertId();
-            if ($started) {
+            if ($started && $this->pdo->inTransaction()) {
                 $this->pdo->commit();
             }
         } catch (Throwable $error) {
@@ -628,7 +638,7 @@ final class RoomReservations
             if ($statement->rowCount() < 1) {
                 throw new InvalidArgumentException('این رزرو در انتظار تأیید نیست.');
             }
-            if ($started) {
+            if ($started && $this->pdo->inTransaction()) {
                 $this->pdo->commit();
             }
         } catch (Throwable $error) {
@@ -918,14 +928,6 @@ final class RoomReservations
         return $room;
     }
 
-    private function ensureSettingsColumns(): void
-    {
-        if (!Schema::tableExists($this->pdo, 'center_settings')) {
-            return;
-        }
-        Schema::migrate($this->pdo);
-    }
-
     private static function normalizePhone(string $phone): string
     {
         $digits = preg_replace('/\D+/', '', JalaliDate::normalizeDigits($phone)) ?? '';
@@ -987,7 +989,7 @@ final class RoomReservations
      */
     public function updateSettings(array $payload): array
     {
-        $this->ensureSettingsColumns();
+        $this->settingsCache = null;
         $current = $this->settings();
         $data = [
             'room_auto_approve' => array_key_exists('room_auto_approve', $payload)
@@ -1022,6 +1024,8 @@ final class RoomReservations
             $this->pdo->prepare('UPDATE meeting_rooms SET slot_minutes = :slot')
                 ->execute(['slot' => $data['room_slot_minutes']]);
         }
+
+        $this->settingsCache = null;
 
         return $this->settings();
     }

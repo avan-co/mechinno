@@ -33,7 +33,6 @@ final class PerformanceReports
             'performance_h2_open_until' => '',
             'performance_report_guide' => 'گزارش عملکرد را طبق فرمت اعلام‌شده مرکز به‌صورت فایل (ترجیحاً PDF) بارگذاری کنید.',
         ];
-        $this->ensureSettingsColumns();
         try {
             $row = $this->pdo->query(
                 'SELECT performance_reports_enabled, performance_h1_open_from, performance_h1_open_until,
@@ -60,7 +59,6 @@ final class PerformanceReports
      */
     public function updateSettings(array $payload): array
     {
-        $this->ensureSettingsColumns();
         $current = $this->settings();
         $enabled = array_key_exists('performance_reports_enabled', $payload)
             ? ((int) $payload['performance_reports_enabled'] === 1)
@@ -622,11 +620,4 @@ final class PerformanceReports
         return (string) $year;
     }
 
-    private function ensureSettingsColumns(): void
-    {
-        if (!Schema::tableExists($this->pdo, 'center_settings')) {
-            return;
-        }
-        Schema::migrate($this->pdo);
-    }
 }
